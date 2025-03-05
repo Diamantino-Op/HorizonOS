@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.28)
+
+add_subdirectory(kernel-common)
+
+if (${HORIZON_ARCH} STREQUAL "x86_64")
+    add_subdirectory(kernel-x86_64)
+elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    add_subdirectory(kernel-riscv64)
+elseif (${HORIZON_ARCH} STREQUAL "arm64")
+    add_subdirectory(kernel-arm64)
+elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    add_subdirectory(kernel-aarch64)
+else ()
+    message("Invalid Arch")
+endif ()
