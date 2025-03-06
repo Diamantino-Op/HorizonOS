@@ -19,6 +19,10 @@ if(NOT EXISTS "${LLVM_DIR}")
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             RESULT_VARIABLE GIT_CLONE_RESULT
     )
+    execute_process(
+            COMMAND rm -rf ${LLVM_DIR}/.git
+            WORKING_DIRECTORY ${LLVM_DIR}
+    )
     if(NOT GIT_CLONE_RESULT EQUAL 0)
         message(FATAL_ERROR "Failed to clone LLVM repository.")
     endif()
