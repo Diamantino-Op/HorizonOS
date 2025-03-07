@@ -5,13 +5,13 @@ include(FetchContent)
 project(HorizonOS)
 
 # ------------------ LLVM Compiler ------------------
-set(LLVM_REPO "https://github.com/llvm/llvm-project.git")
-set(LLVM_BRANCH "release/20.x")
-set(LLVM_DIR "${CMAKE_SOURCE_DIR}/llvm")
-set(LLVM_BUILD_DIR "${LLVM_DIR}/build")
-set(LLVM_BIN_DIR "${LLVM_BUILD_DIR}/bin")
+set(LLVM_REPO "https://github.com/llvm/llvm-project.git" CACHE STRING "LLVM Repository")
+set(LLVM_BRANCH "release/20.x" CACHE STRING "LLVM Branch")
+set(LLVM_DIR "${CMAKE_SOURCE_DIR}/llvm" CACHE PATH "LLVM Directory")
+set(LLVM_BUILD_DIR "${LLVM_DIR}/build" CACHE PATH "LLVM Build Directory")
+set(LLVM_BIN_DIR "${LLVM_BUILD_DIR}/bin" CACHE PATH "LLVM Bin Directory")
 
-# Clone LLVM if it does not exist
+# Clone LLVM
 if(NOT EXISTS "${LLVM_DIR}")
     message(STATUS "Cloning LLVM repository...")
     execute_process(
@@ -28,7 +28,7 @@ if(NOT EXISTS "${LLVM_DIR}")
     endif()
 endif()
 
-# Build LLVM if not built
+# Build LLVM
 if(NOT EXISTS "${LLVM_BUILD_DIR}")
     file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
     message(STATUS "Configuring LLVM build...")
@@ -52,15 +52,91 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
     endif()
 endif()
 
+# ------------------ Limine Bootloader ------------------
+set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
+set(LIMINE_BRANCH "v9.x-binary" CACHE STRING "Limine Branch")
+set(LIMINE_DIR "${CMAKE_SOURCE_DIR}/limine" CACHE PATH "Limine Directory")
+
+# Clone Limine
+if(NOT EXISTS "${LIMINE_DIR}")
+    message(STATUS "Cloning Limine repository...")
+    execute_process(
+            COMMAND git clone --depth=1 --branch ${LIMINE_BRANCH} ${LIMINE_REPO} ${LIMINE_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE GIT_CLONE_RESULT
+    )
+    execute_process(
+            COMMAND rm -rf ${LIMINE_DIR}/.git
+            WORKING_DIRECTORY ${LIMINE_DIR}
+    )
+    if(NOT GIT_CLONE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to clone Limine repository.")
+    endif()
+endif()
+
+# Build Limine
+if(NOT EXISTS "${LIMINE_DIR}/limine")
+    message(STATUS "Building Limine...")
+    execute_process(
+            COMMAND make
+            WORKING_DIRECTORY ${LIMINE_DIR}
+            RESULT_VARIABLE LIMINE_BUILD_RESULT
+    )
+    if(NOT LIMINE_BUILD_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to build Limine.")
+    endif()
+endif()
+
+# ------------------ ISO Directory ------------------
+set(ISO_DIR "${CMAKE_SOURCE_DIR}/iso/${HORIZON_ARCH}" CACHE PATH "ISO Directory")
+set(RES_DIR "${CMAKE_SOURCE_DIR}/res" CACHE PATH "Resources Directory")
+
+if (NOT EXISTS "${ISO_DIR}")
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/iso/out" "${ISO_DIR}" "${ISO_DIR}/efi/boot" "${ISO_DIR}/boot" "${ISO_DIR}/boot/limine" "${ISO_DIR}/boot/HorizonOS")
+
+    if (${HORIZON_ARCH} STREQUAL "x86_64")
+        file(COPY "${LIMINE_DIR}/BOOTX64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+        file(COPY "${LIMINE_DIR}/BOOTRISCV64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+        file(COPY "${LIMINE_DIR}/BOOTAA64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    endif ()
+
+    file(COPY "${RES_DIR}/Limine.cfg" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios.sys" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios-pxe.bin" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-uefi-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
+endif ()
+
+# ------------------ OVMF Bios ------------------
+set(OVMF_FILE "${CMAKE_SOURCE_DIR}/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
+
+if (${HORIZON_ARCH} STREQUAL "x86_64")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd" CACHE STRING "OVMF Link")
+elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd" CACHE STRING "OVMF Link")
+
+    execute_process(
+            COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=33554432
+    )
+elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd" CACHE STRING "OVMF Link")
+endif ()
+
+if (NOT EXISTS "${OVMF_FILE}")
+    file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
+endif ()
+
 # ------------------ Tools Setup ------------------
-set(CMAKE_C_COMPILER ${LLVM_BIN_DIR}/clang CACHE FILEPATH "C Compiler")
-set(CMAKE_CXX_COMPILER ${LLVM_BIN_DIR}/clang++ CACHE FILEPATH "C++ Compiler")
-set(CMAKE_ASM_COMPILER ${LLVM_BIN_DIR}/clang CACHE FILEPATH "Asm Compiler")
-set(CMAKE_AR ${LLVM_BIN_DIR}/llvm-ar CACHE FILEPATH "AR Tool")
+set(CMAKE_C_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "C Compiler")
+set(CMAKE_CXX_COMPILER "${LLVM_BIN_DIR}/clang++" CACHE FILEPATH "C++ Compiler")
+set(CMAKE_ASM_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "Asm Compiler")
+set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
 # ------------------ Global Variables ------------------
 set(HORIZON_ARCH "x86_64" CACHE STRING "HorizonOS Architecture")
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld CACHE FILEPATH "Linker Script")
+set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
 set(CMAKE_C_FLAGS -Wall -Wextra -O2 -fPIE -fshort-wchar --target=${HORIZON_ARCH}-none-elf CACHE STRING "C Flags")
 set(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "C++ Flags")
 set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "Asm Flags")
@@ -70,17 +146,31 @@ set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -pie -n
 add_subdirectory(src/kernel)
 
 # ------------------ ISO ------------------
-# Compile C, C++, and Assembly files
-set(ISO_OUTPUT "${CMAKE_BINARY_DIR}/HorizonOS.iso")
+set(ISO_OUTPUT "${CMAKE_SOURCE_DIR}/iso/out/HorizonOS-${HORIZON_ARCH}.iso" CACHE FILEPATH "ISO Output")
 
 # Generate ISO
 add_custom_command(
         OUTPUT ${ISO_OUTPUT}
-        COMMAND mkdir -p ${CMAKE_BINARY_DIR}/iso/boot
-        COMMAND cp ${CMAKE_BINARY_DIR}/HorizonOS ${CMAKE_BINARY_DIR}/iso/boot/HorizonOS
-        COMMAND xorriso -as mkisofs -R -J -V "HorizonOS" -b boot/HorizonOS -no-emul-boot -boot-load-size 4 -boot-info-table -o ${ISO_OUTPUT} ${CMAKE_BINARY_DIR}/iso
-        DEPENDS HorizonOS
+        COMMAND cp ${CMAKE_BINARY_DIR}/HorizonOS ${ISO_DIR}/boot/HorizonOS/HorizonOS_Kernel
+        COMMAND xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus -apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_DIR} -o ${ISO_OUTPUT}
+        COMMAND ${LIMINE_DIR}/limine bios-install ${ISO_OUTPUT}
+        DEPENDS kernel
         COMMENT "Generating bootable ISO"
 )
 
-add_custom_target(iso ALL DEPENDS ${ISO_OUTPUT})
+add_custom_target(HorizonOS-ISO ALL DEPENDS ${ISO_OUTPUT})
+
+# ------------------ Qemu Target ------------------
+if (${HORIZON_ARCH} STREQUAL "x86_64")
+    add_custom_target(
+            Run-HorizonOS
+            COMMAND qemu-system-x86_64 -serial stdio -bios ${OVMF_FILE} -m 8G -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom ${ISO_OUTPUT} -smp 10
+            DEPENDS HorizonOS-ISO
+    )
+elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    add_custom_target(
+            Run-HorizonOS
+            COMMAND qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 8G -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            DEPENDS HorizonOS-ISO
+    )
+endif ()
