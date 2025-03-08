@@ -1,1 +1,5 @@
 
+
+extern "C" void kernelMain() {
+
+}
