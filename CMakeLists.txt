@@ -33,7 +33,7 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
     file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
     message(STATUS "Configuring LLVM build...")
     execute_process(
-            COMMAND cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld;lldb; -DLLVM_ENABLE_RUNTIMES=libc;libcxx;libcxxabi; -DLLVM_ENABLE_ASSERTIONS=OFF -DCMAKE_INSTALL_PREFIX=${LLVM_DIR}/bin
+            COMMAND cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld;lldb; -DLLVM_ENABLE_ASSERTIONS=OFF -DCMAKE_INSTALL_PREFIX=${LLVM_DIR}/bin
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             RESULT_VARIABLE CMAKE_CONFIGURE_RESULT
     )
@@ -51,6 +51,17 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
         message(FATAL_ERROR "Failed to build LLVM.")
     endif()
 endif()
+
+include(${LLVM_BUILD_DIR}/cmake/modules/CMakeFiles/LLVMConfig.cmake)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS_LIST})
+
+llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
 
 # ------------------ Limine Bootloader ------------------
 set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
@@ -144,6 +155,9 @@ set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -pie -n
 
 # ------------------ Kernel ------------------
 add_subdirectory(src/kernel)
+
+# ------------------ Libs ------------------
+add_subdirectory(src/libs/hos-base)
 
 # ------------------ ISO ------------------
 set(ISO_OUTPUT "${CMAKE_SOURCE_DIR}/iso/out/HorizonOS-${HORIZON_ARCH}.iso" CACHE FILEPATH "ISO Output")
