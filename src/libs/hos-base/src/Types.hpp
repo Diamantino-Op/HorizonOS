@@ -2,6 +2,8 @@
 #define TYPES_HPP
 
 extern "C" {
+    #define NULL ((void *)0)
+
     typedef __INT8_TYPE__ i8;
     typedef __INT16_TYPE__ i16;
     typedef __INT32_TYPE__ i32;
@@ -37,6 +39,10 @@ extern "C" {
     typedef __UINT_FAST16_TYPE__ uFast16;
     typedef __UINT_FAST32_TYPE__ uFast32;
     typedef __UINT_FAST64_TYPE__ uFast64;
+
+    typedef __SIZE_TYPE__ size_t;
+
+    typedef __PTRDIFF_TYPE__ ptrDiff;
 }
 
 #endif

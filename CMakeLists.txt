@@ -57,11 +57,35 @@ include(${LLVM_BUILD_DIR}/cmake/modules/CMakeFiles/LLVMConfig.cmake)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-include_directories(${LLVM_INCLUDE_DIRS})
+#include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
+#llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
+
+# ------------------ C Headers ------------------
+set(CHDRS_REPO "https://github.com/osdev0/freestnd-c-hdrs.git" CACHE STRING "CHDRS Repository")
+set(CHDRS_BRANCH "trunk" CACHE STRING "CHDRS Branch")
+set(CHDRS_DIR "${CMAKE_SOURCE_DIR}/chdrs" CACHE PATH "CHDRS Directory")
+set(CHDRS_INC_DIR "${CHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CHDRS Include Directory")
+
+if(NOT EXISTS "${CHDRS_DIR}")
+    message(STATUS "Cloning C Headers repository...")
+    execute_process(
+            COMMAND git clone --depth=1 --branch ${CHDRS_BRANCH} ${CHDRS_REPO} ${CHDRS_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE GIT_CLONE_RESULT
+    )
+    execute_process(
+            COMMAND rm -rf ${CHDRS_DIR}/.git
+            WORKING_DIRECTORY ${CHDRS_DIR}
+    )
+    if(NOT GIT_CLONE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to clone CHDRS repository.")
+    endif()
+endif()
+
+include_directories(${CHDRS_INC_DIR})
 
 # ------------------ Limine Bootloader ------------------
 set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
