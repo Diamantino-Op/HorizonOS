@@ -14,6 +14,10 @@ extern "C" {
     typedef __UINT32_TYPE__ u32;
     typedef __UINT64_TYPE__ u64;
 
+    using f32 = float;
+    using f64 = double;
+    using f128 = long double;
+
     typedef __INTPTR_TYPE__ iPtr;
     typedef __UINTPTR_TYPE__ uPtr;
 
@@ -40,9 +44,9 @@ extern "C" {
     typedef __UINT_FAST32_TYPE__ uFast32;
     typedef __UINT_FAST64_TYPE__ uFast64;
 
-    typedef __SIZE_TYPE__ size_t;
+    typedef __SIZE_TYPE__ usize;
 
-    typedef __PTRDIFF_TYPE__ ptrDiff;
+    typedef __PTRDIFF_TYPE__ isize;
 }
 
 #endif

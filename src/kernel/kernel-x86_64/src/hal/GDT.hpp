@@ -3,18 +3,9 @@
 
 #include "Types.hpp"
 
-namespace hal::x86_64 {
-	struct __attribute__((packed)) Tss {
-		u32 _reserved;
-		Array<u64, 3> rsp;
-		u64 _reserved1;
-		Array<u64, 7> ist;
-		u32 _reserved2;
-		u32 _reserved3;
-		u16 _reserved4;
-		u16 iopbOffset;
-	};
+static constexpr u32 PAGE_SIZE = 4096;
 
+namespace hal::x86_64 {
 	enum Selector {
 		ZERO = 0,
 		KERNEL_CODE = 1,
@@ -43,6 +34,18 @@ namespace hal::x86_64 {
 		LONG_MODE = 0b0010,
 	};
 
+	struct __attribute__((packed)) Tss {
+		u32 _reserved{};
+		u64 rsp[3];
+		u64 _reserved1{};
+		u64 ist[7];
+		u64 _reserved2{};
+		u16 _reserved3{};
+		u16 iopbOffset{};
+
+		constexpr Tss() = default;
+	};
+
 	// 64-Bit ignores limit and base values.
 	struct __attribute__((packed)) GdtEntry {
 		u16 limitLow{};
@@ -59,31 +62,22 @@ namespace hal::x86_64 {
 	};
 
 	struct __attribute__((packed)) GdtTssEntry {
-		u16 len;
-		u16 baseLow16;
-		u8 baseMid8;
-		u8 flags1;
-		u8 flags2;
-		u8 baseHigh8;
-		u32 baseUpper32;
-		u32 _reserved;
+		u16 limitLow{};
+		u16 baseLow{};
+		u8 baseMid{};
+		u8 accessByte{};
+		u8 limitHigh : 4 {};
+		u8 flags : 4 {};
+		u8 baseHigh{};
+		u32 baseUpper32{};
+		u32 _reserved{};
 
 		constexpr GdtTssEntry() = default;
 
-		explicit GdtTssEntry(Tss const& tss)
-			: len(sizeof(Tss)),
-			  baseLow16((size_t)&tss & 0xffff),
-			  baseMid8(((size_t)&tss >> 16) & 0xff),
-			  flags1(0b10001001),
-			  flags2(0),
-			  baseHigh8(((size_t)&tss >> 24) & 0xff),
-			  baseUpper32((size_t)&tss >> 32),
-			  _reserved() {}
+		explicit GdtTssEntry(Tss const& tss): limitLow(sizeof(Tss)), baseLow((usize)&tss & 0xffff), baseMid(((usize)&tss >> 16) & 0xff), accessByte(0b10001001), baseHigh(((usize)&tss >> 24) & 0xff), baseUpper32((usize)&tss >> 32) {}
 	};
 
 	struct __attribute__((packed)) Gdt {
-		static constexpr size_t LEN = 6;
-
 		GdtEntry entries[6];
 
 		/*Karm::Array<GdtEntry, Gdt::LEN - 1> entries = {
@@ -94,7 +88,9 @@ namespace hal::x86_64 {
 			{AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE | AccessBytes::USER, Flags::LONG_MODE},
 		};*/
 
-		GdtTssEntry tssEntry;
+		GdtTssEntry tssEntry{};
+
+		constexpr Gdt() = default;
 
 		explicit Gdt(Tss const& tss): tssEntry(tss) {}
 	};
@@ -103,11 +99,16 @@ namespace hal::x86_64 {
 		u16 limit;
 		u64 base;
 
-		explicit GdtDesc(Gdt const& base): limit(sizeof(Gdt) - 1), base(reinterpret_cast<size_t>(&base)) {}
+		constexpr GdtDesc() = default;
+
+		explicit GdtDesc(Gdt const& base): limit(sizeof(Gdt) - 1), base(reinterpret_cast<usize>(&base)) {}
 	};
 
 	class GdtManager {
 		public:
+			GdtManager() = default;
+			~GdtManager() = default;
+
 			void initGdt();
 			void initTss();
 			void loadGdt();
@@ -119,9 +120,11 @@ namespace hal::x86_64 {
 			void addGdtEntry(u8 flags, u8 granularity);
 			void addTssEntry();
 
-			Gdt gdtInstance;
-			GdtDesc gdtDescriptor;
-			Tss tssInstance;
+			Gdt gdtInstance{};
+			GdtDesc gdtDescriptor{};
+			Tss tssInstance{};
+
+			u8 kernelStack[PAGE_SIZE * 1024]; // 4MB Stack
 	};
 }
 
