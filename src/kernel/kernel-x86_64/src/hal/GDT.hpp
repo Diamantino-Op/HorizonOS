@@ -1,9 +1,8 @@
-#ifndef GDT_HPP
-#define GDT_HPP
+#ifndef KERNEL_X86_64_GDT_HPP
+#define KERNEL_X86_64_GDT_HPP
 
 #include "Types.hpp"
-
-static constexpr u32 PAGE_SIZE = 4096;
+#include "TSS.hpp"
 
 namespace hal::x86_64 {
 	enum Selector {
@@ -32,18 +31,6 @@ namespace hal::x86_64 {
 		PAGE_GRANULARITY = 0b1000,
 		PROTECTED_SEGMENT = 0b0100,
 		LONG_MODE = 0b0010,
-	};
-
-	struct __attribute__((packed)) Tss {
-		u32 _reserved{};
-		u64 rsp[3];
-		u64 _reserved1{};
-		u64 ist[7];
-		u64 _reserved2{};
-		u16 _reserved3{};
-		u16 iopbOffset{};
-
-		constexpr Tss() = default;
 	};
 
 	// 64-Bit ignores limit and base values.
@@ -110,11 +97,9 @@ namespace hal::x86_64 {
 			~GdtManager() = default;
 
 			void initGdt();
-			void initTss();
 			void loadGdt();
-			void updateTss();
+
 			Gdt getGdt();
-			Tss getTss();
 
 		private:
 			void addGdtEntry(u8 flags, u8 granularity);
@@ -122,9 +107,6 @@ namespace hal::x86_64 {
 
 			Gdt gdtInstance{};
 			GdtDesc gdtDescriptor{};
-			Tss tssInstance{};
-
-			u8 kernelStack[PAGE_SIZE * 1024]; // 4MB Stack
 	};
 }
 

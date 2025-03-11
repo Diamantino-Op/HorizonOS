@@ -5,23 +5,7 @@ namespace hal::x86_64 {
 
     }
 
-    void GdtManager::initTss() {
-
-    }
-
     void GdtManager::loadGdt() {
-
-    }
-
-    void GdtManager::updateTss() {
-
-    }
-
-    Gdt GdtManager::getGdt() {
-
-    }
-
-    Tss GdtManager::getTss() {
 
     }
 
@@ -33,4 +17,7 @@ namespace hal::x86_64 {
 
     }
 
+    Gdt GdtManager::getGdt() {
+        return this->gdtInstance;
+    }
 }
