@@ -1,0 +1,9 @@
+# Snyk (https://snyk.io) policy file
+exclude:
+    global:
+        - "chdrs/**"
+        - "iso/**"
+        - "limine/**"
+        - "llvm/**"
+        - "out/**"
+        - "ovmf/**"

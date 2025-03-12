@@ -65,21 +65,11 @@ namespace hal::x86_64 {
 	};
 
 	struct __attribute__((packed)) Gdt {
-		GdtEntry entries[6];
-
-		/*Karm::Array<GdtEntry, Gdt::LEN - 1> entries = {
-			GdtEntry{},
-			{AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE, Flags::LONG_MODE},
-			{AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE, 0},
-			{AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::USER, 0},
-			{AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE | AccessBytes::USER, Flags::LONG_MODE},
-		};*/
+		GdtEntry entries[5];
 
 		GdtTssEntry tssEntry{};
 
 		constexpr Gdt() = default;
-
-		explicit Gdt(Tss const& tss): tssEntry(tss) {}
 	};
 
 	struct __attribute__((packed)) GdtDesc {
@@ -96,15 +86,12 @@ namespace hal::x86_64 {
 			GdtManager() = default;
 			~GdtManager() = default;
 
-			void initGdt();
+			void initGdt(Tss const& tss);
 			void loadGdt();
 
 			Gdt getGdt();
 
 		private:
-			void addGdtEntry(u8 flags, u8 granularity);
-			void addTssEntry();
-
 			Gdt gdtInstance{};
 			GdtDesc gdtDescriptor{};
 	};
