@@ -33,7 +33,7 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
     file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
     message(STATUS "Configuring LLVM build...")
     execute_process(
-            COMMAND cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld;lldb -DLLVM_TARGETS_TO_BUILD=X86;RISCV;AArch64 -DLLVM_ENABLE_ASSERTIONS=OFF -DCMAKE_INSTALL_PREFIX=${LLVM_DIR}/bin -DLLVM_PARALLEL_COMPILE_JOBS=12 -DLLVM_PARALLEL_LINK_JOBS=12
+            COMMAND "cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=\"clang;clang-tools-extra;lld;lldb\" -DLLVM_TARGETS_TO_BUILD=\"X86;RISCV;AArch64\" -DLLVM_ENABLE_ASSERTIONS=OFF -DCMAKE_INSTALL_PREFIX=${LLVM_DIR}/bin -DLLVM_PARALLEL_COMPILE_JOBS=12 -DLLVM_PARALLEL_LINK_JOBS=12"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             RESULT_VARIABLE CMAKE_CONFIGURE_RESULT
     )
@@ -43,7 +43,7 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
 
     message(STATUS "Building LLVM...")
     execute_process(
-            COMMAND cmake --build ${LLVM_BUILD_DIR} --parallel
+            COMMAND "cmake --build ${LLVM_BUILD_DIR} --parallel"
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             RESULT_VARIABLE CMAKE_BUILD_RESULT
     )
@@ -165,7 +165,9 @@ endif ()
 
 # ------------------ Tools Setup ------------------
 set(CMAKE_C_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "C Compiler")
+set(CMAKE_C_LINK_EXECUTABLE "${LLVM_BIN_DIR}/lld" CACHE FILEPATH "C Linker")
 set(CMAKE_CXX_COMPILER "${LLVM_BIN_DIR}/clang++" CACHE FILEPATH "C++ Compiler")
+set(CMAKE_CXX_LINK_EXECUTABLE "${LLVM_BIN_DIR}/lld" CACHE FILEPATH "C++ Linker")
 set(CMAKE_ASM_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "Asm Compiler")
 set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
