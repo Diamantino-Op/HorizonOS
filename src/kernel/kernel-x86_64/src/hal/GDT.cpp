@@ -37,6 +37,8 @@ namespace hal::x86_64 {
 
     void GdtManager::loadGdt() {
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
+
+        asm volatile ("lgdt %0" : : "m"(this->gdtDescriptor));
     }
 
     Gdt GdtManager::getGdt() {

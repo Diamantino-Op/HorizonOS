@@ -157,6 +157,10 @@ elseif (${HORIZON_ARCH} STREQUAL "riscv64")
     )
 elseif (${HORIZON_ARCH} STREQUAL "aarch64")
     set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd" CACHE STRING "OVMF Link")
+
+    execute_process(
+            COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=33554432
+    )
 endif ()
 
 if (NOT EXISTS "${OVMF_FILE}")
@@ -201,16 +205,43 @@ add_custom_command(
 add_custom_target(HorizonOS-ISO ALL DEPENDS ${ISO_OUTPUT})
 
 # ------------------ Qemu Target ------------------
+
+# GDB Cmd: gdb target extended-remote localhost:1234
+
 if (${HORIZON_ARCH} STREQUAL "x86_64")
     add_custom_target(
-            Run-HorizonOS
-            COMMAND qemu-system-x86_64 -serial stdio -bios ${OVMF_FILE} -m 8G -cpu max,+hypervisor,+invtsc,+tsc-deadline -M q35 -accel kvm -cdrom ${ISO_OUTPUT} -smp 10
+            Run-HorizonOS-Debug
+            COMMAND qemu-system-x86_64 -s -S -cpu max,+hypervisor,+invtsc,+tsc-deadline -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT} -serial stdio
+            DEPENDS HorizonOS-ISO
+    )
+
+    add_custom_target(
+            Run-HorizonOS-NoDbg
+            COMMAND qemu-system-x86_64 -cpu max,+hypervisor,+invtsc,+tsc-deadline -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT} -serial stdio
             DEPENDS HorizonOS-ISO
     )
 elseif (${HORIZON_ARCH} STREQUAL "riscv64")
     add_custom_target(
-            Run-HorizonOS
-            COMMAND qemu-system-riscv64 -M virt -cpu rv64 -device ramfb -device virtio-keyboard -device qemu-xhci -device usb-kbd -m 8G -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            Run-HorizonOS-Debug
+            COMMAND qemu-system-riscv64 -s -S -cpu rv64 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            DEPENDS HorizonOS-ISO
+    )
+
+    add_custom_target(
+            Run-HorizonOS-NoDbg
+            COMMAND qemu-system-riscv64 -cpu rv64 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            DEPENDS HorizonOS-ISO
+    )
+elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    add_custom_target(
+            Run-HorizonOS-Debug
+            COMMAND qemu-system-aarch64 -s -S -cpu cortex-a53 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            DEPENDS HorizonOS-ISO
+    )
+
+    add_custom_target(
+            Run-HorizonOS-NoDbg
+            COMMAND qemu-system-aarch64 -cpu cortex-a53 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
             DEPENDS HorizonOS-ISO
     )
 endif ()
