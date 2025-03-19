@@ -1,6 +1,6 @@
 #include "GDT.hpp"
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
     void GdtManager::initGdt(Tss const& tss) {
         this->gdtInstance = Gdt();
 

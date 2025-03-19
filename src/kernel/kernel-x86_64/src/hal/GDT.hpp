@@ -1,10 +1,10 @@
-#ifndef KERNEL_X86_64_GDT_HPP
-#define KERNEL_X86_64_GDT_HPP
+#ifndef KERNEL_X86_64_HAL_GDT_HPP
+#define KERNEL_X86_64_HAL_GDT_HPP
 
 #include "Types.hpp"
 #include "TSS.hpp"
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
 	enum Selector {
 		ZERO = 0,
 		KERNEL_CODE = 1,
@@ -82,18 +82,18 @@ namespace hal::x86_64 {
 	};
 
 	class GdtManager {
-		public:
-			GdtManager() = default;
-			~GdtManager() = default;
+	public:
+		GdtManager() = default;
+		~GdtManager() = default;
 
-			void initGdt(Tss const& tss);
-			void loadGdt();
+		void initGdt(Tss const& tss);
+		void loadGdt();
 
-			Gdt getGdt();
+		Gdt getGdt();
 
-		private:
-			Gdt gdtInstance{};
-			GdtDesc gdtDescriptor{};
+	private:
+		Gdt gdtInstance{};
+		GdtDesc gdtDescriptor{};
 	};
 }
 

@@ -1,11 +1,11 @@
-#ifndef KERNEL_X86_64_TSS_HPP
-#define KERNEL_X86_64_TSS_HPP
+#ifndef KERNEL_X86_64_HAL_TSS_HPP
+#define KERNEL_X86_64_HAL_TSS_HPP
 
 #include "Types.hpp"
 
 static constexpr u32 PAGE_SIZE = 4096;
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
     struct __attribute__((packed)) Tss {
         u32 _reserved{};
         u64 rsp[3];
@@ -19,20 +19,22 @@ namespace hal::x86_64 {
     };
 
     class TssManager {
-        public:
-            TssManager() = default;
-            ~TssManager() = default;
+    public:
+        TssManager() = default;
+        ~TssManager() = default;
 
-            void initTss();
-            void updateTss();
+        void initTss();
+        void updateTss();
 
-            Tss getTss();
+        Tss getTss();
 
-        private:
-            Tss tssInstance{};
+    private:
+        Tss tssInstance{};
 
-            u8 kernelStack[PAGE_SIZE * 1024]; // 4MB Stack
+        u8 tssStack[PAGE_SIZE * 1024]; // 4MB Stack
     };
+
+    extern "C" void asmApiUpdateTss();
 }
 
 #endif
