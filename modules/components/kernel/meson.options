@@ -1,0 +1,2 @@
+option('horizon_arch', type : 'combo', choices : ['x86_64', 'aarch64', 'riscv64'], value : 'x86_64', description : 'Build Arch of HorizonOS')
+option('horizon_version', type: 'string', value: '0.0.1', description: 'HorizonOS Version')

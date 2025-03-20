@@ -1,5 +1,5 @@
 project('HorizonOS', 'cpp',
-        version : '0.0.1',
+        version : get_option('horizon_version'),
         default_options : [
           'warning_level=3',
           'c_std=gnu11',
@@ -9,17 +9,15 @@ project('HorizonOS', 'cpp',
 
 # ------------------ Meson Modules ------------------
 fs = import('fs')
-cmake = import('cmake')
+
+subprojectsDir = 'subprojects'
 
 # ------------------ Global Variables ------------------
-#horizon_arch = get_option('arch')
-horizon_arch = 'x86_64'
-if horizon_arch == ''
-  horizon_arch = 'x86_64'
-endif
+horizon_version = get_option('horizon_version')
+horizon_arch = get_option('horizon_arch')
 
-linker_script = join_paths(meson.source_root(), 'res', horizon_arch, 'Linker.ld')
-file_grabber_path = join_paths(meson.source_root(), 'scripts', 'FileGrabber.sh')
+linker_script = join_paths('res', horizon_arch, 'Linker.ld')
+file_grabber_path = join_paths('scripts', 'FileGrabber.sh')
 
 c_flags = ['-Wall', '-Wextra', '-O2', '-fPIE', '-fshort-wchar', '--target=@0@-none-elf'.format(horizon_arch)]
 cxx_flags = c_flags
@@ -29,25 +27,25 @@ exe_linker_flags = ['-T', linker_script, '-pie', '-nostdlib']
 # ------------------ LLVM Compiler ------------------
 llvm_repo = 'https://github.com/llvm/llvm-project.git'
 llvm_branch = 'release/20.x'
-llvm_dir = 'llvm'
+llvm_dir = join_paths(subprojectsDir, 'llvm')
 llvm_build_dir = join_paths(llvm_dir, 'build')
 llvm_bin_dir = join_paths(llvm_build_dir, 'bin')
 
 # Clone LLVM
 if not fs.exists(llvm_dir)
   message('Cloning LLVM repository...')
-  run_command('git', 'clone', '--depth=1', '--branch', llvm_branch, llvm_repo, llvm_dir, check : true, workdir : meson.source_root())
-  run_command('rm', '-rf', join_paths(llvm_dir, '.git'), check : true, workdir : llvm_dir)
+  run_command('git', 'clone', '--depth=1', '--branch', llvm_branch, llvm_repo, llvm_dir, check : true)
+  run_command('rm', '-rf', join_paths(llvm_dir, '.git'), check : true)
 endif
 
 # Build LLVM
 if not fs.exists(llvm_build_dir)
   mkdir(llvm_build_dir)
   message('Configuring LLVM build...')
-  run_command('cmake', '-S', join_paths(llvm_dir, 'llvm'), '-B', llvm_build_dir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld;lldb"', '-DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64"', '-DLLVM_ENABLE_ASSERTIONS=OFF', '-DCMAKE_INSTALL_PREFIX=@0@/bin'.format(llvm_dir), '-DLLVM_PARALLEL_COMPILE_JOBS=12', '-DLLVM_PARALLEL_LINK_JOBS=12', check : true, workdir : meson.source_root())
+  run_command('cmake', '-S', join_paths(llvm_dir, 'llvm'), '-B', llvm_build_dir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld;lldb"', '-DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64"', '-DLLVM_ENABLE_ASSERTIONS=OFF', '-DCMAKE_INSTALL_PREFIX=@0@/bin'.format(llvm_dir), '-DLLVM_PARALLEL_COMPILE_JOBS=12', '-DLLVM_PARALLEL_LINK_JOBS=12', check : true)
 
   message('Building LLVM...')
-  run_command('cmake', '--build', llvm_build_dir, '--parallel', check : true, workdir : meson.source_root())
+  run_command('cmake', '--build', llvm_build_dir, '--parallel', check : true)
 endif
 
 # ------------------ C Headers ------------------
@@ -58,20 +56,20 @@ chdrs_inc_dir = join_paths(chdrs_dir, horizon_arch, 'include')
 
 if not fs.exists(chdrs_dir)
   message('Cloning C Headers repository...')
-  run_command('git', 'clone', '--depth=1', '--branch', chdrs_branch, chdrs_repo, chdrs_dir, check : true, workdir : meson.source_root())
-  run_command('rm', '-rf', join_paths(chdrs_dir, '.git'), check : true, workdir : chdrs_dir)
+  run_command('git', 'clone', '--depth=1', '--branch', chdrs_branch, chdrs_repo, chdrs_dir, check : true)
+  run_command('rm', '-rf', join_paths(chdrs_dir, '.git'), check : true)
 endif
 
 include_directories(chdrs_inc_dir)
 
 # ------------------ uACPI ------------------
 uacpi_repo = 'https://github.com/uACPI/uACPI.git'
-uacpi_dir = 'uacpi'
+uacpi_dir = join_paths(subprojectsDir, 'uacpi')
 
 if not fs.exists(uacpi_dir)
   message('Cloning uACPI repository...')
-  run_command('git', 'clone', '--depth=1', uacpi_repo, uacpi_dir, check : true, workdir : meson.source_root())
-  run_command('rm', '-rf', join_paths(uacpi_dir, '.git'), check : true, workdir : uacpi_dir)
+  run_command('git', 'clone', '--depth=1', uacpi_repo, uacpi_dir, check : true)
+  run_command('rm', '-rf', join_paths(uacpi_dir, '.git'), check : true)
 endif
 
 uacpi_subproject = subproject('uacpi')
@@ -84,14 +82,14 @@ limine_dir = 'limine'
 # Clone Limine
 if not fs.exists(limine_dir)
   message('Cloning Limine repository...')
-  run_command('git', 'clone', '--depth=1', '--branch', limine_branch, limine_repo, limine_dir, check : true, workdir : meson.source_root())
-  run_command('rm', '-rf', join_paths(limine_dir, '.git'), check : true, workdir : limine_dir)
+  run_command('git', 'clone', '--depth=1', '--branch', limine_branch, limine_repo, limine_dir, check : true)
+  run_command('rm', '-rf', join_paths(limine_dir, '.git'), check : true)
 endif
 
 # Build Limine
-if not fs.exists(join_paths(limine_dir,'limine'))
+if not fs.exists(join_paths(limine_dir, 'limine'))
   message('Building Limine...')
-  run_command('make', check : true, workdir : limine_dir)
+  run_command('cd @0@ && make'.format(limine_dir), check : true)
 endif
 
 # ------------------ ISO Directory ------------------
@@ -122,7 +120,7 @@ if not fs.exists(iso_dir)
 endif
 
 # ------------------ OVMF Bios ------------------
-ovmf_file = join_paths(meson.source_root(), 'ovmf', horizon_arch, 'OVMF.fd')
+ovmf_file = join_paths('ovmf', horizon_arch, 'OVMF.fd')
 ovmf_link = ''
 
 if horizon_arch == 'x86_64'
@@ -149,27 +147,24 @@ endif
 
 # ------------------ Tools Setup ------------------
 # C
-c_compiler = find_program(join_paths(llvm_bin_dir, 'clang'))
-c_ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'))
-c_linker = find_program(join_paths(llvm_bin_dir, 'ld.lld'))
+c_compiler = find_program(join_paths(llvm_bin_dir, 'clang'), required : true)
+c_ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'), required : true)
+c_linker = find_program(join_paths(llvm_bin_dir, 'ld.lld'), required : true)
 
 # C++
-cxx_compiler = find_program(join_paths(llvm_bin_dir, 'clang++'))
-cxx_ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'))
-cxx_linker = find_program(join_paths(llvm_bin_dir, 'ld.lld'))
+cxx_compiler = find_program(join_paths(llvm_bin_dir, 'clang++'), required : true)
+cxx_ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'), required : true)
+cxx_linker = find_program(join_paths(llvm_bin_dir, 'ld.lld'), required : true)
 
 # ASM
-asm_compiler = find_program(join_paths(llvm_bin_dir, 'clang'))
-ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'))
+asm_compiler = find_program(join_paths(llvm_bin_dir, 'clang'), required : true)
+ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'), required : true)
 
-# ------------------ Kernel ------------------
-kernel_subproject = subproject('kernel', default_options : ['buildtype=release'])
-
-# ------------------ Libs ------------------
-hos_base_subproject = subproject('hos-base', default_options : ['buildtype=release'])
+# ------------------ Modules ------------------
+modules_prj = subproject('modules', default_options : ['horizon_arch=@0@'.format(horizon_arch), 'horizon_version=@0@'.format(horizon_version)])
 
 # ------------------ ISO ------------------
-iso_output = join_paths(meson.source_root(), 'iso', 'out', 'HorizonOS-@0@.iso'.format(horizon_arch))
+iso_output = join_paths('iso', 'out', 'HorizonOS-@0@.iso'.format(horizon_arch))
 
 # Generate ISO
 iso_cmd = custom_target('HorizonOS-ISO',

@@ -1,3 +1,13 @@
+project('HorizonOS Kernel', 'cpp',
+        version : get_option('horizon_version'),
+        subproject_dir: 'arches',
+        default_options : [
+          'warning_level=3',
+          'c_std=gnu11',
+          'cpp_std=c++2a',
+        ]
+)
+
 kernel_common_proj = subproject('kernel-common')
 kernel_common_lib = kernel_common_proj.get_variable('kernel-common')
 
