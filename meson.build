@@ -1,5 +1,5 @@
 project('HorizonOS', 'cpp',
-        version : get_option('horizon_version'),
+        version : '0.0.1',
         default_options : [
           'warning_level=3',
           'c_std=gnu11',
@@ -7,13 +7,14 @@ project('HorizonOS', 'cpp',
         ]
 )
 
+version = get_option('horizon_version')
+
 # ------------------ Meson Modules ------------------
 fs = import('fs')
 
 subprojectsDir = 'subprojects'
 
 # ------------------ Global Variables ------------------
-horizon_version = get_option('horizon_version')
 horizon_arch = get_option('horizon_arch')
 
 linker_script = join_paths('res', horizon_arch, 'Linker.ld')
@@ -71,8 +72,6 @@ if not fs.exists(uacpi_dir)
   run_command('git', 'clone', '--depth=1', uacpi_repo, uacpi_dir, check : true)
   run_command('rm', '-rf', join_paths(uacpi_dir, '.git'), check : true)
 endif
-
-uacpi_subproject = subproject('uacpi')
 
 # ------------------ Limine Bootloader ------------------
 limine_repo = 'https://github.com/limine-bootloader/limine.git'
@@ -161,7 +160,7 @@ asm_compiler = find_program(join_paths(llvm_bin_dir, 'clang'), required : true)
 ar = find_program(join_paths(llvm_bin_dir, 'llvm-ar'), required : true)
 
 # ------------------ Modules ------------------
-modules_prj = subproject('modules', default_options : ['horizon_arch=@0@'.format(horizon_arch), 'horizon_version=@0@'.format(horizon_version)])
+modules_prj = subproject('modules', default_options : ['horizon_arch=@0@'.format(horizon_arch)])
 
 # ------------------ ISO ------------------
 iso_output = join_paths('iso', 'out', 'HorizonOS-@0@.iso'.format(horizon_arch))

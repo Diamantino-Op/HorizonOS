@@ -1,5 +1,5 @@
 project('HorizonOS Kernel', 'cpp',
-        version : get_option('horizon_version'),
+        version : '0.0.1',
         subproject_dir: 'arches',
         default_options : [
           'warning_level=3',
@@ -8,31 +8,21 @@ project('HorizonOS Kernel', 'cpp',
         ]
 )
 
-kernel_common_proj = subproject('kernel-common')
-kernel_common_lib = kernel_common_proj.get_variable('kernel-common')
+version = get_option('horizon_version')
 
-if horizon_arch == 'x86_64'
-  kernel_arch_proj = subproject('kernel-x86_64')
-elif horizon_arch == 'riscv64'
-  kernel_arch_proj = subproject('kernel-riscv64')
-elif horizon_arch == 'aarch64'
-  kernel_arch_proj = subproject('kernel-aarch64')
-else
-  error('Invalid Arch')
-endif
+horizon_arch = get_option('horizon_arch')
 
-kernel = kernel_arch_proj.get_variable('kernel')
+kernel_common_prj = subproject('kernel-common')
+kernel_common_lib = kernel_common_prj.get_variable('kernel-common')
 
-hos_base_proj = subproject('hos-base')
-hos_base = hos_base_proj.get_variable('hos-base')
+kernel_prj  = subproject('kernel-@0@'.format(horizon_arch))
+kernel_bin = kernel_arch_proj.get_variable('kernel')
 
-uacpi_includes = uacpi.get_variable('includes')
+uacpi_subproject = subproject('uacpi')
+uacpi_includes = uacpi_subproject.get_variable('includes')
 
-kernel.include_directories(uacpi_includes)
 kernel_common_lib.include_directories(uacpi_includes)
+kernel_bin.include_directories(uacpi_includes)
 
-kernel_common_lib.link_with(hos_base)
-kernel.link(kernel_common_lib)
-
-linker_script_path = get_option('linker_script')
-kernel.link_args('-T' + linker_script_path)
+linker_script_path = join_paths('..', '..', '..', 'res', horizon_arch, 'Linker.ld')
+kernel_bin.link_args('-T' + linker_script_path)
