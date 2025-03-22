@@ -1,9 +1,8 @@
-/.idea/
-/subprojects/llvm/
-/subprojects/uacpi/
-/limine/
-/chdrs/
-/out/
+/deps/llvm/
+/deps/limine/
+/deps/ovmf/
+/deps/chdrs/
+/deps/uacpi/
 /iso/
-/ovmf/
-/buildDir/
+/out/
+/.idea/
