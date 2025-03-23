@@ -67,7 +67,12 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 # ------------------ Tools Setup ------------------
 set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -mno-sse -mno-red-zone -ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "C Flags")
+set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -mno-red-zone -ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "C Flags")
+
+if (${HORIZON_ARCH} STREQUAL "x86_64")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mno-sse" CACHE STRING "C Flags")
+endif ()
+
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}" CACHE STRING "C++ Flags")
 set(CMAKE_ASM_FLAGS "-mno-sse -mno-red-zone -ffreestanding -static --target=${HORIZON_ARCH}-none-elf -masm=intel" CACHE STRING "Asm Flags")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -static -nostdlib" CACHE STRING "Linker Flags")
