@@ -5,7 +5,7 @@
 
 static constexpr u32 PAGE_SIZE = 4096;
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
     struct __attribute__((packed)) Tss {
         u32 _reserved{};
         u64 rsp[3];
@@ -33,6 +33,8 @@ namespace hal::x86_64 {
 
             u8 kernelStack[PAGE_SIZE * 1024]; // 4MB Stack
     };
+
+    extern "C" void updateTssAsm();
 }
 
 #endif

@@ -1,6 +1,6 @@
 #include "TSS.hpp"
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
     void TssManager::initTss() {
         this->tssInstance = Tss();
 
@@ -8,14 +8,7 @@ namespace hal::x86_64 {
     }
 
     void TssManager::updateTss() {
-        asm volatile(
-            "mov %0, %%ax;"
-            "ltr %%ax;"
-            "ret;"
-            :
-            : "r" (0x28)
-            : "%ax"
-        );
+        updateTssAsm();
     }
 
     Tss TssManager::getTss() {

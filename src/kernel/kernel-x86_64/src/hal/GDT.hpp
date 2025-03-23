@@ -4,7 +4,7 @@
 #include "Types.hpp"
 #include "TSS.hpp"
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
 	enum Selector {
 		ZERO = 0,
 		KERNEL_CODE = 1,
@@ -88,6 +88,7 @@ namespace hal::x86_64 {
 
 			void initGdt(Tss const& tss);
 			void loadGdt();
+			void reloadRegisters();
 
 			Gdt getGdt();
 
@@ -95,6 +96,9 @@ namespace hal::x86_64 {
 			Gdt gdtInstance{};
 			GdtDesc gdtDescriptor{};
 	};
+
+	extern "C" void loadGdtAsm(GdtDesc* gdtDescriptor);
+	extern "C" void reloadRegistersAsm();
 }
 
 #endif

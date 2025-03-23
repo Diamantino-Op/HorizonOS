@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 23)
 project(kernel-common VERSION 0.0.1 LANGUAGES CXX ASM)
 
 # ------------------ Kernel Common ------------------
-file(GLOB_RECURSE KERNEL_COMMON_SRC "src/*.hpp" "src/*.cpp" "src/*.asm")
+file(GLOB_RECURSE KERNEL_COMMON_SRC "src/*.hpp" "src/*.cpp" "src/*.asm" "src/*.s")
 
 add_library(kernel-common STATIC ${KERNEL_COMMON_SRC})
 

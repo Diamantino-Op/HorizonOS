@@ -12,10 +12,10 @@ else ()
     message("Invalid Arch")
 endif ()
 
-set_target_properties(kernel PROPERTIES EXECUTABLE_OUTPUT_PATH "${ISO_DIR}/boot/HorizonOS")
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 
-#target_link_libraries(kernel-common ${LLVM_LIBS} hos-base)
-#target_link_libraries(kernel ${LLVM_LIBS} kernel-common)
+target_include_directories(kernel-common PUBLIC ${LIMINE_DIR})
+target_include_directories(kernel PUBLIC ${LIMINE_DIR})
+
 target_link_libraries(kernel-common hos-base)
 target_link_libraries(kernel kernel-common)

@@ -1,6 +1,6 @@
 #include "GDT.hpp"
 
-namespace hal::x86_64 {
+namespace x86_64::hal {
     void GdtManager::initGdt(Tss const& tss) {
         this->gdtInstance = Gdt();
 
@@ -38,7 +38,11 @@ namespace hal::x86_64 {
     void GdtManager::loadGdt() {
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
 
-        asm volatile ("lgdt %0" : : "m"(this->gdtDescriptor));
+        loadGdtAsm(&this->gdtDescriptor);
+    }
+
+    void GdtManager::reloadRegisters() {
+        reloadRegistersAsm();
     }
 
     Gdt GdtManager::getGdt() {

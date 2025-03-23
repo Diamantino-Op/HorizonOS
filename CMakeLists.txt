@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.28)
 
 include(FetchContent)
 
+# ------------------ Global Variables ------------------
+set(HORIZON_ARCH "x86_64" CACHE STRING "HorizonOS Architecture")
+
 # ------------------ LLVM Compiler ------------------
 set(LLVM_REPO "https://github.com/llvm/llvm-project.git" CACHE STRING "LLVM Repository")
 set(LLVM_BRANCH "release/20.x" CACHE STRING "LLVM Branch")
@@ -56,17 +59,30 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
 #include_directories(${LLVM_INCLUDE_DIRS})
-separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
-add_definitions(${LLVM_DEFINITIONS_LIST})
+#separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+#add_definitions(${LLVM_DEFINITIONS_LIST})
 
 #llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
 
 # ------------------ Tools Setup ------------------
+set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
+
+set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "C Flags")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}" CACHE STRING "C++ Flags")
+set(CMAKE_ASM_FLAGS "-ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "Asm Flags")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -static -nostdlib" CACHE STRING "Linker Flags")
+
+set(CMAKE_LINKER "${LLVM_BIN_DIR}/ld.lld" CACHE FILEPATH "Linker")
+set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "C Linker")
+set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "C++ Linker")
+set(CMAKE_ASM_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Asm Linker")
+
 set(CMAKE_C_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "C Compiler")
-set(CMAKE_C_LINK_EXECUTABLE "${LLVM_BIN_DIR}/lld" CACHE FILEPATH "C Linker")
+set(CMAKE_C_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "C Compiler AR")
 set(CMAKE_CXX_COMPILER "${LLVM_BIN_DIR}/clang++" CACHE FILEPATH "C++ Compiler")
-set(CMAKE_CXX_LINK_EXECUTABLE "${LLVM_BIN_DIR}/lld" CACHE FILEPATH "C++ Linker")
+set(CMAKE_CXX_COMPILER_AR  "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "C++ Compiler AR")
 set(CMAKE_ASM_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "Asm Compiler")
+set(CMAKE_ASM_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "Asm Compiler AR")
 set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
 # ------------------ C Headers ------------------
@@ -150,28 +166,6 @@ if(NOT EXISTS "${LIMINE_DIR}/limine")
     endif()
 endif()
 
-# ------------------ ISO Directory ------------------
-set(ISO_DIR "${CMAKE_SOURCE_DIR}/iso/${HORIZON_ARCH}" CACHE PATH "ISO Directory")
-set(RES_DIR "${CMAKE_SOURCE_DIR}/res" CACHE PATH "Resources Directory")
-
-if (NOT EXISTS "${ISO_DIR}")
-    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/iso/out" "${ISO_DIR}" "${ISO_DIR}/efi/boot" "${ISO_DIR}/boot" "${ISO_DIR}/boot/limine" "${ISO_DIR}/boot/HorizonOS")
-
-    if (${HORIZON_ARCH} STREQUAL "x86_64")
-        file(COPY "${LIMINE_DIR}/BOOTX64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    elseif (${HORIZON_ARCH} STREQUAL "riscv64")
-        file(COPY "${LIMINE_DIR}/BOOTRISCV64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    elseif (${HORIZON_ARCH} STREQUAL "aarch64")
-        file(COPY "${LIMINE_DIR}/BOOTAA64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    endif ()
-
-    file(COPY "${RES_DIR}/Limine.cfg" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios.sys" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios-pxe.bin" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-uefi-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
-endif ()
-
 # ------------------ OVMF Bios ------------------
 set(OVMF_FILE "${CMAKE_SOURCE_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
 
@@ -195,16 +189,30 @@ if (NOT EXISTS "${OVMF_FILE}")
     file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
 endif ()
 
+# ------------------ ISO Directory ------------------
+set(ISO_DIR "${CMAKE_SOURCE_DIR}/iso/${HORIZON_ARCH}" CACHE PATH "ISO Directory")
+set(RES_DIR "${CMAKE_SOURCE_DIR}/res" CACHE PATH "Resources Directory")
+
+if (NOT EXISTS "${ISO_DIR}")
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/iso/out" "${ISO_DIR}" "${ISO_DIR}/efi/boot" "${ISO_DIR}/boot" "${ISO_DIR}/boot/limine" "${ISO_DIR}/boot/HorizonOS")
+
+    if (${HORIZON_ARCH} STREQUAL "x86_64")
+        file(COPY "${LIMINE_DIR}/BOOTX64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+        file(COPY "${LIMINE_DIR}/BOOTRISCV64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+        file(COPY "${LIMINE_DIR}/BOOTAA64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
+    endif ()
+
+    file(COPY "${RES_DIR}/Limine.conf" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios.sys" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-bios-pxe.bin" DESTINATION "${ISO_DIR}/boot/limine")
+    file(COPY "${LIMINE_DIR}/limine-uefi-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
+endif ()
+
 # ------------------ Project Setup ------------------
 project(HorizonOS)
-
-# ------------------ Global Variables ------------------
-set(HORIZON_ARCH "x86_64" CACHE STRING "HorizonOS Architecture")
-set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
-set(CMAKE_C_FLAGS -Wall -Wextra -O2 -fPIE -fshort-wchar --target=${HORIZON_ARCH}-none-elf CACHE STRING "C Flags")
-set(CMAKE_CXX_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "C++ Flags")
-set(CMAKE_ASM_FLAGS ${CMAKE_C_FLAGS} CACHE STRING "Asm Flags")
-set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -pie -nostdlib CACHE STRING "Linker Flags")
 
 # ------------------ Kernel ------------------
 add_subdirectory(src/kernel)
@@ -218,7 +226,7 @@ set(ISO_OUTPUT "${CMAKE_SOURCE_DIR}/iso/out/HorizonOS-${HORIZON_ARCH}.iso" CACHE
 # Generate ISO
 add_custom_command(
         OUTPUT ${ISO_OUTPUT}
-        COMMAND cp ${CMAKE_BINARY_DIR}/HorizonOS ${ISO_DIR}/boot/HorizonOS/HorizonOS_Kernel
+        COMMAND cp $<TARGET_FILE:kernel> ${ISO_DIR}/boot/HorizonOS/HorizonOS_Kernel
         COMMAND xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus -apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_DIR} -o ${ISO_OUTPUT}
         COMMAND ${LIMINE_DIR}/limine bios-install ${ISO_OUTPUT}
         DEPENDS kernel
@@ -229,6 +237,7 @@ add_custom_target(HorizonOS-ISO ALL DEPENDS ${ISO_OUTPUT})
 
 # ------------------ Qemu Target ------------------
 
+# Enter gdb: gdb iso/x86_64/boot/HorizonOS/HorizonOS_Kernel
 # GDB Cmd: gdb target extended-remote localhost:1234
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
@@ -258,13 +267,13 @@ elseif (${HORIZON_ARCH} STREQUAL "riscv64")
 elseif (${HORIZON_ARCH} STREQUAL "aarch64")
     add_custom_target(
             Run-HorizonOS-Debug
-            COMMAND qemu-system-aarch64 -s -S -cpu cortex-a53 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-aarch64 -s -S -cpu cortex-a76 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
             DEPENDS HorizonOS-ISO
     )
 
     add_custom_target(
             Run-HorizonOS-NoDbg
-            COMMAND qemu-system-aarch64 -cpu cortex-a53 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-aarch64 -cpu cortex-a76 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
             DEPENDS HorizonOS-ISO
     )
 endif ()
