@@ -1,13 +1,13 @@
-global loadGdtAsm
+.global loadGdtAsm
 loadGdtAsm:
     lgdt [rdi]
 
-global reloadRegistersAsm
+.global reloadRegistersAsm
 reloadRegistersAsm:
     push 0x08
-    lea rax, [rip + .reload_CS]
+    lea rax, [rip + .reloadCS]
     push rax
-    lretq
+    retfq
 .reloadCS:
     mov ax, 0x10
     mov ds, ax
