@@ -19,19 +19,17 @@ namespace x86_64::hal {
     };
 
     class TssManager {
-        public:
-            TssManager() = default;
-            ~TssManager() = default;
+    public:
+        TssManager();
 
-            void initTss();
-            void updateTss();
+        void updateTss();
 
-            Tss getTss();
+        Tss getTss();
 
-        private:
-            Tss tssInstance{};
+    private:
+        Tss tssInstance{};
 
-            u8 kernelStack[PAGE_SIZE * 1024]; // 4MB Stack
+        u8 kernelStack[PAGE_SIZE * 1024]{}; // 4MB Stack
     };
 
     extern "C" void updateTssAsm();

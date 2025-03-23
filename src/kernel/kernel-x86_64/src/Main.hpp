@@ -9,10 +9,8 @@ namespace x86_64 {
 
     class Kernel {
     public:
-        Kernel() = default;
-        ~Kernel() = default;
+        Kernel();
 
-        void init();
         void halt();
 
     private:

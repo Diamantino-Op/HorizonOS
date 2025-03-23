@@ -1,7 +1,7 @@
 #include "GDT.hpp"
 
 namespace x86_64::hal {
-    void GdtManager::initGdt(Tss const& tss) {
+    GdtManager::GdtManager(Tss const& tss) {
         this->gdtInstance = Gdt();
 
         // Null Segment

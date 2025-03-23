@@ -1,10 +1,10 @@
 #include "TSS.hpp"
 
 namespace x86_64::hal {
-    void TssManager::initTss() {
-        this->tssInstance = Tss();
+	TssManager::TssManager() {
+    	this->tssInstance = Tss();
 
-        this->tssInstance.rsp[0] = (usize)&this->kernelStack + sizeof(this->kernelStack);
+    	this->tssInstance.rsp[0] = (usize)&this->kernelStack + sizeof(this->kernelStack);
     }
 
     void TssManager::updateTss() {

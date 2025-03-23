@@ -82,19 +82,18 @@ namespace x86_64::hal {
 	};
 
 	class GdtManager {
-		public:
-			GdtManager() = default;
-			~GdtManager() = default;
+	public:
+		GdtManager() = default;
+		GdtManager(Tss const& tss);
 
-			void initGdt(Tss const& tss);
-			void loadGdt();
-			void reloadRegisters();
+		void loadGdt();
+		void reloadRegisters();
 
-			Gdt getGdt();
+		Gdt getGdt();
 
-		private:
-			Gdt gdtInstance{};
-			GdtDesc gdtDescriptor{};
+	private:
+		Gdt gdtInstance{};
+		GdtDesc gdtDescriptor{};
 	};
 
 	extern "C" void loadGdtAsm(GdtDesc* gdtDescriptor);
