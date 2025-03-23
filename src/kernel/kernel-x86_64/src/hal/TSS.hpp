@@ -29,7 +29,7 @@ namespace x86_64::hal {
     private:
         Tss tssInstance{};
 
-        u8 kernelStack[PAGE_SIZE * 1024]{}; // 4MB Stack
+        //u8 kernelStack[PAGE_SIZE * 1]{}; // 4KB Stack
     };
 
     extern "C" void updateTssAsm();

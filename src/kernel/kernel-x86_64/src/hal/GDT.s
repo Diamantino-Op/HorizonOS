@@ -1,18 +1,18 @@
-.global loadGdtAsm
+global loadGdtAsm
 loadGdtAsm:
-    lgdtq (%rdi)
+    lgdt [rdi]
 
-.global reloadRegistersAsm
+global reloadRegistersAsm
 reloadRegistersAsm:
     push 0x08
-    leaq .reloadCS(%rdi), %rax
-    push %rax
+    lea rax, [rip + .reload_CS]
+    push rax
     lretq
 .reloadCS:
-    movw %ax, 0x10
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %fs
-    movw %ax, %gs
-    movw %ax, %ss
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
     ret

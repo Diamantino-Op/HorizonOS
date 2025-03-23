@@ -93,8 +93,6 @@ namespace x86_64 {
     	// TSS
     	this->tssManager = TssManager();
 
-    	this->tssManager.updateTss();
-
     	/*for (usize i = 0; i < 100; i++) {
     		volatile u32 *fb_ptr = (u32*) framebuffer->address;
     		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0x00ff00;
@@ -105,6 +103,8 @@ namespace x86_64 {
 
     	this->gdtManager.loadGdt();
     	this->gdtManager.reloadRegisters();
+
+    	this->tssManager.updateTss();
 
     	/*for (usize i = 0; i < 100; i++) {
     		volatile u32 *fb_ptr = (u32*) framebuffer->address;
