@@ -5,13 +5,13 @@
 #include "TSS.hpp"
 
 namespace x86_64::hal {
-	enum Selector {
-		ZERO = 0,
-		KERNEL_CODE = 1,
-		KERNEL_DATA = 2,
-		USER_DATA = 3,
-		USER_CODE = 4,
-		TSS = 5,
+	enum Selector : u16 {
+		ZERO = 0x0000,
+		KERNEL_CODE = 0x0008,
+		KERNEL_DATA = 0x0010,
+		USER_DATA = 0x0018,
+		USER_CODE = 0x0020,
+		TSS = 0x0028,
 	};
 
 	// User: Ring 3, Driver: Ring 2, System: Ring 1
@@ -45,7 +45,9 @@ namespace x86_64::hal {
 
 		constexpr GdtEntry() = default;
 
-		explicit GdtEntry(u8 accessByte, u8 flags): accessByte(accessByte), flags(flags) {}
+		explicit GdtEntry(u8 accessByte, u8 flags):
+			accessByte(accessByte),
+			flags(flags) {}
 	};
 
 	struct __attribute__((packed)) GdtTssEntry {
@@ -61,7 +63,13 @@ namespace x86_64::hal {
 
 		constexpr GdtTssEntry() = default;
 
-		explicit GdtTssEntry(Tss const& tss): limitLow(sizeof(Tss)), baseLow((usize)&tss & 0xffff), baseMid(((usize)&tss >> 16) & 0xff), accessByte(0b10001001), baseHigh(((usize)&tss >> 24) & 0xff), baseUpper32((usize)&tss >> 32) {}
+		explicit GdtTssEntry(Tss const& tss):
+			limitLow(sizeof(Tss)),
+			baseLow((usize)&tss & 0xffff),
+			baseMid(((usize)&tss >> 16) & 0xff),
+			accessByte(0b10001001),
+			baseHigh(((usize)&tss >> 24) & 0xff),
+			baseUpper32((usize)&tss >> 32) {}
 	};
 
 	struct __attribute__((packed)) Gdt {
@@ -73,12 +81,14 @@ namespace x86_64::hal {
 	};
 
 	struct __attribute__((packed)) GdtDesc {
-		u16 limit;
-		u64 base;
+		u16 limit{};
+		u64 base{};
 
 		constexpr GdtDesc() = default;
 
-		explicit GdtDesc(Gdt const& base): limit(sizeof(Gdt) - 1), base(reinterpret_cast<usize>(&base)) {}
+		explicit GdtDesc(Gdt const& base):
+			limit(sizeof(Gdt) - 1),
+			base(reinterpret_cast<usize>(&base)) {}
 	};
 
 	class GdtManager {

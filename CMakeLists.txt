@@ -67,20 +67,39 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 # ------------------ Tools Setup ------------------
 set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
 
-set(CMAKE_C_FLAGS "-Wall -Wextra -O3 -mno-red-zone -ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "C Flags")
+set(COMMON_C_FLAGS "-Wall -Wextra -O3 -ffreestanding -static --target=${HORIZON_ARCH}-none-elf" CACHE STRING "Common C Flags")
+set(COMMON_ASM_FLAGS "-static --target=${HORIZON_ARCH}-none-elf -masm=intel" CACHE STRING "Common Asm Flags")
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mno-sse" CACHE STRING "C Flags")
+    message("X86_64 Flags")
+
+    set(CMAKE_C_FLAGS "${COMMON_C_FLAGS} -mno-red-zone -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387" CACHE STRING "C Flags")
+    set(CMAKE_ASM_FLAGS "${COMMON_ASM_FLAGS} -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387" CACHE STRING "Asm Flags")
+elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    message("RiscV64 Flags")
+
+    set(CMAKE_C_FLAGS "${COMMON_C_FLAGS}" CACHE STRING "C Flags")
+    set(CMAKE_ASM_FLAGS "${COMMON_ASM_FLAGS}7" CACHE STRING "Asm Flags")
+elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    message("AArch64 Flags")
+
+    set(CMAKE_C_FLAGS "${COMMON_C_FLAGS}" CACHE STRING "C Flags")
+    set(CMAKE_ASM_FLAGS "${COMMON_ASM_FLAGS}" CACHE STRING "Asm Flags")
 endif ()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}" CACHE STRING "C++ Flags")
-set(CMAKE_ASM_FLAGS "-mno-sse -mno-red-zone -ffreestanding -static --target=${HORIZON_ARCH}-none-elf -masm=intel" CACHE STRING "Asm Flags")
+
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${LINKER_SCRIPT} -static -nostdlib" CACHE STRING "Linker Flags")
 
+message("C Flags: ${CMAKE_C_FLAGS}")
+message("C++ Flags: ${CMAKE_CXX_FLAGS}")
+message("Asm Flags: ${CMAKE_ASM_FLAGS} \n")
+
 set(CMAKE_LINKER "${LLVM_BIN_DIR}/ld.lld" CACHE FILEPATH "Linker")
-set(CMAKE_C_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "C Linker")
-set(CMAKE_CXX_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "C++ Linker")
-set(CMAKE_ASM_LINK_EXECUTABLE "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Asm Linker")
+set(COMMON_LINKER "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
+set(CMAKE_C_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C Linker")
+set(CMAKE_CXX_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C++ Linker")
+set(CMAKE_ASM_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "Asm Linker")
 
 set(CMAKE_C_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "C Compiler")
 set(CMAKE_C_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "C Compiler AR")

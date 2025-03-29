@@ -1,5 +1,5 @@
 #include "Main.hpp"
-//#include "limine.h"
+#include "limine.h"
 
 using namespace x86_64;
 
@@ -7,7 +7,7 @@ extern "C" void kernelMain() {
     Kernel();
 }
 
-/*__attribute__((used, section(".limine_requests")))
+__attribute__((used, section(".limine_requests")))
 static volatile LIMINE_BASE_REVISION(3);
 
 __attribute__((used, section(".limine_requests")))
@@ -20,7 +20,7 @@ __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
 
 __attribute__((used, section(".limine_requests_end")))
-static volatile LIMINE_REQUESTS_END_MARKER;*/
+static volatile LIMINE_REQUESTS_END_MARKER;
 
 extern "C" void *memcpy(void *dest, const void *src, usize n) {
 	u8 *pdest = (u8 *)dest;
@@ -75,7 +75,7 @@ extern "C" int memcmp(const void *s1, const void *s2, usize n) {
 
 namespace x86_64 {
     Kernel::Kernel() {
-    	/*if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+    	if (LIMINE_BASE_REVISION_SUPPORTED == false) {
     		halt();
     	}
 
@@ -88,15 +88,15 @@ namespace x86_64 {
     	for (usize i = 0; i < 100; i++) {
     		volatile u32 *fb_ptr = (u32*) framebuffer->address;
     		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0x0000ff;
-    	}*/
+    	}
 
     	// TSS
     	this->tssManager = TssManager();
 
-    	/*for (usize i = 0; i < 100; i++) {
+    	for (usize i = 0; i < 100; i++) {
     		volatile u32 *fb_ptr = (u32*) framebuffer->address;
     		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0x00ff00;
-    	}*/
+    	}
 
     	// GDT
     	this->gdtManager = GdtManager(this->tssManager.getTss());
@@ -106,10 +106,19 @@ namespace x86_64 {
 
     	this->tssManager.updateTss();
 
-    	/*for (usize i = 0; i < 100; i++) {
+    	for (usize i = 0; i < 100; i++) {
     		volatile u32 *fb_ptr = (u32*) framebuffer->address;
     		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0xff0000;
-    	}*/
+    	}
+
+		this->idtManager = IDTManager();
+
+    	this->idtManager.loadIdt();
+
+    	for (usize i = 0; i < 100; i++) {
+    		volatile u32 *fb_ptr = (u32*) framebuffer->address;
+    		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0xffffff;
+    	}
 
     	halt();
     }
