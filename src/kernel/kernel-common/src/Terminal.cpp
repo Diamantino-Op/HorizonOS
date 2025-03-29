@@ -234,11 +234,11 @@ namespace kernel::common {
 		} while (number > 0);
 
 		if (sign && numberSign < 0) {
-			buffer[pos++] = '-';
+			buffer[pos] = '-';
 		}
 
-		while (--pos >= 0) {
-			putChar(buffer[pos]);
+		for (i32 i = 0; i <= pos; i++) {
+			putChar(buffer[i]);
 		}
 
 		return argp;

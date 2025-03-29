@@ -6,4 +6,8 @@ namespace kernel::x86_64::hal {
 
 
 	}
+
+	void backtrace(usize rbp) {
+
+	}
 }

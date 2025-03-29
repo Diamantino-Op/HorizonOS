@@ -288,39 +288,45 @@ add_custom_target(HorizonOS-ISO ALL DEPENDS ${ISO_OUTPUT})
 # GDB Cmd: gdb target extended-remote localhost:1234
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
+    set(X86_64_RUN_FLAGS "-cpu max,+hypervisor,+invtsc,+tsc-deadline -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT}" CACHE STRING "x86_64 Run Flags")
+
     add_custom_target(
             Run-HorizonOS-Debug
-            COMMAND qemu-system-x86_64 -s -S -cpu max,+hypervisor,+invtsc,+tsc-deadline -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT} -serial stdio
+            COMMAND qemu-system-x86_64 -s -S ${X86_64_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 
     add_custom_target(
             Run-HorizonOS-NoDbg
-            COMMAND qemu-system-x86_64 -cpu max,+hypervisor,+invtsc,+tsc-deadline -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT} -serial stdio
+            COMMAND qemu-system-x86_64 ${X86_64_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    set(RISCV_RUN_FLAGS "-cpu rv64 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0" CACHE STRING "RiscV Run Flags")
+
     add_custom_target(
             Run-HorizonOS-Debug
-            COMMAND qemu-system-riscv64 -s -S -cpu rv64 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-riscv64 -s -S ${RISCV_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 
     add_custom_target(
             Run-HorizonOS-NoDbg
-            COMMAND qemu-system-riscv64 -cpu rv64 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-riscv64 ${RISCV_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    set (AARCH64_RUN_FLAGS "-cpu cortex-a76 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0" CACHE STRING "AArch64 Run Flags")
+
     add_custom_target(
             Run-HorizonOS-Debug
-            COMMAND qemu-system-aarch64 -s -S -cpu cortex-a76 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-aarch64 -s -S ${AARCH64_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 
     add_custom_target(
             Run-HorizonOS-NoDbg
-            COMMAND qemu-system-aarch64 -cpu cortex-a76 -smp 10 -M virt -m 8G -usb -device qemu-xhci -device usb-kbd -device usb-mouse -device ramfb -device ahci,id=ahci -device ide-hd,drive=hdd0 -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -drive file=${ISO_OUTPUT},if=none,id=hdd0 -serial stdio
+            COMMAND qemu-system-aarch64 ${AARCH64_RUN_FLAGS}
             DEPENDS HorizonOS-ISO
     )
 endif ()

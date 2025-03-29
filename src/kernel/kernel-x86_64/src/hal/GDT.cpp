@@ -40,8 +40,6 @@ namespace kernel::x86_64::hal {
     void GdtManager::loadGdt() {
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
 
-    	Kernel::getTerminal().printf("GDT Address: %llp\n", &this->gdtDescriptor.base);
-
         loadGdtAsm(&this->gdtDescriptor);
     }
 

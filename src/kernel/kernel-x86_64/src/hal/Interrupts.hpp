@@ -31,6 +31,8 @@ namespace kernel::x86_64::hal {
         u64 ss;
     };
 
+    void backtrace(usize rbp);
+
     extern "C" uPtr interruptTable[256];
 
     extern "C" void handleInterruptAsm(usize stackFrame);
