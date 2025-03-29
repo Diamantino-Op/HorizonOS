@@ -1,6 +1,8 @@
 #include "GDT.hpp"
 
-namespace x86_64::hal {
+#include "Main.hpp"
+
+namespace kernel::x86_64::hal {
     GdtManager::GdtManager(Tss const& tss) {
         this->gdtInstance = Gdt();
 
@@ -37,6 +39,8 @@ namespace x86_64::hal {
 
     void GdtManager::loadGdt() {
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
+
+    	Kernel::getTerminal().printf("GDT Address: %llp\n", &this->gdtDescriptor.base);
 
         loadGdtAsm(&this->gdtDescriptor);
     }

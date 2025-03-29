@@ -3,7 +3,7 @@
 
 #include "Types.hpp"
 
-namespace x86_64::hal {
+namespace kernel::x86_64::hal {
     struct __attribute__((packed)) Frame {
         u64 r15;
         u64 r14;

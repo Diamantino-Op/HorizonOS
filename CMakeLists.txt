@@ -73,7 +73,7 @@ set(COMMON_ASM_FLAGS "-static --target=${HORIZON_ARCH}-none-elf -masm=intel" CAC
 if (${HORIZON_ARCH} STREQUAL "x86_64")
     message("X86_64 Flags")
 
-    set(CMAKE_C_FLAGS "${COMMON_C_FLAGS} -mno-red-zone -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387" CACHE STRING "C Flags")
+    set(CMAKE_C_FLAGS "${COMMON_C_FLAGS} -mno-red-zone -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387 -fPIC -fPIE" CACHE STRING "C Flags")
     set(CMAKE_ASM_FLAGS "${COMMON_ASM_FLAGS} -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387" CACHE STRING "Asm Flags")
 elseif (${HORIZON_ARCH} STREQUAL "riscv64")
     message("RiscV64 Flags")
@@ -189,6 +189,29 @@ if(NOT EXISTS "${LIMINE_DIR}/limine")
         message(FATAL_ERROR "Failed to build Limine.")
     endif()
 endif()
+
+# ------------------ Flanterm ------------------
+set(FLANTERM_REPO "https://github.com/mintsuki/flanterm.git" CACHE STRING "Flanterm Repository")
+set(FLANTERM_BRANCH "trunk" CACHE STRING "Flanterm Branch")
+set(FLANTERM_DIR "${CMAKE_SOURCE_DIR}/deps/flanterm" CACHE PATH "Flanterm Directory")
+
+if(NOT EXISTS "${FLANTERM_DIR}")
+    message(STATUS "Cloning Flanterm repository...")
+    execute_process(
+            COMMAND git clone --depth=1 --branch ${FLANTERM_BRANCH} ${FLANTERM_REPO} ${FLANTERM_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            RESULT_VARIABLE GIT_CLONE_RESULT
+    )
+    execute_process(
+            COMMAND rm -rf ${FLANTERM_DIR}/.git
+            WORKING_DIRECTORY ${FLANTERM_DIR}
+    )
+    if(NOT GIT_CLONE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to clone Flanterm repository.")
+    endif()
+endif()
+
+include_directories(${FLANTERM_DIR})
 
 # ------------------ OVMF Bios ------------------
 set(OVMF_FILE "${CMAKE_SOURCE_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")

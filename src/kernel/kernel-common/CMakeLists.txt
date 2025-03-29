@@ -6,7 +6,8 @@ project(kernel-common VERSION 0.0.1 LANGUAGES CXX ASM)
 
 # ------------------ Kernel Common ------------------
 file(GLOB_RECURSE KERNEL_COMMON_SRC "src/*.hpp" "src/*.cpp" "src/*.asm" "src/*.s")
+file(GLOB_RECURSE FLANTERM_SRC "${FLANTERM_DIR}/*.h" "${FLANTERM_DIR}/*.c")
 
-add_library(kernel-common STATIC ${KERNEL_COMMON_SRC})
+add_library(kernel-common STATIC ${KERNEL_COMMON_SRC} ${FLANTERM_SRC})
 
 target_include_directories(kernel-common PUBLIC src)

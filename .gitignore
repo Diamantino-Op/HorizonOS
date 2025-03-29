@@ -3,6 +3,7 @@
 /deps/ovmf/
 /deps/chdrs/
 /deps/uacpi/
+/deps/flanterm/
 /iso/
 /out/
 /.idea/

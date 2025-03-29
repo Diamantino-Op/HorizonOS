@@ -1,4 +1,4 @@
-section .text
+.section .text
 
 .global loadIdtAsm
 loadIdtAsm:

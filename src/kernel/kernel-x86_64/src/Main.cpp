@@ -1,7 +1,9 @@
 #include "Main.hpp"
 #include "limine.h"
 
-using namespace x86_64;
+using namespace kernel::x86_64;
+
+Terminal Kernel::terminal;
 
 extern "C" void kernelMain() {
     Kernel();
@@ -73,7 +75,7 @@ extern "C" int memcmp(const void *s1, const void *s2, usize n) {
 	return 0;
 }
 
-namespace x86_64 {
+namespace kernel::x86_64 {
     Kernel::Kernel() {
     	if (LIMINE_BASE_REVISION_SUPPORTED == false) {
     		halt();
@@ -85,40 +87,38 @@ namespace x86_64 {
 
     	limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
 
-    	for (usize i = 0; i < 100; i++) {
-    		volatile u32 *fb_ptr = (u32*) framebuffer->address;
-    		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0x0000ff;
-    	}
+    	// Terminal
+    	terminal = Terminal(framebuffer);
+
+    	terminal.printf("Initializing HorizonOS...\n");
 
     	// TSS
     	this->tssManager = TssManager();
 
-    	for (usize i = 0; i < 100; i++) {
-    		volatile u32 *fb_ptr = (u32*) framebuffer->address;
-    		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0x00ff00;
-    	}
+    	terminal.printf("TSS Created... OK\n");
 
     	// GDT
     	this->gdtManager = GdtManager(this->tssManager.getTss());
 
+    	terminal.printf("GDT Created... OK\n");
+
     	this->gdtManager.loadGdt();
     	this->gdtManager.reloadRegisters();
 
+    	terminal.printf("GDT Loaded... OK\n");
+
     	this->tssManager.updateTss();
 
-    	for (usize i = 0; i < 100; i++) {
-    		volatile u32 *fb_ptr = (u32*) framebuffer->address;
-    		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0xff0000;
-    	}
+    	terminal.printf("Updated TSS... OK\n");
 
+    	// IDT
 		this->idtManager = IDTManager();
+
+    	terminal.printf("IDT Created... OK\n");
 
     	this->idtManager.loadIdt();
 
-    	for (usize i = 0; i < 100; i++) {
-    		volatile u32 *fb_ptr = (u32*) framebuffer->address;
-    		fb_ptr[i * (framebuffer->pitch / 4) + i] = 0xffffff;
-    	}
+    	terminal.printf("IDT Loaded... OK\n");
 
     	halt();
     }
@@ -127,5 +127,9 @@ namespace x86_64 {
     	for (;;) {
     		asm volatile ("hlt");
     	}
+    }
+
+	Terminal Kernel::getTerminal() {
+		return terminal;
     }
 }

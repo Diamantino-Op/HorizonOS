@@ -4,7 +4,7 @@
 #include "Types.hpp"
 #include "TSS.hpp"
 
-namespace x86_64::hal {
+namespace kernel::x86_64::hal {
 	enum Selector : u16 {
 		ZERO = 0x0000,
 		KERNEL_CODE = 0x0008,

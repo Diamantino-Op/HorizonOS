@@ -5,10 +5,11 @@
 #include "hal/TSS.hpp"
 #include "hal/IDT.hpp"
 
-#include "printf.h"
+#include "Terminal.hpp"
 
-namespace x86_64 {
+namespace kernel::x86_64 {
     using namespace hal;
+    using namespace common;
 
     class Kernel {
     public:
@@ -16,7 +17,11 @@ namespace x86_64 {
 
         void halt();
 
+        static Terminal getTerminal();
+
     private:
+        static Terminal terminal;
+
         GdtManager gdtManager;
         TssManager tssManager;
         IDTManager idtManager;

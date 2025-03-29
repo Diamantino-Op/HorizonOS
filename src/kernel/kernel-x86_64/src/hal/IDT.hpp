@@ -3,7 +3,7 @@
 
 #include "Types.hpp"
 
-namespace x86_64::hal {
+namespace kernel::x86_64::hal {
 	enum GateType : u8 {
 		TRAP_TYPE = 0xEF,
 		USER_TYPE = 0x60,

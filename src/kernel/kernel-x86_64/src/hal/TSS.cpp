@@ -1,6 +1,6 @@
 #include "TSS.hpp"
 
-namespace x86_64::hal {
+namespace kernel::x86_64::hal {
 	TssManager::TssManager() {
     	this->tssInstance = Tss();
 
