@@ -5,6 +5,10 @@ namespace x86_64::hal {
 		this->idtInstance = Idt();
 	}
 
+	void IDTManager::addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags) {
+		this->idtInstance.entries[id] = IDTEntry(handler, selector, ist, flags);
+    }
+
 	void IDTManager::loadIdt() {
 		this->idtDescriptor = IDTDesc(this->idtInstance);
 
@@ -13,5 +17,9 @@ namespace x86_64::hal {
 
 	Idt IDTManager::getIdt() {
 		return this->idtInstance;
+	}
+
+	void handleInterruptAsm(usize stackFrame) {
+
 	}
 }

@@ -10,6 +10,33 @@ namespace x86_64::hal {
 		GATE_TYPE = 0x8E,
 	};
 
+	struct __attribute__((packed)) Frame {
+		u64 r15;
+		u64 r14;
+		u64 r13;
+		u64 r12;
+		u64 r11;
+		u64 r10;
+		u64 r9;
+		u64 r8;
+		u64 rbp;
+		u64 rdi;
+		u64 rsi;
+		u64 rdx;
+		u64 rcx;
+		u64 rbx;
+		u64 rax;
+
+		u64 intNo;
+		u64 errNo;
+
+		u64 rip;
+		u64 cs;
+		u64 rFlags;
+		u64 rsp;
+		u64 ss;
+	};
+
     struct __attribute__((packed)) IDTEntry {
         u16 offsetLow{};
         u16 selector{};
@@ -52,6 +79,7 @@ namespace x86_64::hal {
 	public:
 		IDTManager();
 
+		void addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags);
 		void loadIdt();
 
 		Idt getIdt();
@@ -62,6 +90,7 @@ namespace x86_64::hal {
 	};
 
 	extern "C" void loadIdtAsm(IDTDesc *idtDescriptor);
+	extern "C" void handleInterruptAsm(usize stackFrame);
 }
 
 #endif
