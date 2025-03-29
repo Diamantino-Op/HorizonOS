@@ -18,8 +18,4 @@ namespace x86_64::hal {
 	Idt IDTManager::getIdt() {
 		return this->idtInstance;
 	}
-
-	void handleInterruptAsm(usize stackFrame) {
-
-	}
 }

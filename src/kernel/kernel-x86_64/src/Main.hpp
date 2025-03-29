@@ -5,6 +5,8 @@
 #include "hal/TSS.hpp"
 #include "hal/IDT.hpp"
 
+#include "printf.h"
+
 namespace x86_64 {
     using namespace hal;
 
