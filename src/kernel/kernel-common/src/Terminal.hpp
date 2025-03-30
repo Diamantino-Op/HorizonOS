@@ -5,7 +5,6 @@
 
 #include "limine.h"
 #include "flanterm.h"
-#include "backends/fb.h"
 
 #define PRINTF_STATE_NORMAL       0
 #define PRINTF_STATE_LENGTH       1
@@ -22,6 +21,24 @@
 namespace kernel::common {
     constexpr char HEX_DIGITS[] = "0123456789abcdef";
 
+	constexpr char FORMAT_CHAR[] = "\033[";
+
+    enum TextFormatting {
+        Regular = "0",
+        Bold = "1",
+        LowIntensity = "2",
+        Italic = "3",
+        Underline = "4",
+        Blinking = "5",
+        Reverse = "6",
+        Background = "7",
+        Invisible = "8",
+    };
+
+    enum TextColor {
+
+    };
+
     class Terminal {
     public:
         Terminal() = default;
@@ -32,6 +49,7 @@ namespace kernel::common {
         void putString(const char* str);
         void printf(const char* format, ...);
         i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
+        char* getFormat(const char* mainFormat, ...);
 
     private:
         flanterm_context *flantermCtx;

@@ -1,10 +1,10 @@
 # Snyk (https://snyk.io) policy file
 exclude:
     global:
-        - "deps/chdrs/**"
-        - "deps/limine/**"
-        - "deps/llvm/**"
-        - "deps/ovmf/**"
-        - "deps/flanterm/**"
-        - "iso/**"
-        - "out/**"
+        - "deps/chdrs/**/*"
+        - "deps/limine/**/*"
+        - "deps/llvm/**/*"
+        - "deps/ovmf/**/*"
+        - "deps/flanterm/**/*"
+        - "iso/**/*"
+        - "out/**/*"

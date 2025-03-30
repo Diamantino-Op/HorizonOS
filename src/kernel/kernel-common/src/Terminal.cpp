@@ -1,5 +1,8 @@
 #include "Terminal.hpp"
 
+#include "backends/fb.h"
+#include "stdarg.h"
+
 namespace kernel::common {
 	 Terminal::Terminal(limine_framebuffer *framebuffer) {
 	 	this->flantermCtx = flanterm_fb_init(
@@ -243,4 +246,45 @@ namespace kernel::common {
 
 		return argp;
     }
+
+	char* Terminal::getFormat(const char* mainFormat, ...) {
+	 	va_list args;
+	 	va_start(args, mainFormat);
+
+	 	size_t totalLength = 0;
+	 	const char* arg = mainFormat;
+	 	while (arg) {
+	 		const char* temp = arg;
+	 		while (*temp) {
+	 			totalLength++;
+	 			temp++;
+	 		}
+	 		arg = va_arg(args, const char*);
+	 		if (arg) totalLength++;
+	 	}
+	 	va_end(args);
+
+	 	char* result = new char[totalLength + 1];
+	 	if (!result) return nullptr;
+
+	 	va_start(args, mainFormat);
+	 	char* ptr = result;
+	 	arg = mainFormat;
+	 	while (arg) {
+	 		while (*arg) {
+	 			*ptr = *arg;
+	 			ptr++;
+	 			arg++;
+	 		}
+	 		arg = va_arg(args, const char*);
+	 		if (arg) {
+	 			*ptr = ';';
+	 			ptr++;
+	 		}
+	 	}
+	 	*ptr = '\0';
+	 	va_end(args);
+
+	 	return result;
+	}
 }
