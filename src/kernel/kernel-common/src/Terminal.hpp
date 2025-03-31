@@ -60,6 +60,7 @@ namespace kernel::common {
 
         const char* getTextFormatting(TextFormatting format);
         const char* getTextColor(TextColor format);
+        const char* getBackgroundColor(TextColor format);
 
     private:
         flanterm_context *flantermCtx;

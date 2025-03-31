@@ -329,4 +329,18 @@ namespace kernel::common {
 	 		default: return "0";
 	 	}
 	 }
+
+	const char* Terminal::getBackgroundColor(TextColor color) {
+	 	switch (color) {
+	 		case TextColor::Black: return "40m";
+	 		case TextColor::Red: return "41m";
+	 		case TextColor::Green: return "42m";
+	 		case TextColor::Yellow: return "43m";
+	 		case TextColor::Blue: return "44m";
+	 		case TextColor::Magenta: return "45m";
+	 		case TextColor::Cyan: return "46m";
+	 		case TextColor::White: return "47m";
+	 		default: return "0";
+	 	}
+	 }
 }

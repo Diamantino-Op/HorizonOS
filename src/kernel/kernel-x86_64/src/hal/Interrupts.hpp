@@ -31,6 +31,9 @@ namespace kernel::x86_64::hal {
         u64 ss;
     };
 
+    void kernelPanic(Frame& frame);
+    void userPanic(Frame& frame);
+
     void backtrace(usize rbp);
 
     extern "C" uPtr interruptTable[256];
