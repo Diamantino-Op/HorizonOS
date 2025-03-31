@@ -8,6 +8,11 @@ file(GLOB_RECURSE KERNEL_X86_64_SRC "src/*.hpp" "src/*.cpp" "src/*.asm" "src/*.s
 
 add_executable(kernel ${KERNEL_X86_64_SRC})
 
+target_link_options(kernel PUBLIC ${KERNEL_LINK_FLAGS})
+target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_FLAGS}>)
+target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${EXTRA_CXX_FLAGS}>)
+target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${EXTRA_ASM_FLAGS}>)
+
 target_include_directories(kernel PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR})
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})

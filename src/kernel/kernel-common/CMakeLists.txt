@@ -9,6 +9,11 @@ file(GLOB_RECURSE FLANTERM_SRC "${FLANTERM_DIR}/*.h" "${FLANTERM_DIR}/*.c")
 
 add_library(kernel-common STATIC ${KERNEL_COMMON_SRC} ${FLANTERM_SRC})
 
+target_link_options(kernel-common PUBLIC ${KERNEL_LINK_FLAGS})
+target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_FLAGS}>)
+target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${EXTRA_CXX_FLAGS}>)
+target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${EXTRA_ASM_FLAGS}>)
+
 target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR})
 
 target_link_libraries(kernel-common hos-base)
