@@ -252,9 +252,15 @@ namespace kernel::common {
 	 	va_start(args, mainFormat);
 
 	 	size_t totalLength = 0;
+	 	const char* temp = FORMAT_CHAR;
+	 	while (*temp) {
+	 		totalLength++;
+	 		temp++;
+	 	}
+
 	 	const char* arg = mainFormat;
 	 	while (arg) {
-	 		const char* temp = arg;
+	 		temp = arg;
 	 		while (*temp) {
 	 			totalLength++;
 	 			temp++;
@@ -267,8 +273,15 @@ namespace kernel::common {
 	 	char* result = new char[totalLength + 1];
 	 	if (!result) return nullptr;
 
-	 	va_start(args, mainFormat);
 	 	char* ptr = result;
+	 	temp = FORMAT_CHAR;
+	 	while (*temp) {
+	 		*ptr = *temp;
+	 		ptr++;
+	 		temp++;
+	 	}
+
+	 	va_start(args, mainFormat);
 	 	arg = mainFormat;
 	 	while (arg) {
 	 		while (*arg) {
@@ -278,7 +291,7 @@ namespace kernel::common {
 	 		}
 	 		arg = va_arg(args, const char*);
 	 		if (arg) {
-	 			*ptr = ';';
+	 			*ptr = ',';
 	 			ptr++;
 	 		}
 	 	}
@@ -287,4 +300,33 @@ namespace kernel::common {
 
 	 	return result;
 	}
+
+	const char* Terminal::getTextFormatting(TextFormatting format) {
+	 	switch (format) {
+	 		case TextFormatting::Regular: return "0";
+	 		case TextFormatting::Bold: return "1";
+	 		case TextFormatting::LowIntensity: return "2";
+	 		case TextFormatting::Italic: return "3";
+	 		case TextFormatting::Underline: return "4";
+	 		case TextFormatting::Blinking: return "5";
+	 		case TextFormatting::Reverse: return "6";
+	 		case TextFormatting::Background: return "7";
+	 		case TextFormatting::Invisible: return "8";
+	 		default: return "0";
+	 	}
+    }
+
+	const char* Terminal::getTextColor(TextColor color) {
+	 	switch (color) {
+	 		case TextColor::Black: return "30m";
+	 		case TextColor::Red: return "31m";
+	 		case TextColor::Green: return "32m";
+	 		case TextColor::Yellow: return "33m";
+	 		case TextColor::Blue: return "34m";
+	 		case TextColor::Magenta: return "35m";
+	 		case TextColor::Cyan: return "36m";
+	 		case TextColor::White: return "37m";
+	 		default: return "0";
+	 	}
+	 }
 }

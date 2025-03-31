@@ -39,11 +39,8 @@ endif ()
 # ------------------ Project Setup ------------------
 project(HorizonOS)
 
-# ------------------ Kernel ------------------
-add_subdirectory(src/kernel)
-
-# ------------------ Libs ------------------
-add_subdirectory(src/libs/hos-base)
+# ------------------ Source ------------------
+add_subdirectory(src)
 
 # ------------------ ISO ------------------
 set(ISO_OUTPUT "${CMAKE_SOURCE_DIR}/iso/out/HorizonOS-${HORIZON_ARCH}.iso")

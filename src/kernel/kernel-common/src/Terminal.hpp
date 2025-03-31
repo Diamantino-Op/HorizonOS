@@ -24,19 +24,26 @@ namespace kernel::common {
 	constexpr char FORMAT_CHAR[] = "\033[";
 
     enum TextFormatting {
-        Regular = "0",
-        Bold = "1",
-        LowIntensity = "2",
-        Italic = "3",
-        Underline = "4",
-        Blinking = "5",
-        Reverse = "6",
-        Background = "7",
-        Invisible = "8",
+        Regular,
+        Bold,
+        LowIntensity,
+        Italic,
+        Underline,
+        Blinking,
+        Reverse,
+        Background,
+        Invisible
     };
 
     enum TextColor {
-
+        Black,
+        Red,
+        Green,
+        Yellow,
+        Blue,
+        Magenta,
+        Cyan,
+        White
     };
 
     class Terminal {
@@ -50,6 +57,9 @@ namespace kernel::common {
         void printf(const char* format, ...);
         i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
         char* getFormat(const char* mainFormat, ...);
+
+        const char* getTextFormatting(TextFormatting format);
+        const char* getTextColor(TextColor format);
 
     private:
         flanterm_context *flantermCtx;
