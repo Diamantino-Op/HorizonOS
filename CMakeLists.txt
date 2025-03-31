@@ -5,11 +5,11 @@ set(HORIZON_CMAKE_VERSION 3.28 CACHE STRING "HorizonOS CMake Version")
 set(HORIZON_CXX_STANDARD 23 CACHE STRING "HorizonOS C++ Standard")
 set(HORIZON_C_STANDARD 23 CACHE STRING "HorizonOS C Standard")
 
-set(ROOT_DIR "${CMAKE_SOURCE_DIR}")
+set(ROOT_DIR "${CMAKE_SOURCE_DIR}" CACHE PATH "Root Directory")
 
 cmake_minimum_required(VERSION ${HORIZON_CMAKE_VERSION})
 
-set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld")
+set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILEPATH "Linker Script")
 
 # ------------------ Dependencies Setup ------------------
 add_subdirectory(deps)

@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION ${HORIZON_CMAKE_VERSION})
 
 # ------------------ LLVM Compiler ------------------
-set(LLVM_REPO "https://github.com/llvm/llvm-project.git")
-set(LLVM_BRANCH "release/20.x")
-set(LLVM_DIR "${ROOT_DIR}/deps/llvm")
-set(LLVM_BUILD_DIR "${LLVM_DIR}/build")
-set(LLVM_BIN_DIR "${LLVM_BUILD_DIR}/bin")
+set(LLVM_REPO "https://github.com/llvm/llvm-project.git" CACHE STRING "LLVM Repository")
+set(LLVM_BRANCH "release/20.x" CACHE STRING "LLVM Branch")
+set(LLVM_DIR "${ROOT_DIR}/deps/llvm" CACHE PATH "LLVM Directory")
+set(LLVM_BUILD_DIR "${LLVM_DIR}/build" CACHE PATH "LLVM Build Directory")
+set(LLVM_BIN_DIR "${LLVM_BUILD_DIR}/bin" CACHE PATH "LLVM Bin Directory")
 
 # Clone LLVM
 if(NOT EXISTS "${LLVM_DIR}")
@@ -48,10 +48,10 @@ if(NOT EXISTS "${LLVM_BUILD_DIR}")
     endif()
 endif()
 
-include(${LLVM_BUILD_DIR}/cmake/modules/CMakeFiles/LLVMConfig.cmake)
+#include(${LLVM_BUILD_DIR}/cmake/modules/CMakeFiles/LLVMConfig.cmake)
 
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+#message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+#message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
 #include_directories(${LLVM_INCLUDE_DIRS})
 #separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
@@ -75,10 +75,10 @@ set(CMAKE_ASM_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "Asm Compiler
 set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
 # ------------------ C Headers ------------------
-set(CHDRS_REPO "https://github.com/osdev0/freestnd-c-hdrs.git")
-set(CHDRS_BRANCH "trunk")
-set(CHDRS_DIR "${ROOT_DIR}/deps/chdrs")
-set(CHDRS_INC_DIR "${CHDRS_DIR}/${HORIZON_ARCH}/include")
+set(CHDRS_REPO "https://github.com/osdev0/freestnd-c-hdrs.git" CACHE STRING "CHDRS Repository")
+set(CHDRS_BRANCH "trunk" CACHE STRING "CHDRS Branch")
+set(CHDRS_DIR "${ROOT_DIR}/deps/chdrs" CACHE PATH "CHDRS Directory")
+set(CHDRS_INC_DIR "${CHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CHDRS Include Directory")
 
 if(NOT EXISTS "${CHDRS_DIR}")
     message(STATUS "Cloning C Headers repository...")
@@ -99,8 +99,8 @@ endif()
 include_directories(${CHDRS_INC_DIR})
 
 # ------------------ uACPI ------------------
-set(UACPI_REPO "https://github.com/uACPI/uACPI.git")
-set(UACPI_DIR "${ROOT_DIR}/deps/uacpi")
+set(UACPI_REPO "https://github.com/uACPI/uACPI.git" CACHE STRING "uACPI Repository")
+set(UACPI_DIR "${ROOT_DIR}/deps/uacpi" CACHE PATH "uACPI Directory")
 
 if(NOT EXISTS "${UACPI_DIR}")
     message(STATUS "Cloning uACPI repository...")
@@ -121,9 +121,9 @@ endif()
 include(${UACPI_DIR}/uacpi.cmake)
 
 # ------------------ Limine Bootloader ------------------
-set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git")
-set(LIMINE_BRANCH "v9.x-binary")
-set(LIMINE_DIR "${ROOT_DIR}/deps/limine")
+set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
+set(LIMINE_BRANCH "v9.x-binary" CACHE STRING "Limine Branch")
+set(LIMINE_DIR "${ROOT_DIR}/deps/limine" CACHE PATH "Limine Directory")
 
 # Clone Limine
 if(NOT EXISTS "${LIMINE_DIR}")
@@ -156,9 +156,9 @@ if(NOT EXISTS "${LIMINE_DIR}/limine")
 endif()
 
 # ------------------ Flanterm ------------------
-set(FLANTERM_REPO "https://github.com/mintsuki/flanterm.git")
-set(FLANTERM_BRANCH "trunk")
-set(FLANTERM_DIR "${ROOT_DIR}/deps/flanterm")
+set(FLANTERM_REPO "https://github.com/mintsuki/flanterm.git" CACHE STRING "Flanterm Repository")
+set(FLANTERM_BRANCH "trunk" CACHE STRING "Flanterm Branch")
+set(FLANTERM_DIR "${ROOT_DIR}/deps/flanterm" CACHE PATH "Flanterm Directory")
 
 if(NOT EXISTS "${FLANTERM_DIR}")
     message(STATUS "Cloning Flanterm repository...")
@@ -179,18 +179,18 @@ endif()
 include_directories(${FLANTERM_DIR})
 
 # ------------------ OVMF Bios ------------------
-set(OVMF_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd")
+set(OVMF_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
-    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd" CACHE STRING "OVMF Link")
 elseif (${HORIZON_ARCH} STREQUAL "riscv64")
-    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd" CACHE STRING "OVMF Link")
 
     execute_process(
             COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
     )
 elseif (${HORIZON_ARCH} STREQUAL "aarch64")
-    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd")
+    set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd" CACHE STRING "OVMF Link")
 
     execute_process(
             COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
