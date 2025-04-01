@@ -31,6 +31,41 @@ namespace kernel::x86_64::hal {
         u64 ss;
     };
 
+    static char const* faultMessages[32] = {
+        "Division By Zero",
+        "Debug",
+        "Non Maskable Interrupt",
+        "Breakpoint",
+        "Detected Overflow",
+        "Out Of Bounds",
+        "Invalid OpCode",
+        "No CoProcessor",
+        "Double Fault",
+        "CoProcessor Segment Overrun",
+        "Bad Tss",
+        "Segment Not Present",
+        "Stack Fault",
+        "General Protection Fault",
+        "Page Fault",
+        "Unknown Interrupt",
+        "CoProcessor Fault",
+        "Alignment Check",
+        "Machine Check",
+        "Simd Floating Point Exception",
+        "Virtualization Exception",
+        "Control Protection Exception",
+        "Reserved",
+        "Hypervisor Injection Exception",
+        "Vmm Communication Exception",
+        "Security Exception",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+    };
+
     void kernelPanic(Frame& frame);
     void userPanic(Frame& frame);
 
