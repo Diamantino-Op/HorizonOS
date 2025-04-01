@@ -91,35 +91,35 @@ namespace kernel::x86_64 {
     	// Terminal
     	terminal = Terminal(framebuffer);
 
-    	Terminal::printf("Initializing HorizonOS...\n");
+    	terminal.printf("Initializing HorizonOS...\n");
 
     	// TSS
     	this->tssManager = TssManager();
 
-    	Terminal::printf("TSS Created... OK\n");
+    	terminal.printf("TSS Created... OK\n");
 
     	// GDT
     	this->gdtManager = GdtManager(this->tssManager.getTss());
 
-    	Terminal::printf("GDT Created... OK\n");
+    	terminal.printf("GDT Created... OK\n");
 
     	this->gdtManager.loadGdt();
     	this->gdtManager.reloadRegisters();
 
-    	Terminal::printf("GDT Loaded... OK\n");
+    	terminal.printf("GDT Loaded... OK\n");
 
     	this->tssManager.updateTss();
 
-    	Terminal::printf("Updated TSS... OK\n");
+    	terminal.printf("Updated TSS... OK\n");
 
     	// IDT
 		this->idtManager = IDTManager();
 
-    	Terminal::printf("IDT Created... OK\n");
+    	terminal.printf("IDT Created... OK\n");
 
     	this->idtManager.loadIdt();
 
-    	Terminal::printf("IDT Loaded... OK\n");
+    	terminal.printf("IDT Loaded... OK\n");
 
     	halt();
     }
@@ -130,7 +130,7 @@ namespace kernel::x86_64 {
     	}
     }
 
-	Terminal Kernel::getTerminal() {
-		return terminal;
+	Terminal* Kernel::getTerminal() {
+		return &terminal;
     }
 }

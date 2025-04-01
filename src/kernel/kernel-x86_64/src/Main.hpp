@@ -17,7 +17,7 @@ namespace kernel::x86_64 {
 
         void halt();
 
-        static Terminal getTerminal();
+        static Terminal* getTerminal();
 
     private:
         static Terminal terminal;

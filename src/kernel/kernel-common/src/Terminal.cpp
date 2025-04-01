@@ -4,8 +4,8 @@
 #include "stdarg.h"
 
 namespace kernel::common {
-	 Terminal::Terminal(const limine_framebuffer *framebuffer) {
-	 	flantermCtx = flanterm_fb_init(
+	 Terminal::Terminal(limine_framebuffer *framebuffer) {
+	 	this->flantermCtx = flanterm_fb_init(
 	 		nullptr,
 	 		nullptr,
 	 		(u32 *) framebuffer->address,
@@ -37,11 +37,11 @@ namespace kernel::common {
 	void Terminal::putChar(char c) {
 	 	char str[] = { c };
 
-	 	flanterm_write(flantermCtx, str, sizeof(str));
+	 	flanterm_write(this->flantermCtx, str, sizeof(str));
 	}
 
 	void Terminal::putString(const char *str) {
-	 	flanterm_write(flantermCtx, str, sizeof(str));
+	 	flanterm_write(this->flantermCtx, str, sizeof(str));
 	}
 
 	void Terminal::printf(const char *format, ...) {

@@ -50,20 +50,20 @@ namespace kernel::common {
     public:
         Terminal() = default;
 
-        explicit Terminal(const limine_framebuffer *framebuffer);
+        explicit Terminal(limine_framebuffer *framebuffer);
 
-        static void putChar(char c);
-        static void putString(const char* str);
-        static void printf(const char* format, ...);
-        static i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
-        static char* getFormat(const char* mainFormat, ...);
+        void putChar(char c);
+        void putString(const char* str);
+        void printf(const char* format, ...);
+        i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
+        char* getFormat(const char* mainFormat, ...);
 
-        static const char* getTextFormatting(TextFormatting format);
-        static const char* getTextColor(TextColor format);
-        static const char* getBackgroundColor(TextColor format);
+        const char* getTextFormatting(TextFormatting format);
+        const char* getTextColor(TextColor format);
+        const char* getBackgroundColor(TextColor format);
 
     private:
-        static flanterm_context *flantermCtx;
+        flanterm_context *flantermCtx;
     };
 }
 
