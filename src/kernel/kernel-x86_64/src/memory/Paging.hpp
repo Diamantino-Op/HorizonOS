@@ -3,26 +3,33 @@
 
 #include "Types.hpp"
 
-namespace x86_64::memory {
-    struct PageMapEntry {
+namespace kernel::x86_64::memory {
+	enum PageTableFlags : u8 {
+		PAGE_PRESENT = 0b00000001,
+		PAGE_READ_WRITE = 0b00000010,
+		PAGE_USER = 0b00000100,
+		PAGE_WRITE_TROUGH = 0b00001000,
+		PAGE_CACHE_DISABLE = 0b00010000,
+		PAGE_ACCESSED = 0b00100000,
+	};
+
+    struct __attribute__((packed)) PageEntry {
     	u8 flags{};
-    	u8 availableLow : 3 {};
+    	u8 availableLow : 4 {};
     	u64 address : 40 {};
 		u32 availableHigh : 11 {};
     	u8 executeDisable : 1 {};
     };
 
-    struct PointerTableEntry {
+	class PagingManager {
+	public:
+		PagingManager();
+
+	private:
 
 	};
 
-	struct PageDirectoryEntry {
-
-	};
-
-	struct PageTableEntry {
-
-	};
+	extern "C" void initPaging(u64* pageTablePointer);
 }
 
 #endif

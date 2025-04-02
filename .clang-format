@@ -5,6 +5,7 @@ IndentWidth: 4
 TabWidth: 4
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: false
+NamespaceIndentation: All
 IndentCaseLabels: true
 ColumnLimit: 0
 AccessModifierOffset: -4
