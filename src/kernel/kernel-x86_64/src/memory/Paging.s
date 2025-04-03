@@ -1,5 +1,5 @@
-.global initPaging
-initPaging:
+.global initPagingAsm
+initPagingAsm:
     // Disable paging
     mov ebx, cr0
     and ebx, ~(1 << 31)

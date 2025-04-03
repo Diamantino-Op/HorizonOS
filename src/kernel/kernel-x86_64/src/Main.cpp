@@ -42,6 +42,8 @@ namespace kernel::x86_64 {
 
     	terminal.printf("Initializing HorizonOS...\n");
 
+    	this->pagingManager = PagingManager();
+
     	// TSS
     	this->tssManager = TssManager();
 

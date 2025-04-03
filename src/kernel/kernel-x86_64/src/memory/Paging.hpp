@@ -26,10 +26,11 @@ namespace kernel::x86_64::memory {
 		PagingManager();
 
 	private:
-
+		PageEntry __attribute__((aligned(4096))) pageDirectoryTable[1024]{}; // TODO: Make Dynamic
+		PageEntry __attribute__((aligned(4096))) pageTable[1024]{}; // TODO: Make Dynamic
 	};
 
-	extern "C" void initPaging(u64* pageTablePointer);
+	extern "C" void initPagingAsm(u64 pageTablePointer);
 }
 
 #endif

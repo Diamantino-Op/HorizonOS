@@ -4,11 +4,13 @@
 #include "hal/GDT.hpp"
 #include "hal/TSS.hpp"
 #include "hal/IDT.hpp"
+#include "memory/Paging.hpp"
 
 #include "Terminal.hpp"
 
 namespace kernel::x86_64 {
     using namespace hal;
+    using namespace memory;
     using namespace common;
 
     class Kernel {
@@ -25,6 +27,7 @@ namespace kernel::x86_64 {
         GdtManager gdtManager;
         TssManager tssManager;
         IDTManager idtManager;
+        PagingManager pagingManager;
     };
 }
 
