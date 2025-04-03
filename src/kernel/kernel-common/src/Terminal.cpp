@@ -247,7 +247,7 @@ namespace kernel::common {
 		return argp;
     }
 
-	char* Terminal::getFormat(const char* mainFormat, ...) {
+	/*char* Terminal::getFormat(const char* mainFormat, ...) {
 	 	va_list args;
 	 	va_start(args, mainFormat);
 
@@ -299,9 +299,9 @@ namespace kernel::common {
 	 	va_end(args);
 
 	 	return result;
-	}
+	}*/
 
-	const char* Terminal::getTextFormatting(TextFormatting format) {
+	/*const char* Terminal::getTextFormatting(TextFormatting format) {
 	 	switch (format) {
 	 		case TextFormatting::Regular: return "0";
 	 		case TextFormatting::Bold: return "1";
@@ -314,9 +314,9 @@ namespace kernel::common {
 	 		case TextFormatting::Invisible: return "8";
 	 		default: return "0";
 	 	}
-    }
+    }*/
 
-	const char* Terminal::getTextColor(TextColor color) {
+	/*const char* Terminal::getTextColor(TextColor color) {
 	 	switch (color) {
 	 		case TextColor::Black: return "30m";
 	 		case TextColor::Red: return "31m";
@@ -328,9 +328,9 @@ namespace kernel::common {
 	 		case TextColor::White: return "37m";
 	 		default: return "0";
 	 	}
-	 }
+	}*/
 
-	const char* Terminal::getBackgroundColor(TextColor color) {
+	/*const char* Terminal::getBackgroundColor(TextColor color) {
 	 	switch (color) {
 	 		case TextColor::Black: return "40m";
 	 		case TextColor::Red: return "41m";
@@ -342,5 +342,5 @@ namespace kernel::common {
 	 		case TextColor::White: return "47m";
 	 		default: return "0";
 	 	}
-	 }
+	}*/
 }

@@ -19,37 +19,37 @@ namespace kernel::x86_64::hal {
 	void kernelPanic(Frame& frame) {
 		Terminal* terminal = Kernel::getTerminal();
 
-		terminal->printf("%s------------------------------ Kernel Panic ------------------------------\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   Cause: %s\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), faultMessages[frame.intNo]);
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   Registers:\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   int: 0x%lx\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.intNo);
-		terminal->printf("%s-   err: 0x%lx\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.errNo);
-		terminal->printf("%s-   rip: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rip);
-		terminal->printf("%s-   rbp: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rbp);
-		terminal->printf("%s-   rsp: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rsp);
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
+		terminal->printf("\033[0;31m------------------------------ Kernel Panic ------------------------------\n");
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   Registers:\n");
+		terminal->printf("\033[0;31m-   int: 0x%lx\n", frame.intNo);
+		terminal->printf("\033[0;31m-   err: 0x%lx\n", frame.errNo);
+		terminal->printf("\033[0;31m-   rip: 0x%lp\n", frame.rip);
+		terminal->printf("\033[0;31m-   rbp: 0x%lp\n", frame.rbp);
+		terminal->printf("\033[0;31m-   rsp: 0x%lp\n", frame.rsp);
+		terminal->printf("\033[0;31m-\n");
 		backtrace(frame.rbp);
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s--------------------------------------------------------------------------\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
 	}
 
-	void userPanic(Frame& frame) {
+	void userPanic(const Frame & frame) {
 		Terminal* terminal = Kernel::getTerminal();
 
-		terminal->printf("%s------------------------------ Userland Panic ------------------------------\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   Cause: %s\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), faultMessages[frame.intNo]);
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   Registers:\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s-   int: 0x%lx\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.intNo);
-		terminal->printf("%s-   err: 0x%lx\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.errNo);
-		terminal->printf("%s-   rip: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rip);
-		terminal->printf("%s-   rbp: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rbp);
-		terminal->printf("%s-   rsp: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), frame.rsp);
-		terminal->printf("%s-\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
-		terminal->printf("%s--------------------------------------------------------------------------\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)));
+		terminal->printf("\033[0;31m------------------------------ Userland Panic ------------------------------\n");
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   Registers:\n");
+		terminal->printf("\033[0;31m-   int: 0x%lx\n", frame.intNo);
+		terminal->printf("\033[0;31m-   err: 0x%lx\n", frame.errNo);
+		terminal->printf("\033[0;31m-   rip: 0x%lp\n", frame.rip);
+		terminal->printf("\033[0;31m-   rbp: 0x%lp\n", frame.rbp);
+		terminal->printf("\033[0;31m-   rsp: 0x%lp\n", frame.rsp);
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
 	}
 
 	void backtrace(usize rbp) {
@@ -58,10 +58,10 @@ namespace kernel::x86_64::hal {
 		usize* frame = reinterpret_cast<usize*>(rbp);
 
 		while (frame) {
-			usize ip = frame[1];
-			usize sp = frame[0];
+			const usize ip = frame[1];
+			const usize sp = frame[0];
 
-			terminal->printf("%s-   ip: 0x%lp, sp: 0x%lp\n", terminal->getFormat(terminal->getTextFormatting(TextFormatting::Regular), terminal->getTextColor(TextColor::Red)), ip, sp);
+			terminal->printf("\033[0;31m-   ip: 0x%lp, sp: 0x%lp\n", ip, sp);
 
 			frame = reinterpret_cast<usize*>(sp);
 		}

@@ -58,9 +58,9 @@ namespace kernel::common {
         i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
         char* getFormat(const char* mainFormat, ...);
 
-        const char* getTextFormatting(TextFormatting format);
-        const char* getTextColor(TextColor format);
-        const char* getBackgroundColor(TextColor format);
+        //const char* getTextFormatting(TextFormatting format);
+        //const char* getTextColor(TextColor format);
+        //const char* getBackgroundColor(TextColor format);
 
     private:
         flanterm_context *flantermCtx;

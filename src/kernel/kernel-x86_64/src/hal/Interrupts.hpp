@@ -67,7 +67,7 @@ namespace kernel::x86_64::hal {
     };
 
     void kernelPanic(Frame& frame);
-    void userPanic(Frame& frame);
+    void userPanic(const Frame & frame);
 
     void backtrace(usize rbp);
 
