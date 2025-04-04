@@ -2,15 +2,15 @@
 
 namespace kernel::x86_64::memory {
 	 PagingManager::PagingManager() {
-		for (u32 i = 0; i < 1024; i++) {
-			pageDirectoryTable[i].flags = PageTableFlags::PAGE_READ_WRITE;
+	 	for (u32 i = 0; i < 4; i++) {
+	 		for (u32 j = 0; j < 1024; j++) {
+	 			this->pageDirectoryTables[i].table[j].flags = PageTableFlags::PAGE_READ_WRITE | PageTableFlags::PAGE_PRESENT | PageTableFlags::PAGE_SIZE;
+	 		}
 
-			pageTable[i].flags = PageTableFlags::PAGE_READ_WRITE | PageTableFlags::PAGE_PRESENT;
-			pageTable[i].address = i * 0x1;
-		}
+	 		this->pageDirectoryPointerTable.table[i].flags = PageTableFlags::PAGE_PRESENT;
+	 		this->pageDirectoryPointerTable.table[i].address = reinterpret_cast<usize>(&this->pageDirectoryTables[i]) >> 12;
+	 	}
 
-	 	pageDirectoryTable[0].address = reinterpret_cast<u64>(pageTable);
-
-		initPagingAsm(reinterpret_cast<usize>(&this->pageDirectoryTable));
+		initPagingAsm(reinterpret_cast<usize>(&this->pageDirectoryPointerTable));
 	}
 }

@@ -11,6 +11,7 @@ namespace kernel::x86_64::memory {
 		PAGE_WRITE_TROUGH = 0b00001000,
 		PAGE_CACHE_DISABLE = 0b00010000,
 		PAGE_ACCESSED = 0b00100000,
+		PAGE_SIZE = 0b10000000
 	};
 
     struct __attribute__((packed)) PageEntry {
@@ -21,13 +22,21 @@ namespace kernel::x86_64::memory {
     	u8 executeDisable : 1 {};
     };
 
+	struct __attribute__((packed)) PageDirectoryTable {
+		PageEntry __attribute__((aligned(4096))) table[1024]{};
+	};
+
+	struct __attribute__((packed)) PageDirectoryPointerTable {
+		PageEntry __attribute__((aligned(32))) table[4]{};
+	};
+
 	class PagingManager {
 	public:
 		PagingManager();
 
 	private:
-		PageEntry __attribute__((aligned(4096))) pageDirectoryTable[1024]{}; // TODO: Make Dynamic
-		PageEntry __attribute__((aligned(4096))) pageTable[1024]{}; // TODO: Make Dynamic
+		PageDirectoryTable pageDirectoryTables[4]{}; // TODO: Make Dynamic
+		PageDirectoryPointerTable pageDirectoryPointerTable{}; // TODO: Make Dynamic
 	};
 
 	extern "C" void initPagingAsm(u64 pageTablePointer);
