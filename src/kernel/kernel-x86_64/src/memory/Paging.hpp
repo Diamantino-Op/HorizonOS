@@ -18,12 +18,13 @@ namespace kernel::x86_64::memory {
     	u8 flags{};
     	u8 availableLow : 4 {};
     	u64 address : 40 {};
-		u32 availableHigh : 11 {};
+		u8 availableHigh : 7 {};
+    	u8 pk : 4 {};
     	u8 executeDisable : 1 {};
     };
 
 	struct __attribute__((packed)) PageDirectoryTable {
-		PageEntry __attribute__((aligned(4096))) table[1024]{};
+		PageEntry __attribute__((aligned(4096))) table[512]{};
 	};
 
 	struct __attribute__((packed)) PageDirectoryPointerTable {
@@ -35,7 +36,7 @@ namespace kernel::x86_64::memory {
 		PagingManager();
 
 	private:
-		PageDirectoryTable pageDirectoryTables[4]{}; // TODO: Make Dynamic
+		PageDirectoryTable pageDirectoryTables{}; // TODO: Make Dynamic
 		PageDirectoryPointerTable pageDirectoryPointerTable{}; // TODO: Make Dynamic
 	};
 
