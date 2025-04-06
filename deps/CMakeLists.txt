@@ -96,7 +96,7 @@ if(NOT EXISTS "${CHDRS_DIR}")
     endif()
 endif()
 
-include_directories(${CHDRS_INC_DIR})
+include_directories(BEFORE ${CHDRS_INC_DIR})
 
 # ------------------ uACPI ------------------
 set(UACPI_REPO "https://github.com/uACPI/uACPI.git" CACHE STRING "uACPI Repository")

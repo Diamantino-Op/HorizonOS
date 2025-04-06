@@ -39,6 +39,10 @@ endif ()
 # ------------------ Project Setup ------------------
 project(HorizonOS)
 
+unset(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
+unset(CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES)
+unset(CMAKE_ASM_IMPLICIT_INCLUDE_DIRECTORIES)
+
 # ------------------ Source ------------------
 add_subdirectory(src)
 

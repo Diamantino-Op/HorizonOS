@@ -1,5 +1,5 @@
-#ifndef LIB_HOS_TYPETRAITS_HPP
-#define LIB_HOS_TYPETRAITS_HPP
+#ifndef LIB_HOS_BASE_TYPETRAITS_HPP
+#define LIB_HOS_BASE_TYPETRAITS_HPP
 
 #include "Types.hpp"
 

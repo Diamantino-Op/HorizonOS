@@ -8,4 +8,4 @@ file(GLOB_RECURSE HOS_BASE_SRC "src/*.hpp" "src/*.cpp" "src/*.asm")
 
 add_library(hos-base STATIC ${HOS_BASE_SRC})
 
-target_include_directories(hos-base PUBLIC src)
+target_include_directories(hos-base PUBLIC src ${CHDRS_INC_DIR})

@@ -1,5 +1,5 @@
-#ifndef LIB_HOS_TYPES_HPP
-#define LIB_HOS_TYPES_HPP
+#ifndef LIB_HOS_BASE_TYPES_HPP
+#define LIB_HOS_BASE_TYPES_HPP
 
 extern "C" {
     #define NULL ((void *)0)

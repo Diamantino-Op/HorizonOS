@@ -14,6 +14,6 @@ target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_F
 target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${KERNEL_CXX_FLAGS}>)
 target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${KERNEL_ASM_FLAGS}>)
 
-target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR})
+target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR})
 
 target_link_libraries(kernel-common hos-base)
