@@ -232,42 +232,22 @@ namespace kernel::common::memory {
 
     protected:
         constexpr EnableSharedFromThis() noexcept = default;
-        EnableSharedFromThis(const EnableSharedFromThis<T> &obj) noexcept = default;
-        EnableSharedFromThis(EnableSharedFromThis<T> &&obj) noexcept = delete;
+        EnableSharedFromThis(const EnableSharedFromThis &obj) noexcept = default;
+        EnableSharedFromThis(EnableSharedFromThis &&obj) noexcept = delete;
         ~EnableSharedFromThis() = default;
 
-        EnableSharedFromThis<T> &operator=(const EnableSharedFromThis<T> &) noexcept
-        {
-            return *this;
-        }
+        EnableSharedFromThis<T> &operator=(const EnableSharedFromThis &) noexcept;
 
     public:
-        SharedPtr<T> sharedFromThis() { return weakThis.lock(); }
-        SharedPtr<T const> sharedFromThis() const { return weakThis.lock(); }
-        WeakPtr<T> weakFromThis() noexcept { return weakThis; }
-        WeakPtr<T const> weakFromThis() const noexcept { return weakThis; }
+        SharedPtr<T> sharedFromThis();
+        SharedPtr<T const> sharedFromThis() const;
+        WeakPtr<T> weakFromThis() noexcept;
+        WeakPtr<T const> weakFromThis() const noexcept;
 
         template<class X> friend class SharedPtr;
     };
 
-    template<class T> SharedPtr<T>::SharedPtr(UniquePtr<T> &&p)
-    {
-        if (not p.get())
-            return;
-
-        UniquePtr<SmartPtrRefcountStr> refCountNew = makeUnique<SmartPtrRefcountStr>(SmartPtrRefcountStr());
-
-        if (not refCountNew)
-            return;
-
-        ptr = p.release();
-        refCount = refCountNew.release();
-        refCount->sharedRefs = 1;
-
-        if constexpr (isBaseOfTemplate<EnableSharedFromThis, T>::value) {
-            ptr->weakThis = *this;
-        }
-    }
+    //template<class T> SharedPtr<T>::SharedPtr(UniquePtr<T> &&p);
 }
 
 #endif

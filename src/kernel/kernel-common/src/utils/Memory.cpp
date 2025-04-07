@@ -501,4 +501,42 @@ namespace kernel::common::memory {
 	template<class T> template<class U> bool WeakPtr<T>::operator==(const WeakPtr<U> &rhs) noexcept {
 		return this->refCount == rhs.refCount;
 	}
+
+	template<class T> EnableSharedFromThis<T> &EnableSharedFromThis<T>::operator=(const EnableSharedFromThis &) noexcept {
+		return *this;
+	}
+
+	template<class T> SharedPtr<T> EnableSharedFromThis<T>::sharedFromThis() {
+		return this->weakThis.lock();
+	}
+
+	template<class T> SharedPtr<T const> EnableSharedFromThis<T>::sharedFromThis() const {
+		return this->weakThis.lock();
+	}
+
+	template<class T> WeakPtr<T> EnableSharedFromThis<T>::weakFromThis() noexcept {
+		return this->weakThis;
+	}
+
+	template<class T> WeakPtr<T const> EnableSharedFromThis<T>::weakFromThis() const noexcept {
+		return this->weakThis;
+	}
+
+	template<class T> SharedPtr<T>::SharedPtr(UniquePtr<T> &&p) {
+		if (not p.get())
+			return;
+
+		UniquePtr<SmartPtrRefcountStr> refCountNew = makeUnique<SmartPtrRefcountStr>(SmartPtrRefcountStr());
+
+		if (not refCountNew)
+			return;
+
+		this->ptr = p.release();
+		this->refCount = refCountNew.release();
+		this->refCount->sharedRefs = 1;
+
+		if constexpr (isBaseOfTemplate<EnableSharedFromThis, T>::value) {
+			this->ptr->weakThis = *this;
+		}
+	}
 }

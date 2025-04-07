@@ -4,40 +4,34 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::memory {
-	enum PageTableFlags : u8 {
-		PAGE_PRESENT = 0b00000001,
-		PAGE_READ_WRITE = 0b00000010,
-		PAGE_USER = 0b00000100,
-		PAGE_WRITE_TROUGH = 0b00001000,
-		PAGE_CACHE_DISABLE = 0b00010000,
-		PAGE_ACCESSED = 0b00100000,
-		PAGE_SIZE = 0b10000000
-	};
-
-    struct __attribute__((packed)) PageEntry {
-    	u8 flags{};
-    	u8 availableLow : 4 {};
+    struct __attribute__((packed, aligned(8))) PageEntry {
+    	u8 present : 1 {};
+    	u8 writeable : 1 {};
+    	u8 user_access : 1 {};
+    	u8 write_through : 1 {};
+    	u8 cache_disabled : 1 {};
+    	u8 accessed : 1 {};
+    	u8 dirty : 1 {};
+    	u8 size : 1 {};
+    	u8 global : 1 {};
+    	u8 availableLow : 3 {};
     	u64 address : 40 {};
 		u8 availableHigh : 7 {};
     	u8 pk : 4 {};
     	u8 executeDisable : 1 {};
+
+    	void clearAuto();
+
+    	void clearNoFree();
     };
 
-	struct __attribute__((packed)) PageDirectoryTable {
-		PageEntry __attribute__((aligned(4096))) table[512]{};
-	};
+	class X86PageTable {
 
-	struct __attribute__((packed)) PageDirectoryPointerTable {
-		PageEntry __attribute__((aligned(32))) table[4]{};
 	};
 
 	class PagingManager {
 	public:
 		PagingManager();
-
-	private:
-		PageDirectoryTable pageDirectoryTables{}; // TODO: Make Dynamic
-		PageDirectoryPointerTable pageDirectoryPointerTable{}; // TODO: Make Dynamic
 	};
 
 	extern "C" void initPagingAsm(u64 pageTablePointer);
