@@ -19,13 +19,9 @@ namespace kernel::x86_64::memory {
 		u8 availableHigh : 7 {};
     	u8 pk : 4 {};
     	u8 executeDisable : 1 {};
-
-    	void clearAuto();
-
-    	void clearNoFree();
     };
 
-	class X86PageTable {
+	class PageTable {
 
 	};
 
