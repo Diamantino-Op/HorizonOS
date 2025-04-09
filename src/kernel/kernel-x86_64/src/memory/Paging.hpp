@@ -3,7 +3,11 @@
 
 #include "Types.hpp"
 
+#include "memory/CommonPaging.hpp"
+
 namespace kernel::x86_64::memory {
+	using namespace common::memory;
+
     struct __attribute__((packed, aligned(4096))) PageEntry {
     	u8 present : 1 {};
     	u8 writeable : 1 {};
@@ -22,46 +26,20 @@ namespace kernel::x86_64::memory {
     };
 
 	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) Level1PageTable {
+	struct __attribute__((packed, aligned(4096))) PageTable {
 		PageEntry entries [512];
 	};
 
-	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) Level2PageTable {
-		PageEntry entries [512];
-
-		Level1PageTable level1Table[512] {};
-	};
-
-	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) Level3PageTable {
-		PageEntry entries [512];
-
-		Level2PageTable level2Table[512] {};
-	};
-
-	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) Level4PageTable {
-		PageEntry entries [512];
-
-		Level3PageTable level3Table[512] {};
-	};
-
-	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) Level5PageTable {
-		PageEntry entries [512];
-
-		Level4PageTable level4Table[512] {};
-	};
-
-	class PagingManager {
+	class PagingManager : CommonPagingManager {
 	public:
 		PagingManager();
 
 		void loadPageTable();
 
+		void mapPage(uPtr* level4Page, u64 vAddr, u64 pAddr, u8 flags) override;
+
 	private:
-		uPtr *paging{};
+		uPtr* getOrCreatePageTable(uPtr* parent, u16 index, bool isUser) override;
 	};
 
 	extern "C" void loadPageTableAsm(uPtr *pageTablePointer);
