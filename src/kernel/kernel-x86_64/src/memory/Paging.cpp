@@ -2,13 +2,12 @@
 
 namespace kernel::x86_64::memory {
 	 PagingManager::PagingManager() {
-	 	for (u32 i = 0; i < 512; i++) {
-	 		this->pageDirectoryTables.table[i].flags = PageTableFlags::PAGE_READ_WRITE | PageTableFlags::PAGE_PRESENT | PageTableFlags::PAGE_SIZE;
-	 	}
+	 	auto tempPaging = Level4PageTable {};
 
-	 	this->pageDirectoryPointerTable.table[0].flags = PageTableFlags::PAGE_PRESENT;
-	 	this->pageDirectoryPointerTable.table[0].address = reinterpret_cast<usize>(&this->pageDirectoryTables) >> 12;
+		this->paging = reinterpret_cast<uPtr *>(&tempPaging);
+	}
 
-		initPagingAsm(reinterpret_cast<usize>(&this->pageDirectoryPointerTable));
+	void PagingManager::loadPageTable() {
+		loadPageTableAsm(this->paging);
 	}
 }
