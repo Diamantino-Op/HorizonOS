@@ -75,7 +75,7 @@ set(CMAKE_ASM_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "Asm Compiler
 set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
 # ------------------ C Headers ------------------
-set(CHDRS_REPO "https://github.com/osdev0/freestnd-c-hdrs.git" CACHE STRING "CHDRS Repository")
+set(CHDRS_REPO "https://codeberg.org/osdev/freestnd-c-hdrs.git" CACHE STRING "CHDRS Repository")
 set(CHDRS_BRANCH "trunk" CACHE STRING "CHDRS Branch")
 set(CHDRS_DIR "${ROOT_DIR}/deps/chdrs" CACHE PATH "CHDRS Directory")
 set(CHDRS_INC_DIR "${CHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CHDRS Include Directory")

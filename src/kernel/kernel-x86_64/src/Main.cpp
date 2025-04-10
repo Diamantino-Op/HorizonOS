@@ -9,21 +9,42 @@ extern "C" void kernelMain() {
     Kernel();
 }
 
-__attribute__((used, section(".limine_requests")))
-static volatile LIMINE_BASE_REVISION(3);
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_framebuffer_request framebuffer_request = {
-	.id = LIMINE_FRAMEBUFFER_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
 __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
 
 __attribute__((used, section(".limine_requests_end")))
 static volatile LIMINE_REQUESTS_END_MARKER;
+
+__attribute__((used, section(".limine_requests")))
+static volatile LIMINE_BASE_REVISION(3);
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_framebuffer_request framebufferRequest = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_hhdm_request hhdmRequest = {
+	.id = LIMINE_HHDM_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_memmap_request memMapRequest = {
+	.id = LIMINE_MEMMAP_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_5_level_paging_request level5PagingRequest = {
+	.id = LIMINE_5_LEVEL_PAGING_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
 
 namespace kernel::x86_64 {
     Kernel::Kernel() {
@@ -31,18 +52,16 @@ namespace kernel::x86_64 {
     		halt();
     	}
 
-    	if (framebuffer_request.response == nullptr || framebuffer_request.response->framebuffer_count < 1) {
+    	if (framebufferRequest.response == nullptr || framebufferRequest.response->framebuffer_count < 1) {
     		halt();
     	}
 
-    	limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
+    	limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
 
     	// Terminal
     	terminal = Terminal(framebuffer);
 
     	terminal.printf("Initializing HorizonOS...\n");
-
-    	this->pagingManager = PagingManager();
 
     	// TSS
     	this->tssManager = TssManager();
@@ -71,6 +90,9 @@ namespace kernel::x86_64 {
     	this->idtManager.loadIdt();
 
     	terminal.printf("IDT Loaded... OK\n");
+
+    	// Memory
+    	this->pagingManager = PagingManager<PageTable>();
 
     	halt();
     }
