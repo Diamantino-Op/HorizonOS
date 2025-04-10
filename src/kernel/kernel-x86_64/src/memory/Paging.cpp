@@ -1,12 +1,12 @@
 #include "Paging.hpp"
 
-namespace kernel::x86_64::memory {
-	PagingManager::PagingManager() {
+#include "memory/MainMemory.hpp"
 
-	}
+namespace kernel::common::memory {
+	using namespace x86_64::memory;
 
 	void PagingManager::loadPageTable() {
-
+		loadPageTableAsm(this->currentLevel4Page);
 	}
 
 	void PagingManager::mapPage(uPtr* level4Page, u64 vAddr, u64 pAddr, u8 flags) {
@@ -31,13 +31,23 @@ namespace kernel::x86_64::memory {
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
 	}
 
-	uPtr*  PagingManager::getOrCreatePageTable(uPtr* parent, u16 index, bool isUser) {
-		if (!(parent->entries[index] & 1)) { // Not present
-			page_table_t* new_table = alloc_page_table();
-			memset(new_table, 0, PAGE_SIZE);
-			parent->entries[index] = ((uint64_t)new_table) | 0b11; // Present + Writable
-			if (user) parent->entries[index] |= (1 << 2); // User bit
+	uPtr* PagingManager::getOrCreatePageTable(uPtr* parent, u16 index, bool isUser) {
+		PageTable *parentTable = reinterpret_cast<PageTable *>(parent);
+
+		if (!parentTable->entries[index].present) { // Not present
+			PageTable* newTable = alloc_page_table();
+			memset(newTable, 0, pageSize);
+
+			//TODO: Maybe copy the other fields too
+			parentTable->entries[index].writeable = 1;
+			parentTable->entries[index].present = 1;
+			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF; // Present + Writable
+
+			if (isUser) {
+				parentTable->entries[index].userAccess = 1;
+			}
 		}
-		return (page_table_t*)(parent->entries[index] & ~0xFFFULL);
+
+		return reinterpret_cast<uPtr *>(parentTable->entries[index].address);
 	}
 }

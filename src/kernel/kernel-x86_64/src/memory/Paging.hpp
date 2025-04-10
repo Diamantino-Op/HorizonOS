@@ -8,7 +8,7 @@
 namespace kernel::x86_64::memory {
 	using namespace common::memory;
 
-    struct __attribute__((packed, aligned(4096))) PageEntry {
+    struct __attribute__((packed)) PageEntry {
     	u8 present : 1 {};
     	u8 writeable : 1 {};
     	u8 userAccess : 1 {};
@@ -26,20 +26,8 @@ namespace kernel::x86_64::memory {
     };
 
 	// TODO: Move to common file
-	struct __attribute__((packed, aligned(4096))) PageTable {
+	struct __attribute__((packed, aligned(pageSize))) PageTable {
 		PageEntry entries [512];
-	};
-
-	class PagingManager : CommonPagingManager {
-	public:
-		PagingManager();
-
-		void loadPageTable();
-
-		void mapPage(uPtr* level4Page, u64 vAddr, u64 pAddr, u8 flags) override;
-
-	private:
-		uPtr* getOrCreatePageTable(uPtr* parent, u16 index, bool isUser) override;
 	};
 
 	extern "C" void loadPageTableAsm(uPtr *pageTablePointer);
