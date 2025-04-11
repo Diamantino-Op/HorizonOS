@@ -30,7 +30,7 @@ namespace kernel::x86_64 {
         GdtManager gdtManager;
         TssManager tssManager;
         IDTManager idtManager;
-        PagingManager<PageTable> pagingManager;
+        VirtualMemoryManager<PageTable> pagingManager;
     };
 }
 

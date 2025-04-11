@@ -3,15 +3,29 @@
 
 #include "Types.hpp"
 
+#include "limine.h"
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_hhdm_request hhdmRequest = {
+  .id = LIMINE_HHDM_REQUEST,
+  .revision = 0,
+  .response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_paging_mode_request pagingModeRequest = {
+  .id = LIMINE_PAGING_MODE_REQUEST,
+  .revision = 0,
+  .response = nullptr,
+};
+
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
-    constexpr u64 hhdmOffsetLevel4 = 0xFFFF800000000000;
-    constexpr u64 hhdmOffsetLevel5 = 0xFFFF800000000000;
 
-    template <class T> class PagingManager {
+    template <class T> class VirtualMemoryManager {
     public:
-      PagingManager();
-      ~PagingManager() = default;
+      VirtualMemoryManager();
+      ~VirtualMemoryManager() = default;
 
       void handlePageFault(u64 faultAddr, u8 flags);
 
@@ -26,7 +40,8 @@ namespace kernel::common::memory {
 
       uPtr* getOrCreatePageTable(T* parent, u16 index, u8 flags);
 
-      T currentLevel4Page {};
+      T currentMainPage {};
+      u64 currentHhdm {};
     };
 }
 

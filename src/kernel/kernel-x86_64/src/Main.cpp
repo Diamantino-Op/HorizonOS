@@ -26,22 +26,8 @@ static volatile limine_framebuffer_request framebufferRequest = {
 };
 
 __attribute__((used, section(".limine_requests")))
-static volatile limine_hhdm_request hhdmRequest = {
-	.id = LIMINE_HHDM_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
-__attribute__((used, section(".limine_requests")))
 static volatile limine_memmap_request memMapRequest = {
 	.id = LIMINE_MEMMAP_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_5_level_paging_request level5PagingRequest = {
-	.id = LIMINE_5_LEVEL_PAGING_REQUEST,
 	.revision = 0,
 	.response = nullptr,
 };
@@ -92,7 +78,7 @@ namespace kernel::x86_64 {
     	terminal.printf("IDT Loaded... OK\n");
 
     	// Memory
-    	this->pagingManager = PagingManager<PageTable>();
+    	this->pagingManager = VirtualMemoryManager<PageTable>();
 
     	halt();
     }

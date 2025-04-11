@@ -3,6 +3,9 @@ BasedOnStyle: LLVM
 UseTab: ForIndentation
 IndentWidth: 4
 TabWidth: 4
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+BracedInitializerIndentWidth: 4
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: false
 NamespaceIndentation: All
