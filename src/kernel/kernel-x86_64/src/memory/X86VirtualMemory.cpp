@@ -8,28 +8,36 @@ namespace kernel::common::memory {
 	using namespace x86_64::memory;
 
 	template<class T> VirtualMemoryManager<T>::VirtualMemoryManager() {
-		Terminal* terminal = Kernel::getTerminal();
+		Terminal* terminal = CommonMain::getTerminal();
 
-		this->currentMainPage = PageTable();
+		terminal->printf("Initializing Virtual Memory Manager...\n");
 
 		if (hhdmRequest.response != nullptr) {
 			this->currentHhdm = hhdmRequest.response->offset;
 		}
 
-		terminal->printf("Current HHDM Offset: %l", this->currentHhdm);
+		terminal->printf("Current HHDM Offset: %lp\n", this->currentHhdm);
 
 		if (pagingModeRequest.response != nullptr) {
 			// 0 = Page Level 4, 1 = Page Level 5
 			if (pagingModeRequest.response->mode == 0) {
-				terminal->printf("Current Paging Mode: Level 4");
+				terminal->printf("Current Paging Mode: Level 4\n");
+
+				this->isLevel5Paging = false;
 			} else if (pagingModeRequest.response->mode == 1) {
-				terminal->printf("Current Paging Mode: Level 5");
+				terminal->printf("Current Paging Mode: Level 5\n");
+
+				this->isLevel5Paging = true;
 			}
 		}
+
+		// this->currentMainPage = PageTable(); TODO: Replace with pmm alloc
+
+		this->init();
 	}
 
 	template<class T> void VirtualMemoryManager<T>::loadPageTable() {
-		Terminal* terminal = Kernel::getTerminal();
+		Terminal* terminal = CommonMain::getTerminal();
 
 		terminal->printf("Loading main page table: %l", reinterpret_cast<uPtr *>(&this->currentMainPage) - this->currentHhdm);
 

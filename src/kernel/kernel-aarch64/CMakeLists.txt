@@ -16,8 +16,5 @@ target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${KERNEL_ASM_FLAG
 target_include_directories(kernel PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR})
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
-set_target_properties(kernel PROPERTIES CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "")
-set_target_properties(kernel PROPERTIES CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES "")
-set_target_properties(kernel PROPERTIES CMAKE_ASM_IMPLICIT_INCLUDE_DIRECTORIES "")
 
-target_link_libraries(kernel kernel-common)
+target_link_libraries(kernel PUBLIC kernel-common)

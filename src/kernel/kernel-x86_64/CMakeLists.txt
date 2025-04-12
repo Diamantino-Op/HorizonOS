@@ -17,4 +17,4 @@ target_include_directories(kernel PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHD
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 
-target_link_libraries(kernel kernel-common)
+target_link_libraries(kernel PRIVATE kernel-common)

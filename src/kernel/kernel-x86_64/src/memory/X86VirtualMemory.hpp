@@ -5,6 +5,16 @@
 
 #include "memory/VirtualMemory.hpp"
 
+__attribute__((used, section(".limine_requests")))
+static volatile limine_paging_mode_request pagingModeRequest = {
+	.id = LIMINE_PAGING_MODE_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.mode = 1,
+	.max_mode = 1,
+	.min_mode = 0,
+};
+
 namespace kernel::x86_64::memory {
 	using namespace common::memory;
 

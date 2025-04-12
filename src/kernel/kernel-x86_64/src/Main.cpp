@@ -3,8 +3,6 @@
 
 using namespace kernel::x86_64;
 
-Terminal Kernel::terminal;
-
 extern "C" void kernelMain() {
     Kernel();
 }
@@ -33,63 +31,63 @@ static volatile limine_memmap_request memMapRequest = {
 };
 
 namespace kernel::x86_64 {
-    Kernel::Kernel() {
-    	if (LIMINE_BASE_REVISION_SUPPORTED == false) {
-    		halt();
-    	}
+	Kernel::Kernel() {
+		asm volatile("mov %0, %%rsp" : "=r"(stackTop));
+	}
 
-    	if (framebufferRequest.response == nullptr || framebufferRequest.response->framebuffer_count < 1) {
-    		halt();
-    	}
+	void Kernel::init() {
+		if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+			this->halt();
+		}
 
-    	limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
+		if (framebufferRequest.response == nullptr || framebufferRequest.response->framebuffer_count < 1) {
+			this->halt();
+		}
 
-    	// Terminal
-    	terminal = Terminal(framebuffer);
+		limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
 
-    	terminal.printf("Initializing HorizonOS...\n");
+		// Terminal
+		terminal = Terminal(framebuffer);
 
-    	// TSS
-    	this->tssManager = TssManager();
+		terminal.printf("Initializing HorizonOS...\n");
 
-    	terminal.printf("TSS Created... OK\n");
+		// TSS
+		this->tssManager = TssManager();
 
-    	// GDT
-    	this->gdtManager = GdtManager(this->tssManager.getTss());
+		terminal.printf("TSS Created... OK\n");
 
-    	terminal.printf("GDT Created... OK\n");
+		// GDT
+		this->gdtManager = GdtManager(this->tssManager.getTss());
 
-    	this->gdtManager.loadGdt();
-    	this->gdtManager.reloadRegisters();
+		terminal.printf("GDT Created... OK\n");
 
-    	terminal.printf("GDT Loaded... OK\n");
+		this->gdtManager.loadGdt();
+		this->gdtManager.reloadRegisters();
 
-    	this->tssManager.updateTss();
+		terminal.printf("GDT Loaded... OK\n");
 
-    	terminal.printf("Updated TSS... OK\n");
+		this->tssManager.updateTss();
 
-    	// IDT
+		terminal.printf("Updated TSS... OK\n");
+
+		// IDT
 		this->idtManager = IDTManager();
 
-    	terminal.printf("IDT Created... OK\n");
+		terminal.printf("IDT Created... OK\n");
 
-    	this->idtManager.loadIdt();
+		this->idtManager.loadIdt();
 
-    	terminal.printf("IDT Loaded... OK\n");
+		terminal.printf("IDT Loaded... OK\n");
 
-    	// Memory
-    	this->pagingManager = VirtualMemoryManager<PageTable>();
+		// Memory
+		this->pagingManager = VirtualMemoryManager<PageTable>();
 
-    	halt();
+		this->halt();
     }
 
 	void Kernel::halt() {
     	for (;;) {
     		asm volatile ("hlt");
     	}
-    }
-
-	Terminal* Kernel::getTerminal() {
-		return &terminal;
     }
 }

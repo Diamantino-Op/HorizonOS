@@ -13,35 +13,44 @@ static volatile limine_hhdm_request hhdmRequest = {
 };
 
 __attribute__((used, section(".limine_requests")))
-static volatile limine_paging_mode_request pagingModeRequest = {
-  .id = LIMINE_PAGING_MODE_REQUEST,
-  .revision = 0,
-  .response = nullptr,
+static volatile limine_kernel_address_request kernelAddressRequest = {
+    .id = LIMINE_KERNEL_ADDRESS_REQUEST,
+    .revision = 0,
+    .response = nullptr,
 };
 
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
 
+    extern "C" u8 limineStart[], limineEnd[];
+    extern "C" u8 textStart[], textEnd[];
+    extern "C" u8 rodataStart[], rodataEnd[];
+    extern "C" u8 dataStart[], dataEnd[];
+
     template <class T> class VirtualMemoryManager {
     public:
-      VirtualMemoryManager();
-      ~VirtualMemoryManager() = default;
+        VirtualMemoryManager();
 
-      void handlePageFault(u64 faultAddr, u8 flags);
+        void init();
 
-      void mapPage(u64 vAddr, u64 pAddr, u8 flags);
+        void handlePageFault(u64 faultAddr, u8 flags);
 
-      void unMapPage(u64 vAddr);
+        void mapPage(u64 vAddr, u64 pAddr, u8 flags);
+
+        void unMapPage(u64 vAddr);
 
     protected:
-      void setPageFlags(uPtr * pageAddr, u8 flags);
+        void setPageFlags(uPtr * pageAddr, u8 flags);
 
-      void loadPageTable();
+        void loadPageTable();
 
-      uPtr* getOrCreatePageTable(T* parent, u16 index, u8 flags);
+        uPtr* getOrCreatePageTable(T* parent, u16 index, u8 flags);
 
-      T currentMainPage {};
-      u64 currentHhdm {};
+        T currentMainPage {};
+        u64 currentHhdm {};
+        u64 kernelAddrPhys {};
+        u64 kernelAddrVirt {};
+        bool isLevel5Paging = false;
     };
 }
 
