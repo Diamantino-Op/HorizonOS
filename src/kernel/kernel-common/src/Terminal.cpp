@@ -37,12 +37,6 @@ namespace kernel::common {
 	void Terminal::putChar(char c) {
 	 	char str[] = { c };
 
-	 	if (this->flantermCtx == nullptr) {
-	 		for (;;) {
-	 			asm volatile ("hlt");
-	 		}
-	 	}
-
 	 	flanterm_write(this->flantermCtx, str, sizeof(str));
 	}
 

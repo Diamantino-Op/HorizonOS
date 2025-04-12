@@ -32,7 +32,7 @@ static volatile limine_memmap_request memMapRequest = {
 
 namespace kernel::x86_64 {
 	Kernel::Kernel() {
-		asm volatile("mov %0, %%rsp" : "=r"(stackTop));
+		//asm volatile("mov %%rsp, %0" : "=r"(stackTop));
 	}
 
 	void Kernel::init() {
