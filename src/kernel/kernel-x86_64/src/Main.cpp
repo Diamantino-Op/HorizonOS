@@ -80,7 +80,7 @@ namespace kernel::x86_64 {
 		terminal.printf("IDT Loaded... OK\n");
 
 		// Memory
-		this->pagingManager = VirtualMemoryManager<PageTable>();
+		this->pagingManager = VirtualMemoryManager();
 
 		this->halt();
     }

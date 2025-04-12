@@ -4,7 +4,7 @@
 #include "stdarg.h"
 
 namespace kernel::common {
-	 Terminal::Terminal(limine_framebuffer *framebuffer) {
+	 Terminal::Terminal(const limine_framebuffer *framebuffer) {
 	 	this->flantermCtx = flanterm_fb_init(
 	 		nullptr,
 	 		nullptr,
@@ -36,6 +36,12 @@ namespace kernel::common {
 
 	void Terminal::putChar(char c) {
 	 	char str[] = { c };
+
+	 	if (this->flantermCtx == nullptr) {
+	 		for (;;) {
+	 			asm volatile ("hlt");
+	 		}
+	 	}
 
 	 	flanterm_write(this->flantermCtx, str, sizeof(str));
 	}

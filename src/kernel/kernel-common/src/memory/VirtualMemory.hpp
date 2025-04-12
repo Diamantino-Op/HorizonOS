@@ -3,22 +3,6 @@
 
 #include "Types.hpp"
 
-#include "limine.h"
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_hhdm_request hhdmRequest = {
-  .id = LIMINE_HHDM_REQUEST,
-  .revision = 0,
-  .response = nullptr,
-};
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_kernel_address_request kernelAddressRequest = {
-    .id = LIMINE_KERNEL_ADDRESS_REQUEST,
-    .revision = 0,
-    .response = nullptr,
-};
-
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
 
@@ -27,7 +11,7 @@ namespace kernel::common::memory {
     extern "C" u8 rodataStart[], rodataEnd[];
     extern "C" u8 dataStart[], dataEnd[];
 
-    template <class T> class VirtualMemoryManager {
+    class VirtualMemoryManager {
     public:
         VirtualMemoryManager();
 
@@ -44,9 +28,9 @@ namespace kernel::common::memory {
 
         void loadPageTable();
 
-        uPtr* getOrCreatePageTable(T* parent, u16 index, u8 flags);
+        uPtr* getOrCreatePageTable(uPtr* parent, u16 index, u8 flags);
 
-        T currentMainPage {};
+        uPtr* currentMainPage {};
         u64 currentHhdm {};
         u64 kernelAddrPhys {};
         u64 kernelAddrVirt {};

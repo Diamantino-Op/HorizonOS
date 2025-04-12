@@ -50,7 +50,7 @@ namespace kernel::common {
     public:
         Terminal() = default;
 
-        explicit Terminal(limine_framebuffer *framebuffer);
+        explicit Terminal(const limine_framebuffer *framebuffer);
 
         void putChar(char c);
         void putString(const char* str);

@@ -3,8 +3,15 @@
 #include "CommonMain.hpp"
 #include "MainMemory.hpp"
 
+__attribute__((used, section(".limine_requests")))
+static volatile limine_kernel_address_request kernelAddressRequest = {
+	.id = LIMINE_KERNEL_ADDRESS_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
 namespace kernel::common::memory {
-	template <class T> void VirtualMemoryManager<T>::init() {
+	void VirtualMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		terminal->printf("Main page table allocated at: %lp\n", reinterpret_cast<uPtr *>(&this->currentMainPage));
@@ -29,7 +36,7 @@ namespace kernel::common::memory {
 		terminal->printf("	Data: Start: %lp, End: %lp\n", dataStart, dataEnd);
 	}
 
-	template<class T> void VirtualMemoryManager<T>::handlePageFault(u64 faultAddr, u8 flags) {
+	void VirtualMemoryManager::handlePageFault(u64 faultAddr, u8 flags) {
 		u64 alignedAddr = faultAddr & ~(0x1000 - 1);
 		// u64 physAddress = allocatePage();
 

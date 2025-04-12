@@ -3,11 +3,28 @@
 #include "Main.hpp"
 #include "memory/MainMemory.hpp"
 
+__attribute__((used, section(".limine_requests")))
+static volatile limine_hhdm_request hhdmRequest = {
+	.id = LIMINE_HHDM_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile limine_paging_mode_request pagingModeRequest = {
+	.id = LIMINE_PAGING_MODE_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.mode = 1,
+	.max_mode = 1,
+	.min_mode = 0,
+};
+
 namespace kernel::common::memory {
 	using namespace x86_64;
 	using namespace x86_64::memory;
 
-	template<class T> VirtualMemoryManager<T>::VirtualMemoryManager() {
+	VirtualMemoryManager::VirtualMemoryManager() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		terminal->printf("Initializing Virtual Memory Manager...\n");
@@ -36,23 +53,23 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	template<class T> void VirtualMemoryManager<T>::loadPageTable() {
+	void VirtualMemoryManager::loadPageTable() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("Loading main page table: %l", reinterpret_cast<uPtr *>(&this->currentMainPage) - this->currentHhdm);
+		terminal->printf("Loading main page table: %l", this->currentMainPage - this->currentHhdm);
 
-		loadPageTableAsm(reinterpret_cast<uPtr *>(&this->currentMainPage) - this->currentHhdm);
+		loadPageTableAsm(this->currentMainPage - this->currentHhdm);
 	}
 
-	template<class T> void VirtualMemoryManager<T>::mapPage(u64 vAddr, u64 pAddr, u8 flags) {
+	void VirtualMemoryManager::mapPage(u64 vAddr, u64 pAddr, u8 flags) {
 		u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		uPtr *pdpt = getOrCreatePageTable(&this->currentMainPage, lvl4, flags);
-		uPtr *pd = getOrCreatePageTable(pdpt, lvl3, flags);
-		PageTable *pt = getOrCreatePageTable(pd, lvl2, flags);
+		PageTable *pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl4, flags));
+		PageTable *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags));
+		PageTable *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags));
 
 		pt->entries[lvl1].present = 1;
 
@@ -61,19 +78,19 @@ namespace kernel::common::memory {
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
 	}
 
-	template<class T> void VirtualMemoryManager<T>::unMapPage(u64 vAddr) {
+	void VirtualMemoryManager::unMapPage(u64 vAddr) {
 		u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		PageTable lvl4Table = this->currentMainPage;
+		PageTable *lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
 
-		if (!lvl4Table.entries[lvl4].present) {
+		if (!lvl4Table->entries[lvl4].present) {
 			return;
 		}
 
-		PageTable *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table.entries[lvl4].address << 12) + this->currentHhdm);
+		PageTable *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + this->currentHhdm);
 		if (!lvl3Table->entries[lvl3].present) {
 			return;
 		}
@@ -89,8 +106,8 @@ namespace kernel::common::memory {
 		}
 	}
 
-	template<class T> uPtr* VirtualMemoryManager<T>::getOrCreatePageTable(T* parent, u16 index,u8 flags) {
-		PageTable *parentTable = parent;
+	uPtr* VirtualMemoryManager::getOrCreatePageTable(uPtr* parent, u16 index,u8 flags) {
+		PageTable *parentTable = reinterpret_cast<PageTable *>(parent);
 
 		if (!parentTable->entries[index].present) {
 			PageTable* newTable = nullptr; // alloc_page_table()
@@ -108,7 +125,7 @@ namespace kernel::common::memory {
 		return reinterpret_cast<uPtr *>((parentTable->entries[index].address << 12) + this->currentHhdm);
 	}
 
-	template<class T> void VirtualMemoryManager<T>::setPageFlags(uPtr *pageAddr, u8 flags) {
+	void VirtualMemoryManager::setPageFlags(uPtr *pageAddr, u8 flags) {
 		PageEntry *pageEntry = reinterpret_cast<PageEntry *>(pageAddr);
 
 		pageEntry->writeable = (flags >> 1) & 1;
