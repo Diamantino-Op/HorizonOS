@@ -16,7 +16,7 @@ namespace kernel::common::memory {
 
 		terminal->printf("Main page table allocated at: %lp\n", reinterpret_cast<uPtr *>(&this->currentMainPage));
 
-		memset(this->currentMainPage, 0, pageSize);
+		// memset(this->currentMainPage, 0, pageSize); TODO: Alloc first
 
 		terminal->printf("Kernel Stack Top Address: %lp\n", CommonMain::getStackTop());
 
@@ -30,10 +30,10 @@ namespace kernel::common::memory {
 		terminal->printf("	Physical Addresses: %lp\n", this->kernelAddrPhys);
 
 		terminal->printf("Sections:\n");
-		terminal->printf("	Limine: Start: %lp, End: %lp\n", limineStart, limineEnd);
-		terminal->printf("	Text: Start: %lp, End: %lp\n", textStart, textEnd);
-		terminal->printf("	RoData: Start: %lp, End: %lp\n", rodataStart, rodataEnd);
-		terminal->printf("	Data: Start: %lp, End: %lp\n", dataStart, dataEnd);
+		terminal->printf("	Limine: Start: 0x%.16llx, End: 0x%.16llx\n", &limineStart, &limineEnd);
+		terminal->printf("	Text: Start: 0x%.16llx, End: 0x%.16llx\n", &textStart, &textEnd);
+		terminal->printf("	RoData: Start: 0x%.16llx, End: 0x%.16llx\n", &rodataStart, &rodataEnd);
+		terminal->printf("	Data: Start: 0x%.16llx, End: 0x%.16llx\n", &dataStart, &dataEnd);
 	}
 
 	void VirtualMemoryManager::handlePageFault(u64 faultAddr, u8 flags) {

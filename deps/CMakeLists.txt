@@ -200,3 +200,20 @@ endif ()
 if (NOT EXISTS "${OVMF_FILE}")
     file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
 endif ()
+
+# ------------------ NanoPrintf ------------------
+set(NANOPRINTF_LINK "https://raw.githubusercontent.com/charlesnicholson/nanoprintf/refs/heads/main/nanoprintf.h" CACHE STRING "NanoPrintf Link")
+set(NANOPRINTF_DIR "${ROOT_DIR}/deps/nanoprintf" CACHE PATH "NanoPrintf Directory")
+set(NANOPRINTF_FILE "${NANOPRINTF_DIR}/nanoprintf.h" CACHE PATH "NanoPrintf File")
+
+if(NOT EXISTS "${NANOPRINTF_DIR}")
+    message(STATUS "Downloading NanoPrintf...")
+    execute_process(
+            COMMAND mkdir ${NANOPRINTF_DIR}
+            WORKING_DIRECTORY ${ROOT_DIR}
+    )
+
+    file(DOWNLOAD "${NANOPRINTF_LINK}" "${NANOPRINTF_FILE}")
+endif()
+
+include_directories(${NANOPRINTF_DIR})

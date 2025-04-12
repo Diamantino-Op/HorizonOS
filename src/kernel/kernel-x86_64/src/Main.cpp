@@ -34,7 +34,7 @@ static volatile limine_memmap_request memMapRequest = {
 
 namespace kernel::x86_64 {
 	Kernel::Kernel() {
-		//asm volatile("mov %%rsp, %0" : "=r"(stackTop));
+		asm volatile("mov %%rsp, %0" : "=r"(stackTop));
 	}
 
 	void Kernel::init() {
@@ -83,6 +83,8 @@ namespace kernel::x86_64 {
 
 		// Memory
 		this->pagingManager = VirtualMemoryManager();
+
+		this->pagingManager.archInit();
 
 		this->halt();
     }

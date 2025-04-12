@@ -6,5 +6,6 @@ exclude:
         - "deps/llvm/**/*"
         - "deps/ovmf/**/*"
         - "deps/flanterm/**/*"
+        - "deps/nanoprintf/**/*"
         - "iso/**/*"
         - "out/**/*"

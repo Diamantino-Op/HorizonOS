@@ -4,6 +4,7 @@
 /deps/chdrs/
 /deps/uacpi/
 /deps/flanterm/
+/deps/nanoprintf/
 /iso/
 /out/
 /.idea/

@@ -19,10 +19,6 @@
 #define PRINTF_LENGTH_LONG_LONG   4
 
 namespace kernel::common {
-    constexpr char HEX_DIGITS[] = "0123456789abcdef";
-
-	constexpr char FORMAT_CHAR[] = "\033[";
-
     enum TextFormatting {
         Regular,
         Bold,
@@ -52,18 +48,16 @@ namespace kernel::common {
 
         explicit Terminal(const limine_framebuffer *framebuffer);
 
-        void putChar(char c);
-        void putString(const char* str);
+        static void putChar(char c, void *ctx);
         void printf(const char* format, ...);
-        i32* printfNumber(i32* argp, i32 length, bool sign, i32 radix);
-        char* getFormat(const char* mainFormat, ...);
+        //char* getFormat(const char* mainFormat, ...);
 
         //const char* getTextFormatting(TextFormatting format);
         //const char* getTextColor(TextColor format);
         //const char* getBackgroundColor(TextColor format);
 
     private:
-        flanterm_context *flantermCtx;
+        static flanterm_context *flantermCtx;
     };
 }
 

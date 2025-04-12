@@ -3,19 +3,19 @@
 
 #include "Types.hpp"
 
+extern char limineStart[], limineEnd[];
+extern char textStart[], textEnd[];
+extern char rodataStart[], rodataEnd[];
+extern char dataStart[], dataEnd[];
+
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
 
-    extern "C" u8 limineStart[], limineEnd[];
-    extern "C" u8 textStart[], textEnd[];
-    extern "C" u8 rodataStart[], rodataEnd[];
-    extern "C" u8 dataStart[], dataEnd[];
-
     class VirtualMemoryManager {
     public:
-        VirtualMemoryManager();
+        VirtualMemoryManager() = default;
 
-        void init();
+        void archInit();
 
         void handlePageFault(u64 faultAddr, u8 flags);
 
@@ -24,6 +24,8 @@ namespace kernel::common::memory {
         void unMapPage(u64 vAddr);
 
     protected:
+        void init();
+
         void setPageFlags(uPtr * pageAddr, u8 flags);
 
         void loadPageTable();

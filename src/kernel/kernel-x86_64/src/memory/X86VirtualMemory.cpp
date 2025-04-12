@@ -24,7 +24,7 @@ namespace kernel::common::memory {
 	using namespace x86_64;
 	using namespace x86_64::memory;
 
-	VirtualMemoryManager::VirtualMemoryManager() {
+	void VirtualMemoryManager::archInit() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		terminal->printf("Initializing Virtual Memory Manager...\n");
