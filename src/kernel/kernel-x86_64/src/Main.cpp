@@ -4,7 +4,9 @@
 using namespace kernel::x86_64;
 
 extern "C" void kernelMain() {
-    Kernel();
+    Kernel kernel = Kernel();
+
+	kernel.init();
 }
 
 __attribute__((used, section(".limine_requests_start")))
