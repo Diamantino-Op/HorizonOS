@@ -35,7 +35,6 @@ namespace kernel::x86_64::memory {
     	u8 executeDisable : 1 {};
     };
 
-	// TODO: Move to common file
 	struct __attribute__((packed, aligned(pageSize))) PageTable {
 		PageEntry entries [512];
 	};
