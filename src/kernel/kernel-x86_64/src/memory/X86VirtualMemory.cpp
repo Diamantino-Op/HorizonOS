@@ -61,18 +61,17 @@ namespace kernel::common::memory {
 		loadPageTableAsm(this->currentMainPage - this->currentHhdm);
 	}
 
-	void VirtualMemoryManager::mapPage(u64 vAddr, u64 pAddr, u8 flags) {
+	void VirtualMemoryManager::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {
 		u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		PageTable *pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl4, flags));
-		PageTable *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags));
-		PageTable *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags));
+		PageTable *pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl4, flags, noExec));
+		PageTable *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, noExec));
+		PageTable *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags, noExec));
 
-		pt->entries[lvl1].present = 1;
-
+		pt->entries[lvl1].executeDisable = noExec;
 		this->setPageFlags(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), flags);
 
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
@@ -106,20 +105,19 @@ namespace kernel::common::memory {
 		}
 	}
 
-	uPtr* VirtualMemoryManager::getOrCreatePageTable(uPtr* parent, u16 index,u8 flags) {
+	uPtr* VirtualMemoryManager::getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec) {
 		PageTable *parentTable = reinterpret_cast<PageTable *>(parent);
 
 		if (!parentTable->entries[index].present) {
 			PageTable* newTable = nullptr; // alloc_page_table()
 			memset(newTable + this->currentHhdm, 0, pageSize);
 
+			parentTable->entries[index].executeDisable = noExec;
 			this->setPageFlags(reinterpret_cast<uPtr *>(&parentTable->entries[index]), flags);
 
 			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF;
 		} else {
 			this->setPageFlags(reinterpret_cast<uPtr *>(&parentTable->entries[index]), flags);
-
-			parentTable->entries[index].executeDisable = 0;
 		}
 
 		return reinterpret_cast<uPtr *>((parentTable->entries[index].address << 12) + this->currentHhdm);
@@ -128,6 +126,7 @@ namespace kernel::common::memory {
 	void VirtualMemoryManager::setPageFlags(uPtr *pageAddr, u8 flags) {
 		PageEntry *pageEntry = reinterpret_cast<PageEntry *>(pageAddr);
 
+		pageEntry->present = flags & 1;
 		pageEntry->writeable = (flags >> 1) & 1;
 		pageEntry->userAccess = (flags >> 2) & 1;
 		pageEntry->writeThrough = (flags >> 3) & 1;

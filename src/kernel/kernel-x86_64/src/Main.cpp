@@ -1,4 +1,7 @@
 #include "Main.hpp"
+
+#include "hal/Interrupts.hpp"
+
 #include "limine.h"
 
 using namespace kernel::x86_64;
@@ -25,16 +28,9 @@ static volatile limine_framebuffer_request framebufferRequest = {
 	.response = nullptr,
 };
 
-__attribute__((used, section(".limine_requests")))
-static volatile limine_memmap_request memMapRequest = {
-	.id = LIMINE_MEMMAP_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
 namespace kernel::x86_64 {
 	Kernel::Kernel() {
-		asm volatile("mov %%rsp, %0" : "=r"(stackTop));
+		asm volatile("mov %%rsp, %0" : "=r"(this->stackTop));
 	}
 
 	void Kernel::init() {
@@ -77,12 +73,16 @@ namespace kernel::x86_64 {
 
 		terminal.printf("IDT Created... OK\n");
 
+		for (u16 i = 0; i <= 255; i++) {
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::GATE_TYPE);
+		}
+
 		this->idtManager.loadIdt();
 
 		terminal.printf("IDT Loaded... OK\n");
 
 		// Memory
-		this->pagingManager = VirtualMemoryManager();
+		this->pagingManager = VirtualMemoryManager(this->stackTop);
 
 		this->pagingManager.archInit();
 

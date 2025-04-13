@@ -1,6 +1,8 @@
 #ifndef KERNEL_COMMON_COMMONMAIN_HPP
 #define KERNEL_COMMON_COMMONMAIN_HPP
 
+#define LIMINE_API_REVISION 3
+
 #include "Terminal.hpp"
 
 namespace kernel::common {
@@ -10,14 +12,12 @@ namespace kernel::common {
 
         static Terminal* getTerminal();
 
-        static uPtr getStackTop();
-
     protected:
         virtual void halt();
 
         static Terminal terminal;
 
-        static uPtr stackTop;
+        uPtr stackTop {};
     };
 }
 

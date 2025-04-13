@@ -57,7 +57,7 @@ namespace kernel::common {
 	void Terminal::printf(const char *format, ...) {
 	 	va_list val;
 	 	va_start(val, format);
-	 	npf_pprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+	 	npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
 	 	va_end(val);
 	}
 

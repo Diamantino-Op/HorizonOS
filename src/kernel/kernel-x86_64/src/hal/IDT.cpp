@@ -1,5 +1,7 @@
 #include "IDT.hpp"
 
+#include "Main.hpp"
+
 namespace kernel::x86_64::hal {
 	IDTManager::IDTManager() {
 		this->idtInstance = Idt();
@@ -10,7 +12,11 @@ namespace kernel::x86_64::hal {
     }
 
 	void IDTManager::loadIdt() {
+		Terminal* terminal = CommonMain::getTerminal();
+
 		this->idtDescriptor = IDTDesc(this->idtInstance);
+
+		terminal->printf("Loading IDT at address: 0x%.16lx\n", &this->idtDescriptor);
 
 		loadIdtAsm(&this->idtDescriptor);
 	}

@@ -38,7 +38,11 @@ namespace kernel::x86_64::hal {
     }
 
     void GdtManager::loadGdt() {
+    	Terminal* terminal = CommonMain::getTerminal();
+
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
+
+    	terminal->printf("Loading GDT at address: 0x%.16lx\n", &this->gdtDescriptor);
 
         loadGdtAsm(&this->gdtDescriptor);
     }
