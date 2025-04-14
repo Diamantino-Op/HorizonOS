@@ -11,6 +11,8 @@ extern char rodataStart[], rodataEnd[];
 extern char dataStart[], dataEnd[];
 
 namespace kernel::common::memory {
+    constexpr u64 kernelMemorySize = pageSize * 1024 * 4; // 16 Mbit
+
     class VirtualMemoryManager {
     public:
         VirtualMemoryManager() = default;
@@ -38,7 +40,6 @@ namespace kernel::common::memory {
         u64 kernelAddrPhys {};
         u64 kernelAddrVirt {};
         u64 kernelStackTop {};
-        UsableMemory* usableMemory {};
         bool isLevel5Paging = false;
     };
 }

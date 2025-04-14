@@ -1,0 +1,4 @@
+#ifndef VIRTUALALLOCATOR_HPP
+#define VIRTUALALLOCATOR_HPP
+
+#endif

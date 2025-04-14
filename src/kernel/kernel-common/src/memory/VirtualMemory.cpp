@@ -39,21 +39,6 @@ namespace kernel::common::memory {
 		if (memMapRequest.response != nullptr) {
 			u64 total = 0;
 			u64 usable = 0;
-			u64 usableAmount = 0;
-
-			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
-
-				if (entry->type == LIMINE_MEMMAP_USABLE) {
-					usableAmount++;
-				}
-			}
-
-			UsableMemory tempUsableMemory[usableAmount] = {};
-
-			this->usableMemory = tempUsableMemory;
-
-			usableAmount = 0;
 
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
 				limine_memmap_entry *entry = memMapRequest.response->entries[i];
@@ -62,13 +47,6 @@ namespace kernel::common::memory {
 
 				if (entry->type == LIMINE_MEMMAP_USABLE) {
 					usable += entry->length;
-
-					this->usableMemory[usableAmount] = {
-						entry->base,
-						entry->length,
-					};
-
-					usableAmount++;
 				}
 
 				const char *type;
@@ -119,7 +97,7 @@ namespace kernel::common::memory {
 		}
 
 		// Kernel Stack
-		u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
+		/*u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
 
 		for (u64 i = kernelStackTopAligned - (pageSize * 16); i < kernelStackTopAligned; i += pageSize) {
 			this->mapPage(i, i - this->currentHhdm, 0b00000011, true);
@@ -187,7 +165,7 @@ namespace kernel::common::memory {
 
 		terminal->printf("Memory Sections mapped!\n");
 
-		this->loadPageTable();
+		this->loadPageTable();*/
 	}
 
 	void VirtualMemoryManager::handlePageFault(u64 faultAddr, u8 flags) {

@@ -81,10 +81,15 @@ namespace kernel::x86_64 {
 
 		terminal.printf("IDT Loaded... OK\n");
 
-		// Memory
-		this->pagingManager = VirtualMemoryManager(this->stackTop);
+		// Physical Memory
+		this->physicalMemoryManager = PhysicalMemoryManager();
 
-		this->pagingManager.archInit();
+		this->physicalMemoryManager.init();
+
+		// Virtual Memory
+		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
+
+		this->virtualMemoryManager.archInit();
 
 		this->halt();
     }

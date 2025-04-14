@@ -24,15 +24,20 @@ namespace kernel::x86_64::hal {
 		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Registers:\n");
-		terminal->printf("\033[0;31m-   int: 0x%lx\n", frame.intNo);
-		terminal->printf("\033[0;31m-   err: 0x%lx\n", frame.errNo);
-		terminal->printf("\033[0;31m-   rip: 0x%lp\n", frame.rip);
-		terminal->printf("\033[0;31m-   rbp: 0x%lp\n", frame.rbp);
-		terminal->printf("\033[0;31m-   rsp: 0x%lp\n", frame.rsp);
+		terminal->printf("\033[0;31m-   int: 0x%.16lx\n", frame.intNo);
+		terminal->printf("\033[0;31m-   err: 0x%.16lx\n", frame.errNo);
+		terminal->printf("\033[0;31m-   rip: 0x%.16lx\n", frame.rip);
+		terminal->printf("\033[0;31m-   rbp: 0x%.16lx\n", frame.rbp);
+		terminal->printf("\033[0;31m-   rsp: 0x%.16lx\n", frame.rsp);
 		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   Backtrace:\n");
 		backtrace(frame.rbp);
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
+
+		for (;;) {
+			asm volatile ("hlt");
+		}
 	}
 
 	void userPanic(const Frame & frame) {
@@ -43,11 +48,11 @@ namespace kernel::x86_64::hal {
 		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Registers:\n");
-		terminal->printf("\033[0;31m-   int: 0x%lx\n", frame.intNo);
-		terminal->printf("\033[0;31m-   err: 0x%lx\n", frame.errNo);
-		terminal->printf("\033[0;31m-   rip: 0x%lp\n", frame.rip);
-		terminal->printf("\033[0;31m-   rbp: 0x%lp\n", frame.rbp);
-		terminal->printf("\033[0;31m-   rsp: 0x%lp\n", frame.rsp);
+		terminal->printf("\033[0;31m-   int: 0x%.16lx\n", frame.intNo);
+		terminal->printf("\033[0;31m-   err: 0x%.16lx\n", frame.errNo);
+		terminal->printf("\033[0;31m-   rip: 0x%.16lx\n", frame.rip);
+		terminal->printf("\033[0;31m-   rbp: 0x%.16lx\n", frame.rbp);
+		terminal->printf("\033[0;31m-   rsp: 0x%.16lx\n", frame.rsp);
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
 	}
@@ -61,7 +66,7 @@ namespace kernel::x86_64::hal {
 			const usize ip = frame[1];
 			const usize sp = frame[0];
 
-			terminal->printf("\033[0;31m-   ip: 0x%lp, sp: 0x%lp\n", ip, sp);
+			terminal->printf("\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx\n", ip, sp);
 
 			frame = reinterpret_cast<usize*>(sp);
 		}

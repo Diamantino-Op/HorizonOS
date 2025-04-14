@@ -27,7 +27,8 @@ namespace kernel::x86_64 {
         GdtManager gdtManager;
         TssManager tssManager;
         IDTManager idtManager;
-        VirtualMemoryManager pagingManager;
+        PhysicalMemoryManager physicalMemoryManager;
+        VirtualMemoryManager virtualMemoryManager;
     };
 }
 
