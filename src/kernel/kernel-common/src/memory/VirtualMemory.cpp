@@ -6,19 +6,8 @@
 
 #include "limine.h"
 
-__attribute__((used, section(".limine_requests")))
-static volatile limine_executable_address_request kernelAddressRequest = {
-	.id = LIMINE_EXECUTABLE_ADDRESS_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_memmap_request memMapRequest = {
-	.id = LIMINE_MEMMAP_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
+extern limine_executable_address_request kernelAddressRequest;
+extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
 	VirtualMemoryManager::VirtualMemoryManager(u64 kernelStackTop) : kernelStackTop(kernelStackTop) {}

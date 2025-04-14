@@ -3,19 +3,14 @@
 
 #include "Types.hpp"
 
+#include "PhysicalMemory.hpp"
+
 extern char limineStart[], limineEnd[];
 extern char textStart[], textEnd[];
 extern char rodataStart[], rodataEnd[];
 extern char dataStart[], dataEnd[];
 
 namespace kernel::common::memory {
-    constexpr u16 pageSize = 0x1000;
-
-    struct UsableMemory {
-        u64 start {};
-        u64 size {};
-    };
-
     class VirtualMemoryManager {
     public:
         VirtualMemoryManager() = default;
