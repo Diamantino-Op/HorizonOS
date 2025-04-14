@@ -47,11 +47,15 @@ namespace kernel::common::memory {
 				limine_memmap_entry *entry = memMapRequest.response->entries[i];
 
 				if (entry->type == LIMINE_MEMMAP_USABLE) {
+					u64 tmpJ = 0;
+
 					for (u64 j = 0; j < entry->length / pageSize; j++) {
 						entryList[currEntry + j]->address = entry->base + (j * pageSize);
 
-						currEntry++;
+						tmpJ = j;
 					}
+
+					currEntry += tmpJ;
 				}
 			}
 		}
