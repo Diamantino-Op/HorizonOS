@@ -64,6 +64,8 @@ namespace kernel::common::memory {
 
 			this->usableMemory = tempUsableMemory;
 
+			usableAmount = 0;
+
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
 				limine_memmap_entry *entry = memMapRequest.response->entries[i];
 
@@ -71,6 +73,13 @@ namespace kernel::common::memory {
 
 				if (entry->type == LIMINE_MEMMAP_USABLE) {
 					usable += entry->length;
+
+					this->usableMemory[usableAmount] = {
+						entry->base,
+						entry->length,
+					};
+
+					usableAmount++;
 				}
 
 				const char *type;
@@ -120,23 +129,7 @@ namespace kernel::common::memory {
 			terminal->printf("Usable Memory: %llu\n", usable);
 		}
 
-		// Limine Section
-
-		if (reinterpret_cast<u64>(&limineStart) - reinterpret_cast<u64>(&limineEnd) != 0) {
-			u64 limineStartAligned = alignDown<u64>(reinterpret_cast<u64>(&limineStart), pageSize);
-			u64 limineEndAligned = alignUp<u64>(reinterpret_cast<u64>(&limineEnd), pageSize);
-
-			for (u64 i = limineStartAligned; i < limineEndAligned; i += pageSize) {
-				this->mapPage(i, i - this->currentHhdm, 0b00000011, false);
-			}
-
-			terminal->printf("Limine Section mapped!\n");
-		} else {
-			terminal->printf("\033[0;31mLimine Section size is 0!\n");
-		}
-
 		// Kernel Stack
-
 		u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
 
 		for (u64 i = kernelStackTopAligned - (pageSize * 16); i < kernelStackTopAligned; i += pageSize) {
@@ -144,6 +137,66 @@ namespace kernel::common::memory {
 		}
 
 		terminal->printf("Kernel Stack mapped!\n");
+
+		// Limine Section
+		if (reinterpret_cast<u64>(&limineStart) - reinterpret_cast<u64>(&limineEnd) != 0) {
+			u64 limineStartAligned = alignDown<u64>(reinterpret_cast<u64>(&limineStart), pageSize);
+			u64 limineEndAligned = alignUp<u64>(reinterpret_cast<u64>(&limineEnd), pageSize);
+
+			for (u64 i = limineStartAligned; i < limineEndAligned; i += pageSize) {
+				this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, false);
+			}
+
+			terminal->printf("Limine Section mapped!\n");
+		} else {
+			terminal->printf("\033[0;31mLimine Section size is 0!\n");
+		}
+
+		// Text Section
+		u64 textStartAligned = alignDown<u64>(reinterpret_cast<u64>(&textStart), pageSize);
+		u64 textEndAligned = alignUp<u64>(reinterpret_cast<u64>(&textEnd), pageSize);
+
+		for (u64 i = textStartAligned; i < textEndAligned; i += pageSize) {
+			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, false);
+		}
+
+		terminal->printf("Text Section mapped!\n");
+
+		// ROData Section
+		u64 rodataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&rodataStart), pageSize);
+		u64 rodataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&rodataEnd), pageSize);
+
+		for (u64 i = rodataStartAligned; i < rodataEndAligned; i += pageSize) {
+			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, true);
+		}
+
+		terminal->printf("ROData Section mapped!\n");
+
+		// Data Section
+		u64 dataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&dataStart), pageSize);
+		u64 dataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
+
+		for (u64 i = dataStartAligned; i < dataEndAligned; i += pageSize) {
+			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, true);
+		}
+
+		terminal->printf("Data Section mapped!\n");
+
+		// MemMap
+		if (memMapRequest.response != nullptr) {
+			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
+				limine_memmap_entry *entry = memMapRequest.response->entries[i];
+
+				u64 entryStartAligned = alignDown<u64>(entry->base, pageSize);
+				u64 entryEndAligned = alignUp<u64>(entry->base + entry->length, pageSize);
+
+				for (u64 j = entryStartAligned; j < entryEndAligned; j += pageSize) {
+					this->mapPage(j + this->currentHhdm, j, 0b00000011, false);
+				}
+			}
+		}
+
+		terminal->printf("Memory Sections mapped!\n");
 
 		this->loadPageTable();
 	}
