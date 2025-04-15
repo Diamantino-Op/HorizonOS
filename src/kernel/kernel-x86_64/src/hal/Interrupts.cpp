@@ -19,6 +19,13 @@ namespace kernel::x86_64::hal {
 	void kernelPanic(Frame& frame) {
 		Terminal* terminal = CommonMain::getTerminal();
 
+		//TODO Move to own function
+		u64 cr2Val = 0;
+		u64 cr3Val = 0;
+
+		asm volatile("mov %%cr2, %0" : "=r"(cr2Val));
+		asm volatile("mov %%cr3, %0" : "=r"(cr3Val));
+
 		terminal->printf("\033[0;31m------------------------------ Kernel Panic ------------------------------\n");
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
@@ -29,6 +36,8 @@ namespace kernel::x86_64::hal {
 		terminal->printf("\033[0;31m-   rip: 0x%.16lx\n", frame.rip);
 		terminal->printf("\033[0;31m-   rbp: 0x%.16lx\n", frame.rbp);
 		terminal->printf("\033[0;31m-   rsp: 0x%.16lx\n", frame.rsp);
+		terminal->printf("\033[0;31m-   cr2: 0x%.16lx\n", cr2Val);
+		terminal->printf("\033[0;31m-   cr3: 0x%.16lx\n", cr3Val);
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Backtrace:\n");
 		backtrace(frame.rbp);

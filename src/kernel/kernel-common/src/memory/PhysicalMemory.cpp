@@ -39,8 +39,6 @@ namespace kernel::common::memory {
 				}
 			}
 
-			PmmListEntry **entryList = reinterpret_cast<PmmListEntry **>(this->listPtr);
-
 			u64 currEntry = 0;
 
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
@@ -50,7 +48,7 @@ namespace kernel::common::memory {
 					u64 tmpJ = 0;
 
 					for (u64 j = 0; j < entry->length / pageSize; j++) {
-						entryList[currEntry + j]->address = entry->base + (j * pageSize);
+						reinterpret_cast<PmmListEntry*>(this->listPtr + (pageSize * (currEntry + j)))->address = entry->base + (j * pageSize);
 
 						tmpJ = j;
 					}
