@@ -27,7 +27,7 @@ namespace kernel::common::memory {
 				limine_memmap_entry *entry = memMapRequest.response->entries[i];
 
 				if (entry->type == LIMINE_MEMMAP_USABLE && entry->length >= reqSize) {
-					this->listPtr = reinterpret_cast<uPtr *>(entry->base);
+					this->listPtr = reinterpret_cast<uPtr *>(entry->base + currHhdm);
 					this->listSize = reqSize;
 
 					terminal->printf("PMM Table located at: 0x%.16lx, With size: %llu\n", this->listPtr,  this->listSize);
@@ -45,15 +45,18 @@ namespace kernel::common::memory {
 				limine_memmap_entry *entry = memMapRequest.response->entries[i];
 
 				if (entry->type == LIMINE_MEMMAP_USABLE) {
-					u64 tmpJ = 0;
+					//u64 tmpJ = 0;
 
-					for (u64 j = 0; j < entry->length / pageSize; j++) {
+					terminal->printf("Entry Base: 0x%.16lx\n", entry->base + currHhdm);
+					reinterpret_cast<PmmListEntry*>(this->listPtr)->address = entry->base + currHhdm;
+
+					/*for (u64 j = 0; j < entry->length / pageSize; j++) {
 						reinterpret_cast<PmmListEntry*>(this->listPtr + (pageSize * (currEntry + j)))->address = entry->base + (j * pageSize);
 
 						tmpJ = j;
-					}
+					}*/
 
-					currEntry += tmpJ;
+					//currEntry += tmpJ;
 				}
 			}
 		}
