@@ -36,7 +36,7 @@ namespace kernel::common::memory {
 		terminal->printf("	RoData: Start: 0x%.16lx, End: 0x%.16lx\n", rodataStart, rodataEnd);
 		terminal->printf("	Data: Start: 0x%.16lx, End: 0x%.16lx\n", dataStart, dataEnd);
 
-		if (memMapRequest.response != nullptr) {
+		/*if (memMapRequest.response != nullptr) {
 			u64 total = 0;
 			u64 usable = 0;
 
@@ -94,7 +94,7 @@ namespace kernel::common::memory {
 
 			terminal->printf("Total Memory: %llu\n", total);
 			terminal->printf("Usable Memory: %llu\n", usable);
-		}
+		}*/
 
 		// Kernel Stack
 		/*u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);

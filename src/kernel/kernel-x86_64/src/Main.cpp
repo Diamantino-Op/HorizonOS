@@ -86,6 +86,8 @@ namespace kernel::x86_64 {
 
 		this->physicalMemoryManager.init();
 
+		terminal.printf("Total Free Memory: %llu\n", this->physicalMemoryManager.getFreeMemory());
+
 		// Virtual Memory
 		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
 

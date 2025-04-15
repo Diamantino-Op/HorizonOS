@@ -5,9 +5,7 @@
 
 namespace kernel::x86_64::hal {
 	extern "C" void handleInterruptAsm(usize stackFrame) {
-		Frame& frame = *reinterpret_cast<Frame *>(stackFrame);
-
-		if (frame.intNo < 32) {
+		if (Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo < 32) {
 			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
 				userPanic(frame);
 			} else {
@@ -29,6 +27,8 @@ namespace kernel::x86_64::hal {
 		terminal->printf("\033[0;31m------------------------------ Kernel Panic ------------------------------\n");
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
+		terminal->printf("\033[0;31m-\n");
+		terminal->printf("\033[0;31m-   At: %s:%llu (%s)\n", __FILE__, __LINE__, __func__); // TODO: Fix this
 		terminal->printf("\033[0;31m-\n");
 		terminal->printf("\033[0;31m-   Registers:\n");
 		terminal->printf("\033[0;31m-   int: 0x%.16lx\n", frame.intNo);

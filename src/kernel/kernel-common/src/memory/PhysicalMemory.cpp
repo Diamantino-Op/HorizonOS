@@ -1,6 +1,7 @@
 #include "PhysicalMemory.hpp"
 
 #include "CommonMain.hpp"
+#include "MainMemory.hpp"
 
 #include "limine.h"
 
@@ -10,55 +11,97 @@ namespace kernel::common::memory {
 	void PhysicalMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		u64 usableAmount = 0;
+		terminal->printf("Initializing Physical Memory Manager...\n");
 
 		if (memMapRequest.response != nullptr) {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
+				if (const limine_memmap_entry *entry = memMapRequest.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE) {
+					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + currHhdm);
+					currEntry->count = entry->length / pageSize;
 
-				if (entry->type == LIMINE_MEMMAP_USABLE) {
-					usableAmount += entry->length;
-				}
-			}
+					terminal->printf("New Free entry found: Base: 0x%.16lx, Size: %llu\n", currEntry, currEntry->count * pageSize);
 
-			u64 reqSize = (usableAmount / pageSize) * sizeof(PmmListEntry);
+					currEntry->next = this->listPtr;
 
-			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
+					if (this->listPtr != nullptr) {
+						this->listPtr->prev = currEntry;
+					}
 
-				if (entry->type == LIMINE_MEMMAP_USABLE && entry->length >= reqSize) {
-					this->listPtr = reinterpret_cast<uPtr *>(entry->base + currHhdm);
-					this->listSize = reqSize;
-
-					terminal->printf("PMM Table located at: 0x%.16lx, With size: %llu\n", this->listPtr,  this->listSize);
-
-					entry->base += reqSize;
-					entry->length -= reqSize;
-
-					break;
-				}
-			}
-
-			u64 currEntry = 0;
-
-			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
-
-				if (entry->type == LIMINE_MEMMAP_USABLE) {
-					//u64 tmpJ = 0;
-
-					terminal->printf("Entry Base: 0x%.16lx\n", entry->base + currHhdm);
-					reinterpret_cast<PmmListEntry*>(this->listPtr)->address = entry->base + currHhdm;
-
-					/*for (u64 j = 0; j < entry->length / pageSize; j++) {
-						reinterpret_cast<PmmListEntry*>(this->listPtr + (pageSize * (currEntry + j)))->address = entry->base + (j * pageSize);
-
-						tmpJ = j;
-					}*/
-
-					//currEntry += tmpJ;
+					this->listPtr = currEntry;
 				}
 			}
 		}
+	}
+
+	u64 *PhysicalMemoryManager::allocPages(usize pageAmount, bool useHhdm) const {
+		PmmListEntry *currEntry = this->listPtr;
+
+		while (currEntry != nullptr) {
+			if (currEntry->count >= pageAmount) {
+				const auto retAddress = reinterpret_cast<u64>(currEntry);
+
+				if (currEntry->count == pageAmount) {
+					if (currEntry->prev != nullptr) {
+						currEntry->prev->next = currEntry->next;
+					}
+
+					if (currEntry->next != nullptr) {
+						currEntry->next->prev = currEntry->prev;
+					}
+				} else {
+					u64 *newAddress = reinterpret_cast<u64 *>(currEntry) + (pageAmount * pageSize);
+
+					currEntry->count -= pageAmount;
+
+					if (currEntry->prev != nullptr) {
+						currEntry->prev->next = reinterpret_cast<PmmListEntry *>(newAddress);
+					}
+
+					if (currEntry->next != nullptr) {
+						currEntry->next->prev = reinterpret_cast<PmmListEntry *>(newAddress);
+					}
+				}
+
+				memset(currEntry, 0, pageAmount * pageSize);
+
+				if (useHhdm) {
+					return reinterpret_cast<u64 *>(retAddress);
+				}
+
+				return reinterpret_cast<u64 *>(retAddress - currHhdm);
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		return nullptr;
+	}
+
+	void PhysicalMemoryManager::freePages(u64 *virtAddress, usize pageAmount) {
+		auto *currEntry = reinterpret_cast<PmmListEntry *>(virtAddress);
+
+		currEntry->count = pageAmount;
+
+		currEntry->next = this->listPtr;
+
+		if (this->listPtr != nullptr) {
+			this->listPtr->prev = currEntry;
+		}
+
+		this->listPtr = currEntry;
+	}
+
+	u64 PhysicalMemoryManager::getFreeMemory() const {
+		const PmmListEntry *currEntry = this->listPtr;
+
+		u64 totFreeMemory = 0;
+
+		while (currEntry != nullptr) {
+			totFreeMemory += currEntry->count * pageSize;
+
+			currEntry = currEntry->next;
+		}
+
+		return totFreeMemory;
 	}
 }

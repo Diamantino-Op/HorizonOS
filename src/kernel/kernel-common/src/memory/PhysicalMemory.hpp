@@ -5,10 +5,14 @@
 
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
+
+    // TODO: Pass from init
     constexpr u64 currHhdm = 0xffff800000000000;
 
     struct PmmListEntry {
-        u64 address {}; // 64th bit = used, 63rd bit = empty
+        PmmListEntry *prev;
+        usize count;
+        PmmListEntry *next;
     };
 
     class PhysicalMemoryManager {
@@ -17,13 +21,14 @@ namespace kernel::common::memory {
 
         void init();
 
-        u64 *allocPages(usize pageAmount, bool useHhdm);
+        u64 *allocPages(usize pageAmount, bool useHhdm) const;
 
-        void freePages(u64 *virtAddress);
+        void freePages(u64 *virtAddress, usize pageAmount);
+
+        u64 getFreeMemory() const;
 
     private:
-        uPtr *listPtr {};
-        u64 listSize {};
+        PmmListEntry *listPtr {};
     };
 }
 
