@@ -94,6 +94,8 @@ namespace kernel::x86_64 {
 		this->virtualMemoryManager.archInit();
 
 		this->halt();
+
+		terminal.info("VMM Loaded... OK", "HorizonOS");
     }
 
 	void Kernel::halt() {

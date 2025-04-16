@@ -56,9 +56,9 @@ namespace kernel::common::memory {
 	void VirtualMemoryManager::loadPageTable() const {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->debug("Loading main page table: %l", "VMM", this->currentMainPage - this->currentHhdm);
+		terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->currentMainPage) - this->currentHhdm));
 
-		loadPageTableAsm(this->currentMainPage - this->currentHhdm);
+		loadPageTableAsm(reinterpret_cast<uPtr *>(reinterpret_cast<u64>(this->currentMainPage) - this->currentHhdm));
 	}
 
 	void VirtualMemoryManager::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {

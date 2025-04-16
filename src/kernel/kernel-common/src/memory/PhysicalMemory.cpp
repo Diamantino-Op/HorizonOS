@@ -33,7 +33,9 @@ namespace kernel::common::memory {
 		}
 	}
 
-	u64 *PhysicalMemoryManager::allocPages(usize pageAmount, bool useHhdm) const {
+	u64 *PhysicalMemoryManager::allocPages(usize pageAmount, bool useHhdm) {
+		Terminal* terminal = CommonMain::getTerminal();
+
 		PmmListEntry *currEntry = this->listPtr;
 
 		while (currEntry != nullptr) {
@@ -53,16 +55,22 @@ namespace kernel::common::memory {
 
 					memcpy(newAddress, currEntry, sizeof(PmmListEntry));
 
-					currEntry = reinterpret_cast<PmmListEntry *>(newAddress);
+					if (this->listPtr == currEntry) {
+						this->listPtr = reinterpret_cast<PmmListEntry *>(newAddress);
 
-					currEntry->count -= pageAmount;
+						this->listPtr->count -= pageAmount;
+					} else {
+						currEntry = reinterpret_cast<PmmListEntry *>(newAddress);
 
-					if (currEntry->prev != nullptr) {
-						currEntry->prev->next = reinterpret_cast<PmmListEntry *>(newAddress);
-					}
+						currEntry->count -= pageAmount;
 
-					if (currEntry->next != nullptr) {
-						currEntry->next->prev = reinterpret_cast<PmmListEntry *>(newAddress);
+						if (currEntry->prev != nullptr) {
+							currEntry->prev->next = currEntry;
+						}
+
+						if (currEntry->next != nullptr) {
+							currEntry->next->prev = currEntry;
+						}
 					}
 				}
 

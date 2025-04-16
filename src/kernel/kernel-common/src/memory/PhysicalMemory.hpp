@@ -21,7 +21,7 @@ namespace kernel::common::memory {
 
         void init();
 
-        u64 *allocPages(usize pageAmount, bool useHhdm) const;
+        u64 *allocPages(usize pageAmount, bool useHhdm);
 
         void freePages(u64 *virtAddress, usize pageAmount);
 

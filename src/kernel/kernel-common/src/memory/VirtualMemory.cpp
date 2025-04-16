@@ -151,20 +151,11 @@ namespace kernel::common::memory {
 
 		// MemMap
 		if (memMapRequest.response != nullptr) {
-			terminal->debug("Mapping MemMaps: %llu", "VMM", memMapRequest.response->entry_count);
-
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				terminal->debug("Mapping Entry: %llu", "VMM", i);
-
 				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
-
-				terminal->debug("Entry %llu found", "VMM", i);
-				terminal->debug("	No Align: Start: 0x%.16lx, End: 0x%.16lx", "VMM", entry->base, entry->base + entry->length);
 
 				const u64 entryStartAligned = alignDown<u64>(entry->base, pageSize);
 				const u64 entryEndAligned = alignUp<u64>(entry->base + entry->length, pageSize);
-
-				terminal->debug("	Aligned: Start: 0x%.16lx, End: 0x%.16lx", "VMM", entryStartAligned, entryEndAligned);
 
 				for (u64 j = entryStartAligned; j < entryEndAligned; j += pageSize) {
 					this->mapPage(j + this->currentHhdm, j, 0b00000011, false);

@@ -55,9 +55,13 @@ namespace kernel::common {
 	}
 
 	void Terminal::putChar(char c, void *ctx) {
+		constexpr u16 com1Port = 0x3F8;
+
 		const char str[] = { c };
 
 	 	flanterm_write(flantermCtx, str, sizeof(str));
+
+		asm volatile ("outb %0, %1" : : "a"(c), "Nd"(com1Port));
 	}
 
 	void Terminal::printf(bool autoSN, const char *format, ...) const {
