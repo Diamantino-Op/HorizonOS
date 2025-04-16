@@ -10,14 +10,14 @@ extern limine_executable_address_request kernelAddressRequest;
 extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
-	VirtualMemoryManager::VirtualMemoryManager(u64 kernelStackTop) : kernelStackTop(kernelStackTop) {}
+	VirtualMemoryManager::VirtualMemoryManager(u64 kernelStackTop, u64 *mainPtr) : mainPtr(mainPtr), kernelStackTop(kernelStackTop) {}
 
 	void VirtualMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->debug("Main page table allocated at: %lp", "VMM", reinterpret_cast<uPtr *>(&this->currentMainPage));
+		terminal->debug("Main page table allocated at: %lp", "VMM", this->currentMainPage);
 
-		// memset(this->currentMainPage, 0, pageSize); TODO: Alloc first
+		memset(this->currentMainPage, 0, pageSize);
 
 		terminal->debug("Kernel Stack Top Address: %lp", "VMM", this->kernelStackTop);
 
@@ -97,65 +97,74 @@ namespace kernel::common::memory {
 		}*/
 
 		// Kernel Stack
-		/*u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
+		const u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
 
 		for (u64 i = kernelStackTopAligned - (pageSize * 16); i < kernelStackTopAligned; i += pageSize) {
 			this->mapPage(i, i - this->currentHhdm, 0b00000011, true);
 		}
 
-		terminal->printf("Kernel Stack mapped!\n");
+		terminal->debug("Kernel Stack mapped!", "VMM");
 
 		// Limine Section
 		if (reinterpret_cast<u64>(&limineStart) - reinterpret_cast<u64>(&limineEnd) != 0) {
-			u64 limineStartAligned = alignDown<u64>(reinterpret_cast<u64>(&limineStart), pageSize);
-			u64 limineEndAligned = alignUp<u64>(reinterpret_cast<u64>(&limineEnd), pageSize);
+			const u64 limineStartAligned = alignDown<u64>(reinterpret_cast<u64>(&limineStart), pageSize);
+			const u64 limineEndAligned = alignUp<u64>(reinterpret_cast<u64>(&limineEnd), pageSize);
 
 			for (u64 i = limineStartAligned; i < limineEndAligned; i += pageSize) {
 				this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, false);
 			}
 
-			terminal->printf("Limine Section mapped!\n");
+			terminal->debug("Limine Section mapped!", "VMM");
 		} else {
-			terminal->printf("\033[0;31mLimine Section size is 0!\n");
+			terminal->error("\033[0;31mLimine Section size is 0!", "VMM");
 		}
 
 		// Text Section
-		u64 textStartAligned = alignDown<u64>(reinterpret_cast<u64>(&textStart), pageSize);
-		u64 textEndAligned = alignUp<u64>(reinterpret_cast<u64>(&textEnd), pageSize);
+		const u64 textStartAligned = alignDown<u64>(reinterpret_cast<u64>(&textStart), pageSize);
+		const u64 textEndAligned = alignUp<u64>(reinterpret_cast<u64>(&textEnd), pageSize);
 
 		for (u64 i = textStartAligned; i < textEndAligned; i += pageSize) {
 			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, false);
 		}
 
-		terminal->printf("Text Section mapped!\n");
+		terminal->debug("Text Section mapped!", "VMM");
 
 		// ROData Section
-		u64 rodataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&rodataStart), pageSize);
-		u64 rodataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&rodataEnd), pageSize);
+		const u64 rodataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&rodataStart), pageSize);
+		const u64 rodataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&rodataEnd), pageSize);
 
 		for (u64 i = rodataStartAligned; i < rodataEndAligned; i += pageSize) {
 			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, true);
 		}
 
-		terminal->printf("ROData Section mapped!\n");
+		terminal->debug("ROData Section mapped!", "VMM");
 
 		// Data Section
-		u64 dataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&dataStart), pageSize);
-		u64 dataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
+		const u64 dataStartAligned = alignDown<u64>(reinterpret_cast<u64>(&dataStart), pageSize);
+		const u64 dataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
 
 		for (u64 i = dataStartAligned; i < dataEndAligned; i += pageSize) {
 			this->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, true);
 		}
 
-		terminal->printf("Data Section mapped!\n");
+		terminal->debug("Data Section mapped!", "VMM");
 
 		// MemMap
 		if (memMapRequest.response != nullptr) {
-			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
+			terminal->debug("Mapping MemMaps: %llu", "VMM", memMapRequest.response->entry_count);
 
-				u64 entryStartAligned = alignDown<u64>(entry->base, pageSize);
-				u64 entryEndAligned = alignUp<u64>(entry->base + entry->length, pageSize);
+			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
+				terminal->debug("Mapping Entry: %llu", "VMM", i);
+
+				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
+
+				terminal->debug("Entry %llu found", "VMM", i);
+				terminal->debug("	No Align: Start: 0x%.16lx, End: 0x%.16lx", "VMM", entry->base, entry->base + entry->length);
+
+				const u64 entryStartAligned = alignDown<u64>(entry->base, pageSize);
+				const u64 entryEndAligned = alignUp<u64>(entry->base + entry->length, pageSize);
+
+				terminal->debug("	Aligned: Start: 0x%.16lx, End: 0x%.16lx", "VMM", entryStartAligned, entryEndAligned);
 
 				for (u64 j = entryStartAligned; j < entryEndAligned; j += pageSize) {
 					this->mapPage(j + this->currentHhdm, j, 0b00000011, false);
@@ -163,9 +172,9 @@ namespace kernel::common::memory {
 			}
 		}
 
-		terminal->printf("Memory Sections mapped!\n");
+		terminal->debug("Memory Sections mapped!", "VMM");
 
-		this->loadPageTable();*/
+		this->loadPageTable();
 	}
 
 	void VirtualMemoryManager::handlePageFault(u64 faultAddr, u8 flags) {

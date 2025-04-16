@@ -48,9 +48,9 @@ namespace kernel::x86_64::hal {
     		base(reinterpret_cast<usize>(&base)) {}
 	};
 
-	class IDTManager {
+	class IdtManager {
 	public:
-		IDTManager();
+		IdtManager();
 
 		void addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags);
 		void loadIdt();

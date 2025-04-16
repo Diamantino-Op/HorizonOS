@@ -3,15 +3,15 @@
 #include "Main.hpp"
 
 namespace kernel::x86_64::hal {
-	IDTManager::IDTManager() {
+	IdtManager::IdtManager() {
 		this->idtInstance = Idt();
 	}
 
-	void IDTManager::addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags) {
+	void IdtManager::addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags) {
 		this->idtInstance.entries[id] = IDTEntry(handler, selector, ist, flags);
     }
 
-	void IDTManager::loadIdt() {
+	void IdtManager::loadIdt() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		this->idtDescriptor = IDTDesc(this->idtInstance);
@@ -21,7 +21,7 @@ namespace kernel::x86_64::hal {
 		loadIdtAsm(&this->idtDescriptor);
 	}
 
-	Idt IDTManager::getIdt() {
+	Idt IdtManager::getIdt() {
 		return this->idtInstance;
 	}
 }

@@ -16,7 +16,7 @@ namespace kernel::common::memory {
     class VirtualMemoryManager {
     public:
         VirtualMemoryManager() = default;
-        VirtualMemoryManager(u64 kernelStackTop);
+        VirtualMemoryManager(u64 kernelStackTop, u64 *mainPtr);
 
         void archInit();
 
@@ -24,16 +24,18 @@ namespace kernel::common::memory {
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec);
 
-        void unMapPage(u64 vAddr);
+        void unMapPage(u64 vAddr) const;
 
     protected:
         void init();
 
         void setPageFlags(uPtr * pageAddr, u8 flags);
 
-        void loadPageTable();
+        void loadPageTable() const;
 
         uPtr* getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec);
+
+        u64 *mainPtr;
 
         uPtr* currentMainPage {};
         u64 currentHhdm {};

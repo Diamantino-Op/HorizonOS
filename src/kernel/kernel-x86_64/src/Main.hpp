@@ -21,12 +21,19 @@ namespace kernel::x86_64 {
 
         void init() override;
 
+        GdtManager *getGdtManager();
+        TssManager *getTssManager();
+        IdtManager *getIdtManager();
+        PhysicalMemoryManager *getPMM();
+        VirtualMemoryManager *getVMM();
+
     protected:
         void halt() override;
 
+    private:
         GdtManager gdtManager;
         TssManager tssManager;
-        IDTManager idtManager;
+        IdtManager idtManager;
         PhysicalMemoryManager physicalMemoryManager;
         VirtualMemoryManager virtualMemoryManager;
     };

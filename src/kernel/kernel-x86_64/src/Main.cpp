@@ -69,7 +69,7 @@ namespace kernel::x86_64 {
 		terminal.info("Updated TSS... OK", "HorizonOS");
 
 		// IDT
-		this->idtManager = IDTManager();
+		this->idtManager = IdtManager();
 
 		terminal.info("IDT Created... OK", "HorizonOS");
 
@@ -89,7 +89,7 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Virtual Memory
-		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
+		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop, reinterpret_cast<u64 *>(this));
 
 		this->virtualMemoryManager.archInit();
 
@@ -101,4 +101,24 @@ namespace kernel::x86_64 {
     		asm volatile ("hlt");
     	}
     }
+
+	GdtManager *Kernel::getGdtManager() {
+		return &this->gdtManager;
+	}
+
+	TssManager *Kernel::getTssManager() {
+		return &this->tssManager;
+	}
+
+	IdtManager *Kernel::getIdtManager() {
+		return &this->idtManager;
+	}
+
+	PhysicalMemoryManager *Kernel::getPMM() {
+		return &this->physicalMemoryManager;
+	}
+
+	VirtualMemoryManager *Kernel::getVMM() {
+		return &this->virtualMemoryManager;
+	}
 }

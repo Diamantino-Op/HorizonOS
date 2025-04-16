@@ -49,7 +49,11 @@ namespace kernel::common::memory {
 						currEntry->next->prev = currEntry->prev;
 					}
 				} else {
-					u64 *newAddress = reinterpret_cast<u64 *>(currEntry) + (pageAmount * pageSize);
+					const auto newAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(currEntry) + (pageAmount * pageSize));
+
+					memcpy(newAddress, currEntry, sizeof(PmmListEntry));
+
+					currEntry = reinterpret_cast<PmmListEntry *>(newAddress);
 
 					currEntry->count -= pageAmount;
 
@@ -62,7 +66,7 @@ namespace kernel::common::memory {
 					}
 				}
 
-				memset(currEntry, 0, pageAmount * pageSize);
+				memset(reinterpret_cast<u64 *>(retAddress), 0, pageAmount * pageSize);
 
 				if (useHhdm) {
 					return reinterpret_cast<u64 *>(retAddress);
