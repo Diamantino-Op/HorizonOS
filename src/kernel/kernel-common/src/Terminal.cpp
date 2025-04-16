@@ -9,20 +9,26 @@
 
 #include "Terminal.hpp"
 
-#include "nanoprintf.h"
 #include "backends/fb.h"
+#include "nanoprintf.h"
 #include "stdarg.h"
+
+#include "memory/MainMemory.hpp"
 
 using namespace kernel::common;
 
 flanterm_context *Terminal::flantermCtx;
 
 namespace kernel::common {
-	 Terminal::Terminal(const limine_framebuffer *framebuffer) {
+	using namespace memory;
+
+	Terminal::Terminal(const limine_framebuffer *framebuffer) {
+		u32 bgColor = 0x252525;
+
 	 	flantermCtx = flanterm_fb_init(
 	 		nullptr,
 	 		nullptr,
-	 		(u32 *) framebuffer->address,
+	 		static_cast<u32 *>(framebuffer->address),
 	 		framebuffer->width,
 	 		framebuffer->height,
 	 		framebuffer->pitch,
@@ -35,7 +41,7 @@ namespace kernel::common {
 	 		nullptr,
 	 		nullptr,
 	 		nullptr,
-	 		nullptr,
+	 		&bgColor,
 	 		nullptr,
 	 		nullptr,
 	 		nullptr,
@@ -49,16 +55,66 @@ namespace kernel::common {
 	}
 
 	void Terminal::putChar(char c, void *ctx) {
-	 	char str[] = { c };
+		const char str[] = { c };
 
 	 	flanterm_write(flantermCtx, str, sizeof(str));
 	}
 
-	void Terminal::printf(const char *format, ...) {
+	void Terminal::printf(bool autoSN, const char *format, ...) const {
 	 	va_list val;
 	 	va_start(val, format);
 	 	npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
 	 	va_end(val);
+
+		if (autoSN) {
+			npf_pprintf((npf_putc)(void *)this->putChar, NULL, "\n");
+		}
+	}
+
+	void Terminal::info(const char *format, const char *id, ...) {
+		this->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
+	}
+
+	void Terminal::debug(const char *format, const char *id, ...) {
+#ifdef HORIZON_DEBUG
+		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
+#endif
+	}
+
+	void Terminal::warn(const char *format, const char *id, ...) {
+		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
+	}
+
+	void Terminal::error(const char *format, const char *id, ...) {
+		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {

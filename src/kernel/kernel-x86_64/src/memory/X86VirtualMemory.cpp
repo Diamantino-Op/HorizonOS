@@ -27,22 +27,22 @@ namespace kernel::common::memory {
 	void VirtualMemoryManager::archInit() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("Initializing Virtual Memory Manager...\n");
+		terminal->info("Initializing Virtual Memory Manager...", "VMM");
 
 		if (hhdmRequest.response != nullptr) {
 			this->currentHhdm = hhdmRequest.response->offset;
 		}
 
-		terminal->printf("Current HHDM Offset: %lp\n", this->currentHhdm);
+		terminal->debug("Current HHDM Offset: %lp", "VMM", this->currentHhdm);
 
 		if (pagingModeRequest.response != nullptr) {
 			// 0 = Page Level 4, 1 = Page Level 5
 			if (pagingModeRequest.response->mode == 0) {
-				terminal->printf("Current Paging Mode: Level 4\n");
+				terminal->debug("Current Paging Mode: Level 4", "VMM");
 
 				this->isLevel5Paging = false;
 			} else if (pagingModeRequest.response->mode == 1) {
-				terminal->printf("Current Paging Mode: Level 5\n");
+				terminal->debug("Current Paging Mode: Level 5", "VMM");
 
 				this->isLevel5Paging = true;
 			}
@@ -56,7 +56,7 @@ namespace kernel::common::memory {
 	void VirtualMemoryManager::loadPageTable() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("Loading main page table: %l", this->currentMainPage - this->currentHhdm);
+		terminal->debug("Loading main page table: %l", "VMM", this->currentMainPage - this->currentHhdm);
 
 		loadPageTableAsm(this->currentMainPage - this->currentHhdm);
 	}

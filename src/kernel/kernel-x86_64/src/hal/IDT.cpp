@@ -16,7 +16,7 @@ namespace kernel::x86_64::hal {
 
 		this->idtDescriptor = IDTDesc(this->idtInstance);
 
-		terminal->printf("Loading IDT at address: 0x%.16lx\n", &this->idtDescriptor);
+		terminal->debug("Loading IDT at address: 0x%.16lx", "IDT", &this->idtDescriptor);
 
 		loadIdtAsm(&this->idtDescriptor);
 	}

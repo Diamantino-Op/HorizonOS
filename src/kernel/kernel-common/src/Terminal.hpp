@@ -49,7 +49,13 @@ namespace kernel::common {
         explicit Terminal(const limine_framebuffer *framebuffer);
 
         static void putChar(char c, void *ctx);
-        void printf(const char* format, ...);
+        void printf(bool autoSN, const char* format, ...) const;
+
+        void info(const char *format, const char *id, ...);
+        void debug(const char *format, const char *id, ...);
+        void warn(const char *format, const char *id, ...);
+        void error(const char *format, const char *id, ...);
+
         //char* getFormat(const char* mainFormat, ...);
 
         //const char* getTextFormatting(TextFormatting format);

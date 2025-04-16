@@ -47,31 +47,31 @@ namespace kernel::x86_64 {
 		// Terminal
 		terminal = Terminal(framebuffer);
 
-		terminal.printf("Initializing HorizonOS...\n");
+		terminal.info("Initializing HorizonOS...", "HorizonOS");
 
 		// TSS
 		this->tssManager = TssManager();
 
-		terminal.printf("TSS Created... OK\n");
+		terminal.info("TSS Created... OK", "HorizonOS");
 
 		// GDT
 		this->gdtManager = GdtManager(this->tssManager.getTss());
 
-		terminal.printf("GDT Created... OK\n");
+		terminal.info("GDT Created... OK", "HorizonOS");
 
 		this->gdtManager.loadGdt();
 		this->gdtManager.reloadRegisters();
 
-		terminal.printf("GDT Loaded... OK\n");
+		terminal.info("GDT Loaded... OK", "HorizonOS");
 
 		this->tssManager.updateTss();
 
-		terminal.printf("Updated TSS... OK\n");
+		terminal.info("Updated TSS... OK", "HorizonOS");
 
 		// IDT
 		this->idtManager = IDTManager();
 
-		terminal.printf("IDT Created... OK\n");
+		terminal.info("IDT Created... OK", "HorizonOS");
 
 		for (u16 i = 0; i <= 255; i++) {
 			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::GATE_TYPE);
@@ -79,14 +79,14 @@ namespace kernel::x86_64 {
 
 		this->idtManager.loadIdt();
 
-		terminal.printf("IDT Loaded... OK\n");
+		terminal.info("IDT Loaded... OK", "HorizonOS");
 
 		// Physical Memory
 		this->physicalMemoryManager = PhysicalMemoryManager();
 
 		this->physicalMemoryManager.init();
 
-		terminal.printf("Total Free Memory: %llu\n", this->physicalMemoryManager.getFreeMemory());
+		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Virtual Memory
 		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);

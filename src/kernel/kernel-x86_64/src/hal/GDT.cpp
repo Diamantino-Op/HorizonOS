@@ -42,7 +42,7 @@ namespace kernel::x86_64::hal {
 
         this->gdtDescriptor = GdtDesc(this->gdtInstance);
 
-    	terminal->printf("Loading GDT at address: 0x%.16lx\n", &this->gdtDescriptor);
+    	terminal->debug("Loading GDT at address: 0x%.16lx", "GDT", &this->gdtDescriptor);
 
         loadGdtAsm(&this->gdtDescriptor);
     }

@@ -24,25 +24,25 @@ namespace kernel::x86_64::hal {
 		asm volatile("mov %%cr2, %0" : "=r"(cr2Val));
 		asm volatile("mov %%cr3, %0" : "=r"(cr3Val));
 
-		terminal->printf("\033[0;31m------------------------------ Kernel Panic ------------------------------\n");
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   At: %s:%llu (%s)\n", __FILE__, __LINE__, __func__); // TODO: Fix this
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   Registers:\n");
-		terminal->printf("\033[0;31m-   int: 0x%.16lx\n", frame.intNo);
-		terminal->printf("\033[0;31m-   err: 0x%.16lx\n", frame.errNo);
-		terminal->printf("\033[0;31m-   rip: 0x%.16lx\n", frame.rip);
-		terminal->printf("\033[0;31m-   rbp: 0x%.16lx\n", frame.rbp);
-		terminal->printf("\033[0;31m-   rsp: 0x%.16lx\n", frame.rsp);
-		terminal->printf("\033[0;31m-   cr2: 0x%.16lx\n", cr2Val);
-		terminal->printf("\033[0;31m-   cr3: 0x%.16lx\n", cr3Val);
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   Backtrace:\n");
+		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   Cause: %s", faultMessages[frame.intNo]);
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   At: %s:%llu (%s)", __FILE__, __LINE__, __func__); // TODO: Fix this
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   Registers:");
+		terminal->printf(true, "\033[0;31m-   int: 0x%.16lx", frame.intNo);
+		terminal->printf(true, "\033[0;31m-   err: 0x%.16lx", frame.errNo);
+		terminal->printf(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
+		terminal->printf(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
+		terminal->printf(true, "\033[0;31m-   rsp: 0x%.16lx", frame.rsp);
+		terminal->printf(true, "\033[0;31m-   cr2: 0x%.16lx", cr2Val);
+		terminal->printf(true, "\033[0;31m-   cr3: 0x%.16lx", cr3Val);
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   Backtrace:");
 		backtrace(frame.rbp);
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 
 		for (;;) {
 			asm volatile ("hlt");
@@ -52,18 +52,18 @@ namespace kernel::x86_64::hal {
 	void userPanic(const Frame & frame) {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("\033[0;31m------------------------------ Userland Panic ------------------------------\n");
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   Cause: %s\n", faultMessages[frame.intNo]);
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m-   Registers:\n");
-		terminal->printf("\033[0;31m-   int: 0x%.16lx\n", frame.intNo);
-		terminal->printf("\033[0;31m-   err: 0x%.16lx\n", frame.errNo);
-		terminal->printf("\033[0;31m-   rip: 0x%.16lx\n", frame.rip);
-		terminal->printf("\033[0;31m-   rbp: 0x%.16lx\n", frame.rbp);
-		terminal->printf("\033[0;31m-   rsp: 0x%.16lx\n", frame.rsp);
-		terminal->printf("\033[0;31m-\n");
-		terminal->printf("\033[0;31m--------------------------------------------------------------------------\n");
+		terminal->printf(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   Cause: %s", faultMessages[frame.intNo]);
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m-   Registers:");
+		terminal->printf(true, "\033[0;31m-   int: 0x%.16lx", frame.intNo);
+		terminal->printf(true, "\033[0;31m-   err: 0x%.16lx", frame.errNo);
+		terminal->printf(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
+		terminal->printf(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
+		terminal->printf(true, "\033[0;31m-   rsp: 0x%.16lx", frame.rsp);
+		terminal->printf(true, "\033[0;31m-");
+		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 	}
 
 	void backtrace(usize rbp) {
@@ -75,7 +75,7 @@ namespace kernel::x86_64::hal {
 			const usize ip = frame[1];
 			const usize sp = frame[0];
 
-			terminal->printf("\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx\n", ip, sp);
+			terminal->printf(true, "\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx", ip, sp);
 
 			frame = reinterpret_cast<usize*>(sp);
 		}

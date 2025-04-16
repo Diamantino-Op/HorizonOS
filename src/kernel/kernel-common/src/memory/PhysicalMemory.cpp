@@ -11,7 +11,7 @@ namespace kernel::common::memory {
 	void PhysicalMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("Initializing Physical Memory Manager...\n");
+		terminal->info("Initializing Physical Memory Manager...", "PMM");
 
 		if (memMapRequest.response != nullptr) {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
@@ -19,7 +19,7 @@ namespace kernel::common::memory {
 					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + currHhdm);
 					currEntry->count = entry->length / pageSize;
 
-					terminal->printf("New Free entry found: Base: 0x%.16lx, Size: %llu\n", currEntry, currEntry->count * pageSize);
+					terminal->debug("New Usable entry found: Base: 0x%.16lx, Size: %llu", "PMM", currEntry, currEntry->count * pageSize);
 
 					currEntry->next = this->listPtr;
 

@@ -15,26 +15,26 @@ namespace kernel::common::memory {
 	void VirtualMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->printf("Main page table allocated at: %lp\n", reinterpret_cast<uPtr *>(&this->currentMainPage));
+		terminal->debug("Main page table allocated at: %lp", "VMM", reinterpret_cast<uPtr *>(&this->currentMainPage));
 
 		// memset(this->currentMainPage, 0, pageSize); TODO: Alloc first
 
-		terminal->printf("Kernel Stack Top Address: %lp\n", this->kernelStackTop);
+		terminal->debug("Kernel Stack Top Address: %lp", "VMM", this->kernelStackTop);
 
 		if (kernelAddressRequest.response != nullptr) {
 			this->kernelAddrPhys = kernelAddressRequest.response->physical_base;
 			this->kernelAddrVirt = kernelAddressRequest.response->virtual_base;
 		}
 
-		terminal->printf("Kernel Addresses:\n");
-		terminal->printf("	Virtual Addresses: 0x%.16lx\n", this->kernelAddrVirt);
-		terminal->printf("	Physical Addresses: 0x%.16lx\n", this->kernelAddrPhys);
+		terminal->debug("Kernel Addresses:", "VMM");
+		terminal->debug("	Virtual Addresses: 0x%.16lx", "VMM", this->kernelAddrVirt);
+		terminal->debug("	Physical Addresses: 0x%.16lx", "VMM", this->kernelAddrPhys);
 
-		terminal->printf("Sections:\n");
-		terminal->printf("	Limine: Start: 0x%.16lx, End: 0x%.16lx\n", limineStart, limineEnd);
-		terminal->printf("	Text: Start: 0x%.16lx, End: 0x%.16lx\n", textStart, textEnd);
-		terminal->printf("	RoData: Start: 0x%.16lx, End: 0x%.16lx\n", rodataStart, rodataEnd);
-		terminal->printf("	Data: Start: 0x%.16lx, End: 0x%.16lx\n", dataStart, dataEnd);
+		terminal->debug("Sections:", "VMM");
+		terminal->debug("	Limine: Start: 0x%.16lx, End: 0x%.16lx", "VMM", limineStart, limineEnd);
+		terminal->debug("	Text: Start: 0x%.16lx, End: 0x%.16lx", "VMM", textStart, textEnd);
+		terminal->debug("	RoData: Start: 0x%.16lx, End: 0x%.16lx", "VMM", rodataStart, rodataEnd);
+		terminal->debug("	Data: Start: 0x%.16lx, End: 0x%.16lx", "VMM", dataStart, dataEnd);
 
 		/*if (memMapRequest.response != nullptr) {
 			u64 total = 0;
