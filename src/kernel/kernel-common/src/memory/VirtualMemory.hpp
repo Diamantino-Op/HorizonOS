@@ -26,6 +26,8 @@ namespace kernel::common::memory {
 
         void unMapPage(u64 vAddr) const;
 
+        u64 getPhysAddress(u64 vAddr) const;
+
     protected:
         void init();
 

@@ -116,7 +116,7 @@ namespace kernel::common::memory {
 
 			terminal->debug("Limine Section mapped!", "VMM");
 		} else {
-			terminal->error("\033[0;31mLimine Section size is 0!", "VMM");
+			terminal->error("Limine Section size is 0!", "VMM");
 		}
 
 		// Text Section

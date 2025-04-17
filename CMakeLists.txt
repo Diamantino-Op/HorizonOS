@@ -47,7 +47,8 @@ unset(CMAKE_ASM_IMPLICIT_INCLUDE_DIRECTORIES)
 add_subdirectory(src)
 
 # ------------------ ISO ------------------
-set(ISO_OUTPUT "${CMAKE_SOURCE_DIR}/iso/out/HorizonOS-${HORIZON_ARCH}.iso")
+set(TMP_ISO_DIR "${CMAKE_SOURCE_DIR}/iso")
+set(ISO_OUTPUT "${TMP_ISO_DIR}/out/HorizonOS-${HORIZON_ARCH}.iso")
 
 # Generate ISO
 add_custom_command(

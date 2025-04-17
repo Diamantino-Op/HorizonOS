@@ -105,6 +105,36 @@ namespace kernel::common::memory {
 		}
 	}
 
+	u64 VirtualMemoryManager::getPhysAddress(u64 vAddr) const {
+		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
+		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
+		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
+		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
+
+		const auto *lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+
+		if (!lvl4Table->entries[lvl4].present) {
+			return 0;
+		}
+
+		const auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + this->currentHhdm);
+		if (!lvl3Table->entries[lvl3].present) {
+			return 0;
+		}
+
+		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + this->currentHhdm);
+		if (!lvl2Table->entries[lvl2].present) {
+			return 0;
+		}
+
+		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + this->currentHhdm);
+		if (!lvl1Table->entries[lvl1].present) {
+			return 0;
+		}
+
+		return lvl1Table->entries[lvl1].address << 12;
+	}
+
 	uPtr* VirtualMemoryManager::getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 
