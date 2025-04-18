@@ -18,15 +18,32 @@ namespace kernel::x86_64::hal {
 
     class PIC {
     public:
-        PIC() = default;
+		explicit PIC(u8 address);
         ~PIC() = default;
 
+        void ack() const;
+        void disable() const;
+        void cmd(u8 cmd, bool needsWait) const;
+        void data(u8 data, bool needsWait) const;
+
     private:
-        u8 address;
+        void wait() const;
+
+        u8 address {};
     };
 
     class DualPIC {
+    public:
+        DualPIC();
+        ~DualPIC() = default;
 
+        void init() const;
+        void ack(usize intNo) const;
+        void disable() const;
+
+    private:
+        PIC pic1;
+        PIC pic2;
     };
 }
 

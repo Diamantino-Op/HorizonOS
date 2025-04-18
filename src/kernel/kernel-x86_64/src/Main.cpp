@@ -81,6 +81,12 @@ namespace kernel::x86_64 {
 
 		terminal.info("IDT Loaded... OK", "HorizonOS");
 
+		this->dualPic = DualPIC();
+
+		this->dualPic.init();
+
+		terminal.info("PIC Loaded... OK", "HorizonOS");
+
 		// Physical Memory
 		this->physicalMemoryManager = PhysicalMemoryManager();
 

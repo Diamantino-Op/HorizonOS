@@ -4,8 +4,9 @@
 #include "CommonMain.hpp"
 
 #include "hal/GDT.hpp"
-#include "hal/TSS.hpp"
 #include "hal/IDT.hpp"
+#include "hal/TSS.hpp"
+#include "hal/PIC.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {
@@ -34,6 +35,9 @@ namespace kernel::x86_64 {
         GdtManager gdtManager;
         TssManager tssManager;
         IdtManager idtManager;
+
+        DualPIC dualPic;
+
         PhysicalMemoryManager physicalMemoryManager;
         VirtualMemoryManager virtualMemoryManager;
     };
