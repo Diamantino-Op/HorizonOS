@@ -34,7 +34,7 @@ namespace kernel::common::memory {
 	}
 
 	u64 *PhysicalMemoryManager::allocPages(usize pageAmount, bool useHhdm) {
-		Terminal* terminal = CommonMain::getTerminal();
+		pmmSpinLock.lock();
 
 		PmmListEntry *currEntry = this->listPtr;
 
@@ -77,8 +77,12 @@ namespace kernel::common::memory {
 				memset(reinterpret_cast<u64 *>(retAddress), 0, pageAmount * pageSize);
 
 				if (useHhdm) {
+					pmmSpinLock.unlock();
+
 					return reinterpret_cast<u64 *>(retAddress);
 				}
+
+				pmmSpinLock.unlock();
 
 				return reinterpret_cast<u64 *>(retAddress - currHhdm);
 			}
@@ -86,10 +90,14 @@ namespace kernel::common::memory {
 			currEntry = currEntry->next;
 		}
 
+		pmmSpinLock.unlock();
+
 		return nullptr;
 	}
 
 	void PhysicalMemoryManager::freePages(u64 *virtAddress, usize pageAmount) {
+		pmmSpinLock.lock();
+
 		auto *currEntry = reinterpret_cast<PmmListEntry *>(virtAddress);
 
 		currEntry->count = pageAmount;
@@ -101,6 +109,8 @@ namespace kernel::common::memory {
 		}
 
 		this->listPtr = currEntry;
+
+		pmmSpinLock.unlock();
 	}
 
 	u64 PhysicalMemoryManager::getFreeMemory() const {

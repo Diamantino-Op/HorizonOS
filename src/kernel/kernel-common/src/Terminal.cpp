@@ -15,12 +15,15 @@
 
 #include "memory/MainMemory.hpp"
 
+#include "hal/IOPort.hpp"
+
 using namespace kernel::common;
 
 flanterm_context *Terminal::flantermCtx;
 
 namespace kernel::common {
 	using namespace memory;
+	using namespace hal;
 
 	Terminal::Terminal(const limine_framebuffer *framebuffer) {
 		u32 bgColor = 0x252525;
@@ -61,7 +64,7 @@ namespace kernel::common {
 
 	 	flanterm_write(flantermCtx, str, sizeof(str));
 
-		asm volatile ("outb %0, %1" : : "a"(c), "Nd"(com1Port));
+		IOPort::out8(c, com1Port);
 	}
 
 	void Terminal::printf(bool autoSN, const char *format, ...) const {

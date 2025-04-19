@@ -3,22 +3,8 @@
 #include "Main.hpp"
 #include "memory/MainMemory.hpp"
 
-__attribute__((used, section(".limine_requests")))
-static volatile limine_hhdm_request hhdmRequest = {
-	.id = LIMINE_HHDM_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
-
-__attribute__((used, section(".limine_requests")))
-static volatile limine_paging_mode_request pagingModeRequest = {
-	.id = LIMINE_PAGING_MODE_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-	.mode = 1,
-	.max_mode = 1,
-	.min_mode = 0,
-};
+extern limine_hhdm_request hhdmRequest;
+extern limine_paging_mode_request pagingModeRequest;
 
 namespace kernel::common::memory {
 	using namespace x86_64;
@@ -53,7 +39,7 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	void VirtualMemoryManager::loadPageTable() const {
+	void VirtualMemoryManager::loadPageTable(PageMap *pageMap) {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->currentMainPage) - this->currentHhdm));
@@ -61,13 +47,22 @@ namespace kernel::common::memory {
 		loadPageTableAsm(reinterpret_cast<uPtr *>(reinterpret_cast<u64>(this->currentMainPage) - this->currentHhdm));
 	}
 
-	void VirtualMemoryManager::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {
+	void PageMap::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		auto *pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl4, flags, noExec));
+		PageTable *pdpt = nullptr;
+
+		if (this->isLevel5Paging) {
+			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl5, flags, noExec));
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(lvl5Table), lvl4, flags, noExec));
+		} else {
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->currentMainPage, lvl4, flags, noExec));
+		}
+
 		auto *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, noExec));
 		auto *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags, noExec));
 
@@ -77,13 +72,25 @@ namespace kernel::common::memory {
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
 	}
 
-	void VirtualMemoryManager::unMapPage(u64 vAddr) const {
+	void PageMap::unMapPage(u64 vAddr) const {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		const auto *lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+		const PageTable *lvl4Table = nullptr;
+
+		if (this->isLevel5Paging) {
+			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+			if (!lvl5Table->entries[lvl5].present) {
+				return;
+			}
+
+			lvl4Table = reinterpret_cast<PageTable *>((lvl5Table->entries[lvl5].address << 12) + this->currentHhdm);
+		} else {
+			lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+		}
 
 		if (!lvl4Table->entries[lvl4].present) {
 			return;
@@ -105,13 +112,25 @@ namespace kernel::common::memory {
 		}
 	}
 
-	u64 VirtualMemoryManager::getPhysAddress(u64 vAddr) const {
+	u64 PageMap::getPhysAddress(u64 vAddr) const {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
 		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		const auto *lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+		const PageTable *lvl4Table = nullptr;
+
+		if (this->isLevel5Paging) {
+			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+			if (!lvl5Table->entries[lvl5].present) {
+				return 0;
+			}
+
+			lvl4Table = reinterpret_cast<PageTable *>((lvl5Table->entries[lvl5].address << 12) + this->currentHhdm);
+		} else {
+			lvl4Table = reinterpret_cast<PageTable *>(this->currentMainPage);
+		}
 
 		if (!lvl4Table->entries[lvl4].present) {
 			return 0;
@@ -135,11 +154,11 @@ namespace kernel::common::memory {
 		return lvl1Table->entries[lvl1].address << 12;
 	}
 
-	uPtr* VirtualMemoryManager::getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec) {
+	uPtr* PageMap::getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 
 		if (!parentTable->entries[index].present) {
-			auto *newTable = reinterpret_cast<PageTable *>(reinterpret_cast<Kernel *>(this->mainPtr)->getPMM()->allocPages(1, false));
+			auto *newTable = reinterpret_cast<PageTable *>(reinterpret_cast<Kernel *>(CommonMain::getInstance())->getPMM()->allocPages(1, false));
 			//memset(reinterpret_cast<u64 *>(reinterpret_cast<u64>(newTable) + this->currentHhdm), 0, pageSize); // TODO: Prob not needed
 
 			parentTable->entries[index].executeDisable = noExec;
@@ -153,7 +172,7 @@ namespace kernel::common::memory {
 		return reinterpret_cast<uPtr *>((parentTable->entries[index].address << 12) + this->currentHhdm);
 	}
 
-	void VirtualMemoryManager::setPageFlags(uPtr *pageAddr, u8 flags) {
+	void PageMap::setPageFlags(uPtr *pageAddr, u8 flags) {
 		auto *pageEntry = reinterpret_cast<PageEntry *>(pageAddr);
 
 		pageEntry->present = flags & 1;

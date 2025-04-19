@@ -13,14 +13,10 @@ extern char dataStart[], dataEnd[];
 namespace kernel::common::memory {
     constexpr u64 kernelMemorySize = pageSize * 1024 * 4; // 16 Mbit
 
-    class VirtualMemoryManager {
+    class PageMap {
     public:
-        VirtualMemoryManager() = default;
-        VirtualMemoryManager(u64 kernelStackTop, u64 *mainPtr);
-
-        void archInit();
-
-        void handlePageFault(u64 faultAddr, u8 flags);
+        PageMap() = default;
+		explicit PageMap(u64 *pageTable);
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec);
 
@@ -28,18 +24,26 @@ namespace kernel::common::memory {
 
         u64 getPhysAddress(u64 vAddr) const;
 
-    protected:
-        void init();
-
+    private:
         void setPageFlags(uPtr * pageAddr, u8 flags);
-
-        void loadPageTable() const;
 
         uPtr* getOrCreatePageTable(uPtr* parent, u16 index, u8 flags, bool noExec);
 
-        u64 *mainPtr;
+        u64* pageTable {};
+    };
 
-        uPtr* currentMainPage {};
+    class VirtualMemoryManager {
+    public:
+        VirtualMemoryManager() = default;
+		explicit VirtualMemoryManager(u64 kernelStackTop);
+
+        void archInit();
+
+        static void loadPageTable(PageMap *pageMap);
+
+    private:
+        void init();
+
         u64 currentHhdm {};
         u64 kernelAddrPhys {};
         u64 kernelAddrVirt {};

@@ -2,6 +2,7 @@
 #define KERNEL_COMMON_PHYSICALMEMORY_HPP
 
 #include "Types.hpp"
+#include "SpinLock.hpp"
 
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
@@ -29,6 +30,7 @@ namespace kernel::common::memory {
 
     private:
         PmmListEntry *listPtr {};
+        SpinLock pmmSpinLock {};
     };
 }
 

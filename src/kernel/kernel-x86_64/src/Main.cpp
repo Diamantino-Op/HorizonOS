@@ -4,14 +4,6 @@
 
 #include "limine.h"
 
-using namespace kernel::x86_64;
-
-extern "C" void kernelMain() {
-    Kernel kernel = Kernel();
-
-	kernel.init();
-}
-
 __attribute__((used, section(".limine_requests_start")))
 static volatile LIMINE_REQUESTS_START_MARKER;
 
@@ -21,12 +13,13 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 __attribute__((used, section(".limine_requests")))
 static volatile LIMINE_BASE_REVISION(3);
 
-__attribute__((used, section(".limine_requests")))
-static volatile limine_framebuffer_request framebufferRequest = {
-	.id = LIMINE_FRAMEBUFFER_REQUEST,
-	.revision = 0,
-	.response = nullptr,
-};
+extern limine_framebuffer_request framebufferRequest;
+
+extern "C" void kernelMain() {
+    auto kernel = kernel::x86_64::Kernel();
+
+	kernel.init();
+}
 
 namespace kernel::x86_64 {
 	Kernel::Kernel() {
@@ -81,11 +74,21 @@ namespace kernel::x86_64 {
 
 		terminal.info("IDT Loaded... OK", "HorizonOS");
 
+		// PIC
+
 		this->dualPic = DualPIC();
 
 		this->dualPic.init();
 
-		terminal.info("PIC Loaded... OK", "HorizonOS");
+		terminal.info("PIC Initialised... OK", "HorizonOS");
+
+		// PIT
+
+		this->pit = PIT();
+
+		this->pit.init(1000);
+
+		terminal.info("PIT Initialised... OK", "HorizonOS");
 
 		// Physical Memory
 		this->physicalMemoryManager = PhysicalMemoryManager();
@@ -95,13 +98,13 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Virtual Memory
-		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop, reinterpret_cast<u64 *>(this));
+		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
 
 		this->virtualMemoryManager.archInit();
 
-		this->halt();
-
 		terminal.info("VMM Loaded... OK", "HorizonOS");
+
+		this->halt();
     }
 
 	void Kernel::halt() {

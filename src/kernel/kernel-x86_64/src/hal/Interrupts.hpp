@@ -66,6 +66,8 @@ namespace kernel::x86_64::hal {
         "Reserved",
     };
 
+    void handlePageFault(Frame& frame);
+
     void kernelPanic(Frame& frame);
     void userPanic(const Frame & frame);
 

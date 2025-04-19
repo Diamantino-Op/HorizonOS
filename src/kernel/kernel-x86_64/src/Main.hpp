@@ -7,6 +7,7 @@
 #include "hal/IDT.hpp"
 #include "hal/TSS.hpp"
 #include "hal/PIC.hpp"
+#include "hal/PIT.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {
@@ -37,6 +38,8 @@ namespace kernel::x86_64 {
         IdtManager idtManager;
 
         DualPIC dualPic;
+
+        PIT pit;
 
         PhysicalMemoryManager physicalMemoryManager;
         VirtualMemoryManager virtualMemoryManager;

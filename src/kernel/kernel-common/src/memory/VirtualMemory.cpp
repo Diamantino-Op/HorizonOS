@@ -10,7 +10,7 @@ extern limine_executable_address_request kernelAddressRequest;
 extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
-	VirtualMemoryManager::VirtualMemoryManager(u64 kernelStackTop, u64 *mainPtr) : mainPtr(mainPtr), kernelStackTop(kernelStackTop) {}
+	VirtualMemoryManager::VirtualMemoryManager(u64 kernelStackTop) : kernelStackTop(kernelStackTop) {}
 
 	void VirtualMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
@@ -36,18 +36,11 @@ namespace kernel::common::memory {
 		terminal->debug("	RoData: Start: 0x%.16lx, End: 0x%.16lx", "VMM", rodataStart, rodataEnd);
 		terminal->debug("	Data: Start: 0x%.16lx, End: 0x%.16lx", "VMM", dataStart, dataEnd);
 
-		/*if (memMapRequest.response != nullptr) {
-			u64 total = 0;
-			u64 usable = 0;
+		terminal->debug("Memmap entries:", "VMM");
 
+		if (memMapRequest.response != nullptr) {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				limine_memmap_entry *entry = memMapRequest.response->entries[i];
-
-				total += entry->length;
-
-				if (entry->type == LIMINE_MEMMAP_USABLE) {
-					usable += entry->length;
-				}
+				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
 
 				const char *type;
 
@@ -89,12 +82,10 @@ namespace kernel::common::memory {
 						break;
 				}
 
-				terminal->printf("Entry %d, Start: 0x%.16lx, Size: %llu, %s\n", i, entry->base, entry->length, type);
+				terminal->debug("Entry %d:", "VMM", i);
+				terminal->debug("	Start: 0x%.16lx, Size: %llu, Type: %s", "VMM", entry->base, entry->length, type);
 			}
-
-			terminal->printf("Total Memory: %llu\n", total);
-			terminal->printf("Usable Memory: %llu\n", usable);
-		}*/
+		}
 
 		// Kernel Stack
 		const u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
@@ -166,12 +157,5 @@ namespace kernel::common::memory {
 		terminal->debug("Memory Sections mapped!", "VMM");
 
 		this->loadPageTable();
-	}
-
-	void VirtualMemoryManager::handlePageFault(u64 faultAddr, u8 flags) {
-		u64 alignedAddr = faultAddr & ~(0x1000 - 1);
-		// u64 physAddress = allocatePage();
-
-		this->mapPage(alignedAddr, (u64) nullptr, flags, false);
 	}
 }

@@ -1,6 +1,10 @@
 #include "PIC.hpp"
 
+#include "hal/IOPort.hpp"
+
 namespace kernel::x86_64::hal {
+	using namespace common::hal;
+
 	PIC::PIC(const u8 address) : address(address) {}
 
 	void PIC::ack() const {
@@ -12,7 +16,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void PIC::cmd(u8 cmd, bool needsWait) const {
-		asm volatile ("outb %0, %1" : : "a"(cmd), "Nd"(static_cast<u16>(address + commandAddress)));
+		IOPort::out8(cmd, address + commandAddress);
 
 		if (needsWait) {
 			this->wait();
@@ -20,7 +24,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void PIC::data(u8 data, bool needsWait) const {
-		asm volatile ("outb %0, %1" : : "a"(data), "Nd"(static_cast<u16>(address + commandAddress)));
+		IOPort::out8(data, address + dataAddress);
 
 		if (needsWait) {
 			this->wait();

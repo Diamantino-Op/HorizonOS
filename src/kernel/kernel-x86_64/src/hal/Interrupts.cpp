@@ -5,12 +5,42 @@
 
 namespace kernel::x86_64::hal {
 	extern "C" void handleInterruptAsm(usize stackFrame) {
-		if (Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo < 32) {
+		if (Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo == 14) {
+			handlePageFault(frame);
+		} else if (frame.intNo < 32) {
 			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
 				userPanic(frame);
 			} else {
 				kernelPanic(frame);
 			}
+		}
+	}
+
+	// TODO: Fix
+	void handlePageFault(Frame& frame) {
+		kernelPanic(frame); // Remove after fix
+
+		Terminal* terminal = CommonMain::getTerminal();
+
+		u64 faultAddr = 0;
+		asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+
+		u8 flags = 0b00000011;
+
+		if (frame.errNo & 0x4) { // User
+			flags |= 0b00000100;
+		}
+
+		if (!(frame.errNo & 0x1)) { // Present
+			u64 physAddress = reinterpret_cast<u64>(reinterpret_cast<Kernel *>(CommonMain::getInstance())->getPMM()->allocPages(1, false));
+
+			reinterpret_cast<Kernel *>(CommonMain::getInstance())->getVMM()->mapPage(faultAddr, physAddress, flags, false);
+
+			asm volatile("invlpg (%0)" ::"r" (faultAddr) : "memory");
+
+			terminal->error("PageFault at address: 0x%.16lx", "Interrupts", faultAddr);
+		} else {
+			kernelPanic(frame);
 		}
 	}
 

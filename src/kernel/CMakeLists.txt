@@ -22,7 +22,7 @@ elseif (${HORIZON_ARCH} STREQUAL "aarch64")
     #set(EXTRA_ASM_FLAGS)
 endif ()
 
-set(KERNEL_C_FLAGS -Wall -Wextra -Werror -O3 -ffast-math -nostdinc -ffreestanding -fno-exceptions -fno-rtti -fno-omit-frame-pointer -Wno-error=unused-variable -Wno-error=unused-parameter -static --target=${HORIZON_ARCH}-none-elf ${EXTRA_C_FLAGS} CACHE STRING "Kernel C Flags")
+set(KERNEL_C_FLAGS -Wall -Wextra -Werror -O3 -ffast-math -nostdinc -ffreestanding -fno-exceptions -fno-rtti -fno-omit-frame-pointer -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=deprecated-enum-enum-conversion -static --target=${HORIZON_ARCH}-none-elf ${EXTRA_C_FLAGS} CACHE STRING "Kernel C Flags")
 set(KERNEL_CXX_FLAGS ${KERNEL_C_FLAGS} ${EXTRA_CXX_FLAGS} CACHE STRING "Kernel C++ Flags")
 set(KERNEL_ASM_FLAGS -static --target=${HORIZON_ARCH}-none-elf -masm=intel ${EXTRA_ASM_FLAGS} CACHE STRING "Kernel Asm Flags")
 set(KERNEL_LINK_FLAGS -T ${LINKER_SCRIPT} -static -nostdlib CACHE STRING "Kernel Link Flags")
