@@ -29,7 +29,7 @@ namespace kernel::x86_64::memory {
 		PageEntry entries [512];
 	};
 
-	extern "C" void loadPageTableAsm(uPtr *pageTablePointer);
+	extern "C" void loadPageTableAsm(u64 *pageTablePointer);
 }
 
 #endif

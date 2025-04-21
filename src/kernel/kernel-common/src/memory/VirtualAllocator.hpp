@@ -4,8 +4,34 @@
 #include "VirtualMemory.hpp"
 
 namespace kernel::common::memory {
+    constexpr u8 minBlockSize = 64;
+
+    struct MemoryBlock {
+        usize size;
+        bool free;
+        MemoryBlock *next;
+    };
+
     struct AllocContext {
         PageMap pageMap {};
+        u8 pageFlags {};
+        u64 *heapStart{};
+		usize heapSize{};
+		MemoryBlock * blocks;
+    };
+
+    class VirtualAllocator {
+    public:
+		static AllocContext *createContext(PageMap pageMap, bool isUserspace);
+
+        static u64 *alloc(AllocContext *ctx, u64 size);
+        static void free(AllocContext *ctx, u64 *ptr);
+
+        static void defrag(const AllocContext *ctx);
+
+    private:
+        static void growHeap(AllocContext *ctx, u64 minSize);
+        static void shrinkHeap(AllocContext *ctx);
     };
 }
 

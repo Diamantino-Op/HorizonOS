@@ -7,9 +7,6 @@
 namespace kernel::common::memory {
     constexpr u16 pageSize = 0x1000;
 
-    // TODO: Pass from init
-    constexpr u64 currHhdm = 0xffff800000000000;
-
     struct PmmListEntry {
         PmmListEntry *prev;
         usize count;

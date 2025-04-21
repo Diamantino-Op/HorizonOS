@@ -26,8 +26,6 @@ namespace kernel::x86_64 {
         GdtManager *getGdtManager();
         TssManager *getTssManager();
         IdtManager *getIdtManager();
-        PhysicalMemoryManager *getPMM();
-        VirtualMemoryManager *getVMM();
 
     protected:
         void halt() override;
@@ -40,9 +38,6 @@ namespace kernel::x86_64 {
         DualPIC dualPic;
 
         PIT pit;
-
-        PhysicalMemoryManager physicalMemoryManager;
-        VirtualMemoryManager virtualMemoryManager;
     };
 }
 

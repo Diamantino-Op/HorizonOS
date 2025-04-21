@@ -15,3 +15,13 @@ volatile limine_memmap_request memMapRequest = {
 	.revision = 0,
 	.response = nullptr,
 };
+
+#include "memory/VirtualMemory.hpp"
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_stack_size_request stackSizeRequest = {
+	.id = LIMINE_STACK_SIZE_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.stack_size = kernel::common::memory::kernelStackSize
+};

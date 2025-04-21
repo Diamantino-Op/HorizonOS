@@ -27,6 +27,8 @@ namespace kernel::x86_64 {
 	}
 
 	void Kernel::init() {
+		this->rootInit();
+
 		if (LIMINE_BASE_REVISION_SUPPORTED == false) {
 			this->halt();
 		}
@@ -123,13 +125,5 @@ namespace kernel::x86_64 {
 
 	IdtManager *Kernel::getIdtManager() {
 		return &this->idtManager;
-	}
-
-	PhysicalMemoryManager *Kernel::getPMM() {
-		return &this->physicalMemoryManager;
-	}
-
-	VirtualMemoryManager *Kernel::getVMM() {
-		return &this->virtualMemoryManager;
 	}
 }

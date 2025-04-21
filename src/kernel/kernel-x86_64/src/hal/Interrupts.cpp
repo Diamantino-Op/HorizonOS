@@ -32,9 +32,9 @@ namespace kernel::x86_64::hal {
 		}
 
 		if (!(frame.errNo & 0x1)) { // Present
-			u64 physAddress = reinterpret_cast<u64>(reinterpret_cast<Kernel *>(CommonMain::getInstance())->getPMM()->allocPages(1, false));
+			u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
-			reinterpret_cast<Kernel *>(CommonMain::getInstance())->getVMM()->mapPage(faultAddr, physAddress, flags, false);
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false);
 
 			asm volatile("invlpg (%0)" ::"r" (faultAddr) : "memory");
 

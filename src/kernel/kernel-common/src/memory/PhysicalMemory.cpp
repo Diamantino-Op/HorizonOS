@@ -16,7 +16,7 @@ namespace kernel::common::memory {
 		if (memMapRequest.response != nullptr) {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
 				if (const limine_memmap_entry *entry = memMapRequest.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE) {
-					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + currHhdm);
+					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + CommonMain::getCurrentHhdm());
 					currEntry->count = entry->length / pageSize;
 
 					terminal->debug("New Usable entry found: Base: 0x%.16lx, Size: %llu", "PMM", currEntry, currEntry->count * pageSize);
@@ -84,7 +84,7 @@ namespace kernel::common::memory {
 
 				pmmSpinLock.unlock();
 
-				return reinterpret_cast<u64 *>(retAddress - currHhdm);
+				return reinterpret_cast<u64 *>(retAddress - CommonMain::getCurrentHhdm());
 			}
 
 			currEntry = currEntry->next;
