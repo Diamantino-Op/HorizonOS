@@ -16,8 +16,6 @@ namespace kernel::common::memory {
 
 		terminal->debug("Current HHDM Offset: %lp", "VMM", CommonMain::getCurrentHhdm());
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.init(CommonMain::getInstance()->getPMM()->allocPages(1, true));
-
 		this->init();
 	}
 

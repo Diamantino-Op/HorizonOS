@@ -4,28 +4,41 @@
 #include "Math.hpp"
 #include "PhysicalMemory.hpp"
 
+#include "MainMemory.hpp"
+
 namespace kernel::common::memory {
-	AllocContext *VirtualAllocator::createContext(const PageMap pageMap, const bool isUserspace) {
+	// TODO: Change page flags to a class for multiarch
+	AllocContext *VirtualAllocator::createContext(const bool isUserspace) {
 		auto *ctx = reinterpret_cast<AllocContext *>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
 
-		ctx->pageMap = pageMap;
-		ctx->heapStart = nullptr;
-		ctx->heapSize = pageSize - sizeof(MemoryBlock);
-		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+		ctx->pageMap = PageMap();
+		ctx->heapSize = pageSize;
 
 		ctx->pageFlags = 0b00000011;
 
 		if (isUserspace) {
 			ctx->pageFlags |= 0b00000100;
+
+			ctx->heapStart = reinterpret_cast<u64 *>(CommonMain::getCurrentHhdm());
+		} else {
+			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize));
 		}
+
+		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+
+		ctx->pageMap.init(CommonMain::getInstance()->getPMM()->allocPages(1, true));
+
+		memset(ctx->pageMap.getPageTable(), 0, pageSize);
 
 		ctx->pageMap.mapPage(reinterpret_cast<u64>(ctx->heapStart), reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false)), ctx->pageFlags, false);
 
+		return ctx;
+	}
+
+	void VirtualAllocator::initContext(const AllocContext *ctx) {
 		ctx->blocks->size = ctx->heapSize - sizeof(MemoryBlock);
 		ctx->blocks->free = true;
 		ctx->blocks->next = nullptr;
-
-		return ctx;
 	}
 
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
@@ -70,7 +83,10 @@ namespace kernel::common::memory {
 		block->free = true;
 
 		defrag(ctx);
-		shrinkHeap(ctx);
+
+		if (ctx->heapSize > pageSize) {
+			shrinkHeap(ctx);
+		}
 	}
 
 	void VirtualAllocator::defrag(const AllocContext *ctx) {

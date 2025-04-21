@@ -20,6 +20,7 @@ namespace kernel::x86_64 {
     class Kernel : CommonMain {
     public:
         Kernel();
+        ~Kernel() override = default;
 
         void init() override;
 

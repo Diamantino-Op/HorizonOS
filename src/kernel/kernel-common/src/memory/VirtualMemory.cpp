@@ -18,9 +18,6 @@ namespace kernel::common::memory {
 		PageMap *currentPageMap = &CommonMain::getInstance()->getKernelAllocContext()->pageMap;
 
 		terminal->debug("Main page table allocated at: %lp", "VMM", currentPageMap->getPageTable());
-
-		memset(currentPageMap->getPageTable(), 0, pageSize);
-
 		terminal->debug("Kernel Stack Top Address: %lp", "VMM", this->kernelStackTop);
 
 		if (kernelAddressRequest.response != nullptr) {

@@ -27,7 +27,7 @@ namespace kernel::x86_64::hal {
 		ACCESSED = 0b00000001,
 	};
 
-	enum Flags {
+	enum Flags : u16 {
 		PAGE_GRANULARITY = 0b1000,
 		PROTECTED_SEGMENT = 0b0100,
 		LONG_MODE = 0b0010,

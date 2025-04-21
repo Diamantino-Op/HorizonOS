@@ -11,7 +11,7 @@ extern char rodataStart[], rodataEnd[];
 extern char dataStart[], dataEnd[];
 
 namespace kernel::common::memory {
-    constexpr u64 kernelStackSize = pageSize * 16; // 16 Mbit
+    constexpr u64 kernelStackSize = pageSize * 16; // 64 Kbit
 
     class PageMap {
     public:

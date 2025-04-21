@@ -25,3 +25,11 @@ volatile limine_paging_mode_request pagingModeRequest = {
 	.max_mode = 1,
 	.min_mode = 0,
 };
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_mp_request mpRequest = {
+	.id = LIMINE_MP_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.flags = 0x1
+};

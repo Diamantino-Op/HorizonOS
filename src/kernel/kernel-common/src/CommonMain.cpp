@@ -18,8 +18,8 @@ namespace kernel::common {
 		return instance;
 	}
 
-	AllocContext *CommonMain::getKernelAllocContext() {
-		return &this->kernelAllocContext;
+	AllocContext *CommonMain::getKernelAllocContext() const {
+		return this->kernelAllocContext;
 	}
 
 	u64 CommonMain::getCurrentHhdm() {

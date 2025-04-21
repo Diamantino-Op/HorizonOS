@@ -1,6 +1,7 @@
 #include "Main.hpp"
 
 #include "hal/Interrupts.hpp"
+#include "memory/MainMemory.hpp"
 
 #include "limine.h"
 
@@ -99,12 +100,21 @@ namespace kernel::x86_64 {
 
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
+		// Allocator Context
+		this->kernelAllocContext = VirtualAllocator::createContext(false);
+
+		terminal.info("Allocator Context created...", "HorizonOS");
+
 		// Virtual Memory
 		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
 
 		this->virtualMemoryManager.archInit();
 
 		terminal.info("VMM Loaded... OK", "HorizonOS");
+
+		VirtualAllocator::initContext(this->kernelAllocContext);
+
+		terminal.info("Allocator Context initialized...", "HorizonOS");
 
 		this->halt();
     }

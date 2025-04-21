@@ -12,6 +12,8 @@ namespace kernel::common {
 
     class CommonMain {
     public:
+		virtual ~CommonMain() = default;
+
 		virtual void init();
 
         static Terminal* getTerminal();
@@ -20,7 +22,7 @@ namespace kernel::common {
 
         static u64 getCurrentHhdm();
 
-        AllocContext *getKernelAllocContext();
+        AllocContext *getKernelAllocContext() const;
 
         PhysicalMemoryManager *getPMM();
         VirtualMemoryManager *getVMM();
@@ -35,7 +37,7 @@ namespace kernel::common {
         static Terminal terminal;
 
         uPtr stackTop {};
-        AllocContext kernelAllocContext {};
+        AllocContext *kernelAllocContext {};
 
         PhysicalMemoryManager physicalMemoryManager;
         VirtualMemoryManager virtualMemoryManager;

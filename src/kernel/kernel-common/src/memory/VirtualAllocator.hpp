@@ -6,7 +6,7 @@
 namespace kernel::common::memory {
     constexpr u8 minBlockSize = 64;
 
-    struct MemoryBlock {
+    struct __attribute__((packed)) MemoryBlock {
         usize size;
         bool free;
         MemoryBlock *next;
@@ -22,7 +22,9 @@ namespace kernel::common::memory {
 
     class VirtualAllocator {
     public:
-		static AllocContext *createContext(PageMap pageMap, bool isUserspace);
+		static AllocContext *createContext(bool isUserspace);
+
+        static void initContext(const AllocContext *ctx);
 
         static u64 *alloc(AllocContext *ctx, u64 size);
         static void free(AllocContext *ctx, u64 *ptr);
