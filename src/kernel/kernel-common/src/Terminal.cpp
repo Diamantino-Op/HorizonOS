@@ -60,9 +60,7 @@ namespace kernel::common {
 	void Terminal::putChar(char c, void *ctx) {
 		constexpr u16 com1Port = 0x3F8;
 
-		const char str[] = { c };
-
-	 	flanterm_write(flantermCtx, str, sizeof(str));
+	 	flanterm_write(flantermCtx, &c, 1);
 
 		IOPort::out8(c, com1Port);
 	}

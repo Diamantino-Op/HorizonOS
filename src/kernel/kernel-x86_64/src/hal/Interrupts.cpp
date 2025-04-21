@@ -3,9 +3,13 @@
 #include "GDT.hpp"
 #include "Main.hpp"
 
+#include "utils/Asm.hpp"
+
 namespace kernel::x86_64::hal {
-	extern "C" void handleInterruptAsm(usize stackFrame) {
-		if (Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo == 14) {
+	using namespace utils;
+
+	extern "C" void handleInterruptAsm(const usize stackFrame) {
+		if (const Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo == 14) {
 			handlePageFault(frame);
 		} else if (frame.intNo < 32) {
 			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
@@ -17,13 +21,12 @@ namespace kernel::x86_64::hal {
 	}
 
 	// TODO: Fix
-	void handlePageFault(Frame& frame) {
+	void handlePageFault(const Frame & frame) {
 		kernelPanic(frame); // Remove after fix
 
-		Terminal* terminal = CommonMain::getTerminal();
+		Terminal *terminal = CommonMain::getTerminal();
 
-		u64 faultAddr = 0;
-		asm volatile("mov %%cr2, %0" : "=r"(faultAddr));
+		const u64 faultAddr = Asm::readCr2();
 
 		u8 flags = 0b00000011;
 
@@ -32,11 +35,11 @@ namespace kernel::x86_64::hal {
 		}
 
 		if (!(frame.errNo & 0x1)) { // Present
-			u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+			const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false);
 
-			asm volatile("invlpg (%0)" ::"r" (faultAddr) : "memory");
+			Asm::invalidatePage(faultAddr);
 
 			terminal->error("PageFault at address: 0x%.16lx", "Interrupts", faultAddr);
 		} else {
@@ -44,15 +47,8 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void kernelPanic(Frame& frame) {
-		Terminal* terminal = CommonMain::getTerminal();
-
-		//TODO Move to own function
-		u64 cr2Val = 0;
-		u64 cr3Val = 0;
-
-		asm volatile("mov %%cr2, %0" : "=r"(cr2Val));
-		asm volatile("mov %%cr3, %0" : "=r"(cr3Val));
+	void kernelPanic(const Frame & frame) {
+		const Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
 		terminal->printf(true, "\033[0;31m-");
@@ -66,8 +62,8 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
 		terminal->printf(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
 		terminal->printf(true, "\033[0;31m-   rsp: 0x%.16lx", frame.rsp);
-		terminal->printf(true, "\033[0;31m-   cr2: 0x%.16lx", cr2Val);
-		terminal->printf(true, "\033[0;31m-   cr3: 0x%.16lx", cr3Val);
+		terminal->printf(true, "\033[0;31m-   cr2: 0x%.16lx", Asm::readCr2());
+		terminal->printf(true, "\033[0;31m-   cr3: 0x%.16lx", Asm::readCr3());
 		terminal->printf(true, "\033[0;31m-");
 		terminal->printf(true, "\033[0;31m-   Backtrace:");
 		backtrace(frame.rbp);
@@ -75,12 +71,12 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 
 		for (;;) {
-			asm volatile ("hlt");
+			Asm::hlt();
 		}
 	}
 
 	void userPanic(const Frame & frame) {
-		Terminal* terminal = CommonMain::getTerminal();
+		const Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
 		terminal->printf(true, "\033[0;31m-");
@@ -96,10 +92,10 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 	}
 
-	void backtrace(usize rbp) {
-		Terminal* terminal = CommonMain::getTerminal();
+	void backtrace(const usize rbp) {
+		const Terminal *terminal = CommonMain::getTerminal();
 
-		usize* frame = reinterpret_cast<usize*>(rbp);
+		const auto *frame = reinterpret_cast<usize *>(rbp);
 
 		while (frame) {
 			const usize ip = frame[1];
