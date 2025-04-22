@@ -4,11 +4,11 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::utils {
-    struct CpuIdRegs {
-        u32 eax;
-        u32 ebx;
-        u32 ecx;
-        u32 edx;
+    struct CpuIdResult {
+        u32 eax {};
+        u32 ebx {};
+        u32 ecx {};
+        u32 edx {};
     };
 
     struct Branding {
@@ -26,11 +26,16 @@ namespace kernel::x86_64::utils {
 
     class CpuId {
     public:
-        static CpuIdRegs getCpuIdRegs(u32 leaf = 0, u32 subLeaf = 0);
+        static CpuIdResult get(u32 leaf, u32 subLeaf);
 
-    private:
-        u32 els[4] {};
-        char str[16] {};
+        static char *getVendor();
+        static char *getBrand();
+
+        static bool hasXSave();
+        static bool hasAvx();
+        static bool hasAvx512();
+
+        static u32 getXSaveSize();
     };
 }
 

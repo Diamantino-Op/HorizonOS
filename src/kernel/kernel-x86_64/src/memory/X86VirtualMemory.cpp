@@ -2,12 +2,14 @@
 
 #include "Main.hpp"
 #include "memory/MainMemory.hpp"
+#include "utils/Asm.hpp"
 
 extern limine_paging_mode_request pagingModeRequest;
 
 namespace kernel::common::memory {
 	using namespace x86_64;
 	using namespace x86_64::memory;
+	using namespace x86_64::utils;
 
 	void VirtualMemoryManager::archInit() {
 		Terminal* terminal = CommonMain::getTerminal();
@@ -43,7 +45,7 @@ namespace kernel::common::memory {
 
 		terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm()));
 
-		loadPageTableAsm(reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm()));
+		Asm::writeCr3(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm());
 	}
 
 	void PageMap::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {

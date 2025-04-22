@@ -28,8 +28,6 @@ namespace kernel::x86_64::memory {
 	struct __attribute__((packed, aligned(pageSize))) PageTable {
 		PageEntry entries [512];
 	};
-
-	extern "C" void loadPageTableAsm(u64 *pageTablePointer);
 }
 
 #endif

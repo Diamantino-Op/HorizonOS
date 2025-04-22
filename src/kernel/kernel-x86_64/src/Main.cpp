@@ -1,7 +1,8 @@
 #include "Main.hpp"
 
 #include "hal/Interrupts.hpp"
-#include "memory/MainMemory.hpp"
+#include "utils/Asm.hpp"
+#include "utils/CpuId.hpp"
 
 #include "limine.h"
 
@@ -23,6 +24,8 @@ extern "C" void kernelMain() {
 }
 
 namespace kernel::x86_64 {
+	using namespace utils;
+
 	Kernel::Kernel() {
 		asm volatile("mov %%rsp, %0" : "=r"(this->stackTop));
 	}
@@ -116,12 +119,15 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
+		terminal.info("Cpu brand: %s", "HorizonOS", CpuId::getBrand());
+		terminal.info("Cpu vendor: %s", "HorizonOS", CpuId::getVendor());
+
 		this->halt();
     }
 
 	void Kernel::halt() {
     	for (;;) {
-    		asm volatile ("hlt");
+    		Asm::hlt();
     	}
     }
 
