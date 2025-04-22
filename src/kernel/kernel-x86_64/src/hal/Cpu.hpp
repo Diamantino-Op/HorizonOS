@@ -1,6 +1,8 @@
 #ifndef KERNEL_X86_64_CPU_HPP
 #define KERNEL_X86_64_CPU_HPP
 
+#include "Types.hpp"
+
 namespace kernel::x86_64::hal {
     class CpuManager {
     public:
@@ -11,6 +13,11 @@ namespace kernel::x86_64::hal {
 
     private:
         void initSimd();
+
+        u64 coreAmount {};
+
+        char *brand {};
+        char *vendor {};
     };
 }
 

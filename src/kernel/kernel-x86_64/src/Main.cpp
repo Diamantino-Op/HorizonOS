@@ -119,8 +119,11 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
-		terminal.info("Cpu brand: %s", "HorizonOS", CpuId::getBrand());
-		terminal.info("Cpu vendor: %s", "HorizonOS", CpuId::getVendor());
+		this->cpuManager = CpuManager();
+
+		this->cpuManager.init();
+
+		terminal.info("Cpu initialized...", "HorizonOS");
 
 		this->halt();
     }

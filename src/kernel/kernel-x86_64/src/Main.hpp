@@ -5,9 +5,10 @@
 
 #include "hal/GDT.hpp"
 #include "hal/IDT.hpp"
-#include "hal/TSS.hpp"
 #include "hal/PIC.hpp"
 #include "hal/PIT.hpp"
+#include "hal/TSS.hpp"
+#include "hal/Cpu.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {
@@ -17,7 +18,7 @@ namespace kernel::x86_64 {
     using namespace common;
     using namespace common::memory;
 
-    class Kernel : CommonMain {
+    class Kernel final : CommonMain {
     public:
         Kernel();
         ~Kernel() override = default;
@@ -39,6 +40,8 @@ namespace kernel::x86_64 {
         DualPIC dualPic;
 
         PIT pit;
+
+        CpuManager cpuManager;
     };
 }
 
