@@ -42,6 +42,8 @@ namespace kernel::common::memory {
 	}
 
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
+		ctx->lock.lock();
+
 		MemoryBlock* current = ctx->blocks;
 
 		while (current) {
@@ -65,17 +67,25 @@ namespace kernel::common::memory {
 		}
 
 		if (CommonMain::getInstance()->getPMM()->getFreeMemory() < size + sizeof(MemoryBlock)) {
+			ctx->lock.unlock();
+
 			return nullptr;
 		}
 
 		growHeap(ctx, size);
+
+		ctx->lock.unlock();
 
 		return alloc(ctx, size);
 	}
 
 	// TODO: Maybe improve speed by defragging only the current block
 	void VirtualAllocator::free(AllocContext *ctx, u64 *ptr) {
+		ctx->lock.lock();
+
 		if (!ptr) {
+			ctx->lock.unlock();
+
 			return;
 		}
 
@@ -87,6 +97,8 @@ namespace kernel::common::memory {
 		if (ctx->heapSize > pageSize) {
 			shrinkHeap(ctx);
 		}
+
+		ctx->lock.unlock();
 	}
 
 	void VirtualAllocator::defrag(const AllocContext *ctx) {

@@ -3,7 +3,15 @@
 
 #include "Types.hpp"
 
+#include "Apic.hpp"
+
 namespace kernel::x86_64::hal {
+    struct Cpu {
+        Apic apic;
+
+        u32 cpuId;
+    };
+
     class CpuManager {
     public:
         CpuManager() = default;
@@ -12,12 +20,17 @@ namespace kernel::x86_64::hal {
         void init();
 
     private:
-        void initSimd();
+        void initSimd() const;
 
         u64 coreAmount {};
+        Cpu *cpuList {};
+
+        Apic *bootstrapApic {};
 
         char *brand {};
         char *vendor {};
+
+        bool hasX2Apic {};
     };
 }
 

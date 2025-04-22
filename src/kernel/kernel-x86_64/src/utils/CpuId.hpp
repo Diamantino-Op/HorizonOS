@@ -11,17 +11,14 @@ namespace kernel::x86_64::utils {
         u32 edx {};
     };
 
-    struct Branding {
-        char vendor[12] {};
-        char brand[48] {};
+    union Brand {
+        char value[48] {};
+        u32 regs[12];
+    };
 
-        char *getVendor() {
-            return vendor;
-        }
-
-        char *getBrand() {
-            return brand;
-        }
+    union Vendor {
+        char value[12] {};
+        u32 regs[3];
     };
 
     class CpuId {

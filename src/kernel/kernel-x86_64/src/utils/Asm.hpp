@@ -34,6 +34,11 @@ namespace kernel::x86_64::utils {
         u32 reserved4 {};
     };
 
+    union Cr0RegisterU {
+        Cr0Register reg {};
+        u64 value;
+    };
+
     struct __attribute__((packed)) Cr4Register {
         u8 virtual8086Ext : 1 {};
         u8 protectedVirtModeInts : 1 {};
@@ -63,9 +68,19 @@ namespace kernel::x86_64::utils {
         u64 reserved3 : 39 {};
     };
 
+    union Cr4RegisterU {
+        Cr4Register reg {};
+        u64 value;
+    };
+
     struct __attribute__((packed)) Cr8Register {
         u8 priority : 4;
         u64 reserved : 60;
+    };
+
+    union Cr8RegisterU {
+        Cr8Register reg {};
+        u64 value;
     };
 
     struct __attribute__((packed)) XCr0Register {
@@ -76,9 +91,14 @@ namespace kernel::x86_64::utils {
         u8 bndcsrEnable : 1 {};
         u8 avx512Enable : 1 {};
         u8 zmm0_15Enable : 1 {};
-        u8 zmm16_32Enable : 1 {};
+        u8 zmm16_31Enable : 1 {};
         u8 pkruEnable : 1 {};
         u64 reserved : 55;
+    };
+
+    union XCr0RegisterU {
+        XCr0Register reg {};
+        u64 value;
     };
 
     class Asm {
@@ -109,8 +129,8 @@ namespace kernel::x86_64::utils {
 
         // AVX / SSE
 
-        static u64 readXCr0(u32 i);
-        static void writeXCr0(u32 i, u64 value);
+        static u64 readXCr(u32 i);
+        static void writeXCr(u32 i, u64 value);
 
         static void xsave(const u64 *region);
         static void xrstor(const u64 *region);

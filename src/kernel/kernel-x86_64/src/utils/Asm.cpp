@@ -83,7 +83,7 @@ namespace kernel::x86_64::utils {
 
 	// AVX / SSE
 
-	u64 Asm::readXCr0(u32 i) {
+	u64 Asm::readXCr(u32 i) {
 		u32 eax, edx;
 
 		asm volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(i) : "memory");
@@ -91,7 +91,7 @@ namespace kernel::x86_64::utils {
 		return eax | (static_cast<u64>(edx) << 32);
 	}
 
-	void Asm::writeXCr0(u32 i, u64 value) {
+	void Asm::writeXCr(u32 i, u64 value) {
 		u32 edx = value >> 32;
 		u32 eax = static_cast<u32>(value);
 

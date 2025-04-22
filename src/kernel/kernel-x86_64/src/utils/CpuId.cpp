@@ -14,40 +14,40 @@ namespace kernel::x86_64::utils {
 	}
 
 	char *CpuId::getVendor() {
-		static char vendor[12] {};
+		static Vendor vendor {};
 
 		const CpuIdResult res = get(0x00, 0x00);
 
-		reinterpret_cast<u32 *>(vendor)[0] = res.ebx;
-		reinterpret_cast<u32 *>(vendor)[1] = res.edx;
-		reinterpret_cast<u32 *>(vendor)[2] = res.ecx;
+		vendor.regs[0] = res.ebx;
+		vendor.regs[1] = res.edx;
+		vendor.regs[2] = res.ecx;
 
-		return vendor;
+		return vendor.value;
 	}
 
 	char *CpuId::getBrand() {
-		static char brand[48];
+		static Brand brand {};
 
 		const CpuIdResult res1 = get(0x80000002, 0x00);
 		const CpuIdResult res2 = get(0x80000003, 0x00);
 		const CpuIdResult res3 = get(0x80000004, 0x00);
 
-		reinterpret_cast<u32 *>(brand)[0] = res1.eax;
-		reinterpret_cast<u32 *>(brand)[1] = res1.ebx;
-		reinterpret_cast<u32 *>(brand)[2] = res1.ecx;
-		reinterpret_cast<u32 *>(brand)[3] = res1.edx;
+		brand.regs[0] = res1.eax;
+		brand.regs[1] = res1.ebx;
+		brand.regs[2] = res1.ecx;
+		brand.regs[3] = res1.edx;
 
-		reinterpret_cast<u32 *>(brand)[4] = res2.eax;
-		reinterpret_cast<u32 *>(brand)[5] = res2.ebx;
-		reinterpret_cast<u32 *>(brand)[6] = res2.ecx;
-		reinterpret_cast<u32 *>(brand)[7] = res2.edx;
+		brand.regs[4] = res2.eax;
+		brand.regs[5] = res2.ebx;
+		brand.regs[6] = res2.ecx;
+		brand.regs[7] = res2.edx;
 
-		reinterpret_cast<u32 *>(brand)[8] = res3.eax;
-		reinterpret_cast<u32 *>(brand)[9] = res3.ebx;
-		reinterpret_cast<u32 *>(brand)[10] = res3.ecx;
-		reinterpret_cast<u32 *>(brand)[11] = res3.edx;
+		brand.regs[8] = res3.eax;
+		brand.regs[9] = res3.ebx;
+		brand.regs[10] = res3.ecx;
+		brand.regs[11] = res3.edx;
 
-		return brand;
+		return brand.value;
 	}
 
 	bool CpuId::hasXSave() {

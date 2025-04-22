@@ -3,21 +3,24 @@
 
 #include "VirtualMemory.hpp"
 
+#include "SpinLock.hpp"
+
 namespace kernel::common::memory {
     constexpr u8 minBlockSize = 64;
 
     struct __attribute__((packed)) MemoryBlock {
-        usize size;
-        bool free;
-        MemoryBlock *next;
+        usize size {};
+        bool free {};
+        MemoryBlock *next {};
     };
 
     struct AllocContext {
         PageMap pageMap {};
         u8 pageFlags {};
-        u64 *heapStart{};
-		usize heapSize{};
-		MemoryBlock * blocks;
+        u64 *heapStart {};
+		usize heapSize {};
+		MemoryBlock *blocks {};
+        SpinLock lock {};
     };
 
     class VirtualAllocator {
