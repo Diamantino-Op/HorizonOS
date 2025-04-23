@@ -42,6 +42,11 @@ namespace kernel::common {
         PhysicalMemoryManager physicalMemoryManager;
         VirtualMemoryManager virtualMemoryManager;
     };
+
+    class CommonCoreMain {
+    public:
+        virtual ~CommonCoreMain() = default;
+    };
 }
 
 #endif

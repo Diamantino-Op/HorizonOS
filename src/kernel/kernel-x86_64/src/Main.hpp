@@ -43,6 +43,20 @@ namespace kernel::x86_64 {
 
         CpuManager cpuManager;
     };
+
+    class CoreKernel final : CommonCoreMain {
+    public:
+        ~CoreKernel() override = default;
+
+        void init();
+
+    private:
+        GdtManager coreGdtManager {};
+        TssManager coreTssManager {};
+        IdtManager coreIdtManager {};
+
+        CpuCore cpuCore {};
+    };
 }
 
 #endif

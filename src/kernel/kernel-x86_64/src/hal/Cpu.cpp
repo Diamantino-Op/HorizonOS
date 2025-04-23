@@ -19,7 +19,7 @@ namespace kernel::x86_64::hal {
 			Terminal* terminal = CommonMain::getTerminal();
 
 			this->coreAmount = mpRequest.response->cpu_count;
-			this->cpuList = new Cpu[this->coreAmount];
+			this->cpuList = new CpuCore[this->coreAmount];
 
 			for (u64 i = 0; i < this->coreAmount; i++) {
 				this->cpuList[i].apic.setId(mpRequest.response->cpus[i]->lapic_id);
@@ -27,6 +27,11 @@ namespace kernel::x86_64::hal {
 
 				if (this->cpuList[i].apic.getId() == mpRequest.response->bsp_lapic_id) {
 					this->bootstrapApic = &this->cpuList[i].apic;
+				} else {
+					mpRequest.response->cpus[i]->extra_argument = reinterpret_cast<u64>(&this->cpuList[i]);
+					mpRequest.response->cpus[i]->goto_address = [](limine_mp_info * info) {
+						coreInit(reinterpret_cast<CpuCore *>(info->extra_argument));
+					};
 				}
 			}
 
@@ -95,5 +100,15 @@ namespace kernel::x86_64::hal {
 		}
 
 		terminal->info("SIMD Enabled", "Cpu");
+	}
+
+	void coreInit(const Cpu *cpu) {
+		Terminal* terminal = CommonMain::getTerminal();
+
+		terminal->info("Core %u initialized...", "Cpu", cpu->cpuId);
+
+		for (;;) {
+			Asm::hlt();
+		}
 	}
 }

@@ -6,7 +6,7 @@
 #include "Apic.hpp"
 
 namespace kernel::x86_64::hal {
-    struct Cpu {
+    struct CpuCore {
         Apic apic;
 
         u32 cpuId;
@@ -23,7 +23,7 @@ namespace kernel::x86_64::hal {
         void initSimd() const;
 
         u64 coreAmount {};
-        Cpu *cpuList {};
+        CpuCore *cpuList {};
 
         Apic *bootstrapApic {};
 
@@ -32,6 +32,8 @@ namespace kernel::x86_64::hal {
 
         bool hasX2Apic {};
     };
+
+    void coreInit(const Cpu *cpu);
 }
 
 #endif
