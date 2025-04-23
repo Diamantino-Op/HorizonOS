@@ -119,6 +119,8 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
+		this->dualPic.disable();
+
 		this->cpuManager = CpuManager();
 
 		this->cpuManager.init();

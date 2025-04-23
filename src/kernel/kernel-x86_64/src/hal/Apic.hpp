@@ -11,6 +11,9 @@ namespace kernel::x86_64::hal {
 
         void init();
 
+        void setId(u32 apicId);
+        u32 getId() const;
+
     private:
         u32 apicId {};
     };

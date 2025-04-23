@@ -21,7 +21,14 @@ namespace kernel::x86_64::hal {
 			this->coreAmount = mpRequest.response->cpu_count;
 			this->cpuList = new Cpu[this->coreAmount];
 
-			this->bootstrapApic = &this->cpuList[0].apic;
+			for (u64 i = 0; i < this->coreAmount; i++) {
+				this->cpuList[i].apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->cpuList[i].cpuId = mpRequest.response->cpus[i]->processor_id;
+
+				if (this->cpuList[i].apic.getId() == mpRequest.response->bsp_lapic_id) {
+					this->bootstrapApic = &this->cpuList[i].apic;
+				}
+			}
 
 			this->brand = CpuId::getBrand();
 			this->vendor = CpuId::getVendor();
