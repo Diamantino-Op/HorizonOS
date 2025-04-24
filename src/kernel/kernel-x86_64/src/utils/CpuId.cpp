@@ -70,7 +70,7 @@ namespace kernel::x86_64::utils {
 
 	u32 CpuId::getXSaveSize() {
 		if (!hasXSave()) {
-			return 0;
+			return 512;
 		}
 
 		const CpuIdResult res = get(0x0d, 0x00);

@@ -30,6 +30,10 @@ namespace kernel::common {
 		return 0x0;
 	}
 
+	uPtr CommonMain::getStackTop() const {
+		return this->stackTop;
+	}
+
 	PhysicalMemoryManager *CommonMain::getPMM() {
 		return &this->physicalMemoryManager;
 	}
@@ -39,11 +43,6 @@ namespace kernel::common {
 	}
 
 	void CommonMain::init() {}
-	void CommonMain::halt() {}
 
 	void CommonCoreMain::init() {}
-
-	void CommonCoreMain::rootInit() {
-		instance = this;
-	}
 }

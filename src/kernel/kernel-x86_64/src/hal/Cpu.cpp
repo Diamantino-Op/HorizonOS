@@ -1,12 +1,10 @@
-#define LIMINE_API_REVISION 3
-
 #include "Cpu.hpp"
 
 #include "CommonMain.hpp"
+#include "Main.hpp"
 #include "utils/CpuId.hpp"
 #include "utils/Asm.hpp"
-
-#include "limine.h"
+#include "Math.hpp"
 
 extern limine_mp_request mpRequest;
 
@@ -19,26 +17,11 @@ namespace kernel::x86_64::hal {
 			Terminal* terminal = CommonMain::getTerminal();
 
 			this->coreAmount = mpRequest.response->cpu_count;
-			this->cpuList = new CpuCore[this->coreAmount];
-
-			for (u64 i = 0; i < this->coreAmount; i++) {
-				this->cpuList[i].apic.setId(mpRequest.response->cpus[i]->lapic_id);
-				this->cpuList[i].cpuId = mpRequest.response->cpus[i]->processor_id;
-
-				if (this->cpuList[i].apic.getId() == mpRequest.response->bsp_lapic_id) {
-					this->bootstrapApic = &this->cpuList[i].apic;
-				} else {
-					mpRequest.response->cpus[i]->extra_argument = reinterpret_cast<u64>(&this->cpuList[i]);
-					mpRequest.response->cpus[i]->goto_address = [](limine_mp_info * info) {
-						coreInit(reinterpret_cast<CpuCore *>(info->extra_argument));
-					};
-				}
-			}
 
 			this->brand = CpuId::getBrand();
 			this->vendor = CpuId::getVendor();
 
-			this->hasX2Apic = mpRequest.response->flags & 0x1;
+			this->hasX2Apic = mpRequest.response->flags & LIMINE_MP_X2APIC;
 
 			terminal->info("Brand: %.48s", "Cpu", this->brand);
 			terminal->info("Vendor: %.12s", "Cpu", this->vendor);
@@ -51,12 +34,10 @@ namespace kernel::x86_64::hal {
 			terminal->debug("	XSave Size: %u", "Cpu", CpuId::getXSaveSize());
 			terminal->debug("	Avx: %u", "Cpu", CpuId::hasAvx());
 			terminal->debug("	Avx 512: %u", "Cpu", CpuId::hasAvx512());
-
-			this->initSimd();
 		}
 	}
 
-	void CpuManager::initSimd() const {
+	void CpuManager::initSimd() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		Cr0RegisterU cr0Val {};
@@ -99,16 +80,65 @@ namespace kernel::x86_64::hal {
 			Asm::writeXCr(0, xCr0Val.value);
 		}
 
+		Asm::fninit();
+
 		terminal->info("SIMD Enabled", "Cpu");
 	}
 
-	void coreInit(const Cpu *cpu) {
+	void CpuManager::initSimdContext(const uPtr *ptr) {
+		Asm::fninit();
+
+		saveSimdContext(ptr);
+	}
+
+	void CpuManager::saveSimdContext(const uPtr *ptr) {
+		if (CpuId::hasXSave()) {
+			Asm::xsave(ptr);
+		} else {
+			Asm::fxsave(ptr);
+		}
+	}
+
+	void CpuManager::loadSimdContext(const uPtr *ptr) {
+		if (CpuId::hasXSave()) {
+			Asm::xrstor(ptr);
+		} else {
+			Asm::fxrstor(ptr);
+		}
+	}
+
+	void CpuManager::startMultithread() {
+		this->cpuList = new CoreKernel[this->coreAmount - 1];
+
+		u64 j = 0;
+
+		for (u64 i = 0; i < this->coreAmount; i++) {
+			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
+				this->bootstrapCpu.apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->bootstrapCpu.cpuId = mpRequest.response->cpus[i]->processor_id;
+			} else {
+				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
+
+				this->initCore(j);
+
+				++j;
+			}
+		}
+	}
+
+	void CpuManager::initCore(const u64 coreId) const {
+		mpRequest.response->cpus[coreId]->extra_argument = VirtualAllocator::getPhysicalAddress(reinterpret_cast<u64>(&this->cpuList[coreId])) + CommonMain::getCurrentHhdm();
+		mpRequest.response->cpus[coreId]->goto_address = reinterpret_cast<limine_goto_address>(&bootCore);
+	}
+
+	void bootCore(const limine_mp_info *info) {
 		Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->info("Core %u initialized...", "Cpu", cpu->cpuId);
+		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
 
-		for (;;) {
-			Asm::hlt();
-		}
+		terminal->debug("Cpu %u", "Cpu", coreKernel->cpuCore.cpuId);
+
+		coreKernel->init();
 	}
 }

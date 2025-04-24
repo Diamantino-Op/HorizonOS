@@ -41,6 +41,13 @@ namespace kernel::common::memory {
 		ctx->blocks->next = nullptr;
 	}
 
+	u64 VirtualAllocator::getPhysicalAddress(u64 virtualAddress) {
+		const u64 alignedKernAddr = alignDown<u64>(virtualAddress, pageSize);
+		const u64 diff = virtualAddress - alignedKernAddr;
+
+		return CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPhysAddress(alignedKernAddr) + diff;
+	}
+
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
 		ctx->lock.lock();
 

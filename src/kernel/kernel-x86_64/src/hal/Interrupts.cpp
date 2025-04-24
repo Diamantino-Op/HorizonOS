@@ -48,7 +48,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void kernelPanic(const Frame & frame) {
-		const Terminal * terminal = CommonMain::getTerminal();
+		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
 		terminal->printf(true, "\033[0;31m-");
@@ -76,7 +76,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void userPanic(const Frame & frame) {
-		const Terminal * terminal = CommonMain::getTerminal();
+		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
 		terminal->printf(true, "\033[0;31m-");
@@ -93,7 +93,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void backtrace(const usize rbp) {
-		const Terminal *terminal = CommonMain::getTerminal();
+		Terminal *terminal = CommonMain::getTerminal();
 
 		const auto *frame = reinterpret_cast<usize *>(rbp);
 

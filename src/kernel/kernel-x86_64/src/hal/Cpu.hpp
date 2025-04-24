@@ -1,9 +1,17 @@
 #ifndef KERNEL_X86_64_CPU_HPP
 #define KERNEL_X86_64_CPU_HPP
 
+#define LIMINE_API_REVISION 3
+
 #include "Types.hpp"
 
 #include "Apic.hpp"
+
+#include "limine.h"
+
+namespace kernel::x86_64 {
+	class CoreKernel;
+}
 
 namespace kernel::x86_64::hal {
     struct CpuCore {
@@ -19,13 +27,21 @@ namespace kernel::x86_64::hal {
 
         void init();
 
+        void startMultithread();
+
+        static void initSimd();
+
+        static void initSimdContext(const uPtr *ptr);
+        static void saveSimdContext(const uPtr *ptr);
+        static void loadSimdContext(const uPtr *ptr);
+
     private:
-        void initSimd() const;
+        void initCore(u64 coreId) const;
 
         u64 coreAmount {};
-        CpuCore *cpuList {};
+        CoreKernel *cpuList {};
 
-        Apic *bootstrapApic {};
+        CpuCore bootstrapCpu {};
 
         char *brand {};
         char *vendor {};
@@ -33,7 +49,7 @@ namespace kernel::x86_64::hal {
         bool hasX2Apic {};
     };
 
-    void coreInit(const Cpu *cpu);
+    void bootCore(const limine_mp_info *info);
 }
 
 #endif

@@ -107,6 +107,7 @@ namespace kernel::x86_64::utils {
         static void sti();
 
         static void hlt();
+        [[noreturn]] static void lhlt();
         static void pause();
 
         static void invalidatePage(u64 addr);

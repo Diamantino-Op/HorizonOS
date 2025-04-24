@@ -6,6 +6,8 @@
 #include "limine.h"
 #include "flanterm.h"
 
+#include "SpinLock.hpp"
+
 #define PRINTF_STATE_NORMAL       0
 #define PRINTF_STATE_LENGTH       1
 #define PRINTF_STATE_LENGTH_LONG  2
@@ -49,7 +51,7 @@ namespace kernel::common {
         explicit Terminal(const limine_framebuffer *framebuffer);
 
         static void putChar(char c, void *ctx);
-        void printf(bool autoSN, const char* format, ...) const;
+        void printf(bool autoSN, const char* format, ...);
 
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);
@@ -64,6 +66,8 @@ namespace kernel::common {
 
     private:
         static flanterm_context *flantermCtx;
+
+        static SpinLock lock;
     };
 }
 

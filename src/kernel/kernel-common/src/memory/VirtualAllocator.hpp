@@ -29,6 +29,8 @@ namespace kernel::common::memory {
 
         static void initContext(const AllocContext *ctx);
 
+        static u64 getPhysicalAddress(u64 virtualAddress);
+
         static u64 *alloc(AllocContext *ctx, u64 size);
         static void free(AllocContext *ctx, u64 *ptr);
 

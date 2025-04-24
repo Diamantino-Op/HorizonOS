@@ -9,9 +9,14 @@ namespace kernel::x86_64::utils {
 		asm volatile("sti");
 	}
 
-
 	void Asm::hlt() {
 		asm volatile("hlt");
+	}
+
+	[[noreturn]] void Asm::lhlt() {
+		for (;;) {
+			hlt();
+		}
 	}
 
 	void Asm::pause() {

@@ -2,7 +2,7 @@
 
 #include "hal/Interrupts.hpp"
 #include "utils/Asm.hpp"
-#include "utils/CpuId.hpp"
+#include "memory/MainMemory.hpp"
 
 #include "limine.h"
 
@@ -34,11 +34,11 @@ namespace kernel::x86_64 {
 		this->rootInit();
 
 		if (LIMINE_BASE_REVISION_SUPPORTED == false) {
-			this->halt();
+			Asm::lhlt();
 		}
 
 		if (framebufferRequest.response == nullptr || framebufferRequest.response->framebuffer_count < 1) {
-			this->halt();
+			Asm::lhlt();
 		}
 
 		limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
@@ -127,13 +127,13 @@ namespace kernel::x86_64 {
 
 		terminal.info("Cpu initialized...", "HorizonOS");
 
-		this->halt();
-    }
+		this->cpuManager.startMultithread();
 
-	void Kernel::halt() {
-    	for (;;) {
-    		Asm::hlt();
-    	}
+		CpuManager::initSimd();
+
+		terminal.info("All Cpus initialized...", "HorizonOS");
+
+		Asm::lhlt();
     }
 
 	GdtManager *Kernel::getGdtManager() {
@@ -148,23 +148,33 @@ namespace kernel::x86_64 {
 		return &this->idtManager;
 	}
 
-	CoreKernel::CoreKernel(u64 *args) {
-
+	PIT *Kernel::getPIT() {
+		return &this->pit;
 	}
+
+	// Multicore
 
 	void CoreKernel::init() {
+		Terminal* terminal = CommonMain::getTerminal();
 
-	};
+		this->coreTssManager = TssManager();
+		this->coreGdtManager = GdtManager(this->coreTssManager.getTss());
 
-	GdtManager *CoreKernel::getGdtManager() {
+		this->coreGdtManager.loadGdt();
+		this->coreGdtManager.reloadRegisters();
 
-	}
+		this->coreTssManager.updateTss();
 
-	TssManager *CoreKernel::getTssManager() {
+		memcpy(&this->coreIdtManager, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIdtManager(), sizeof(IdtManager));
 
-	}
+		this->coreIdtManager.loadIdt();
 
-	IdtManager *CoreKernel::getIdtManager() {
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
+		CpuManager::initSimd();
+
+		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
+
+		Asm::lhlt();
 	}
 }

@@ -17,13 +17,12 @@
 
 #include "hal/IOPort.hpp"
 
-using namespace kernel::common;
-
-flanterm_context *Terminal::flantermCtx;
-
 namespace kernel::common {
 	using namespace memory;
 	using namespace hal;
+
+	SpinLock Terminal::lock;
+	flanterm_context *Terminal::flantermCtx;
 
 	Terminal::Terminal(const limine_framebuffer *framebuffer) {
 		u32 bgColor = 0x252525;
@@ -65,7 +64,7 @@ namespace kernel::common {
 		IOPort::out8(c, com1Port);
 	}
 
-	void Terminal::printf(bool autoSN, const char *format, ...) const {
+	void Terminal::printf(bool autoSN, const char *format, ...) {
 	 	va_list val;
 	 	va_start(val, format);
 	 	npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
@@ -77,6 +76,8 @@ namespace kernel::common {
 	}
 
 	void Terminal::info(const char *format, const char *id, ...) {
+		lock.lock();
+
 		this->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
@@ -85,10 +86,14 @@ namespace kernel::common {
 		va_end(val);
 
 		this->printf(true, "\033[0m");
+
+		lock.unlock();
 	}
 
 	void Terminal::debug(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
+		lock.lock();
+
 		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
@@ -97,10 +102,14 @@ namespace kernel::common {
 		va_end(val);
 
 		this->printf(true, "\033[0m");
+
+		lock.unlock();
 #endif
 	}
 
 	void Terminal::warn(const char *format, const char *id, ...) {
+		lock.lock();
+
 		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
@@ -109,9 +118,13 @@ namespace kernel::common {
 		va_end(val);
 
 		this->printf(true, "\033[0m");
+
+		lock.unlock();
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
+		lock.lock();
+
 		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
@@ -120,6 +133,8 @@ namespace kernel::common {
 		va_end(val);
 
 		this->printf(true, "\033[0m");
+
+		lock.unlock();
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {
