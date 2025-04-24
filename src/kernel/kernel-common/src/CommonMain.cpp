@@ -40,4 +40,10 @@ namespace kernel::common {
 
 	void CommonMain::init() {}
 	void CommonMain::halt() {}
+
+	void CommonCoreMain::init() {}
+
+	void CommonCoreMain::rootInit() {
+		instance = this;
+	}
 }

@@ -147,4 +147,24 @@ namespace kernel::x86_64 {
 	IdtManager *Kernel::getIdtManager() {
 		return &this->idtManager;
 	}
+
+	CoreKernel::CoreKernel(u64 *args) {
+
+	}
+
+	void CoreKernel::init() {
+
+	};
+
+	GdtManager *CoreKernel::getGdtManager() {
+
+	}
+
+	TssManager *CoreKernel::getTssManager() {
+
+	}
+
+	IdtManager *CoreKernel::getIdtManager() {
+
+	}
 }

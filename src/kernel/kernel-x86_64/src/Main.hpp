@@ -18,6 +18,16 @@ namespace kernel::x86_64 {
     using namespace common;
     using namespace common::memory;
 
+    struct CoreArgs : CommonCoreArgs {
+        GdtManager *coreGdtManager {};
+        TssManager *coreTssManager {};
+        IdtManager *coreIdtManager {};
+
+        PIT *corePIT {};
+
+        CpuCore *cpuCore {};
+    };
+
     class Kernel final : CommonMain {
     public:
         Kernel();
@@ -46,16 +56,23 @@ namespace kernel::x86_64 {
 
     class CoreKernel final : CommonCoreMain {
     public:
+        explicit CoreKernel(u64 *args);
         ~CoreKernel() override = default;
 
-        void init();
+        void init() override;
+
+        GdtManager *getGdtManager();
+        TssManager *getTssManager();
+        IdtManager *getIdtManager();
 
     private:
         GdtManager coreGdtManager {};
         TssManager coreTssManager {};
         IdtManager coreIdtManager {};
 
-        CpuCore cpuCore {};
+        PIT *corePIT {};
+
+        CpuCore *cpuCore {};
     };
 }
 
