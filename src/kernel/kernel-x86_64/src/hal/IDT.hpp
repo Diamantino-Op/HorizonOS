@@ -55,7 +55,7 @@ namespace kernel::x86_64::hal {
 		void addEntry(u8 id, usize handler, u16 selector, u8 ist, u8 flags);
 		void loadIdt();
 
-		Idt getIdt();
+		Idt getIdt() const;
 
 	private:
 		Idt idtInstance{};

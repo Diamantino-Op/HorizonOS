@@ -24,7 +24,7 @@ namespace kernel::x86_64::hal {
 
         void updateTss();
 
-        Tss getTss();
+        Tss getTss() const;
 
     private:
         Tss tssInstance{};

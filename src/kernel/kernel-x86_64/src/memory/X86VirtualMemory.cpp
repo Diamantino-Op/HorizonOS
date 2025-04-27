@@ -48,7 +48,7 @@ namespace kernel::common::memory {
 		Asm::writeCr3(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm());
 	}
 
-	void PageMap::mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec) {
+	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool noExec) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -73,7 +73,7 @@ namespace kernel::common::memory {
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
 	}
 
-	void PageMap::unMapPage(u64 vAddr) const {
+	void PageMap::unMapPage(const u64 vAddr) const {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -113,7 +113,7 @@ namespace kernel::common::memory {
 		}
 	}
 
-	u64 PageMap::getPhysAddress(u64 vAddr) const {
+	u64 PageMap::getPhysAddress(const u64 vAddr) const {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -155,7 +155,7 @@ namespace kernel::common::memory {
 		return lvl1Table->entries[lvl1].address << 12;
 	}
 
-	u64* PageMap::getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool noExec) {
+	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 
 		if (!parentTable->entries[index].present) {
@@ -176,7 +176,7 @@ namespace kernel::common::memory {
 		return reinterpret_cast<u64 *>((parentTable->entries[index].address << 12) + CommonMain::getCurrentHhdm());
 	}
 
-	void PageMap::setPageFlags(u64 *pageAddr, u8 flags) {
+	void PageMap::setPageFlags(u64 *pageAddr, const u8 flags) {
 		auto *pageEntry = reinterpret_cast<PageEntry *>(pageAddr);
 
 		pageEntry->present = flags & 1;

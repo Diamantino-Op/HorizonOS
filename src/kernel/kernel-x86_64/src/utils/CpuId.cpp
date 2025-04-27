@@ -63,7 +63,7 @@ namespace kernel::x86_64::utils {
 	}
 
 	bool CpuId::hasAvx512() {
-		CpuIdResult res = get(0x07, 0x00);
+		const CpuIdResult res = get(0x07, 0x00);
 
 		return res.ebx & (1 << 16);
 	}

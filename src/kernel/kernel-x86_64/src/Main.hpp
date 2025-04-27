@@ -53,7 +53,7 @@ namespace kernel::x86_64 {
     private:
         GdtManager coreGdtManager {};
         TssManager coreTssManager {};
-        IdtManager coreIdtManager {};
+        IdtManager *coreIdtManager {};
 
     public:
         CpuCore cpuCore {};

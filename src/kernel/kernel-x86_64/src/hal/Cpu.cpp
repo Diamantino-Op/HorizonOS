@@ -108,6 +108,8 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::startMultithread() {
+		Terminal* terminal = CommonMain::getTerminal();
+
 		this->cpuList = new CoreKernel[this->coreAmount - 1];
 
 		u64 j = 0;
@@ -115,29 +117,35 @@ namespace kernel::x86_64::hal {
 		for (u64 i = 0; i < this->coreAmount; i++) {
 			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
 				this->bootstrapCpu.apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->bootstrapCpu.apic.setIsX2Apic(this->hasX2Apic);
+				this->bootstrapCpu.apic.setCore(&this->bootstrapCpu);
+				this->bootstrapCpu.tsc.setCore(&this->bootstrapCpu);
 				this->bootstrapCpu.cpuId = mpRequest.response->cpus[i]->processor_id;
+
+				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
 			} else {
 				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
+				this->cpuList[j].cpuCore.apic.setCore(&this->cpuList[j].cpuCore);
+				this->cpuList[j].cpuCore.tsc.setCore(&this->cpuList[j].cpuCore);
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
 
-				this->initCore(j);
+				this->initCore(i, j);
 
 				++j;
 			}
 		}
 	}
 
-	void CpuManager::initCore(const u64 coreId) const {
-		mpRequest.response->cpus[coreId]->extra_argument = VirtualAllocator::getPhysicalAddress(reinterpret_cast<u64>(&this->cpuList[coreId])) + CommonMain::getCurrentHhdm();
+	void CpuManager::initCore(const u64 coreId, const u64 listIndex) const {
+		mpRequest.response->cpus[coreId]->extra_argument = reinterpret_cast<u64>(&this->cpuList[listIndex]);
 		mpRequest.response->cpus[coreId]->goto_address = reinterpret_cast<limine_goto_address>(&bootCore);
 	}
 
 	void bootCore(const limine_mp_info *info) {
-		Terminal* terminal = CommonMain::getTerminal();
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
 		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
-
-		terminal->debug("Cpu %u", "Cpu", coreKernel->cpuCore.cpuId);
 
 		coreKernel->init();
 	}

@@ -51,7 +51,7 @@ namespace kernel::x86_64::hal {
         reloadRegistersAsm();
     }
 
-    Gdt GdtManager::getGdt() {
+    Gdt GdtManager::getGdt() const {
         return this->gdtInstance;
     }
 }

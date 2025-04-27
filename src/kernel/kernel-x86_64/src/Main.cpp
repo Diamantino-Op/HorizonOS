@@ -37,7 +37,7 @@ namespace kernel::x86_64 {
 			Asm::lhlt();
 		}
 
-		if (framebufferRequest.response == nullptr || framebufferRequest.response->framebuffer_count < 1) {
+		if (framebufferRequest.response == nullptr or framebufferRequest.response->framebuffer_count < 1) {
 			Asm::lhlt();
 		}
 
@@ -66,6 +66,29 @@ namespace kernel::x86_64 {
 		this->tssManager.updateTss();
 
 		terminal.info("Updated TSS... OK", "HorizonOS");
+
+		// Physical Memory
+		this->physicalMemoryManager = PhysicalMemoryManager();
+
+		this->physicalMemoryManager.init();
+
+		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
+
+		// Allocator Context
+		this->kernelAllocContext = VirtualAllocator::createContext(false);
+
+		terminal.info("Allocator Context created...", "HorizonOS");
+
+		// Virtual Memory
+		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
+
+		this->virtualMemoryManager.archInit();
+
+		terminal.info("VMM Loaded... OK", "HorizonOS");
+
+		VirtualAllocator::initContext(this->kernelAllocContext);
+
+		terminal.info("Allocator Context initialized...", "HorizonOS");
 
 		// IDT
 		this->idtManager = IdtManager();
@@ -96,29 +119,6 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
-		// Physical Memory
-		this->physicalMemoryManager = PhysicalMemoryManager();
-
-		this->physicalMemoryManager.init();
-
-		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
-
-		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false);
-
-		terminal.info("Allocator Context created...", "HorizonOS");
-
-		// Virtual Memory
-		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
-
-		this->virtualMemoryManager.archInit();
-
-		terminal.info("VMM Loaded... OK", "HorizonOS");
-
-		VirtualAllocator::initContext(this->kernelAllocContext);
-
-		terminal.info("Allocator Context initialized...", "HorizonOS");
-
 		this->dualPic.disable();
 
 		this->cpuManager = CpuManager();
@@ -128,6 +128,8 @@ namespace kernel::x86_64 {
 		terminal.info("Cpu initialized...", "HorizonOS");
 
 		this->cpuManager.startMultithread();
+
+		// Start of multicore
 
 		CpuManager::initSimd();
 
@@ -165,11 +167,9 @@ namespace kernel::x86_64 {
 
 		this->coreTssManager.updateTss();
 
-		memcpy(&this->coreIdtManager, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIdtManager(), sizeof(IdtManager));
+		this->coreIdtManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIdtManager();
 
-		this->coreIdtManager.loadIdt();
-
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
+		this->coreIdtManager->loadIdt();
 
 		CpuManager::initSimd();
 

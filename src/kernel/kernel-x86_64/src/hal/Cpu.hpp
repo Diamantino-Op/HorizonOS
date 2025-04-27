@@ -6,6 +6,7 @@
 #include "Types.hpp"
 
 #include "Apic.hpp"
+#include "Tsc.hpp"
 
 #include "limine.h"
 
@@ -14,10 +15,16 @@ namespace kernel::x86_64 {
 }
 
 namespace kernel::x86_64::hal {
-    struct CpuCore {
-        Apic apic;
+    class Apic;
+    class Tsc;
 
-        u32 cpuId;
+    struct CpuCore {
+        Apic apic {};
+        Tsc tsc {};
+
+        u32 cpuId {};
+
+        i64 offset {};
     };
 
     class CpuManager {
@@ -36,7 +43,7 @@ namespace kernel::x86_64::hal {
         static void loadSimdContext(const uPtr *ptr);
 
     private:
-        void initCore(u64 coreId) const;
+        void initCore(u64 coreId, u64 listIndex) const;
 
         u64 coreAmount {};
         CoreKernel *cpuList {};

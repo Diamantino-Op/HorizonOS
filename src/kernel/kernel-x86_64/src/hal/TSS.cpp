@@ -11,7 +11,7 @@ namespace kernel::x86_64::hal {
         updateTssAsm();
     }
 
-    Tss TssManager::getTss() {
+    Tss TssManager::getTss() const {
         return this->tssInstance;
     }
 }

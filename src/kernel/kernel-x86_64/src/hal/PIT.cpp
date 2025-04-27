@@ -5,7 +5,7 @@
 namespace kernel::x86_64::hal {
 	using namespace common::hal;
 
-	void PIT::init(isize freq) {
+	void PIT::init(const isize freq) {
 		const u16 div = frequency / freq;
 
 		IOPort::out8(CMChannels::CHANNEL1 | CMAccess::LOBYTE | CMModes::SQUARE_WAVE, commandModePortAddress);

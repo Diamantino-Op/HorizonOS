@@ -51,4 +51,9 @@ extern "C" {
     typedef __PTRDIFF_TYPE__ isize;
 }
 
+struct Pair {
+    u64 val1;
+    u64 val2;
+};
+
 #endif

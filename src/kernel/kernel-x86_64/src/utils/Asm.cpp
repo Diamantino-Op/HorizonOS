@@ -125,7 +125,7 @@ namespace kernel::x86_64::utils {
 
 	// Msrs
 
-	u64 Asm::rdmsr(Msrs msr) {
+	u64 Asm::rdmsr(u64 msr) {
 		u32 low, high;
 
 		asm volatile("rdmsr" : "=a"(low), "=d"(high) : "c"(static_cast<u64>(msr)));
@@ -133,7 +133,7 @@ namespace kernel::x86_64::utils {
 		return (static_cast<u64>(high) << 32) | low;
 	}
 
-	void Asm::wrmsr(Msrs msr, u64 value) {
+	void Asm::wrmsr(u64 msr, u64 value) {
 		u32 low = value & 0xFFFFFFFF;
 		u32 high = value >> 32;
 

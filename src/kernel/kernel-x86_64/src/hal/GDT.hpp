@@ -101,7 +101,7 @@ namespace kernel::x86_64::hal {
 		void loadGdt();
 		void reloadRegisters();
 
-		Gdt getGdt();
+		Gdt getGdt() const;
 
 	private:
 		Gdt gdtInstance{};

@@ -95,7 +95,7 @@ namespace kernel::common::memory {
 		return nullptr;
 	}
 
-	void PhysicalMemoryManager::freePages(u64 *virtAddress, usize pageAmount) {
+	void PhysicalMemoryManager::freePages(u64 *virtAddress, const usize pageAmount) {
 		pmmSpinLock.lock();
 
 		auto *currEntry = reinterpret_cast<PmmListEntry *>(virtAddress);
@@ -107,6 +107,8 @@ namespace kernel::common::memory {
 		if (this->listPtr != nullptr) {
 			this->listPtr->prev = currEntry;
 		}
+
+		memset(currEntry, 0, pageAmount * pageSize);
 
 		this->listPtr = currEntry;
 

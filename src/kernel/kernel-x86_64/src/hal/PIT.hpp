@@ -9,7 +9,7 @@ namespace kernel::x86_64::hal {
     constexpr u16 channel1DataAddress = 0x41;
     constexpr u16 channel2DataAddress = 0x42;
 
-    constexpr u64 frequency = 1193182;
+    constexpr u64 frequency = 1193180;
 
     enum CMChannels : u8 {
         CHANNEL0 = 0b00000000,
@@ -48,6 +48,9 @@ namespace kernel::x86_64::hal {
 
         void init(isize freq);
         u16 readCount();
+
+    private:
+        usize ticks;
     };
 }
 

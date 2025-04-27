@@ -5,7 +5,6 @@
 
 namespace kernel::x86_64::utils {
     enum Msrs : u64 {
-        APIC = 0x1B,
         EFER = 0xC0000080,
         STAR = 0xC0000081,
         LSTAR = 0xC0000082,
@@ -141,8 +140,8 @@ namespace kernel::x86_64::utils {
 
         // Msrs
 
-        static u64 rdmsr(Msrs msr);
-        static void wrmsr(Msrs msr, u64 value);
+        static u64 rdmsr(u64 msr);
+        static void wrmsr(u64 msr, u64 value);
     };
 }
 

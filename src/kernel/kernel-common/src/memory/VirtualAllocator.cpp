@@ -3,7 +3,6 @@
 #include "CommonMain.hpp"
 #include "Math.hpp"
 #include "PhysicalMemory.hpp"
-
 #include "MainMemory.hpp"
 
 namespace kernel::common::memory {
@@ -36,12 +35,14 @@ namespace kernel::common::memory {
 	}
 
 	void VirtualAllocator::initContext(const AllocContext *ctx) {
+		memset(ctx->heapStart, 0, pageSize);
+
 		ctx->blocks->size = ctx->heapSize - sizeof(MemoryBlock);
 		ctx->blocks->free = true;
 		ctx->blocks->next = nullptr;
 	}
 
-	u64 VirtualAllocator::getPhysicalAddress(u64 virtualAddress) {
+	u64 VirtualAllocator::getPhysicalAddress(const u64 virtualAddress) {
 		const u64 alignedKernAddr = alignDown<u64>(virtualAddress, pageSize);
 		const u64 diff = virtualAddress - alignedKernAddr;
 
@@ -99,6 +100,8 @@ namespace kernel::common::memory {
 		auto* block = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(ptr) - sizeof(MemoryBlock));
 		block->free = true;
 
+		memset(reinterpret_cast<u64 *>(reinterpret_cast<u64>(block) + sizeof(MemoryBlock)), 0, block->size);
+
 		defrag(ctx);
 
 		if (ctx->heapSize > pageSize) {
@@ -135,6 +138,8 @@ namespace kernel::common::memory {
 			}
 
 			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags, false);
+
+			memset(reinterpret_cast<u64 *>(reinterpret_cast<u64>(baseAddress) + offset), 0, pageSize);
 		}
 
 		auto* newBlock = reinterpret_cast<MemoryBlock *>(baseAddress);
