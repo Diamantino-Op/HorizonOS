@@ -1,9 +1,14 @@
 #include "PIT.hpp"
 
+#include "CommonMain.hpp"
+#include "Interrupts.hpp"
 #include "hal/IOPort.hpp"
 
 namespace kernel::x86_64::hal {
+	using namespace common;
 	using namespace common::hal;
+
+	usize PIT::ticks;
 
 	void PIT::init(const isize freq) {
 		const u16 div = frequency / freq;
@@ -11,6 +16,8 @@ namespace kernel::x86_64::hal {
 		IOPort::out8(CMChannels::CHANNEL1 | CMAccess::LOBYTE | CMModes::SQUARE_WAVE, commandModePortAddress);
 		IOPort::out8(div & 0xFF, channel0DataAddress);
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
+
+		Interrupts::setHandler(0x20, reinterpret_cast<u64 *>(&addTick));
 	}
 
 	u16 PIT::readCount() {
@@ -20,5 +27,13 @@ namespace kernel::x86_64::hal {
 		const u8 high = IOPort::in8(channel0DataAddress);
 
 		return (high << 8) | low;
+	}
+
+	void PIT::addTick() {
+		Terminal* terminal = CommonMain::getTerminal();
+
+		ticks++;
+
+		terminal->debug("Current Ticks: %u", "PIT", ticks);
 	}
 }

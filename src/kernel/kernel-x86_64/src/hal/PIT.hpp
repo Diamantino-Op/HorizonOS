@@ -49,8 +49,10 @@ namespace kernel::x86_64::hal {
         void init(isize freq);
         u16 readCount();
 
+        static void addTick();
+
     private:
-        usize ticks;
+        static usize ticks;
     };
 }
 

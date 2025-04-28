@@ -65,31 +65,6 @@ namespace kernel::x86_64 {
 
 		this->tssManager.updateTss();
 
-		terminal.info("Updated TSS... OK", "HorizonOS");
-
-		// Physical Memory
-		this->physicalMemoryManager = PhysicalMemoryManager();
-
-		this->physicalMemoryManager.init();
-
-		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
-
-		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false);
-
-		terminal.info("Allocator Context created...", "HorizonOS");
-
-		// Virtual Memory
-		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
-
-		this->virtualMemoryManager.archInit();
-
-		terminal.info("VMM Loaded... OK", "HorizonOS");
-
-		VirtualAllocator::initContext(this->kernelAllocContext);
-
-		terminal.info("Allocator Context initialized...", "HorizonOS");
-
 		// IDT
 		this->idtManager = IdtManager();
 
@@ -118,6 +93,31 @@ namespace kernel::x86_64 {
 		this->pit.init(1000);
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
+
+		terminal.info("Updated TSS... OK", "HorizonOS");
+
+		// Physical Memory
+		this->physicalMemoryManager = PhysicalMemoryManager();
+
+		this->physicalMemoryManager.init();
+
+		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
+
+		// Allocator Context
+		this->kernelAllocContext = VirtualAllocator::createContext(false);
+
+		terminal.info("Allocator Context created...", "HorizonOS");
+
+		// Virtual Memory
+		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
+
+		this->virtualMemoryManager.archInit();
+
+		terminal.info("VMM Loaded... OK", "HorizonOS");
+
+		VirtualAllocator::initContext(this->kernelAllocContext);
+
+		terminal.info("Allocator Context initialized...", "HorizonOS");
 
 		this->dualPic.disable();
 

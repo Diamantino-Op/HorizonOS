@@ -8,8 +8,16 @@
 namespace kernel::x86_64::hal {
 	using namespace utils;
 
+	IsrHandler Interrupts::handlers[224];
+
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
-		if (const Frame &frame = *reinterpret_cast<Frame *>(stackFrame); frame.intNo == 14) {
+		const Frame &frame = *reinterpret_cast<Frame *>(stackFrame);
+
+		Interrupts::handleInterrupt(frame);
+	}
+
+	void Interrupts::handleInterrupt(const Frame &frame) {
+		if (frame.intNo == 14) {
 			handlePageFault(frame);
 		} else if (frame.intNo < 32) {
 			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
@@ -17,11 +25,13 @@ namespace kernel::x86_64::hal {
 			} else {
 				kernelPanic(frame);
 			}
+		} else if (handlers[frame.intNo - 32]) {
+			handlers[frame.intNo - 32]();
 		}
 	}
 
 	// TODO: Fix
-	void handlePageFault(const Frame & frame) {
+	void Interrupts::handlePageFault(const Frame &frame) {
 		kernelPanic(frame); // Remove after fix
 
 		Terminal *terminal = CommonMain::getTerminal();
@@ -47,7 +57,11 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void kernelPanic(const Frame & frame) {
+	void Interrupts::setHandler(const u8 id, u64 *handler) {
+		handlers[id] = reinterpret_cast<IsrHandler>(handler);
+	}
+
+	void Interrupts::kernelPanic(const Frame &frame) {
 		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
@@ -70,12 +84,10 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m-");
 		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 
-		for (;;) {
-			Asm::hlt();
-		}
+		Asm::lhlt();
 	}
 
-	void userPanic(const Frame & frame) {
+	void Interrupts::userPanic(const Frame &frame) {
 		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
@@ -92,7 +104,7 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m--------------------------------------------------------------------------");
 	}
 
-	void backtrace(const usize rbp) {
+	void Interrupts::backtrace(const usize rbp) {
 		Terminal *terminal = CommonMain::getTerminal();
 
 		const auto *frame = reinterpret_cast<usize *>(rbp);

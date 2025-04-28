@@ -32,15 +32,15 @@ namespace kernel::x86_64 {
         PIT *getPIT();
 
     private:
-        GdtManager gdtManager;
-        TssManager tssManager;
-        IdtManager idtManager;
+        GdtManager gdtManager {};
+        TssManager tssManager {};
+        IdtManager idtManager {};
 
-        DualPIC dualPic;
+        DualPIC dualPic {};
 
-        PIT pit;
+        PIT pit {};
 
-        CpuManager cpuManager;
+        CpuManager cpuManager {};
     };
 
     class CoreKernel final : CommonCoreMain {

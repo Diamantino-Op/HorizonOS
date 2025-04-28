@@ -4,6 +4,8 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::hal {
+    using IsrHandler = void(*)();
+
     struct __attribute__((packed)) Frame {
         u64 r15;
         u64 r14;
@@ -66,12 +68,22 @@ namespace kernel::x86_64::hal {
         "Reserved",
     };
 
-    void handlePageFault(const Frame & frame);
+    class Interrupts {
+    public:
+        static void handleInterrupt(const Frame &frame);
 
-    void kernelPanic(const Frame & frame);
-    void userPanic(const Frame & frame);
+        static void handlePageFault(const Frame &frame);
 
-    void backtrace(usize rbp);
+        static void kernelPanic(const Frame &frame);
+        static void userPanic(const Frame &frame);
+
+        static void backtrace(usize rbp);
+
+        static void setHandler(u8 id, u64 *handler);
+
+    private:
+        static IsrHandler handlers[224];
+    };
 
     extern "C" uPtr interruptTable[256];
 
