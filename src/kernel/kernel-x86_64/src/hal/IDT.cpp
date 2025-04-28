@@ -8,7 +8,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void IdtManager::addEntry(const u8 id, const usize handler, const u16 selector, const u8 ist, const u8 flags) {
-		this->idtInstance.entries[id] = IDTEntry(handler, selector, ist, flags);
+		this->idtInstance.entries[id] = IDTEntry(handler, selector, ist, flags | IDT_ENTRY_PRESENT);
     }
 
 	void IdtManager::loadIdt() {

@@ -6,7 +6,7 @@
 namespace kernel::x86_64::hal {
     using IsrHandler = void(*)();
 
-    struct __attribute__((packed)) Frame {
+    struct __attribute__((packed)) ExceptionFrame {
         u64 r15;
         u64 r14;
         u64 r13;
@@ -25,6 +25,26 @@ namespace kernel::x86_64::hal {
 
         u64 intNo;
         u64 errNo;
+
+        u64 rip;
+        u64 cs;
+        u64 rFlags;
+        u64 rsp;
+        u64 ss;
+    };
+
+    struct __attribute__((packed)) InterruptFrame {
+        u64 intNo;
+
+        u64 rip;
+        u64 cs;
+        u64 rFlags;
+        u64 rsp;
+        u64 ss;
+    };
+
+    struct __attribute__((packed)) NMIFrame {
+        u64 intNo;
 
         u64 rip;
         u64 cs;
@@ -70,12 +90,15 @@ namespace kernel::x86_64::hal {
 
     class Interrupts {
     public:
-        static void handleInterrupt(const Frame &frame);
+        static void handleInterrupt(const InterruptFrame &frame);
+        static void handleException(const ExceptionFrame &frame);
 
-        static void handlePageFault(const Frame &frame);
+        static void handleNonMaskableInt(const NMIFrame &frame);
 
-        static void kernelPanic(const Frame &frame);
-        static void userPanic(const Frame &frame);
+        static void handlePageFault(const ExceptionFrame &frame);
+
+        static void kernelPanic(const ExceptionFrame &frame);
+        static void userPanic(const ExceptionFrame &frame);
 
         static void backtrace(usize rbp);
 
@@ -91,6 +114,8 @@ namespace kernel::x86_64::hal {
     extern "C" uPtr interruptTable[256];
 
     extern "C" void handleInterruptAsm(usize stackFrame);
+    extern "C" void handleNonMaskableInt(usize stackFrame);
+    extern "C" void handleExceptionAsm(usize stackFrame);
 }
 
 #endif

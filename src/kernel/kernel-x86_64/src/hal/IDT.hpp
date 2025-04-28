@@ -5,24 +5,25 @@
 
 namespace kernel::x86_64::hal {
 	enum GateType : u8 {
-		TRAP_TYPE = 0xEF,
-		USER_TYPE = 0x60,
-		GATE_TYPE = 0x8E,
+		INTERRUPT_GATE = 0xE,
+		TRAP_GATE = 0xF,
 	};
 
+	constexpr u8 IDT_ENTRY_PRESENT = 0b10000000;
+
     struct __attribute__((packed)) IDTEntry {
-        u16 offsetLow{};
-        u16 selector{};
+        u16 offsetLow {};
+        u16 selector {};
         u8 ist : 3 {};
         u8 reservedLow : 5 {};
-        u8 flags{};
-        u16 offsetMid{};
-        u32 offsetHigh{};
-        u32 reservedHigh{};
+        u8 flags {};
+        u16 offsetMid {};
+        u32 offsetHigh {};
+        u32 reservedHigh {};
 
         constexpr IDTEntry() = default;
 
-        constexpr IDTEntry(usize handler, u16 selector, u8 ist, u8 flags):
+        constexpr IDTEntry(const usize handler, const u16 selector, const u8 ist, const u8 flags):
     		offsetLow(handler & 0xffff),
     		selector(selector),
     		ist(ist),

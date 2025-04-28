@@ -72,8 +72,17 @@ namespace kernel::x86_64 {
 
 		terminal.info("IDT Created... OK", "HorizonOS");
 
-		for (u16 i = 0; i <= 255; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::GATE_TYPE);
+		// Exceptions
+		for (u16 i = 0; i <= 31; i++) {
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::TRAP_GATE);
+		}
+
+		// NMI
+		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 0, GateType::INTERRUPT_GATE);
+
+		// Interrupts
+		for (u16 i = 32; i <= 255; i++) {
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::INTERRUPT_GATE);
 		}
 
 		this->idtManager.loadIdt();
