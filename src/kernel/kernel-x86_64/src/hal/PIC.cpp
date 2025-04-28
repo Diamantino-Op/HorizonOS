@@ -1,69 +1,83 @@
 #include "PIC.hpp"
 
 #include "hal/IOPort.hpp"
+#include "utils/Asm.hpp"
 
 namespace kernel::x86_64::hal {
+	using namespace utils;
 	using namespace common::hal;
 
 	PIC::PIC(const u8 address) : address(address) {}
 
-	void PIC::ack() const {
-		this->cmd(0x20, false);
+	void PIC::eoi() const {
+		this->cmd(0x20);
 	}
 
 	void PIC::disable() const {
-		this->data(0xff, false);
+		this->dataOut(0xff);
 	}
 
-	void PIC::cmd(u8 cmd, bool needsWait) const {
+	void PIC::cmd(const u8 cmd) const {
 		IOPort::out8(cmd, address + commandAddress);
-
-		if (needsWait) {
-			this->wait();
-		}
 	}
 
-	void PIC::data(u8 data, bool needsWait) const {
+	void PIC::dataOut(const u8 data) const {
 		IOPort::out8(data, address + dataAddress);
-
-		if (needsWait) {
-			this->wait();
-		}
 	}
 
-	void PIC::wait() const {
-		asm volatile("jmp 1f; 1: jmp 1f; 1:");
+	u8 PIC::dataIn() const {
+		return IOPort::in8(address + dataAddress);
 	}
 
 	DualPIC::DualPIC() : pic1(pic1Address), pic2(pic2Address) {}
 
 	void DualPIC::init() const {
-		this->pic1.cmd(icw1Init | icw1Icw4, true);
-		this->pic2.cmd(icw1Init | icw1Icw4, true);
+		this->pic1.cmd(icw1Init | icw1Icw4);
+		this->pic2.cmd(icw1Init | icw1Icw4);
 
-		this->pic1.data(pic1Offset, true);
-		this->pic2.data(pic2Offset, true);
+		this->pic1.dataOut(pic1Offset);
+		this->pic2.dataOut(pic2Offset);
 
-		this->pic1.data(4, true);
-		this->pic2.data(2, true);
+		this->pic1.dataOut(4);
+		this->pic2.dataOut(2);
 
-		this->pic1.data(0x01, true);
-		this->pic2.data(0x01, true);
+		this->pic1.dataOut(0x01);
+		this->pic2.dataOut(0x01);
 
-		this->pic1.data(0x00, true);
-		this->pic2.data(0x00, true);
+		this->pic1.dataOut(0x00);
+		this->pic2.dataOut(0x00);
 	}
 
-	void DualPIC::ack(const usize intNo) const {
+	void DualPIC::eoi(const usize intNo) const {
 		if (intNo >= 40) {
-			this->pic2.ack();
+			this->pic2.eoi();
 		}
 
-		this->pic1.ack();
+		this->pic1.eoi();
 	}
 
 	void DualPIC::disable() const {
 		this->pic1.disable();
 		this->pic2.disable();
+	}
+
+	void DualPIC::mask(const u8 id) const {
+		if (u8 irq = id - 0x20; irq >= 8) {
+			irq -= 8;
+
+			pic2.dataOut(pic2.dataIn() | (1 << irq));
+		} else {
+			pic1.dataOut(pic1.dataIn() | (1 << irq));
+		}
+	}
+
+	void DualPIC::unmask(const u8 id) const {
+		if (u8 irq = id - 0x20; irq >= 8) {
+			irq -= 8;
+
+			pic2.dataOut(pic2.dataIn() & ~(1 << irq));
+		} else {
+			pic1.dataOut(pic1.dataIn() & ~(1 << irq));
+		}
 	}
 }

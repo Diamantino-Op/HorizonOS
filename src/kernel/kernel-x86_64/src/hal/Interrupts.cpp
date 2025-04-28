@@ -17,6 +17,10 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::handleInterrupt(const Frame &frame) {
+		Terminal *terminal = CommonMain::getTerminal();
+
+		terminal->debug("Interrupt received: %u", "IDT", frame.intNo);
+
 		if (frame.intNo == 14) {
 			handlePageFault(frame);
 		} else if (frame.intNo < 32) {
@@ -26,7 +30,15 @@ namespace kernel::x86_64::hal {
 				kernelPanic(frame);
 			}
 		} else if (handlers[frame.intNo - 32]) {
+			terminal->debug("Interrupt handled!", "IDT");
+
 			handlers[frame.intNo - 32]();
+
+			if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+
+			} else {
+				kernel->getDualPic()->eoi(frame.intNo);
+			}
 		}
 	}
 
@@ -58,7 +70,23 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::setHandler(const u8 id, u64 *handler) {
-		handlers[id] = reinterpret_cast<IsrHandler>(handler);
+		handlers[id - 0x20] = reinterpret_cast<IsrHandler>(handler);
+	}
+
+	void Interrupts::mask(const u8 id) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+
+		} else {
+			kernel->getDualPic()->mask(id);
+		}
+	}
+
+	void Interrupts::unmask(const u8 id) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+
+		} else {
+			kernel->getDualPic()->unmask(id);
+		}
 	}
 
 	void Interrupts::kernelPanic(const Frame &frame) {

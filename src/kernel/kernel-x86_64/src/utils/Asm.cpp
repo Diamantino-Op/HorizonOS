@@ -23,7 +23,6 @@ namespace kernel::x86_64::utils {
 		asm volatile("pause");
 	}
 
-
 	void Asm::invalidatePage(u64 addr) {
 		asm volatile("invlpg (%0)" :: "r" (addr) : "memory");
 	}

@@ -18,6 +18,8 @@ namespace kernel::x86_64::hal {
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
 
 		Interrupts::setHandler(0x20, reinterpret_cast<u64 *>(&addTick));
+
+		Interrupts::unmask(0x20);
 	}
 
 	u16 PIT::readCount() {

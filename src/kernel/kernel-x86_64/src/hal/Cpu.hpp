@@ -36,6 +36,12 @@ namespace kernel::x86_64::hal {
 
         void startMultithread();
 
+        u64 getCoreAmount() const;
+
+        CoreKernel *getCoreList() const;
+
+        CpuCore *getBootstrapCpu();
+
         static void initSimd();
 
         static void initSimdContext(const uPtr *ptr);

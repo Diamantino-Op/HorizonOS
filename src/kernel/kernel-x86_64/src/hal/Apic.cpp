@@ -8,6 +8,10 @@
 namespace kernel::x86_64::hal {
 	using namespace utils;
 
+	bool Apic::isInitialized() const {
+		return this->initialized;
+	}
+
 	void Apic::init(bool bootstrap = false) {
 
 	}

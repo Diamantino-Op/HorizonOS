@@ -21,14 +21,13 @@ namespace kernel::x86_64::hal {
 		explicit PIC(u8 address);
         ~PIC() = default;
 
-        void ack() const;
+        void eoi() const;
         void disable() const;
-        void cmd(u8 cmd, bool needsWait) const;
-        void data(u8 data, bool needsWait) const;
+        void cmd(u8 cmd) const;
+        void dataOut(u8 data) const;
+        u8 dataIn() const;
 
     private:
-        void wait() const;
-
         u8 address {};
     };
 
@@ -38,8 +37,11 @@ namespace kernel::x86_64::hal {
         ~DualPIC() = default;
 
         void init() const;
-        void ack(usize intNo) const;
+        void eoi(usize intNo) const;
         void disable() const;
+
+        void mask(u8 id) const;
+        void unmask(u8 id) const;
 
     private:
         PIC pic1;

@@ -31,6 +31,8 @@ namespace kernel::x86_64::hal {
         Apic() = default;
         ~Apic() = default;
 
+        bool isInitialized() const;
+
         void init(bool bootstrap);
 
         void calibrateTimer();
@@ -66,6 +68,8 @@ namespace kernel::x86_64::hal {
         u64 p {};
         u64 n {};
         bool calibrated {};
+
+        bool initialized {};
     };
 }
 

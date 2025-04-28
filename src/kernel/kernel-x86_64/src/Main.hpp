@@ -28,8 +28,11 @@ namespace kernel::x86_64 {
         GdtManager *getGdtManager();
         TssManager *getTssManager();
         IdtManager *getIdtManager();
+        DualPIC *getDualPic();
 
         PIT *getPIT();
+
+        CpuManager *getCpuManager();
 
     private:
         GdtManager gdtManager {};

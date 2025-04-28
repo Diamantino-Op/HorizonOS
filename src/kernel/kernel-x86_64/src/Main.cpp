@@ -65,6 +65,8 @@ namespace kernel::x86_64 {
 
 		this->tssManager.updateTss();
 
+		terminal.info("Updated TSS... OK", "HorizonOS");
+
 		// IDT
 		this->idtManager = IdtManager();
 
@@ -85,16 +87,6 @@ namespace kernel::x86_64 {
 		this->dualPic.init();
 
 		terminal.info("PIC Initialised... OK", "HorizonOS");
-
-		// PIT
-
-		this->pit = PIT();
-
-		this->pit.init(1000);
-
-		terminal.info("PIT Initialised... OK", "HorizonOS");
-
-		terminal.info("Updated TSS... OK", "HorizonOS");
 
 		// Physical Memory
 		this->physicalMemoryManager = PhysicalMemoryManager();
@@ -119,8 +111,6 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
-		this->dualPic.disable();
-
 		this->cpuManager = CpuManager();
 
 		this->cpuManager.init();
@@ -134,6 +124,20 @@ namespace kernel::x86_64 {
 		CpuManager::initSimd();
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
+
+		if (cpuManager.getBootstrapCpu()->apic.isInitialized()) {
+			//this->dualPic.disable();
+		}
+
+		// PIT
+
+		this->pit = PIT();
+
+		this->pit.init(1000);
+
+		terminal.info("PIT Initialised... OK", "HorizonOS");
+
+		Asm::sti();
 
 		Asm::lhlt();
     }
@@ -150,8 +154,16 @@ namespace kernel::x86_64 {
 		return &this->idtManager;
 	}
 
+	DualPIC *Kernel::getDualPic() {
+		return &this->dualPic;
+	}
+
 	PIT *Kernel::getPIT() {
 		return &this->pit;
+	}
+
+	CpuManager *Kernel::getCpuManager() {
+		return &this->cpuManager;
 	}
 
 	// Multicore
@@ -174,6 +186,8 @@ namespace kernel::x86_64 {
 		CpuManager::initSimd();
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
+
+		Asm::sti();
 
 		Asm::lhlt();
 	}

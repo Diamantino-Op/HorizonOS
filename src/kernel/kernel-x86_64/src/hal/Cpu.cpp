@@ -37,6 +37,18 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
+	u64 CpuManager::getCoreAmount() const {
+		return this->coreAmount;
+	}
+
+	CoreKernel *CpuManager::getCoreList() const {
+		return this->cpuList;
+	}
+
+	CpuCore *CpuManager::getBootstrapCpu() {
+		return &this->bootstrapCpu;
+	}
+
 	void CpuManager::initSimd() {
 		Terminal* terminal = CommonMain::getTerminal();
 

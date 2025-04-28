@@ -81,6 +81,9 @@ namespace kernel::x86_64::hal {
 
         static void setHandler(u8 id, u64 *handler);
 
+        static void mask(u8 id);
+        static void unmask(u8 id);
+
     private:
         static IsrHandler handlers[224];
     };
