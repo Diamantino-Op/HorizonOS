@@ -146,7 +146,7 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
-		//Asm::sti();
+		Asm::sti();
 
 		Asm::lhlt();
     }

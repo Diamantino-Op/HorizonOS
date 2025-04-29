@@ -1,8 +1,8 @@
 .section .text
 
-.extern handleExceptionAsm
+.extern handleInterruptAsm
 
-exceptionCommon:
+interruptCommon:
     cld
 
     push rax
@@ -22,7 +22,7 @@ exceptionCommon:
     push r15
 
     mov rdi, rsp
-    call handleExceptionAsm
+    call handleInterruptAsm
 
     pop r15
     pop r14
@@ -44,45 +44,14 @@ exceptionCommon:
 
     iretq
 
-.extern handleInterruptAsm
-
-interruptCommon:
-    cld
-
-    mov rdi, rsp
-    call handleInterruptAsm
-
-    add rsp, 16
-
-    iretq
-    
-.extern handleNonMaskableInt
-    
-nonMaskableInterruptCommon:
-    cld
-
-    mov rdi, rsp
-    call handleNonMaskableInt
-
-    add rsp, 16
-
-    iretq
-
 .macro createInterruptHandler interruptNumber
 interruptHandler\interruptNumber:
-    .if \interruptNumber == 2
-        jmp nonMaskableInterruptCommon
-    .elseif \interruptNumber < 32
-        .if \interruptNumber != 8 && \interruptNumber != 10 && \interruptNumber != 11 && \interruptNumber != 12 && \interruptNumber != 13 && \interruptNumber != 14 && \interruptNumber != 17 && \interruptNumber != 30
-            push 0
-        .endif
-
-        push \interruptNumber
-        jmp exceptionCommon
-    .else
-        push \interruptNumber
-        jmp interruptCommon
+    .if \interruptNumber != 8 && \interruptNumber != 10 && \interruptNumber != 11 && \interruptNumber != 12 && \interruptNumber != 13 && \interruptNumber != 14 && \interruptNumber != 17 && \interruptNumber != 30
+        push 0
     .endif
+
+    push \interruptNumber
+    jmp interruptCommon
 .endm
 
 .altmacro

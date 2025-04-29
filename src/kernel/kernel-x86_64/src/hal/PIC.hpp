@@ -13,8 +13,8 @@ namespace kernel::x86_64::hal {
     constexpr u8 pic1Offset = 0x20;
     constexpr u8 pic2Offset = 0x28;
 
-    constexpr u8 icw1Init = 0x20;
-    constexpr u8 icw1Icw4 = 0x28;
+    constexpr u8 icw1Init = 0x10;
+    constexpr u8 icw1Icw4 = 0x01;
 
     class PIC {
     public:

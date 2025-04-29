@@ -11,32 +11,22 @@ namespace kernel::x86_64::hal {
 	IsrHandler Interrupts::handlers[224];
 
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
-		const InterruptFrame &frame = *reinterpret_cast<InterruptFrame *>(stackFrame);
+		const Frame &frame = *reinterpret_cast<Frame *>(stackFrame);
 
 		Interrupts::handleInterrupt(frame);
 	}
 
-	extern "C" void handleNonMaskableInt(const usize stackFrame) {
-		const NMIFrame &frame = *reinterpret_cast<NMIFrame *>(stackFrame);
-
-		Interrupts::handleNonMaskableInt(frame);
-	}
-
-	extern "C" void handleExceptionAsm(const usize stackFrame) {
-		const ExceptionFrame &frame = *reinterpret_cast<ExceptionFrame *>(stackFrame);
-
-		Interrupts::handleException(frame);
-	}
-
-	void Interrupts::handleInterrupt(const InterruptFrame &frame) {
-		Terminal *terminal = CommonMain::getTerminal();
-
-		terminal->debug("Interrupt received: %u", "IDT", frame.intNo);
-
-		if (handlers[frame.intNo - 0x20]) {
-			terminal->debug("Interrupt handled!", "IDT");
-
-			handlers[frame.intNo - 0x20]();
+	void Interrupts::handleInterrupt(const Frame &frame) {
+		if (frame.intNo == 14) {
+			handlePageFault(frame);
+		} else if (frame.intNo < 32) {
+			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
+				userPanic(frame);
+			} else {
+				kernelPanic(frame);
+			}
+		} else if (handlers[frame.intNo - 32]) {
+			handlers[frame.intNo - 32]();
 
 			if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
@@ -46,26 +36,8 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Interrupts::handleNonMaskableInt(const NMIFrame &frame) {
-		Terminal *terminal = CommonMain::getTerminal();
-
-		terminal->debug("NMI received!", "IDT");
-	}
-
-	void Interrupts::handleException(const ExceptionFrame &frame) {
-		if (frame.intNo == 14) {
-			handlePageFault(frame);
-		} else if (frame.intNo < 32) {
-			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
-				userPanic(frame);
-			} else {
-				kernelPanic(frame);
-			}
-		}
-	}
-
 	// TODO: Fix
-	void Interrupts::handlePageFault(const ExceptionFrame &frame) {
+	void Interrupts::handlePageFault(const Frame &frame) {
 		kernelPanic(frame); // Remove after fix
 
 		Terminal *terminal = CommonMain::getTerminal();
@@ -111,7 +83,7 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Interrupts::kernelPanic(const ExceptionFrame &frame) {
+	void Interrupts::kernelPanic(const Frame &frame) {
 		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
@@ -137,7 +109,7 @@ namespace kernel::x86_64::hal {
 		Asm::lhlt();
 	}
 
-	void Interrupts::userPanic(const ExceptionFrame &frame) {
+	void Interrupts::userPanic(const Frame &frame) {
 		Terminal * terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");

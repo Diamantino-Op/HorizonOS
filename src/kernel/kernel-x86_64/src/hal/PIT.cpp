@@ -31,11 +31,11 @@ namespace kernel::x86_64::hal {
 		return (high << 8) | low;
 	}
 
+	u64 PIT::getNs() {
+		return ((ticks * 1'000) / frequency) * 1'000'000ul;
+	}
+
 	void PIT::addTick() {
-		Terminal* terminal = CommonMain::getTerminal();
-
 		ticks++;
-
-		terminal->debug("Current Ticks: %u", "PIT", ticks);
 	}
 }
