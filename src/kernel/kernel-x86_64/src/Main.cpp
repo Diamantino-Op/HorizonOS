@@ -146,7 +146,7 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
-		Asm::sti();
+		//Asm::sti();
 
 		Asm::lhlt();
     }
@@ -194,9 +194,9 @@ namespace kernel::x86_64 {
 
 		CpuManager::initSimd();
 
-		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
-
 		Asm::sti();
+
+		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 
 		Asm::lhlt();
 	}
