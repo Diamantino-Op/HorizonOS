@@ -50,12 +50,30 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	}
 }
 
+u64 *lastAllocatedAddr = nullptr;
+
 void *uacpi_kernel_alloc(uacpi_size size) {
-	return malloc(size);
+	void *mem = malloc(size);
+
+	if (mem == nullptr) {
+		CommonMain::getTerminal()->debug("Allocating %u bytes, failed: 0x%.16lx, last address: 0x%.16lx", "uACPI", size, mem, lastAllocatedAddr);
+	} else {
+		lastAllocatedAddr = static_cast<u64 *>(mem);
+	}
+
+	return mem;
 }
 
 void *uacpi_kernel_alloc_zeroed(uacpi_size size) {
-	return malloc(size);
+	void *mem = malloc(size);
+
+	if (mem == nullptr) {
+		CommonMain::getTerminal()->debug("Allocating zeroed %u bytes, failed: 0x%.16lx, last address: 0x%.16lx", "uACPI", size, mem, lastAllocatedAddr);
+	} else {
+		lastAllocatedAddr = static_cast<u64 *>(mem);
+	}
+
+	return mem;
 }
 
 void uacpi_kernel_free(void *mem) {
@@ -63,22 +81,32 @@ void uacpi_kernel_free(void *mem) {
 }
 
 void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
+	Terminal* terminal = CommonMain::getTerminal();
+
 	switch (level) {
 		case UACPI_LOG_ERROR:
-			CommonMain::getTerminal()->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->lock();
+			terminal->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->unlock();
 			break;
 
 		case UACPI_LOG_WARN:
-			CommonMain::getTerminal()->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->lock();
+			terminal->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->unlock();
 			break;
 
 		case UACPI_LOG_INFO:
-			CommonMain::getTerminal()->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->lock();
+			terminal->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->unlock();
 			break;
 
 		case UACPI_LOG_TRACE:
 		case UACPI_LOG_DEBUG:
-			CommonMain::getTerminal()->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->lock();
+			terminal->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->unlock();
 			break;
 	}
 }
@@ -94,7 +122,7 @@ void uacpi_kernel_stall(uacpi_u8 uSec) {
 // PCI
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle) {
@@ -102,27 +130,27 @@ void uacpi_kernel_pci_device_close(uacpi_handle handle) {
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8 *value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32 *value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, uacpi_u32 value) {
-	return UACPI_STATUS_OK;
+	return UACPI_STATUS_UNIMPLEMENTED;
 }
 
 // I/O
@@ -298,7 +326,7 @@ namespace kernel::common::uacpi {
 
 		// Events
 
-		if (const uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, handlerPowerBtn, nullptr); uacpi_unlikely_error(ret)) {
+		if (const uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, &handlerPowerBtn, nullptr); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to install pwr button handler: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
 	}
@@ -310,10 +338,16 @@ namespace kernel::common::uacpi {
 			terminal->error("Failed to prepare for S5: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
 
+		terminal->debug("Preparing to enter S5...", "uAcpi");
+
 		this->disableInts();
+
+		terminal->debug("Entering S5...", "uAcpi");
 
 		if (const uacpi_status ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to enter S5: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
+
+		terminal->debug("Entered S5...", "uAcpi");
 	}
 }

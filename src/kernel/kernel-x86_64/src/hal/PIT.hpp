@@ -55,7 +55,7 @@ namespace kernel::x86_64::hal {
 
         static u64 getNs();
 
-        static void addTick();
+        static u32 addTick(u64);
 
     private:
         Clock clock;

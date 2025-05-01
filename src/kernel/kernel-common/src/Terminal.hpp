@@ -50,6 +50,9 @@ namespace kernel::common {
 
         explicit Terminal(const limine_framebuffer *framebuffer);
 
+        void lock();
+        void unlock();
+
         static void putChar(char c, void *ctx);
         void printf(bool autoSN, const char* format, ...);
 
@@ -67,7 +70,7 @@ namespace kernel::common {
     private:
         static flanterm_context *flantermCtx;
 
-        static TicketSpinLock lock;
+        TicketSpinLock spinLock;
     };
 }
 

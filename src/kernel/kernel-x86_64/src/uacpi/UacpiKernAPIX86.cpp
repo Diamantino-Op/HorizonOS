@@ -31,19 +31,19 @@ namespace kernel::common::uacpi {
 	}
 
 	uacpi_status uacpiKernelIoWrite8(uacpi_handle handle, uacpi_size offset, uacpi_u8 inValue) {
-		IOPort::out8(reinterpret_cast<u64>(handle) + offset, inValue);
+		IOPort::out8(inValue, reinterpret_cast<u64>(handle) + offset);
 
 		return UACPI_STATUS_OK;
 	}
 
 	uacpi_status uacpiKernelIoWrite16(uacpi_handle handle, uacpi_size offset, uacpi_u16 inValue) {
-		IOPort::out16(reinterpret_cast<u64>(handle) + offset, inValue);
+		IOPort::out16(inValue, reinterpret_cast<u64>(handle) + offset);
 
 		return UACPI_STATUS_OK;
 	}
 
 	uacpi_status uacpiKernelIoWrite32(uacpi_handle handle, uacpi_size offset, uacpi_u32 inValue) {
-		IOPort::out32(reinterpret_cast<u64>(handle) + offset, inValue);
+		IOPort::out32(inValue, reinterpret_cast<u64>(handle) + offset);
 
 		return UACPI_STATUS_OK;
 	}
@@ -84,10 +84,6 @@ namespace kernel::common::uacpi {
 	// Events
 
 	uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx) {
-		Terminal* terminal = CommonMain::getTerminal();
-
-		terminal->debug("Power BTN Click!", "uACPI");
-
 		reinterpret_cast<Kernel *>(CommonMain::getInstance())->shutdown();
 
 		return UACPI_INTERRUPT_HANDLED;

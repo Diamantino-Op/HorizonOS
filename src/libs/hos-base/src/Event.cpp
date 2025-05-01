@@ -20,10 +20,10 @@ bool SimpleEvent::decrement() {
 	}
 }
 
-void SimpleEvent::add(u64 val) {
+void SimpleEvent::add(const u64 val) {
 	atomic_fetch_add_explicit(&this->counter, val, memory_order_acq_rel);
 }
 
-void SimpleEvent::set(u64 val) {
+void SimpleEvent::set(const u64 val) {
 	atomic_store_explicit(&this->counter, val, memory_order_release);
 }

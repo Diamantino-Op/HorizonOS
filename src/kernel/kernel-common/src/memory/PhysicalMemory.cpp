@@ -33,7 +33,7 @@ namespace kernel::common::memory {
 		}
 	}
 
-	u64 *PhysicalMemoryManager::allocPages(usize pageAmount, bool useHhdm) {
+	u64 *PhysicalMemoryManager::allocPages(const usize pageAmount, const bool useHhdm) {
 		this->pmmSpinLock.lock();
 
 		PmmListEntry *currEntry = this->listPtr;
@@ -98,7 +98,11 @@ namespace kernel::common::memory {
 	void PhysicalMemoryManager::freePages(u64 *virtAddress, const usize pageAmount) {
 		this->pmmSpinLock.lock();
 
-		auto *currEntry = reinterpret_cast<PmmListEntry *>(virtAddress);
+		const u64 hhdmVirtAddress = CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPhysAddress(reinterpret_cast<u64>(virtAddress)) + CommonMain::getCurrentHhdm();
+
+		auto *currEntry = reinterpret_cast<PmmListEntry *>(hhdmVirtAddress);
+
+		memset(currEntry, 0, pageAmount * pageSize);
 
 		currEntry->count = pageAmount;
 
@@ -107,8 +111,6 @@ namespace kernel::common::memory {
 		if (this->listPtr != nullptr) {
 			this->listPtr->prev = currEntry;
 		}
-
-		memset(currEntry, 0, pageAmount * pageSize);
 
 		this->listPtr = currEntry;
 

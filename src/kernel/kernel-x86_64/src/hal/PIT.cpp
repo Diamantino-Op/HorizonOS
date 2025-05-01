@@ -17,7 +17,7 @@ namespace kernel::x86_64::hal {
 		IOPort::out8(div & 0xFF, channel0DataAddress);
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
 
-		Interrupts::setHandler(0x20, reinterpret_cast<u64 *>(&addTick), nullptr);
+		Interrupts::setHandler(0x20, reinterpret_cast<HandlerFun>(addTick), nullptr);
 
 		Interrupts::unmask(0x20);
 
@@ -43,7 +43,9 @@ namespace kernel::x86_64::hal {
 		return ((ticks * 1'000) / frequency) * 1'000'000ul;
 	}
 
-	void PIT::addTick() {
+	u32 PIT::addTick(u64) {
 		ticks++;
+
+		return 0;
 	}
 }

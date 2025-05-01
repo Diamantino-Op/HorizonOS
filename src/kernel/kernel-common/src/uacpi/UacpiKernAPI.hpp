@@ -5,6 +5,11 @@
 #include "uacpi/types.h"
 
 namespace kernel::common::uacpi {
+    struct IRQOut {
+        u64 *irqHandlerAddr {};
+        u8 number {};
+    };
+
     class UAcpi {
     public:
         UAcpi() = default;

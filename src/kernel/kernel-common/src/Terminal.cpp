@@ -18,7 +18,6 @@
 namespace kernel::common {
 	using namespace memory;
 
-	TicketSpinLock Terminal::lock;
 	flanterm_context *Terminal::flantermCtx;
 
 	Terminal::Terminal(const limine_framebuffer *framebuffer) {
@@ -53,6 +52,14 @@ namespace kernel::common {
 	 		0);
 	}
 
+	void Terminal::lock() {
+		this->spinLock.lock();
+	}
+
+	void Terminal::unlock() {
+		this->spinLock.unlock();
+	}
+
 	void Terminal::putChar(char c, void *ctx) {
 		constexpr u16 com1Port = 0x3F8;
 
@@ -74,7 +81,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::info(const char *format, const char *id, ...) {
-		lock.lock();
+		this->lock();
 
 		this->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -85,12 +92,12 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		lock.unlock();
+		this->unlock();
 	}
 
 	void Terminal::debug(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
-		lock.lock();
+		this->lock();
 
 		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -101,12 +108,12 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		lock.unlock();
+		this->unlock();
 #endif
 	}
 
 	void Terminal::warn(const char *format, const char *id, ...) {
-		lock.lock();
+		this->lock();
 
 		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -117,11 +124,11 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		lock.unlock();
+		this->unlock();
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
-		lock.lock();
+		this->lock();
 
 		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -132,7 +139,7 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		lock.unlock();
+		this->unlock();
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {

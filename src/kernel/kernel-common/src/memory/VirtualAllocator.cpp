@@ -172,7 +172,7 @@ namespace kernel::common::memory {
 			current = current->next;
 		}
 
-		if (!current || !current->free) {
+		if (!current || !current->free || current->size < pageSize) {
 			return;
 		}
 
