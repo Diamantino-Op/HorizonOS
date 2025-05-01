@@ -146,10 +146,18 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
-		Asm::sti();
+		this->uAcpi = UAcpi();
+
+		this->uAcpi.init();
 
 		Asm::lhlt();
     }
+
+	void Kernel::shutdown() {
+		terminal.info("Shutting down...", "HorizonOS");
+
+		this->uAcpi.shutdown();
+	}
 
 	GdtManager *Kernel::getGdtManager() {
 		return &this->gdtManager;

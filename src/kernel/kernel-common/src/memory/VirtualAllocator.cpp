@@ -49,6 +49,7 @@ namespace kernel::common::memory {
 		return CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPhysAddress(alignedKernAddr) + diff;
 	}
 
+	// TODO: Maybe set to 0 too
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
 		ctx->lock.lock();
 
@@ -67,6 +68,8 @@ namespace kernel::common::memory {
 
 				current->free = false;
 				current->size = size;
+
+				ctx->lock.unlock();
 
 				return reinterpret_cast<u64 *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock));
 			}

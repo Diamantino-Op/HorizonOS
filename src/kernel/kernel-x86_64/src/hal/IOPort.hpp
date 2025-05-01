@@ -1,9 +1,9 @@
-#ifndef KERNEL_COMMON_IOPORT_HPP
-#define KERNEL_COMMON_IOPORT_HPP
+#ifndef KERNEL_X86_64_IOPORT_HPP
+#define KERNEL_X86_64_IOPORT_HPP
 
 #include "Types.hpp"
 
-namespace kernel::common::hal {
+namespace kernel::x86_64::hal {
     class IOPort {
     public:
         static void out8(u8 data, u16 address);

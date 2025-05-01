@@ -27,7 +27,7 @@ namespace kernel::common::memory {
 
     private:
         PmmListEntry *listPtr {};
-        SpinLock pmmSpinLock {};
+        TicketSpinLock pmmSpinLock {};
     };
 }
 

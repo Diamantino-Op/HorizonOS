@@ -20,7 +20,7 @@ namespace kernel::common::memory {
         u64 *heapStart {};
 		usize heapSize {};
 		MemoryBlock *blocks {};
-        SpinLock lock {};
+        TicketSpinLock lock {};
     };
 
     class VirtualAllocator {

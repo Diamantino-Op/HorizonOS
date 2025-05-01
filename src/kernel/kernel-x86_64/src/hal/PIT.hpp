@@ -3,7 +3,11 @@
 
 #include "Types.hpp"
 
+#include "hal/Clock.hpp"
+
 namespace kernel::x86_64::hal {
+    using namespace kernel::common::hal;
+
     constexpr u16 commandModePortAddress = 0x43;
     constexpr u16 channel0DataAddress = 0x40;
     constexpr u16 channel1DataAddress = 0x41;
@@ -54,6 +58,8 @@ namespace kernel::x86_64::hal {
         static void addTick();
 
     private:
+        Clock clock;
+
         static usize ticks;
     };
 }

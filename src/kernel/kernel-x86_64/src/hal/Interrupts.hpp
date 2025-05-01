@@ -4,7 +4,12 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::hal {
-    using IsrHandler = void(*)();
+    using HandlerFun = u32(*)(u64 *ctx);
+
+    struct IsrHandler {
+        HandlerFun fun {};
+        u64 *ctx {};
+    };
 
     struct __attribute__((packed)) Frame {
         u64 r15;
@@ -79,7 +84,10 @@ namespace kernel::x86_64::hal {
 
         static void backtrace(usize rbp);
 
-        static void setHandler(u8 id, u64 *handler);
+        static void setHandler(u8 id, u64 *handler, u64 *ctx);
+        static void setHandler(u8 id, HandlerFun handler, u64 *ctx);
+
+        static IsrHandler *getHandler(u8 id);
 
         static void mask(u8 id);
         static void unmask(u8 id);

@@ -13,7 +13,7 @@ target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_FLAGS}>)
 target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${KERNEL_CXX_FLAGS}>)
 target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${KERNEL_ASM_FLAGS}>)
 
-target_include_directories(kernel PRIVATE src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR} ${NANOPRINTF_DIR} ${UACPI_INCLUDES})
+target_include_directories(kernel PRIVATE src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR} ${NANOPRINTF_DIR} ${HOR_UACPI_INCLUDES})
 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 

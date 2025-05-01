@@ -1,11 +1,10 @@
 #include "PIC.hpp"
 
-#include "hal/IOPort.hpp"
+#include "IOPort.hpp"
 #include "utils/Asm.hpp"
 
 namespace kernel::x86_64::hal {
 	using namespace utils;
-	using namespace common::hal;
 
 	PIC::PIC(const u8 address) : address(address) {}
 
@@ -32,6 +31,8 @@ namespace kernel::x86_64::hal {
 	DualPIC::DualPIC() : pic1(pic1Address), pic2(pic2Address) {}
 
 	void DualPIC::init() const {
+		Asm::cli();
+
 		this->pic1.cmd(icw1Init | icw1Icw4);
 		this->pic2.cmd(icw1Init | icw1Icw4);
 
@@ -46,6 +47,8 @@ namespace kernel::x86_64::hal {
 
 		this->pic1.dataOut(0x00);
 		this->pic2.dataOut(0x00);
+
+		Asm::sti();
 	}
 
 	void DualPIC::eoi(const usize intNo) const {

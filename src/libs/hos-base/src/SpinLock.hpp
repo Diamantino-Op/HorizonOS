@@ -5,19 +5,33 @@
 #include "Types.hpp"
 #include "stdatomic.h"
 
-class SpinLock {
+class TicketSpinLock {
 public:
-    SpinLock() = default;
-    ~SpinLock() = default;
+    TicketSpinLock() = default;
+    ~TicketSpinLock() = default;
 
     void lock();
     void unlock();
 
 private:
-    void lockedfun();
+    void lockedFun();
 
     u64 nextTicket {};
     u64 currentTicket {};
+};
+
+class SimpleSpinLock {
+public:
+    SimpleSpinLock() = default;
+    ~SimpleSpinLock() = default;
+
+    void lock();
+    void unlock();
+
+private:
+    void lockedFun();
+
+    bool locked {};
 };
 
 #endif

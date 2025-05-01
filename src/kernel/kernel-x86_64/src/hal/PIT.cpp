@@ -1,8 +1,8 @@
 #include "PIT.hpp"
 
 #include "CommonMain.hpp"
+#include "IOPort.hpp"
 #include "Interrupts.hpp"
-#include "hal/IOPort.hpp"
 
 namespace kernel::x86_64::hal {
 	using namespace common;
@@ -17,9 +17,17 @@ namespace kernel::x86_64::hal {
 		IOPort::out8(div & 0xFF, channel0DataAddress);
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
 
-		Interrupts::setHandler(0x20, reinterpret_cast<u64 *>(&addTick));
+		Interrupts::setHandler(0x20, reinterpret_cast<u64 *>(&addTick), nullptr);
 
 		Interrupts::unmask(0x20);
+
+		this->clock = {
+			.name = "PIT",
+			.priority = 0,
+			.getNs = &PIT::getNs,
+		};
+
+		CommonMain::getInstance()->getClocks()->registerClock(&this->clock);
 	}
 
 	u16 PIT::readCount() {

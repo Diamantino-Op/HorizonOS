@@ -15,13 +15,10 @@
 
 #include "memory/MainMemory.hpp"
 
-#include "hal/IOPort.hpp"
-
 namespace kernel::common {
 	using namespace memory;
-	using namespace hal;
 
-	SpinLock Terminal::lock;
+	TicketSpinLock Terminal::lock;
 	flanterm_context *Terminal::flantermCtx;
 
 	Terminal::Terminal(const limine_framebuffer *framebuffer) {
@@ -61,17 +58,18 @@ namespace kernel::common {
 
 	 	flanterm_write(flantermCtx, &c, 1);
 
-		IOPort::out8(c, com1Port);
+		// TODO: Only x86_64
+		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
 	}
 
-	void Terminal::printf(bool autoSN, const char *format, ...) {
+	void Terminal::printf(const bool autoSN, const char *format, ...) {
 	 	va_list val;
 	 	va_start(val, format);
-	 	npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+	 	npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
 	 	va_end(val);
 
 		if (autoSN) {
-			npf_pprintf((npf_putc)(void *)this->putChar, NULL, "\n");
+			npf_pprintf((npf_putc)(void *)putChar, nullptr, "\n");
 		}
 	}
 
@@ -82,7 +80,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -98,7 +96,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -114,7 +112,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -129,7 +127,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)this->putChar, NULL, format, val);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");

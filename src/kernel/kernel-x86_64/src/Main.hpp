@@ -25,6 +25,8 @@ namespace kernel::x86_64 {
 
         void init() override;
 
+        void shutdown() override;
+
         GdtManager *getGdtManager();
         TssManager *getTssManager();
         IdtManager *getIdtManager();

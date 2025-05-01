@@ -12,7 +12,7 @@ public:
 	// Default constructor
 	Vector();
 
-	explicit Vector(int s);
+	explicit Vector(usize s);
 
 	// Copy constructor
 	Vector(const Vector& arg);
@@ -60,12 +60,12 @@ public:
 
 	// Requests a change in capacity
 	// reserve() will never decrease the capacity.
-	void reserve(int newMalloc);
+	void reserve(usize newMalloc);
 
 	// Changes the Vector's size.
 	// If the newSize is smaller, the last elements will be lost.
 	// Has a default value param for custom values when resizing.
-	void resize(int newSize, T val = T());
+	void resize(usize newSize, T val = T());
 
 	// Returns the size of the Vector (number of elements).
 	usize size() const;
@@ -103,16 +103,16 @@ public:
 	/* ----- ELEMENT ACCESS ----- */
 
 	// Access elements with bound checking
-	T& at(int n);
+	T& at(usize n);
 
 	// Access elements with bounds checking for constant Vectors.
-	const T& at(int n) const;
+	const T& at(usize n) const;
 
 	// Access elements, no bounds checking
-	T& operator[](int i);
+	T& operator[](usize i);
 
 	// Access elements, no bounds checking
-	const T& operator[](int i) const;
+	const T& operator[](usize i) const;
 
 	// Returns a reference to the first element
 	T& front();
@@ -176,16 +176,16 @@ private:
 
 
 // Constructors/Destructor
-template<class T> Vector<T>::Vector() :_size(0), _elements(nullptr), _space(0) {}
+template<class T> Vector<T>::Vector() : _size(0), _elements(nullptr), _space(0) {}
 
-template<class T> Vector<T>::Vector(int s) :_size(s), _elements(new T[s]), _space(s) {
-	for (int index = 0; index < _size; ++index) {
+template<class T> Vector<T>::Vector(const usize s) :_size(s), _elements(new T[s]), _space(s) {
+	for (usize index = 0; index < _size; ++index) {
 		_elements[index] = T();
 	}
 }
 
 template<class T> Vector<T>::Vector(const Vector &arg) : _size(arg._size), _elements(new T[arg._size]), _space(arg._space) {
-	for (int index = 0; index < arg._size; ++index) {
+	for (usize index = 0; index < arg._size; ++index) {
 		_elements[index] = arg._elements[index];
 	}
 }
@@ -197,7 +197,7 @@ template <class T> Vector<T>& Vector<T>::operator=(const Vector<T>& arg) {
 
 	// Current Vector has enough space, so there is no need for new allocation
 	if (arg._size <= _space) {
-		for (int index = 0; index < arg._size; ++index) {
+		for (usize index = 0; index < arg._size; ++index) {
 			_elements[index] = arg._elements[index];
 			_size = arg._size;
 
@@ -261,14 +261,14 @@ template<class T> usize Vector<T>::capacity() const {
 	return _space;
 }
 
-template<class T> void Vector<T>::reserve(const int newMalloc) {
+template<class T> void Vector<T>::reserve(const usize newMalloc) {
 	if (newMalloc <= _space) {
 		return;
 	}
 
 	T* p = new T[newMalloc];
 
-	for (int i = 0; i < _size; ++i)
+	for (usize i = 0; i < _size; ++i)
 		p[i] = _elements[i];
 
 	delete[] _elements;
@@ -278,10 +278,10 @@ template<class T> void Vector<T>::reserve(const int newMalloc) {
 	_space = newMalloc;
 }
 
-template<class T> void Vector<T>::resize(const int newSize, T val) {
+template<class T> void Vector<T>::resize(const usize newSize, T val) {
 	reserve(newSize);
 
-	for (int index = _size; index < newSize; ++index)
+	for (usize index = _size; index < newSize; ++index)
 		_elements[index] = T();
 
 	_size = newSize;
@@ -308,7 +308,7 @@ template<class T> void Vector<T>::pushBack(const T& d) {
 
 
 // Accessors
-template<class T> T & Vector<T>::at(int n) {
+template<class T> T & Vector<T>::at(usize n) {
 	/*if (n < 0 || _size <= n) {
 		throw outOfRange();
 	}*/
@@ -316,7 +316,7 @@ template<class T> T & Vector<T>::at(int n) {
 	return _elements[n];
 }
 
-template<class T> const T & Vector<T>::at(int n) const {
+template<class T> const T & Vector<T>::at(usize n) const {
 	/*if (n < 0 || _size <= n) {
 		throw outOfRange();
 	}*/
@@ -324,11 +324,11 @@ template<class T> const T & Vector<T>::at(int n) const {
 	return _elements[n];
 }
 
-template<class T> T & Vector<T>::operator[](int i) {
+template<class T> T & Vector<T>::operator[](usize i) {
 	return _elements[i];
 }
 
-template<class T> const T & Vector<T>::operator[](int i) const {
+template<class T> const T & Vector<T>::operator[](usize i) const {
 	return _elements[i];
 }
 

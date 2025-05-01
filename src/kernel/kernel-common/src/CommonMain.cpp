@@ -42,7 +42,17 @@ namespace kernel::common {
 		return &this->virtualMemoryManager;
 	}
 
+	Clocks *CommonMain::getClocks() {
+		return &this->clocks;
+	}
+
+	UAcpi *CommonMain::getUAcpi() {
+		return &this->uAcpi;
+	}
+
 	void CommonMain::init() {}
+
+	void CommonMain::shutdown() {}
 
 	void CommonCoreMain::init() {}
 }

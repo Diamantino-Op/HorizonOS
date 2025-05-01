@@ -7,9 +7,30 @@
 
 namespace kernel::common::hal {
     struct Clock {
-        char *name {};
+        const char *name {};
         usize priority {};
         u64 (*getNs)() {};
+    };
+
+    class Clocks {
+    public:
+        Clocks() = default;
+        ~Clocks() = default;
+
+        void registerClock(Clock *clock);
+
+        Clock *getMainClock() const;
+
+        bool stallNs(u64 ns);
+
+    private:
+        void archPause();
+
+        Clock *mainClock { nullptr };
+
+        Clock *clocks[2] {}; // TODO: Make dynamic
+
+        u8 currClockIndex {};
     };
 }
 

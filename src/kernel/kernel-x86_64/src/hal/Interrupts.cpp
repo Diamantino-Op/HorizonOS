@@ -19,14 +19,18 @@ namespace kernel::x86_64::hal {
 	void Interrupts::handleInterrupt(const Frame &frame) {
 		if (frame.intNo == 14) {
 			handlePageFault(frame);
+		} else if (frame.intNo == 2) {
+			Terminal *terminal = CommonMain::getTerminal();
+
+			terminal->debug("NMI Received!", "Interrupts");
 		} else if (frame.intNo < 32) {
 			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
 				userPanic(frame);
 			} else {
 				kernelPanic(frame);
 			}
-		} else if (handlers[frame.intNo - 32]) {
-			handlers[frame.intNo - 32]();
+		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
+			handler->fun(handler->ctx);
 
 			if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
@@ -63,8 +67,18 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Interrupts::setHandler(const u8 id, u64 *handler) {
-		handlers[id - 0x20] = reinterpret_cast<IsrHandler>(handler);
+	void Interrupts::setHandler(const u8 id, u64 *handler, u64 *ctx) {
+		handlers[id - 0x20].fun = reinterpret_cast<HandlerFun>(handler);
+		handlers[id - 0x20].ctx = ctx;
+	}
+
+	void Interrupts::setHandler(const u8 id, const HandlerFun handler, u64 *ctx) {
+		handlers[id - 0x20].fun = handler;
+		handlers[id - 0x20].ctx = ctx;
+	}
+
+	IsrHandler *Interrupts::getHandler(const u8 id) {
+		return &handlers[id - 0x20];
 	}
 
 	void Interrupts::mask(const u8 id) {

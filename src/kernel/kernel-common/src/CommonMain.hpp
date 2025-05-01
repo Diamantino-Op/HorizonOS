@@ -6,9 +6,13 @@
 #include "Terminal.hpp"
 
 #include "memory/VirtualAllocator.hpp"
+#include "hal/Clock.hpp"
+#include "uacpi/UacpiKernAPI.hpp"
 
 namespace kernel::common {
     using namespace memory;
+    using namespace uacpi;
+    using namespace hal;
 
     class CommonMain {
     public:
@@ -16,18 +20,24 @@ namespace kernel::common {
 
 		virtual void init();
 
+        virtual void shutdown();
+
         static Terminal* getTerminal();
 
         static CommonMain *getInstance();
 
         static u64 getCurrentHhdm();
 
-        uPtr getStackTop() const;
+        [[nodiscard]] uPtr getStackTop() const;
 
-        AllocContext *getKernelAllocContext() const;
+        [[nodiscard]] AllocContext *getKernelAllocContext() const;
 
         PhysicalMemoryManager *getPMM();
         VirtualMemoryManager *getVMM();
+
+        Clocks *getClocks();
+
+        UAcpi *getUAcpi();
 
     protected:
         void rootInit();
@@ -39,8 +49,12 @@ namespace kernel::common {
         uPtr stackTop {};
         AllocContext *kernelAllocContext {};
 
-        PhysicalMemoryManager physicalMemoryManager;
-        VirtualMemoryManager virtualMemoryManager;
+        PhysicalMemoryManager physicalMemoryManager {};
+        VirtualMemoryManager virtualMemoryManager {};
+
+        Clocks clocks {};
+
+        UAcpi uAcpi {};
     };
 
     class CommonCoreMain {

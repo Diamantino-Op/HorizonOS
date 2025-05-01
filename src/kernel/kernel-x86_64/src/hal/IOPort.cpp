@@ -1,6 +1,6 @@
 #include "IOPort.hpp"
 
-namespace kernel::common::hal {
+namespace kernel::x86_64::hal {
 	void IOPort::out8(u8 data, u16 address) {
 		asm volatile ("outb %0, %1" : : "a"(data), "d"(address));
 	}

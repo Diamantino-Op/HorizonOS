@@ -125,6 +125,9 @@ CloneUAcpi()
 
 include(${UACPI_DIR}/uacpi.cmake)
 
+set(HOR_UACPI_INCLUDES ${UACPI_INCLUDES} CACHE STRING "uACPI Includes")
+set(HOR_UACPI_SOURCES ${UACPI_SOURCES} CACHE STRING "uACPI Sources")
+
 # ------------------ Limine Bootloader ------------------
 set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
 set(LIMINE_BRANCH "v9.x-binary" CACHE STRING "Limine Branch")
