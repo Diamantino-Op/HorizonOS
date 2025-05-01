@@ -146,6 +146,11 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
+		this->cpuManager.getBootstrapCpu()->tsc.init();
+		this->cpuManager.getBootstrapCpu()->tsc.globalInit();
+
+		terminal.info("TSC Initialised... OK", "HorizonOS");
+
 		this->uAcpi = UAcpi();
 
 		this->uAcpi.init();
@@ -207,6 +212,8 @@ namespace kernel::x86_64 {
 		this->coreIdtManager->loadIdt();
 
 		CpuManager::initSimd();
+
+		this->cpuCore.tsc.init();
 
 		Asm::sti();
 

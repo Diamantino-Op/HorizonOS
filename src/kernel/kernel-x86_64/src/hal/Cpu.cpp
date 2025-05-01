@@ -130,16 +130,14 @@ namespace kernel::x86_64::hal {
 			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
 				this->bootstrapCpu.apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->bootstrapCpu.apic.setIsX2Apic(this->hasX2Apic);
-				this->bootstrapCpu.apic.setCore(&this->bootstrapCpu);
-				this->bootstrapCpu.tsc.setCore(&this->bootstrapCpu);
 				this->bootstrapCpu.cpuId = mpRequest.response->cpus[i]->processor_id;
+
+				setCorePointer(&this->bootstrapCpu);
 
 				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
 			} else {
 				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
-				this->cpuList[j].cpuCore.apic.setCore(&this->cpuList[j].cpuCore);
-				this->cpuList[j].cpuCore.tsc.setCore(&this->cpuList[j].cpuCore);
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
 
 				this->initCore(i, j);
@@ -147,6 +145,14 @@ namespace kernel::x86_64::hal {
 				++j;
 			}
 		}
+	}
+
+	void CpuManager::setCorePointer(CpuCore *core) {
+		Asm::wrmsr(UGSBAS, reinterpret_cast<u64>(core));
+	}
+
+	CpuCore *CpuManager::getCurrentCore() {
+		return reinterpret_cast<CpuCore *>(Asm::rdmsr(UGSBAS));
 	}
 
 	void CpuManager::initCore(const u64 coreId, const u64 listIndex) const {
@@ -158,6 +164,8 @@ namespace kernel::x86_64::hal {
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
 		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
+
+		CpuManager::setCorePointer(&coreKernel->cpuCore);
 
 		coreKernel->init();
 	}

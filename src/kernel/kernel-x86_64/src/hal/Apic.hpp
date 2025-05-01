@@ -4,8 +4,6 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::hal {
-    struct CpuCore;
-
     enum ApicMsrs : u64 {
         APIC_BASE = 0x1B,
         TPR = 0x80,
@@ -47,15 +45,10 @@ namespace kernel::x86_64::hal {
         void setIsX2Apic(bool val);
         bool getIsX2Apic() const;
 
-        void setCore(CpuCore *core);
-        CpuCore *getCore() const;
-
     private:
         u32 toX2Apic(u32 reg);
         u32 read(u32 reg);
         void write(u32 reg, u32 data);
-
-        CpuCore *core {};
 
         u32 apicId {};
 

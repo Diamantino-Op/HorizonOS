@@ -28,13 +28,13 @@ namespace kernel::x86_64::hal {
 			return 0;
 		}
 
-		return ticks2ns(read(), this->p, this->n) - core->offset;
+		return ticks2ns(read(), this->p, this->n) - CpuManager::getCurrentCore()->offset;
 	}
 
 	void Tsc::calibrate() {
 		u64 freq = 0;
 
-		// TODO: Add else if for kvm clock and calibrator
+		// TODO: Add else if for kvm tsc clock and calibrator
 
 		if (const CpuIdResult res = CpuId::get(0x15, 0); res.eax != 0 and res.ebx != 0 and res.ecx != 0) {
 			freq = res.ecx * res.ebx / res.eax;
@@ -47,7 +47,9 @@ namespace kernel::x86_64::hal {
 			this->p = val1;
 			this->n = val2;
 
-			// TODO: Set offset
+			if (const Clock *clock = CommonMain::getInstance()->getClocks()->getMainClock()) {
+				CpuManager::getCurrentCore()->offset = getTimeNs() - clock->getNs();
+			}
 
 			this->calibrated = true;
 		}
@@ -57,6 +59,8 @@ namespace kernel::x86_64::hal {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		if (!supported()) {
+			terminal->debug("TSC not invariant!", "TSC");
+
 			return;
 		}
 
@@ -69,15 +73,21 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Tsc::finalise() {
+	void Tsc::globalInit() {
+		this->clock = {
+			.name = "TSC",
+			.priority = 75,
+			.getNs = &Tsc::getNs,
+		};
 
+		if (this->calibrated) {
+			CommonMain::getInstance()->getClocks()->registerClock(&this->clock);
+		}
 	}
 
-	void Tsc::setCore(CpuCore *core) {
-		this->core = core;
-	}
+	u64 Tsc::getNs() {
+		CpuCore *currentCore = CpuManager::getCurrentCore();
 
-	CpuCore *Tsc::getCore() const {
-		return this->core;
+		return currentCore->tsc.getTimeNs();
 	}
 }

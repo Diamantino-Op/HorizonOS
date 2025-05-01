@@ -82,12 +82,4 @@ namespace kernel::x86_64::hal {
 	bool Apic::getIsX2Apic() const {
 		return this->isX2Apic;
 	}
-
-	void Apic::setCore(CpuCore *core) {
-		this->core = core;
-	}
-
-	CpuCore *Apic::getCore() const {
-		return this->core;
-	}
 }

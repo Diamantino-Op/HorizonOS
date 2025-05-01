@@ -2,9 +2,10 @@
 #define KERNEL_X86_64_TSC_HPP
 
 #include "Types.hpp"
+#include "hal/Clock.hpp"
 
 namespace kernel::x86_64::hal {
-    struct CpuCore;
+    using namespace common::hal;
 
     class Tsc {
     public:
@@ -19,13 +20,13 @@ namespace kernel::x86_64::hal {
         void calibrate();
 
         void init();
-        void finalise();
 
-        void setCore(CpuCore *core);
-        CpuCore *getCore() const;
+        void globalInit();
 
-    public:
-        CpuCore *core {};
+        static u64 getNs();
+
+    private:
+        Clock clock {};
 
         u64 p {};
         u64 n {};

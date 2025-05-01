@@ -48,6 +48,10 @@ namespace kernel::x86_64::hal {
         static void saveSimdContext(const uPtr *ptr);
         static void loadSimdContext(const uPtr *ptr);
 
+        static void setCorePointer(CpuCore *core);
+
+        static CpuCore *getCurrentCore();
+
     private:
         void initCore(u64 coreId, u64 listIndex) const;
 

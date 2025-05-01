@@ -336,6 +336,8 @@ namespace kernel::common::uacpi {
 
 		if (const uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to prepare for S5: %s", "uAcpi", uacpi_status_to_string(ret));
+
+			return;
 		}
 
 		terminal->debug("Preparing to enter S5...", "uAcpi");
@@ -347,7 +349,5 @@ namespace kernel::common::uacpi {
 		if (const uacpi_status ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to enter S5: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
-
-		terminal->debug("Entered S5...", "uAcpi");
 	}
 }
