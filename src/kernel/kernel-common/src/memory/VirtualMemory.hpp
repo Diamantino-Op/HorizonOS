@@ -19,7 +19,7 @@ namespace kernel::common::memory {
 
         void load();
 
-        void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool noExec);
+        void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
 
         void unMapPage(u64 vAddr) const;
 
@@ -30,7 +30,7 @@ namespace kernel::common::memory {
     private:
         void setPageFlags(u64 * pageAddr, u8 flags);
 
-        u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool noExec);
+        u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
 
         u64* pageTable {};
         bool isLevel5Paging = false;

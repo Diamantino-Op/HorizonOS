@@ -33,7 +33,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
 	const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
 
 	for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(alignedAddr + CommonMain::getCurrentHhdm(), alignedAddr, 0b00000011, false);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(alignedAddr + CommonMain::getCurrentHhdm(), alignedAddr, 0b00000011, false, false);
 	}
 
 	return reinterpret_cast<u64 *>(addr + CommonMain::getCurrentHhdm());

@@ -120,6 +120,12 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
+		// Tss Stack
+
+		this->tssManager.allocStack();
+
+		// Cpu Init
+
 		this->cpuManager = CpuManager();
 
 		this->cpuManager.init();
@@ -204,6 +210,8 @@ namespace kernel::x86_64 {
 
 		this->coreGdtManager.loadGdt();
 		this->coreGdtManager.reloadRegisters();
+
+		this->coreTssManager.allocStack();
 
 		this->coreTssManager.updateTss();
 

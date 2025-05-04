@@ -90,7 +90,7 @@ namespace kernel::common::memory {
 		const u64 kernelStackTopAligned = alignUp<u64>(this->kernelStackTop, pageSize);
 
 		for (u64 i = kernelStackTopAligned - (pageSize * 16); i < kernelStackTopAligned; i += pageSize) {
-			currentPageMap->mapPage(i, i - CommonMain::getCurrentHhdm(), 0b00000011, true);
+			currentPageMap->mapPage(i, i - CommonMain::getCurrentHhdm(), 0b00000011, false, true);
 		}
 
 		terminal->debug("Kernel Stack mapped!", "VMM");
@@ -101,7 +101,7 @@ namespace kernel::common::memory {
 			const u64 limineEndAligned = alignUp<u64>(reinterpret_cast<u64>(&limineEnd), pageSize);
 
 			for (u64 i = limineStartAligned; i < limineEndAligned; i += pageSize) {
-				currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, false);
+				currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, false, false);
 			}
 
 			terminal->debug("Limine Section mapped!", "VMM");
@@ -114,7 +114,7 @@ namespace kernel::common::memory {
 		const u64 textEndAligned = alignUp<u64>(reinterpret_cast<u64>(&textEnd), pageSize);
 
 		for (u64 i = textStartAligned; i < textEndAligned; i += pageSize) {
-			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, false);
+			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, false, false);
 		}
 
 		terminal->debug("Text Section mapped!", "VMM");
@@ -124,7 +124,7 @@ namespace kernel::common::memory {
 		const u64 rodataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&rodataEnd), pageSize);
 
 		for (u64 i = rodataStartAligned; i < rodataEndAligned; i += pageSize) {
-			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, true);
+			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, false, true);
 		}
 
 		terminal->debug("ROData Section mapped!", "VMM");
@@ -134,7 +134,7 @@ namespace kernel::common::memory {
 		const u64 dataEndAligned = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
 
 		for (u64 i = dataStartAligned; i < dataEndAligned; i += pageSize) {
-			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, true);
+			currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000011, false, true);
 		}
 
 		terminal->debug("Data Section mapped!", "VMM");
@@ -148,7 +148,7 @@ namespace kernel::common::memory {
 				const u64 entryEndAligned = alignUp<u64>(entry->base + entry->length, pageSize);
 
 				for (u64 j = entryStartAligned; j < entryEndAligned; j += pageSize) {
-					currentPageMap->mapPage(j + CommonMain::getCurrentHhdm(), j, 0b00000011, false);
+					currentPageMap->mapPage(j + CommonMain::getCurrentHhdm(), j, 0b00000011, false, false);
 				}
 			}
 		}

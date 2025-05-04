@@ -44,7 +44,7 @@ namespace kernel::x86_64::hal {
 
     	constexpr IDTDesc() = default;
 
-    	constexpr IDTDesc(Idt const& base):
+		explicit constexpr IDTDesc(Idt const& base):
     		limit(sizeof(Idt) - 1),
     		base(reinterpret_cast<usize>(&base)) {}
 	};

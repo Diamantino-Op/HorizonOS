@@ -72,8 +72,6 @@ namespace kernel::x86_64::hal {
 			baseUpper32(reinterpret_cast<usize>(&tss) >> 32) {}
 	};
 
-
-
 	struct __attribute__((packed)) Gdt {
 		GdtEntry entries[5];
 

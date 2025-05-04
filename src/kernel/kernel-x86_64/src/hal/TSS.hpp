@@ -22,14 +22,14 @@ namespace kernel::x86_64::hal {
     public:
         TssManager();
 
+        void allocStack();
+
         void updateTss();
 
         Tss getTss() const;
 
     private:
         Tss tssInstance{};
-
-        //u8 kernelStack[PAGE_SIZE * 1]{}; // 4KB Stack
     };
 
     extern "C" void updateTssAsm();

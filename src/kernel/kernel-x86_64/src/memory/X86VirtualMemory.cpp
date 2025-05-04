@@ -48,7 +48,7 @@ namespace kernel::common::memory {
 		Asm::writeCr3(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm());
 	}
 
-	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool noExec) {
+	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -58,16 +58,18 @@ namespace kernel::common::memory {
 		PageTable *pdpt = nullptr;
 
 		if (this->isLevel5Paging) {
-			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, noExec));
-			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(lvl5Table), lvl4, flags, noExec));
+			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, global, noExec));
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(lvl5Table), lvl4, flags, global, noExec));
 		} else {
-			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl4, flags, noExec));
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl4, flags, global, noExec));
 		}
 
-		auto *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, noExec));
-		auto *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags, noExec));
+		auto *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, global, noExec));
+		auto *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags, global, noExec));
 
 		pt->entries[lvl1].executeDisable = noExec;
+		pt->entries[lvl1].global = global;
+
 		this->setPageFlags(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), flags);
 
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
@@ -155,7 +157,7 @@ namespace kernel::common::memory {
 		return lvl1Table->entries[lvl1].address << 12;
 	}
 
-	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool noExec) {
+	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 
 		if (!parentTable->entries[index].present) {
@@ -166,6 +168,8 @@ namespace kernel::common::memory {
 			}
 
 			parentTable->entries[index].executeDisable = noExec;
+			parentTable->entries[index].global = global;
+
 			this->setPageFlags(reinterpret_cast<u64 *>(&parentTable->entries[index]), flags);
 
 			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF;
