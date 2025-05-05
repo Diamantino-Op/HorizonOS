@@ -113,6 +113,8 @@ namespace kernel::common::threading {
 
         void sleepThread(Thread *thread, u64 ticks);
 
+        u64 *createContext(bool isUser, u64 rip, u64 rsp);
+
     private:
         u64 executionNodesAmount {};
 
