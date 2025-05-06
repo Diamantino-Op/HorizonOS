@@ -50,6 +50,12 @@ namespace kernel::common::memory {
 					if (currEntry->next != nullptr) {
 						currEntry->next->prev = currEntry->prev;
 					}
+
+					if (currEntry->prev) {
+						this->listPtr = currEntry->prev;
+					} else {
+						this->listPtr = currEntry->next;
+					}
 				} else {
 					const auto newAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(currEntry) + (pageAmount * pageSize));
 
