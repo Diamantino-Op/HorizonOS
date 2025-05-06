@@ -16,8 +16,8 @@ namespace kernel::x86_64::threading {
 
         Frame *getFrame();
 
-        void save(const Frame &frame);
-        void load(Frame &frame) const;
+        void save() const;
+        void load() const;
 
     private:
         u64 *simdSave {};

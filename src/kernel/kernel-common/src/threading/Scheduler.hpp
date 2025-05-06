@@ -31,8 +31,8 @@ namespace kernel::common::threading {
 		explicit Thread(Process* parent);
         ~Thread();
 
-        template<class T> void setContext(T *context);
-        template<class T> T *getContext();
+        void setContext(u64 *context);
+        u64 *getContext();
 
         void setSleepTicks(u64 ticks);
         u64 getSleepTicks();
@@ -90,6 +90,8 @@ namespace kernel::common::threading {
         ~ExecutionNode();
 
         void schedule();
+
+        void switchContextAsm(u64 *oldCtx, u64 *newCtx);
 
     private:
         u8 remainingTicks {};
