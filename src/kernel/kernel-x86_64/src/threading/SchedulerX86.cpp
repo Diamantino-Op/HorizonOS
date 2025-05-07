@@ -30,14 +30,14 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void ExecutionNode::switchContextAsm(u64 *oldCtx, u64 *newCtx) {
+	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) {
+		// Old Ctx
 		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
 		Frame *oldFrame = oldCtxConv->getFrame();
 
-		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
-		Frame *newFrame = newCtxConv->getFrame();
-
 		oldCtxConv->save();
+
+		asm volatile("lea (%%rip), %0" : "=r"(oldFrame->rip));
 
 		asm volatile("mov %%rax, %0" : "=r"(oldFrame->rax));
 		asm volatile("mov %%rbx, %0" : "=r"(oldFrame->rbx));
@@ -62,9 +62,12 @@ namespace kernel::common::threading {
 		asm volatile("pop %0" : "=r"(oldFrame->rFlags));
 
 		asm volatile("mov %%rsp, %0" : "=r"(oldFrame->rsp));
-		asm volatile("mov %%rip, %0" : "=r"(oldFrame->rip));
 
-		newCtxConv->load();
+		// New Ctx
+		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
+		Frame *newFrame = newCtxConv->getFrame();
+
+		asm volatile("mov %0, %%rsp" :: "a"(newFrame->rsp));
 
 		asm volatile("mov %0, %%rax" :: "a"(newFrame->rax));
 		asm volatile("mov %0, %%rbx" :: "a"(newFrame->rbx));
@@ -88,8 +91,9 @@ namespace kernel::common::threading {
 		asm volatile("push %0" :: "a"(newFrame->rFlags));
 		asm volatile("popf");
 
-		asm volatile("mov %0, %%rsp" :: "a"(newFrame->rsp));
-		asm volatile("mov %0, %%rip" :: "a"(newFrame->rip));
+		newCtxConv->load();
+
+		asm volatile("jmp *%0" :: "r"(newFrame->rip));
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip, const u64 rsp) {

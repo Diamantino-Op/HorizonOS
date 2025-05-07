@@ -43,7 +43,7 @@ namespace kernel::x86_64::hal {
 		return ((ticks * 1'000) / frequency) * 1'000'000ul;
 	}
 
-	u32 PIT::addTick(u64) {
+	u32 PIT::addTick(u64 *) {
 		ticks++;
 
 		return 0;

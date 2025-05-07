@@ -91,7 +91,7 @@ namespace kernel::common::threading {
 
         void schedule();
 
-        void switchContextAsm(u64 *oldCtx, u64 *newCtx);
+        void switchContext(u64 *oldCtx, u64 *newCtx);
 
     private:
         u8 remainingTicks {};
@@ -104,7 +104,19 @@ namespace kernel::common::threading {
         Scheduler() = default;
         ~Scheduler() = default;
 
+        /**
+         *  Get the process with the specified PID.
+         *
+         *  @param pid The process ID.
+         **/
         Process *getProcess(u64 pid);
+
+        /**
+         *  Get the thread with the specified TID.
+         *
+         *  @param process The process where the thread resides.
+         *  @param tid The thread ID.
+         **/
         Thread *getThread(Process *process, u64 tid);
 
         void addProcess(Process *process);

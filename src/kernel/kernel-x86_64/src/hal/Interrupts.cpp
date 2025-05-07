@@ -57,7 +57,7 @@ namespace kernel::x86_64::hal {
 		if (!(frame.errNo & 0x1)) { // Present
 			const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
-			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false);
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false, false);
 
 			Asm::invalidatePage(faultAddr);
 
