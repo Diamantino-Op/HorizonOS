@@ -119,15 +119,53 @@ namespace kernel::common::threading {
          **/
         Thread *getThread(Process *process, u64 tid);
 
-        void addProcess(Process *process);
-        void killProcess(Process *process);
+		/**
+		 *  Add a new process to the scheduler.
+		 *
+		 *  @param process A pointer to the process object to be added.
+		 **/
+		void addProcess(Process *process);
 
-        void addThread(Thread *thread);
-        void killThread(Thread *thread);
+		/**
+		 * Terminate the specified process.
+		 *
+		 * @param process A pointer to the process to be terminated.
+		 **/
+		void killProcess(Process *process);
 
-        void sleepThread(Thread *thread, u64 ticks);
+		/**
+		 *  Add a thread to the queue.
+		 *
+		 *  @param thread Pointer to the thread to be added.
+		 *  @param priority The priority of the thread.
+		 **/
+		void addThread(Thread *thread, ProcessPriority priority);
 
-        u64 *createContext(bool isUser, u64 rip, u64 rsp);
+		/**
+		 * Terminate the specified thread.
+		 *
+		 * @param thread A pointer to the thread to be terminated.
+		 **/
+		void killThread(Thread *thread);
+
+		/**
+		 *  Puts the specified thread to sleep for a given number of ticks.
+		 *
+		 *  @param thread The thread to be put to sleep.
+		 *  @param ticks The number of ticks for which the thread should remain asleep.
+		 **/
+		void sleepThread(Thread *thread, u64 ticks);
+
+		/**
+		 *  Create a new context for a thread with the specified parameters.
+		 *
+		 *  @param isUser Indicates whether the context is for a user-space thread.
+		 *  @param rip The instruction pointer for the new context.
+		 *  @param rsp The stack pointer for the new context.
+		 *
+		 *  @return The address of the created context.
+		 */
+		u64 *createContext(bool isUser, u64 rip, u64 rsp);
 
     private:
         u64 executionNodesAmount {};
