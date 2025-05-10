@@ -40,6 +40,8 @@ namespace kernel::common::threading {
         void setState(ThreadState state);
         ThreadState getState();
 
+		u64 getId();
+
         Process *getParent();
 
     private:
@@ -62,7 +64,7 @@ namespace kernel::common::threading {
 
     struct ProcessListEntry {
         ProcessListEntry *next {};
-        Process *thread {};
+        Process *process {};
         ProcessListEntry *prev {};
     };
 
@@ -73,6 +75,8 @@ namespace kernel::common::threading {
 
         void setPriority(ProcessPriority priority);
         ProcessPriority getPriority();
+
+    	u64 getId();
 
     private:
         u64 id {};
@@ -86,12 +90,14 @@ namespace kernel::common::threading {
 
     class ExecutionNode {
     public:
-        ExecutionNode();
-        ~ExecutionNode();
+        ExecutionNode() = default;
+        ~ExecutionNode() = default;
 
         void schedule();
 
         void switchContext(u64 *oldCtx, u64 *newCtx);
+
+    	ThreadListEntry *getCurrentThread() const;
 
     private:
         u8 remainingTicks {};
@@ -109,7 +115,7 @@ namespace kernel::common::threading {
          *
          *  @param pid The process ID.
          **/
-        Process *getProcess(u64 pid);
+        Process *getProcess(u64 pid) const;
 
         /**
          *  Get the thread with the specified TID.
@@ -117,7 +123,7 @@ namespace kernel::common::threading {
          *  @param process The process where the thread resides.
          *  @param tid The thread ID.
          **/
-        Thread *getThread(Process *process, u64 tid);
+        Thread *getThread(Process *process, u64 tid) const;
 
 		/**
 		 *  Add a new process to the scheduler.
