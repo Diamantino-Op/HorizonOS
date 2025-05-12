@@ -8,11 +8,13 @@
 #include "memory/VirtualAllocator.hpp"
 #include "hal/Clock.hpp"
 #include "uacpi/UacpiKernAPI.hpp"
+#include "threading/Scheduler.hpp"
 
 namespace kernel::common {
     using namespace memory;
     using namespace uacpi;
     using namespace hal;
+	using namespace threading;
 
     class CommonMain {
     public:
@@ -39,6 +41,8 @@ namespace kernel::common {
 
         UAcpi *getUAcpi();
 
+    	Scheduler *getScheduler();
+
     protected:
         void rootInit();
 
@@ -55,6 +59,8 @@ namespace kernel::common {
         Clocks clocks {};
 
         UAcpi uAcpi {};
+
+    	Scheduler scheduler {};
     };
 
     class CommonCoreMain {

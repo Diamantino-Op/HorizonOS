@@ -1,16 +1,25 @@
 #include "SchedulerX86.hpp"
 
+#include "CommonMain.hpp"
 #include "memory/MainMemory.hpp"
 #include "threading/Scheduler.hpp"
 
 #include "hal/Cpu.hpp"
 #include "hal/GDT.hpp"
+#include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 
 namespace kernel::common::threading {
 	using namespace x86_64::threading;
+	using namespace x86_64::utils;
 
 	void ExecutionNode::schedule() {
+		Asm::cli();
+
+		if (CommonMain::getInstance()->getScheduler()->readyThreadList) {
+
+		}
+
 		if (currentThread) {
 			if (currentThread->thread->getState() == ThreadState::RUNNING) {
 				if (this->remainingTicks > 0) {
@@ -28,6 +37,8 @@ namespace kernel::common::threading {
 
 			}
 		}
+
+		Asm::sti();
 	}
 
 	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) {

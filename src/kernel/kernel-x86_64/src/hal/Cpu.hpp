@@ -8,6 +8,8 @@
 #include "Apic.hpp"
 #include "Tsc.hpp"
 
+#include "threading/Scheduler.hpp"
+
 #include "limine.h"
 
 namespace kernel::x86_64 {

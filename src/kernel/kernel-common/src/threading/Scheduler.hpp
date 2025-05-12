@@ -178,9 +178,12 @@ namespace kernel::common::threading {
 
         ExecutionNode *executionNodes {};
 
-        ProcessListEntry *processList {};
+    public:
+    	ProcessListEntry *processList {};
 
-        ThreadListEntry *queues[ProcessPriority::COUNT] {};
+    	ThreadListEntry *readyThreadList {};
+
+    	ThreadListEntry *queues[ProcessPriority::COUNT] {};
     };
 }
 
