@@ -3,8 +3,6 @@
 
 #include "Types.hpp"
 
-static constexpr u32 PAGE_SIZE = 4096;
-
 namespace kernel::x86_64::hal {
     struct __attribute__((packed)) Tss {
         u32 _reserved{};

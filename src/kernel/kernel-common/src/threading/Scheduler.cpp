@@ -1,5 +1,7 @@
 #include "Scheduler.hpp"
 
+#include <memory/MainMemory.hpp>
+
 namespace kernel::common::threading {
 	// Threads
 
@@ -129,5 +131,11 @@ namespace kernel::common::threading {
 
 	void Scheduler::sleepThread(Thread *thread, u64 ticks) {
 
+	}
+
+	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
+		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize;
+
+		return createContextArch(isUser, rip, newRsp);
 	}
 }

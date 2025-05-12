@@ -14,7 +14,8 @@ namespace kernel::x86_64::threading {
 		ThreadContext();
         ~ThreadContext();
 
-        Frame *getFrame();
+        u64 *getStackPointer();
+        void setStackPointer(u64 stackPtr);
 
         void save() const;
         void load() const;
@@ -22,7 +23,7 @@ namespace kernel::x86_64::threading {
     private:
         u64 *simdSave {};
 
-        Frame frame {};
+        u64 stackPointer {};
     };
 }
 

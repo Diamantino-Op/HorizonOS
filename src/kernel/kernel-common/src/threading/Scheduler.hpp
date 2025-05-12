@@ -95,15 +95,19 @@ namespace kernel::common::threading {
 
         void schedule();
 
-        void switchContext(u64 *oldCtx, u64 *newCtx);
-
     	ThreadListEntry *getCurrentThread() const;
+
+    	void switchContext(u64 *oldCtx, u64 *newCtx);
 
     private:
         u8 remainingTicks {};
 
         ThreadListEntry *currentThread {};
     };
+
+	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
+
+	constexpr u64 threadCtxStackSize = pageSize * 4;
 
     class Scheduler {
     public:
@@ -167,13 +171,14 @@ namespace kernel::common::threading {
 		 *
 		 *  @param isUser Indicates whether the context is for a user-space thread.
 		 *  @param rip The instruction pointer for the new context.
-		 *  @param rsp The stack pointer for the new context.
 		 *
 		 *  @return The address of the created context.
 		 */
-		u64 *createContext(bool isUser, u64 rip, u64 rsp);
+		u64 *createContext(bool isUser, u64 rip);
 
     private:
+    	u64 *createContextArch(bool isUser, u64 rip, u64 rsp);
+
         u64 executionNodesAmount {};
 
         ExecutionNode *executionNodes {};
