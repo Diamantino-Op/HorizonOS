@@ -16,9 +16,7 @@ namespace kernel::common::threading {
 	void ExecutionNode::schedule() {
 		Asm::cli();
 
-		if (CommonMain::getInstance()->getScheduler()->readyThreadList) {
 
-		}
 
 		if (currentThread) {
 			if (currentThread->thread->getState() == ThreadState::RUNNING) {
@@ -26,6 +24,42 @@ namespace kernel::common::threading {
 					this->remainingTicks--;
 
 					return;
+				} else {
+					//switchContext(currentThread->thread->getContext(), currentThread->thread->getContext());
+
+					ThreadListEntry *lastEntry = CommonMain::getInstance()->getScheduler()->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
+
+					this->currentThread->prev = lastEntry;
+					this->currentThread->next = nullptr;
+
+					if (this->currentThread->prev != nullptr) {
+						this->currentThread->prev->next = this->currentThread;
+					}
+
+					CommonMain::getInstance()->getScheduler()->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+
+					ThreadListEntry *oldEntry = this->currentThread;
+
+					ThreadListEntry *currEntry = CommonMain::getInstance()->getScheduler()->queues[currentThread->thread->getParent()->getPriority()];
+
+					this->currentThread = currEntry;
+
+					if (this->currentThread != nullptr) {
+						CommonMain::getInstance()->getScheduler()->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread->next;
+
+						this->currentThread->next->prev = nullptr;
+						this->currentThread->next = nullptr;
+					}
+
+					if (CommonMain::getInstance()->getScheduler()->readyThreadList) {
+
+					} else {
+						for (u8 i = 0; i < ProcessPriority::COUNT; i++) {
+
+						}
+					}
+
+					this->remainingTicks = maxTicks;
 				}
 			}
 

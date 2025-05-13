@@ -189,6 +189,7 @@ namespace kernel::common::threading {
     	ThreadListEntry *readyThreadList {};
 
     	ThreadListEntry *queues[ProcessPriority::COUNT] {};
+    	ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
     };
 }
 
