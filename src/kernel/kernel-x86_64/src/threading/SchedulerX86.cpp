@@ -16,63 +16,87 @@ namespace kernel::common::threading {
 	void ExecutionNode::schedule() {
 		Asm::cli();
 
+		for (Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler(); auto currQueue : schedulerPtr->queues) {
+			while (currQueue != nullptr) {
+				if (currQueue->thread->getSleepTicks() > 0) {
+					currQueue->thread->setSleepTicks(currQueue->thread->getSleepTicks() - 1);
 
+					if (currQueue->thread->getSleepTicks() == 0) {
+						currQueue->thread->setState(ThreadState::READY);
+					}
+				}
 
-		if (currentThread) {
-			if (currentThread->thread->getState() == ThreadState::RUNNING) {
+				currQueue = currQueue->next;
+			}
+		}
+
+		if (this->currentThread) {
+			if (this->currentThread->thread->getState() == ThreadState::RUNNING) {
 				if (this->remainingTicks > 0) {
 					this->remainingTicks--;
 
 					return;
-				} else {
-					//switchContext(currentThread->thread->getContext(), currentThread->thread->getContext());
-
-					ThreadListEntry *lastEntry = CommonMain::getInstance()->getScheduler()->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
-
-					this->currentThread->prev = lastEntry;
-					this->currentThread->next = nullptr;
-
-					if (this->currentThread->prev != nullptr) {
-						this->currentThread->prev->next = this->currentThread;
-					}
-
-					CommonMain::getInstance()->getScheduler()->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
-
-					ThreadListEntry *oldEntry = this->currentThread;
-
-					ThreadListEntry *currEntry = CommonMain::getInstance()->getScheduler()->queues[currentThread->thread->getParent()->getPriority()];
-
-					this->currentThread = currEntry;
-
-					if (this->currentThread != nullptr) {
-						CommonMain::getInstance()->getScheduler()->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread->next;
-
-						this->currentThread->next->prev = nullptr;
-						this->currentThread->next = nullptr;
-					}
-
-					if (CommonMain::getInstance()->getScheduler()->readyThreadList) {
-
-					} else {
-						for (u8 i = 0; i < ProcessPriority::COUNT; i++) {
-
-						}
-					}
-
-					this->remainingTicks = maxTicks;
 				}
-			}
 
-			if (currentThread->thread->getState() == ThreadState::TERMINATED) {
-				delete currentThread->thread;
+				switchThreads();
+			} else if (currentThread->thread->getState() == ThreadState::BLOCKED) {
+				switchThreads();
+			} else if (currentThread->thread->getState() == ThreadState::TERMINATED) {
 
-				delete currentThread;
 			} else {
 
 			}
 		}
 
 		Asm::sti();
+	}
+
+	void ExecutionNode::switchThreads() {
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		// switchContext(currentThread->thread->getContext(), currentThread->thread->getContext());
+
+		if (this->currentThread != nullptr) {
+			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
+
+			this->currentThread->prev = lastEntry;
+			this->currentThread->next = nullptr;
+
+			if (this->currentThread->prev != nullptr) {
+				this->currentThread->prev->next = this->currentThread;
+			}
+
+			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+		}
+
+		ThreadListEntry *oldEntry = this->currentThread;
+
+		/*ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()];
+
+		this->currentThread = currEntry;
+
+		if (this->currentThread != nullptr) {
+			schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread->next;
+
+			this->currentThread->next->prev = nullptr;
+			this->currentThread->next = nullptr;
+		}*/
+
+		if (schedulerPtr->readyThreadList != nullptr) {
+			this->currentThread = schedulerPtr->readyThreadList;
+
+			schedulerPtr->readyThreadList->next->prev = nullptr;
+			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
+		} else {
+			for (auto currQueue : schedulerPtr->queues) {
+				while (currQueue != nullptr) {
+
+					currQueue = currQueue->next;
+				}
+			}
+		}
+
+		this->remainingTicks = maxTicks;
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
@@ -88,9 +112,7 @@ namespace kernel::common::threading {
 	}
 
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
-		auto *context = new ThreadContext();
-
-		context->setStackPointer(rsp);
+		auto *context = new ThreadContext(rsp, isUser);
 
 		u64 *currStackPointer = context->getStackPointer();
 
@@ -106,7 +128,7 @@ namespace kernel::common::threading {
 namespace kernel::x86_64::threading {
 	using namespace utils;
 
-	ThreadContext::ThreadContext() {
+	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), stackPointer(stackPointer) {
 		this->simdSave = static_cast<u64 *>(malloc(CpuId::getXSaveSize()));
 
 		CpuManager::initSimdContext(this->simdSave);
@@ -130,5 +152,9 @@ namespace kernel::x86_64::threading {
 
 	void ThreadContext::load() const {
 		CpuManager::loadSimdContext(this->simdSave);
+	}
+
+	bool ThreadContext::isUserspace() const {
+		return this->isUser;
 	}
 }

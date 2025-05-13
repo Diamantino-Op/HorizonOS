@@ -8,7 +8,15 @@
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multiarch
 	AllocContext *VirtualAllocator::createContext(const bool isUserspace) {
-		auto *ctx = reinterpret_cast<AllocContext *>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
+		AllocContext *ctx = nullptr;
+
+		if (isUserspace) {
+			ctx = new AllocContext();
+		} else {
+			ctx = reinterpret_cast<AllocContext *>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
+		}
+
+		ctx->isUserspace = isUserspace;
 
 		ctx->pageMap = PageMap();
 		ctx->heapSize = pageSize;
@@ -18,7 +26,7 @@ namespace kernel::common::memory {
 		if (isUserspace) {
 			ctx->pageFlags |= 0b00000100;
 
-			ctx->heapStart = reinterpret_cast<u64 *>(CommonMain::getCurrentHhdm());
+			ctx->heapStart = reinterpret_cast<u64 *>(pageSize);
 		} else {
 			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize));
 		}
@@ -29,7 +37,7 @@ namespace kernel::common::memory {
 
 		memset(ctx->pageMap.getPageTable(), 0, pageSize);
 
-		ctx->pageMap.mapPage(reinterpret_cast<u64>(ctx->heapStart), reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false)), ctx->pageFlags, false, false);
+		ctx->pageMap.mapPage(reinterpret_cast<u64>(ctx->heapStart), reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false)), ctx->pageFlags, !ctx->isUserspace, false);
 
 		return ctx;
 	}
@@ -140,7 +148,7 @@ namespace kernel::common::memory {
 				return;
 			}
 
-			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
+			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags, ctx->isUserspace, false);
 
 			memset(reinterpret_cast<u64 *>(reinterpret_cast<u64>(baseAddress) + offset), 0, pageSize);
 		}

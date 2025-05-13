@@ -97,6 +97,8 @@ namespace kernel::common::threading {
 
     	ThreadListEntry *getCurrentThread() const;
 
+		void switchThreads();
+
     	void switchContext(u64 *oldCtx, u64 *newCtx);
 
     private:

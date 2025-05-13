@@ -11,7 +11,7 @@ namespace kernel::x86_64::threading {
 
     class ThreadContext {
     public:
-		ThreadContext();
+		ThreadContext(u64 stackPointer, bool isUserspace);
         ~ThreadContext();
 
         u64 *getStackPointer();
@@ -20,8 +20,12 @@ namespace kernel::x86_64::threading {
         void save() const;
         void load() const;
 
+        bool isUserspace() const;
+
     private:
         u64 *simdSave {};
+
+        bool isUser {};
 
         u64 stackPointer {};
     };

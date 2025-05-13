@@ -21,6 +21,7 @@ namespace kernel::common::memory {
 		usize heapSize {};
 		MemoryBlock *blocks {};
         TicketSpinLock lock {};
+        bool isUserspace {};
     };
 
     class VirtualAllocator {
