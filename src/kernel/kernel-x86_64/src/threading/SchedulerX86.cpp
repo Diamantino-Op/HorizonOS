@@ -43,9 +43,9 @@ namespace kernel::common::threading {
 				switchThreads();
 			} else if (currentThread->thread->getState() == ThreadState::TERMINATED) {
 
-			} else {
-
 			}
+		} else {
+
 		}
 
 		Asm::sti();
