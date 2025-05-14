@@ -157,13 +157,13 @@ namespace kernel::x86_64 {
 
 		terminal.info("TSC Initialised... OK", "HorizonOS");
 
+		Asm::sti();
+
 		this->uAcpi = UAcpi();
 
 		this->uAcpi.init();
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");
-
-		Asm::sti();
 
 		//this->shutdown();
 

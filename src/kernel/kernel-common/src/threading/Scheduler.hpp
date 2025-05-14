@@ -35,12 +35,12 @@ namespace kernel::common::threading {
         u64 *getContext();
 
         void setSleepTicks(u64 ticks);
-        u64 getSleepTicks();
+        u64 getSleepTicks() const;
 
         void setState(ThreadState state);
         ThreadState getState();
 
-		u64 getId();
+		u64 getId() const;
 
         Process *getParent();
 
@@ -76,7 +76,7 @@ namespace kernel::common::threading {
         void setPriority(ProcessPriority priority);
         ProcessPriority getPriority();
 
-    	u64 getId();
+    	u64 getId() const;
 
     private:
         u64 id {};
@@ -90,7 +90,7 @@ namespace kernel::common::threading {
 
     class ExecutionNode {
     public:
-        ExecutionNode() = default;
+        ExecutionNode();
         ~ExecutionNode() = default;
 
         void schedule();
@@ -113,7 +113,7 @@ namespace kernel::common::threading {
 
     class Scheduler {
     public:
-        Scheduler() = default;
+        Scheduler();
         ~Scheduler() = default;
 
         /**

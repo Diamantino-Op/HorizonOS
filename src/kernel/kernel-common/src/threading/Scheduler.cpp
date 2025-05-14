@@ -14,35 +14,35 @@ namespace kernel::common::threading {
 	}
 
 	void Thread::setContext(u64 *context) {
-
+		this->context = context;
 	}
 
 	u64 *Thread::getContext() {
-
+		return this->context;
 	}
 
-	void Thread::setSleepTicks(u64 ticks) {
-
+	void Thread::setSleepTicks(const u64 ticks) {
+		this->sleepTicks = ticks;
 	}
 
-	u64 Thread::getSleepTicks() {
-
+	u64 Thread::getSleepTicks() const {
+		return this->sleepTicks;
 	}
 
-	void Thread::setState(ThreadState state) {
-
+	void Thread::setState(const ThreadState state) {
+		this->state = state;
 	}
 
 	ThreadState Thread::getState() {
-
+		return this->state;
 	}
 
-	u64 Thread::getId() {
-
+	u64 Thread::getId() const {
+		return this->id;
 	}
 
 	Process *Thread::getParent() {
-
+		return this->parent;
 	}
 
 	// Process
@@ -55,25 +55,35 @@ namespace kernel::common::threading {
 
 	}
 
-	void Process::setPriority(ProcessPriority priority) {
-
-	}
-
-	u64 Process::getId() {
-
+	void Process::setPriority(const ProcessPriority priority) {
+		this->priority = priority;
 	}
 
 	ProcessPriority Process::getPriority() {
+		return this->priority;
+	}
 
+	u64 Process::getId() const {
+		return this->id;
 	}
 
 	// Execution Node
+
+	ExecutionNode::ExecutionNode() {
+
+	}
 
 	ThreadListEntry *ExecutionNode::getCurrentThread() const {
 		return this->currentThread;
 	}
 
 	// Scheduler
+
+	Scheduler::Scheduler() {
+		this->processList = new ProcessListEntry();
+
+		this->processList->process = new Process(ProcessPriority::LOW);
+	}
 
 	Process *Scheduler::getProcess(const u64 pid) const {
 		auto currEntry = this->processList;

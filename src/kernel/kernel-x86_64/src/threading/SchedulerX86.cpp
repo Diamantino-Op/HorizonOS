@@ -101,12 +101,11 @@ namespace kernel::common::threading {
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
 	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) {
-		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
-		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
+		const auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
 
 		oldCtxConv->save();
 
-		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer());
+		switchContextAsm(oldCtx, newCtx);
 
 		oldCtxConv->load();
 	}
