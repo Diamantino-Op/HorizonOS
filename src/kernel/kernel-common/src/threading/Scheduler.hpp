@@ -40,13 +40,13 @@ namespace kernel::common::threading {
         void setState(ThreadState state);
         ThreadState getState();
 
-		u64 getId() const;
+		u16 getId() const;
 
         Process *getParent();
 
     private:
         Process *parent {};
-        u64 id {};
+        u16 id {};
 
         u64 sleepTicks {};
 
@@ -70,20 +70,23 @@ namespace kernel::common::threading {
 
     class Process {
     public:
-		explicit Process(ProcessPriority priority);
+		explicit Process(ProcessPriority priority, bool isUserspace);
+    	explicit Process(ProcessPriority priority, AllocContext *context, bool isUserspace);
         ~Process();
 
         void setPriority(ProcessPriority priority);
         ProcessPriority getPriority();
 
-    	u64 getId() const;
+    	u16 getId() const;
 
     private:
-        u64 id {};
+        u16 id {};
+
+    	bool isUserspace {};
 
         ThreadListEntry *mainThread {};
 
-        AllocContext processContext {};
+        AllocContext *processContext {};
 
         ProcessPriority priority {};
     };
@@ -121,7 +124,7 @@ namespace kernel::common::threading {
          *
          *  @param pid The process ID.
          **/
-        Process *getProcess(u64 pid) const;
+        Process *getProcess(u16 pid) const;
 
         /**
          *  Get the thread with the specified TID.
@@ -129,7 +132,7 @@ namespace kernel::common::threading {
          *  @param process The process where the thread resides.
          *  @param tid The thread ID.
          **/
-        Thread *getThread(Process *process, u64 tid) const;
+        Thread *getThread(Process *process, u16 tid) const;
 
 		/**
 		 *  Add a new process to the scheduler.

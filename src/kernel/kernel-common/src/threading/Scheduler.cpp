@@ -1,6 +1,7 @@
 #include "Scheduler.hpp"
 
-#include <memory/MainMemory.hpp>
+#include "IDAllocator.hpp"
+#include "memory/MainMemory.hpp"
 
 namespace kernel::common::threading {
 	// Threads
@@ -37,7 +38,7 @@ namespace kernel::common::threading {
 		return this->state;
 	}
 
-	u64 Thread::getId() const {
+	u16 Thread::getId() const {
 		return this->id;
 	}
 
@@ -47,12 +48,22 @@ namespace kernel::common::threading {
 
 	// Process
 
-	Process::Process(ProcessPriority priority) {
+	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
+		this->id = PIDAllocator::allocPID();
 
+		this->processContext = VirtualAllocator::createContext(isUserspace);
+	}
+
+	Process::Process(const ProcessPriority priority, AllocContext *context, const bool isUserspace) : isUserspace(isUserspace), processContext(context), priority(priority) {
+		this->id = PIDAllocator::allocPID();
 	}
 
 	Process::~Process() {
+		PIDAllocator::freePID(this->id);
 
+		// TODO: Remove threads
+
+		VirtualAllocator::destroyContext(this->processContext);
 	}
 
 	void Process::setPriority(const ProcessPriority priority) {
@@ -63,7 +74,7 @@ namespace kernel::common::threading {
 		return this->priority;
 	}
 
-	u64 Process::getId() const {
+	u16 Process::getId() const {
 		return this->id;
 	}
 
@@ -85,7 +96,7 @@ namespace kernel::common::threading {
 		this->processList->process = new Process(ProcessPriority::LOW);
 	}
 
-	Process *Scheduler::getProcess(const u64 pid) const {
+	Process *Scheduler::getProcess(const u16 pid) const {
 		auto currEntry = this->processList;
 
 		while (currEntry != nullptr) {
@@ -99,7 +110,7 @@ namespace kernel::common::threading {
 		return nullptr;
 	}
 
-	Thread *Scheduler::getThread(Process *process, const u64 tid) const {
+	Thread *Scheduler::getThread(Process *process, const u16 tid) const {
 		auto currEntry = this->queues[process->getPriority()];
 
 		while (currEntry != nullptr) {

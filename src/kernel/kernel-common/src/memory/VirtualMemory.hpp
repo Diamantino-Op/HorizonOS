@@ -27,6 +27,8 @@ namespace kernel::common::memory {
 
         u64 *getPageTable() const;
 
+        bool level5Paging() const;
+
     private:
         void setPageFlags(u64 * pageAddr, u8 flags);
 
