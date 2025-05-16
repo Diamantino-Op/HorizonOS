@@ -57,9 +57,11 @@ namespace kernel::common::threading {
     };
 
     struct ThreadListEntry {
+    	ThreadListEntry *nextProc {};
         ThreadListEntry *next {};
         Thread *thread {};
         ThreadListEntry *prev {};
+    	ThreadListEntry *prevProc {};
     };
 
     struct ProcessListEntry {
@@ -85,6 +87,8 @@ namespace kernel::common::threading {
     	bool isUserspace {};
 
         ThreadListEntry *mainThread {};
+
+    	ThreadListEntry *threadList {};
 
         AllocContext *processContext {};
 
