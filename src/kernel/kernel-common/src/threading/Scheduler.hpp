@@ -167,6 +167,13 @@ namespace kernel::common::threading {
 		 **/
 		void killThread(Thread *thread);
 
+    	/**
+		 * Terminate the specified thread.
+		 *
+		 * @param thread A pointer to the thread entry to be terminated.
+		 **/
+    	void killThread(ThreadListEntry *thread);
+
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.
 		 *

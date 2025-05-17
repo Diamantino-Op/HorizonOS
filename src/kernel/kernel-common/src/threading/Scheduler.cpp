@@ -61,7 +61,9 @@ namespace kernel::common::threading {
 	Process::~Process() {
 		PIDAllocator::freePID(this->id);
 
-		// TODO: Remove threads
+		while (this->threadList->nextProc != nullptr) {
+
+		}
 
 		VirtualAllocator::destroyContext(this->processContext);
 	}
@@ -148,6 +150,12 @@ namespace kernel::common::threading {
 
 	void Scheduler::killThread(Thread *thread) {
 
+	}
+
+	void Scheduler::killThread(ThreadListEntry *thread) {
+		if (this->queues[thread->thread->getParent()->getPriority()] == thread) {
+			this->queues[thread->thread->getParent()->getPriority()] = thread->next;
+		}
 	}
 
 	void Scheduler::sleepThread(Thread *thread, u64 ticks) {
