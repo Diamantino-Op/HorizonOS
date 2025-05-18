@@ -28,7 +28,7 @@ namespace kernel::common::threading {
 
     class Thread {
     public:
-		explicit Thread(Process* parent);
+		explicit Thread(Process* parent, u64 *context);
         ~Thread();
 
         void setContext(u64 *context);
@@ -49,8 +49,6 @@ namespace kernel::common::threading {
         u16 id {};
 
         u64 sleepTicks {};
-
-        u64 stackPointer {};
 
         u64 *context {};
         ThreadState state {};
@@ -155,10 +153,11 @@ namespace kernel::common::threading {
 		/**
 		 *  Add a thread to the queue.
 		 *
-		 *  @param thread Pointer to the thread to be added.
-		 *  @param priority The priority of the thread.
+    	*  @param isUser Indicates whether it is a user-space thread.
+	     *  @param rip The instruction pointer for the new thread.
+		 *  @param process The parent process of the thread.
 		 **/
-		void addThread(Thread *thread, ProcessPriority priority);
+		void addThread(bool isUser, u64 rip, Process *process);
 
 		/**
 		 * Terminate the specified thread.
@@ -172,7 +171,7 @@ namespace kernel::common::threading {
 		 *
 		 * @param thread A pointer to the thread entry to be terminated.
 		 **/
-    	void killThread(ThreadListEntry *thread);
+    	void killThread(const ThreadListEntry *thread);
 
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.

@@ -6,12 +6,10 @@
 namespace kernel::common::threading {
 	// Threads
 
-	Thread::Thread(Process* parent) {
-
-	}
+	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context) {}
 
 	Thread::~Thread() {
-
+		delete this->context;
 	}
 
 	void Thread::setContext(u64 *context) {
@@ -144,18 +142,39 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void Scheduler::addThread(Thread *thread, ProcessPriority priority) {
+	void Scheduler::addThread(bool isUser, u64 rip, Process *process) {
+		auto *newThread = new Thread(process, createContext(isUser, rip));
 
+		newThread->setState(ThreadState::READY);
 	}
 
 	void Scheduler::killThread(Thread *thread) {
 
 	}
 
-	void Scheduler::killThread(ThreadListEntry *thread) {
+	void Scheduler::killThread(const ThreadListEntry *thread) {
 		if (this->queues[thread->thread->getParent()->getPriority()] == thread) {
 			this->queues[thread->thread->getParent()->getPriority()] = thread->next;
 		}
+
+		if (thread->prev != nullptr) {
+			thread->prev->next = thread->next;
+		}
+
+		if (thread->prevProc != nullptr) {
+			thread->prevProc->nextProc = thread->nextProc;
+		}
+
+		if (thread->next != nullptr) {
+			thread->next->prev = thread->prev;
+		}
+
+		if (thread->nextProc != nullptr) {
+			thread->nextProc->prevProc = thread->prevProc;
+		}
+
+		delete thread->thread;
+		delete thread;
 	}
 
 	void Scheduler::sleepThread(Thread *thread, u64 ticks) {
@@ -163,7 +182,7 @@ namespace kernel::common::threading {
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
-		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize;
+		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
 
 		return createContextArch(isUser, rip, newRsp);
 	}
