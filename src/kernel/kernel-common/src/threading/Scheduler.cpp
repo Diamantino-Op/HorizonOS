@@ -1,6 +1,7 @@
 #include "Scheduler.hpp"
 
 #include "IDAllocator.hpp"
+#include "CommonMain.hpp"
 #include "memory/MainMemory.hpp"
 
 namespace kernel::common::threading {
@@ -16,7 +17,7 @@ namespace kernel::common::threading {
 		this->context = context;
 	}
 
-	u64 *Thread::getContext() {
+	u64 *Thread::getContext() const {
 		return this->context;
 	}
 
@@ -40,7 +41,7 @@ namespace kernel::common::threading {
 		return this->id;
 	}
 
-	Process *Thread::getParent() {
+	Process *Thread::getParent() const {
 		return this->parent;
 	}
 
@@ -59,8 +60,11 @@ namespace kernel::common::threading {
 	Process::~Process() {
 		PIDAllocator::freePID(this->id);
 
-		while (this->threadList->nextProc != nullptr) {
+		while (this->threadList != nullptr) {
+			const ThreadListEntry *tmpEntry = this->threadList;
+			this->threadList = this->threadList->nextProc;
 
+			CommonMain::getInstance()->getScheduler()->killThread(tmpEntry);
 		}
 
 		VirtualAllocator::destroyContext(this->processContext);
@@ -70,8 +74,14 @@ namespace kernel::common::threading {
 		this->priority = priority;
 	}
 
-	ProcessPriority Process::getPriority() {
+	ProcessPriority Process::getPriority() const {
 		return this->priority;
+	}
+
+	void Process::addThread(ThreadListEntry *entry) {
+		entry->prevProc = this->lastThreadList;
+		this->lastThreadList->nextProc = entry;
+		this->lastThreadList = entry;
 	}
 
 	u16 Process::getId() const {
@@ -82,6 +92,10 @@ namespace kernel::common::threading {
 
 	ExecutionNode::ExecutionNode() {
 
+	}
+
+	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
+		this->currentThread = thread;
 	}
 
 	ThreadListEntry *ExecutionNode::getCurrentThread() const {
@@ -134,22 +148,48 @@ namespace kernel::common::threading {
 		this->processList = newEntry;
 	}
 
-	void Scheduler::killProcess(Process *process) {
-		for (u64 i = 0; i < this->executionNodesAmount; i++) {
-			if (this->executionNodes[i].getCurrentThread()->thread->getParent()->getId() == process->getId()) {
-
-			}
-		}
+	void Scheduler::killProcess(const Process *process) {
+		delete process;
 	}
 
-	void Scheduler::addThread(bool isUser, u64 rip, Process *process) {
+	void Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
 		auto *newThread = new Thread(process, createContext(isUser, rip));
 
 		newThread->setState(ThreadState::READY);
+
+		auto *newThreadEntry = new ThreadListEntry();
+
+		newThreadEntry->thread = newThread;
+
+		newThreadEntry->next = this->readyThreadList;
+		this->readyThreadList = newThreadEntry;
+
+		process->addThread(newThreadEntry);
+
+		// TODO: Use this in schedule method
+		/*newThreadEntry->prev = this->lastQueueEntry[process->getPriority()];
+		this->lastQueueEntry[process->getPriority()]->next = newThreadEntry;
+		this->lastQueueEntry[process->getPriority()] = newThreadEntry;*/
 	}
 
 	void Scheduler::killThread(Thread *thread) {
+		for (u64 i = 0; i < this->executionNodesAmount; i++) {
+			if (this->executionNodes[i].getCurrentThread()->thread == thread) {
+				this->executionNodes[i].setCurrentThread(nullptr);
+			}
+		}
 
+		const ThreadListEntry *selectedEntry = this->queues[thread->getParent()->getPriority()];
+
+		while (selectedEntry != nullptr) {
+			if (selectedEntry->thread == thread) {
+				break;
+			}
+
+			selectedEntry = selectedEntry->next;
+		}
+
+		killThread(selectedEntry);
 	}
 
 	void Scheduler::killThread(const ThreadListEntry *thread) {
@@ -177,8 +217,10 @@ namespace kernel::common::threading {
 		delete thread;
 	}
 
-	void Scheduler::sleepThread(Thread *thread, u64 ticks) {
+	void Scheduler::sleepThread(Thread *thread, const u64 ticks) {
+		thread->setSleepTicks(ticks);
 
+		thread->setState(ThreadState::BLOCKED);
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {

@@ -32,7 +32,7 @@ namespace kernel::common::threading {
         ~Thread();
 
         void setContext(u64 *context);
-        u64 *getContext();
+        u64 *getContext() const;
 
         void setSleepTicks(u64 ticks);
         u64 getSleepTicks() const;
@@ -42,7 +42,7 @@ namespace kernel::common::threading {
 
 		u16 getId() const;
 
-        Process *getParent();
+        Process *getParent() const;
 
     private:
         Process *parent {};
@@ -75,7 +75,9 @@ namespace kernel::common::threading {
         ~Process();
 
         void setPriority(ProcessPriority priority);
-        ProcessPriority getPriority();
+        ProcessPriority getPriority() const;
+
+    	void addThread(ThreadListEntry *entry);
 
     	u16 getId() const;
 
@@ -87,6 +89,7 @@ namespace kernel::common::threading {
         ThreadListEntry *mainThread {};
 
     	ThreadListEntry *threadList {};
+    	ThreadListEntry *lastThreadList {};
 
         AllocContext *processContext {};
 
@@ -100,6 +103,7 @@ namespace kernel::common::threading {
 
         void schedule();
 
+    	void setCurrentThread(ThreadListEntry *thread);
     	ThreadListEntry *getCurrentThread() const;
 
 		void switchThreads();
@@ -148,7 +152,7 @@ namespace kernel::common::threading {
 		 *
 		 * @param process A pointer to the process to be terminated.
 		 **/
-		void killProcess(Process *process);
+		void killProcess(const Process *process);
 
 		/**
 		 *  Add a thread to the queue.
