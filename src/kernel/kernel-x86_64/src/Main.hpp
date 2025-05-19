@@ -18,6 +18,12 @@ namespace kernel::x86_64 {
     using namespace common;
     using namespace common::memory;
 
+    void thread1();
+    void thread2();
+    void thread3();
+    void thread4();
+    void thread5();
+
     class Kernel final : CommonMain {
     public:
         Kernel();

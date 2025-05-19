@@ -1,5 +1,7 @@
 #include "CommonMain.hpp"
 
+#include "threading/IDAllocator.hpp"
+
 extern limine_hhdm_request hhdmRequest;
 
 namespace kernel::common {
@@ -8,6 +10,9 @@ namespace kernel::common {
 
 	void CommonMain::rootInit() {
 		instance = this;
+
+		PIDAllocator::init();
+		TIDAllocator::init();
 	}
 
 	Terminal* CommonMain::getTerminal() {

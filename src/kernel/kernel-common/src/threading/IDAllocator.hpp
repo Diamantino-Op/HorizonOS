@@ -9,22 +9,24 @@ namespace kernel::common::threading {
 
     class PIDAllocator {
     public:
+        static void init();
         static u16 allocPID();
         static void freePID(u16 pid);
 
     private:
         static u16 freePIDs[maxProcesses];
-        static u16 pidTop;
+        static i32 pidTop;
     };
 
     class TIDAllocator {
     public:
+        static void init();
         static u16 allocTID();
         static void freeTID(u16 tid);
 
     private:
         static u16 freeTIDs[maxThreads];
-        static u16 tidTop;
+        static i32 tidTop;
     };
 }
 

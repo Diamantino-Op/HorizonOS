@@ -168,11 +168,54 @@ namespace kernel::x86_64 {
 		this->uAcpi.init();
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");
+		
+		Scheduler *schedulerInstance = CommonMain::getInstance()->getScheduler();
+
+		auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
+		schedulerInstance->addProcess(exampleProcess);
+
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+		
+		terminal.info("Example threads registered... OK", "HorizonOS");
 
 		//this->shutdown();
 
 		Asm::lhlt();
     }
+
+	void thread1() {
+		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		
+		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 1", ns);
+	}
+
+	void thread2() {
+		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		
+		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 2", ns);
+	}
+
+	void thread3() {
+		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		
+		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 3", ns);
+	}
+
+	void thread4() {
+		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		
+		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 4", ns);
+	}
+
+	void thread5() {
+		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		
+		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 5", ns);
+	}
 
 	void Kernel::shutdown() {
 		terminal.info("Shutting down...", "HorizonOS");

@@ -2,7 +2,13 @@
 
 namespace kernel::common::threading {
 	u16 PIDAllocator::freePIDs[maxProcesses];
-	u16 PIDAllocator::pidTop = -1;
+	i32 PIDAllocator::pidTop = -1;
+
+	void PIDAllocator::init() {
+		for (int i = maxProcesses - 1; i >= 0; --i) {
+			freePIDs[++pidTop] = i;
+		}
+	}
 
 	u16 PIDAllocator::allocPID() {
 		if (pidTop < 0) {
@@ -21,7 +27,13 @@ namespace kernel::common::threading {
 	}
 
 	u16 TIDAllocator::freeTIDs[maxThreads];
-	u16 TIDAllocator::tidTop = -1;
+	i32 TIDAllocator::tidTop = -1;
+
+	void TIDAllocator::init() {
+		for (int i = maxThreads - 1; i >= 0; --i) {
+			freeTIDs[++tidTop] = i;
+		}
+	}
 
 	u16 TIDAllocator::allocTID() {
 		if (tidTop < 0) {

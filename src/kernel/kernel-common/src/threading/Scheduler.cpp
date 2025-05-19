@@ -1,7 +1,7 @@
 #include "Scheduler.hpp"
 
-#include "IDAllocator.hpp"
 #include "CommonMain.hpp"
+#include "IDAllocator.hpp"
 #include "memory/MainMemory.hpp"
 
 namespace kernel::common::threading {
@@ -91,7 +91,7 @@ namespace kernel::common::threading {
 	// Execution Node
 
 	ExecutionNode::ExecutionNode() {
-
+		CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {

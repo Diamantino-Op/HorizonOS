@@ -116,6 +116,8 @@ namespace kernel::common::threading {
         ThreadListEntry *currentThread {};
     };
 
+	void idleThread();
+
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;

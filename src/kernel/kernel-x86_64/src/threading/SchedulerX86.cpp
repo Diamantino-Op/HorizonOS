@@ -13,6 +13,10 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
+	void idleThread() {
+		Asm::lhlt();
+	}
+
 	void ExecutionNode::schedule() {
 		Asm::cli();
 

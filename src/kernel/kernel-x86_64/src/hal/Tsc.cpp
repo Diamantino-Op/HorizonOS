@@ -11,11 +11,6 @@ namespace kernel::x86_64::hal {
 	using namespace utils;
 
 	bool Tsc::supported() {
-		CommonMain::getTerminal()->debug("CpuId EAX: 0x%.16lx", "TSC", CpuId::get(0x80000007, 0).eax);
-		CommonMain::getTerminal()->debug("CpuId EBX: 0x%.16lx", "TSC", CpuId::get(0x80000007, 0).ebx);
-		CommonMain::getTerminal()->debug("CpuId ECX: 0x%.16lx", "TSC", CpuId::get(0x80000007, 0).ecx);
-		CommonMain::getTerminal()->debug("CpuId EDX: 0x%.16lx", "TSC", CpuId::get(0x80000007, 0).edx);
-
 		return CpuId::get(0x80000007, 0).edx & (1 << 8);
 	}
 
