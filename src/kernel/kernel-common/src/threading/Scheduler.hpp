@@ -138,7 +138,7 @@ namespace kernel::common::threading {
          *  @param process The process where the thread resides.
          *  @param tid The thread ID.
          **/
-        Thread *getThread(Process *process, u16 tid) const;
+        Thread *getThread(const Process *process, u16 tid) const;
 
 		/**
 		 *  Add a new process to the scheduler.

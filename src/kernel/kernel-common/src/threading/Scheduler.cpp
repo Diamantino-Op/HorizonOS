@@ -107,7 +107,7 @@ namespace kernel::common::threading {
 	Scheduler::Scheduler() {
 		this->processList = new ProcessListEntry();
 
-		this->processList->process = new Process(ProcessPriority::LOW);
+		this->processList->process = new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false);
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) const {
@@ -124,7 +124,7 @@ namespace kernel::common::threading {
 		return nullptr;
 	}
 
-	Thread *Scheduler::getThread(Process *process, const u16 tid) const {
+	Thread *Scheduler::getThread(const Process *process, const u16 tid) const {
 		auto currEntry = this->queues[process->getPriority()];
 
 		while (currEntry != nullptr) {

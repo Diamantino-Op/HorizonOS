@@ -17,12 +17,14 @@ namespace kernel::x86_64 {
 }
 
 namespace kernel::x86_64::hal {
+    using namespace common::threading;
     class Apic;
     class Tsc;
 
     struct CpuCore {
         Apic apic {};
         Tsc tsc {};
+        ExecutionNode executionNode {};
 
         u32 cpuId {};
 

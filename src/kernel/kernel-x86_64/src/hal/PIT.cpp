@@ -1,6 +1,7 @@
 #include "PIT.hpp"
 
 #include "CommonMain.hpp"
+#include "Cpu.hpp"
 #include "IOPort.hpp"
 #include "Interrupts.hpp"
 
@@ -45,6 +46,8 @@ namespace kernel::x86_64::hal {
 
 	u32 PIT::addTick(u64 *) {
 		ticks++;
+
+		CpuManager::getCurrentCore()->executionNode.schedule();
 
 		return 0;
 	}
