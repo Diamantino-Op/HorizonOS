@@ -68,7 +68,7 @@ add_custom_target(HorizonOS-ISO ALL DEPENDS ${ISO_OUTPUT})
 # GDB Cmd: gdb target extended-remote localhost:1234
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
-    set(X86_64_RUN_FLAGS "-cpu max,+hypervisor,+invtsc,+tsc-deadline -device qemu-xhci,id=xhci -device usb-kbd,id=usbkbd -device usb-mouse,id=usbmouse -smp 10 -M q35 -m 8G -accel kvm -bios ${OVMF_FILE} -cdrom ${ISO_OUTPUT}")
+    set(X86_64_RUN_FLAGS "-cpu host,+hypervisor,+invtsc,+tsc-deadline -device qemu-xhci,id=xhci -device usb-kbd,id=usbkbd -device usb-mouse,id=usbmouse -smp 10 -M q35 -m 8G -accel kvm -drive if=pflash,unit=0,format=raw,file=${OVMF_FILE} -cdrom ${ISO_OUTPUT}")
 
     add_custom_target(
             Run-HorizonOS-Debug

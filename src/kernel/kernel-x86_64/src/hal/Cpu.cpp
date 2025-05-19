@@ -45,8 +45,8 @@ namespace kernel::x86_64::hal {
 		return this->cpuList;
 	}
 
-	CpuCore *CpuManager::getBootstrapCpu() {
-		return &this->bootstrapCpu;
+	CpuCore *CpuManager::getBootstrapCpu() const {
+		return this->bootstrapCpu;
 	}
 
 	void CpuManager::initSimd() {
@@ -122,17 +122,18 @@ namespace kernel::x86_64::hal {
 	void CpuManager::startMultithread() {
 		Terminal* terminal = CommonMain::getTerminal();
 
+		this->bootstrapCpu = new CpuCore();
 		this->cpuList = new CoreKernel[this->coreAmount - 1];
 
 		u64 j = 0;
 
 		for (u64 i = 0; i < this->coreAmount; i++) {
 			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
-				this->bootstrapCpu.apic.setId(mpRequest.response->cpus[i]->lapic_id);
-				this->bootstrapCpu.apic.setIsX2Apic(this->hasX2Apic);
-				this->bootstrapCpu.cpuId = mpRequest.response->cpus[i]->processor_id;
+				this->bootstrapCpu->apic.setId(mpRequest.response->cpus[i]->lapic_id);
+				this->bootstrapCpu->apic.setIsX2Apic(this->hasX2Apic);
+				this->bootstrapCpu->cpuId = mpRequest.response->cpus[i]->processor_id;
 
-				setCorePointer(&this->bootstrapCpu);
+				setCorePointer(this->bootstrapCpu);
 
 				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
 			} else {

@@ -41,7 +41,7 @@ namespace kernel::common {
 
         UAcpi *getUAcpi();
 
-    	Scheduler *getScheduler();
+    	Scheduler *getScheduler() const;
 
     protected:
         void rootInit();
@@ -60,7 +60,7 @@ namespace kernel::common {
 
         UAcpi uAcpi {};
 
-    	Scheduler scheduler {};
+    	Scheduler *scheduler {};
     };
 
     class CommonCoreMain {

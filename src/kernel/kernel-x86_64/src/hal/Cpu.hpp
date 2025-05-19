@@ -44,7 +44,7 @@ namespace kernel::x86_64::hal {
 
         CoreKernel *getCoreList() const;
 
-        CpuCore *getBootstrapCpu();
+        CpuCore *getBootstrapCpu() const;
 
         static void initSimd();
 
@@ -62,7 +62,7 @@ namespace kernel::x86_64::hal {
         u64 coreAmount {};
         CoreKernel *cpuList {};
 
-        CpuCore bootstrapCpu {};
+        CpuCore *bootstrapCpu {};
 
         char *brand {};
         char *vendor {};

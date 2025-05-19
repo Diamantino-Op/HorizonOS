@@ -124,6 +124,10 @@ namespace kernel::x86_64 {
 
 		this->tssManager.allocStack();
 
+		// Scheduler
+
+		this->scheduler = new Scheduler();
+
 		// Cpu Init
 
 		this->cpuManager = CpuManager();

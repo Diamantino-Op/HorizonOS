@@ -50,8 +50,8 @@ namespace kernel::common {
 		return &this->uAcpi;
 	}
 
-	Scheduler *CommonMain::getScheduler() {
-		return &this->scheduler;
+	Scheduler *CommonMain::getScheduler() const {
+		return this->scheduler;
 	}
 
 	void CommonMain::init() {}
