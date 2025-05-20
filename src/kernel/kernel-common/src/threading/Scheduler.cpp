@@ -234,7 +234,7 @@ namespace kernel::common::threading {
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
-		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + (threadCtxStackSize / 2); // TODO: Maybe use process alloc context
+		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
 
 		return createContextArch(isUser, rip, newRsp);
 	}

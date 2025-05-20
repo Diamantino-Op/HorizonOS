@@ -35,3 +35,5 @@ setStackAsm:
     push 0
 
     mov rsp, rax
+
+    ret
