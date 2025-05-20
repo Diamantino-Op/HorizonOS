@@ -7,10 +7,10 @@
 
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multiarch
-	AllocContext *VirtualAllocator::createContext(const bool isUserspace) {
+	AllocContext *VirtualAllocator::createContext(const bool isUserspace, const bool isProcess) {
 		AllocContext *ctx = nullptr;
 
-		if (isUserspace) {
+		if (isProcess) {
 			ctx = new AllocContext();
 		} else {
 			ctx = reinterpret_cast<AllocContext *>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
@@ -23,8 +23,10 @@ namespace kernel::common::memory {
 
 		ctx->pageFlags = 0b00000011;
 
-		if (isUserspace) {
-			ctx->pageFlags |= 0b00000100;
+		if (isProcess) {
+			if (isUserspace) {
+				ctx->pageFlags |= 0b00000100;
+			}
 
 			ctx->heapStart = reinterpret_cast<u64 *>(pageSize);
 		} else {
@@ -37,7 +39,7 @@ namespace kernel::common::memory {
 
 		memset(ctx->pageMap.getPageTable(), 0, pageSize);
 
-		ctx->pageMap.mapPage(reinterpret_cast<u64>(ctx->heapStart), reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false)), ctx->pageFlags, !ctx->isUserspace, false);
+		ctx->pageMap.mapPage(reinterpret_cast<u64>(ctx->heapStart), reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false)), ctx->pageFlags, false, false);
 
 		return ctx;
 	}

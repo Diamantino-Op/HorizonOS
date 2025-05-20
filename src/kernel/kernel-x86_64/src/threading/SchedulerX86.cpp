@@ -8,6 +8,8 @@
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 
+#include <Math.hpp>
+
 namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
@@ -35,8 +37,8 @@ namespace kernel::common::threading {
 			}
 		}
 
-		if (this->currentThread != nullptr) {
-			CommonMain::getTerminal()->error("No current thread for EN: %ul", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
+		if (this->currentThread == nullptr) {
+			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
 
 			Asm::lhlt();
 		}
@@ -46,6 +48,8 @@ namespace kernel::common::threading {
 				this->remainingTicks--;
 
 				this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+
+				Asm::sti();
 
 				return;
 			}
@@ -62,16 +66,21 @@ namespace kernel::common::threading {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
 		if (this->currentThread != nullptr) {
-			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
+			if (const ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
+				ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
 
-			this->currentThread->prev = lastEntry;
-			this->currentThread->next = nullptr;
+				this->currentThread->prev = lastEntry;
+				this->currentThread->next = nullptr;
 
-			if (this->currentThread->prev != nullptr) {
-				this->currentThread->prev->next = this->currentThread;
+				if (this->currentThread->prev != nullptr) {
+					this->currentThread->prev->next = this->currentThread;
+				}
+
+				schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			} else {
+				schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+				schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
 			}
-
-			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
 		}
 
 		const ThreadListEntry *oldEntry = this->currentThread;
@@ -79,7 +88,10 @@ namespace kernel::common::threading {
 		if (schedulerPtr->readyThreadList != nullptr) {
 			this->currentThread = schedulerPtr->readyThreadList;
 
-			schedulerPtr->readyThreadList->next->prev = nullptr;
+			if (schedulerPtr->readyThreadList->next != nullptr) {
+				schedulerPtr->readyThreadList->next->prev = nullptr;
+			}
+
 			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
 
 			// TODO: Make trampoline for user threads
@@ -96,8 +108,8 @@ namespace kernel::common::threading {
 				}
 			}
 
-			if (selectedEntry != nullptr) {
-				CommonMain::getTerminal()->error("No thread to switch to for EN: %ul", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
+			if (selectedEntry == nullptr) {
+				CommonMain::getTerminal()->error("No thread to switch to for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
 
 				Asm::lhlt();
 			}
@@ -134,12 +146,7 @@ namespace kernel::common::threading {
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
 		auto *context = new ThreadContext(rsp, isUser);
 
-		u64 *currStackPointer = context->getStackPointer();
-
-		// TODO: Maybe port this to asm
-		currStackPointer -= 7;
-
-		currStackPointer[6] = rip;
+		setStackAsm(reinterpret_cast<u64>(context->getStackPointer()), rip);
 
 		return reinterpret_cast<u64 *>(context);
 	}
@@ -149,7 +156,7 @@ namespace kernel::x86_64::threading {
 	using namespace utils;
 
 	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), stackPointer(stackPointer) {
-		this->simdSave = static_cast<u64 *>(malloc(CpuId::getXSaveSize()));
+		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(malloc(CpuId::getXSaveSize() + 64)), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
 	}

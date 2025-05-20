@@ -65,4 +65,14 @@ namespace kernel::common::memory {
 
 		delete ctx;
 	}
+
+	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {
+		const auto *kernelTable = reinterpret_cast<PageTable *>(CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPageTable());
+
+		for (u64 i = 0; i < 256; i++) {
+			auto *table = reinterpret_cast<PageTable *>(ctx->pageMap.getPageTable());
+
+			table->entries[256 + i] = kernelTable->entries[256 + i];
+		}
+	}
 }

@@ -29,6 +29,8 @@ namespace kernel::x86_64::threading {
 
         u64 stackPointer {};
     };
+
+    extern "C" void setStackAsm(u64 rsp, u64 rip);
 }
 
 #endif

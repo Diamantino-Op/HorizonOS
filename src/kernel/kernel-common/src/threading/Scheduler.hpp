@@ -100,8 +100,10 @@ namespace kernel::common::threading {
 
     class ExecutionNode {
     public:
-        ExecutionNode();
+        ExecutionNode() = default;
         ~ExecutionNode() = default;
+
+    	void init();
 
         void schedule();
 

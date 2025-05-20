@@ -52,7 +52,9 @@ namespace kernel::common::threading {
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
-		this->processContext = VirtualAllocator::createContext(isUserspace);
+		this->processContext = VirtualAllocator::createContext(isUserspace, true);
+
+		VirtualAllocator::shareKernelPages(this->processContext);
 	}
 
 	Process::Process(const ProcessPriority priority, AllocContext *context, const bool isUserspace) : isUserspace(isUserspace), processContext(context), priority(priority) {
@@ -85,9 +87,14 @@ namespace kernel::common::threading {
 	}
 
 	void Process::addThread(ThreadListEntry *entry) {
-		entry->prevProc = this->lastThreadList;
-		this->lastThreadList->nextProc = entry;
-		this->lastThreadList = entry;
+		if (this->threadList != nullptr) {
+			entry->prevProc = this->lastThreadList;
+			this->lastThreadList->nextProc = entry;
+			this->lastThreadList = entry;
+		} else {
+			this->threadList = entry;
+			this->lastThreadList = entry;
+		}
 	}
 
 	u16 Process::getId() const {
@@ -96,7 +103,7 @@ namespace kernel::common::threading {
 
 	// Execution Node
 
-	ExecutionNode::ExecutionNode() {
+	void ExecutionNode::init() {
 		this->currentThread = CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
 	}
 
@@ -173,11 +180,6 @@ namespace kernel::common::threading {
 		process->addThread(newThreadEntry);
 
 		return newThreadEntry;
-
-		// TODO: Use this in schedule method
-		/*newThreadEntry->prev = this->lastQueueEntry[process->getPriority()];
-		this->lastQueueEntry[process->getPriority()]->next = newThreadEntry;
-		this->lastQueueEntry[process->getPriority()] = newThreadEntry;*/
 	}
 
 	void Scheduler::killThread(const Thread *thread) {
@@ -232,7 +234,7 @@ namespace kernel::common::threading {
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
-		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
+		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + (threadCtxStackSize / 2); // TODO: Maybe use process alloc context
 
 		return createContextArch(isUser, rip, newRsp);
 	}

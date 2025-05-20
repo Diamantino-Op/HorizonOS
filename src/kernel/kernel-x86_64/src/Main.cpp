@@ -105,7 +105,7 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false);
+		this->kernelAllocContext = VirtualAllocator::createContext(false, false);
 
 		terminal.info("Allocator Context created...", "HorizonOS");
 
@@ -144,6 +144,21 @@ namespace kernel::x86_64 {
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
+		CpuManager::getCurrentCore()->executionNode.init();
+
+		Scheduler *schedulerInstance = CommonMain::getInstance()->getScheduler();
+
+		auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
+		schedulerInstance->addProcess(exampleProcess);
+
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
+		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+
+		terminal.info("Example threads registered... OK", "HorizonOS");
+
 		if (cpuManager.getBootstrapCpu()->apic.isInitialized()) {
 			//this->dualPic.disable();
 		}
@@ -168,19 +183,6 @@ namespace kernel::x86_64 {
 		this->uAcpi.init();
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");
-		
-		Scheduler *schedulerInstance = CommonMain::getInstance()->getScheduler();
-
-		auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
-		schedulerInstance->addProcess(exampleProcess);
-
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
-		
-		terminal.info("Example threads registered... OK", "HorizonOS");
 
 		//this->shutdown();
 
@@ -188,33 +190,43 @@ namespace kernel::x86_64 {
     }
 
 	void thread1() {
-		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-		
-		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 1", ns);
+		for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+
+			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 1", ns);
+		}
 	}
 
 	void thread2() {
-		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 		
-		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 2", ns);
+			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 2", ns);
+		}
 	}
 
 	void thread3() {
-		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 		
-		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 3", ns);
+			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 3", ns);
+		}
 	}
 
 	void thread4() {
-		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 		
-		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 4", ns);
+			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 4", ns);
+		}
 	}
 
 	void thread5() {
-		const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 		
-		CommonMain::getTerminal()->info("Call NS: %ul", "Thread 5", ns);
+			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 5", ns);
+		}
 	}
 
 	void Kernel::shutdown() {
@@ -267,6 +279,8 @@ namespace kernel::x86_64 {
 		this->coreIdtManager->loadIdt();
 
 		CpuManager::initSimd();
+
+		CpuManager::getCurrentCore()->executionNode.init();
 
 		this->cpuCore.tsc.init();
 
