@@ -146,7 +146,14 @@ namespace kernel::common::threading {
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
 		auto *context = new ThreadContext(rsp, isUser);
 
-		setStackAsm(reinterpret_cast<u64>(context->getStackPointer()), rip);
+		u64 *currStackPointer = context->getStackPointer();
+
+		// TODO: Maybe port this to asm
+		currStackPointer -= 7;
+
+		currStackPointer[6] = rip;
+
+		context->setStackPointer(reinterpret_cast<u64>(currStackPointer));
 
 		return reinterpret_cast<u64 *>(context);
 	}
