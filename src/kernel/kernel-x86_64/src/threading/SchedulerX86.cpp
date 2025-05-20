@@ -5,7 +5,6 @@
 #include "threading/Scheduler.hpp"
 
 #include "hal/Cpu.hpp"
-#include "hal/GDT.hpp"
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 
@@ -19,6 +18,8 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::schedule() {
 		Asm::cli();
+
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
 		for (Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler(); auto currQueue : schedulerPtr->queues) {
 			while (currQueue != nullptr) {
@@ -34,22 +35,24 @@ namespace kernel::common::threading {
 			}
 		}
 
-		if (this->currentThread) {
-			if (this->currentThread->thread->getState() == ThreadState::RUNNING) {
-				if (this->remainingTicks > 0) {
-					this->remainingTicks--;
+		if (this->currentThread != nullptr) {
+			CommonMain::getTerminal()->error("No current thread for EN: %ul", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
 
-					return;
-				}
+			Asm::lhlt();
+		}
 
-				switchThreads();
-			} else if (currentThread->thread->getState() == ThreadState::BLOCKED) {
-				switchThreads();
-			} else if (currentThread->thread->getState() == ThreadState::TERMINATED) {
+		if (this->currentThread->thread->getState() == ThreadState::RUNNING) {
+			if (this->remainingTicks > 0) {
+				this->remainingTicks--;
 
+				this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+
+				return;
 			}
-		} else {
 
+			switchThreads();
+		} else {
+			switchThreads();
 		}
 
 		Asm::sti();
@@ -57,8 +60,6 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::switchThreads() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
-
-		// switchContext(currentThread->thread->getContext(), currentThread->thread->getContext());
 
 		if (this->currentThread != nullptr) {
 			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
@@ -73,32 +74,48 @@ namespace kernel::common::threading {
 			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
 		}
 
-		ThreadListEntry *oldEntry = this->currentThread;
-
-		/*ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()];
-
-		this->currentThread = currEntry;
-
-		if (this->currentThread != nullptr) {
-			schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread->next;
-
-			this->currentThread->next->prev = nullptr;
-			this->currentThread->next = nullptr;
-		}*/
+		const ThreadListEntry *oldEntry = this->currentThread;
 
 		if (schedulerPtr->readyThreadList != nullptr) {
 			this->currentThread = schedulerPtr->readyThreadList;
 
 			schedulerPtr->readyThreadList->next->prev = nullptr;
 			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
-		} else {
-			for (auto currQueue : schedulerPtr->queues) {
-				while (currQueue != nullptr) {
 
+			// TODO: Make trampoline for user threads
+		} else {
+			ThreadListEntry *selectedEntry = nullptr;
+
+			for (auto currQueue : schedulerPtr->queues) {
+				while (currQueue != nullptr && currQueue->thread->getState() != ThreadState::RUNNING) {
 					currQueue = currQueue->next;
 				}
+
+				if (currQueue != nullptr && currQueue->thread->getState() == ThreadState::RUNNING) {
+					selectedEntry = currQueue;
+				}
 			}
+
+			if (selectedEntry != nullptr) {
+				CommonMain::getTerminal()->error("No thread to switch to for EN: %ul", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
+
+				Asm::lhlt();
+			}
+
+			schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
+			selectedEntry->next->prev = nullptr;
+
+			this->currentThread = selectedEntry;
+
+			this->currentThread->next = nullptr;
+			this->currentThread->prev = nullptr;
 		}
+
+		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
+
+		switchContext(oldEntry->thread->getContext(), this->currentThread->thread->getContext());
+
+		this->currentThread->thread->getParent()->getProcessContext()->pageMap.load();
 
 		this->remainingTicks = maxTicks;
 	}

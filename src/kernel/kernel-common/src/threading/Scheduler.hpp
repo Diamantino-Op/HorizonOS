@@ -77,6 +77,8 @@ namespace kernel::common::threading {
         void setPriority(ProcessPriority priority);
         ProcessPriority getPriority() const;
 
+    	AllocContext *getProcessContext() const;
+
     	void addThread(ThreadListEntry *entry);
 
     	u16 getId() const;
@@ -162,15 +164,17 @@ namespace kernel::common::threading {
     	*  @param isUser Indicates whether it is a user-space thread.
 	     *  @param rip The instruction pointer for the new thread.
 		 *  @param process The parent process of the thread.
+		 *
+		 *  @return The new thread entry.
 		 **/
-		void addThread(bool isUser, u64 rip, Process *process);
+		ThreadListEntry *addThread(bool isUser, u64 rip, Process *process);
 
 		/**
 		 * Terminate the specified thread.
 		 *
 		 * @param thread A pointer to the thread to be terminated.
 		 **/
-		void killThread(Thread *thread);
+		void killThread(const Thread *thread);
 
     	/**
 		 * Terminate the specified thread.

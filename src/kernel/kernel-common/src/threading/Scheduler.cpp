@@ -7,7 +7,9 @@
 namespace kernel::common::threading {
 	// Threads
 
-	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context) {}
+	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context) {
+		this->id = TIDAllocator::allocTID();
+	}
 
 	Thread::~Thread() {
 		delete this->context;
@@ -78,6 +80,10 @@ namespace kernel::common::threading {
 		return this->priority;
 	}
 
+	AllocContext *Process::getProcessContext() const {
+		return this->processContext;
+	}
+
 	void Process::addThread(ThreadListEntry *entry) {
 		entry->prevProc = this->lastThreadList;
 		this->lastThreadList->nextProc = entry;
@@ -91,7 +97,7 @@ namespace kernel::common::threading {
 	// Execution Node
 
 	ExecutionNode::ExecutionNode() {
-		CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
+		this->currentThread = CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
@@ -152,7 +158,7 @@ namespace kernel::common::threading {
 		delete process;
 	}
 
-	void Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
+	ThreadListEntry *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
 		auto *newThread = new Thread(process, createContext(isUser, rip));
 
 		newThread->setState(ThreadState::READY);
@@ -166,16 +172,18 @@ namespace kernel::common::threading {
 
 		process->addThread(newThreadEntry);
 
+		return newThreadEntry;
+
 		// TODO: Use this in schedule method
 		/*newThreadEntry->prev = this->lastQueueEntry[process->getPriority()];
 		this->lastQueueEntry[process->getPriority()]->next = newThreadEntry;
 		this->lastQueueEntry[process->getPriority()] = newThreadEntry;*/
 	}
 
-	void Scheduler::killThread(Thread *thread) {
+	void Scheduler::killThread(const Thread *thread) {
 		for (u64 i = 0; i < this->executionNodesAmount; i++) {
 			if (this->executionNodes[i].getCurrentThread()->thread == thread) {
-				this->executionNodes[i].setCurrentThread(nullptr);
+				this->executionNodes[i].schedule();
 			}
 		}
 
