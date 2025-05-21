@@ -115,6 +115,10 @@ namespace kernel::common::threading {
 		return this->currentThread;
 	}
 
+	void ExecutionNode::setRemainingTicks(const u8 remainingTicks) {
+		this->remainingTicks = remainingTicks;
+	}
+
 	// Scheduler
 
 	Scheduler::Scheduler() {

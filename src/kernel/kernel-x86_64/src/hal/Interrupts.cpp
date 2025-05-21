@@ -32,11 +32,15 @@ namespace kernel::x86_64::hal {
 		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
 
-			if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+			sendEOI(frame.intNo);
+		}
+	}
 
-			} else {
-				kernel->getDualPic()->eoi(frame.intNo);
-			}
+	void Interrupts::sendEOI(const usize intNo) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+
+		} else {
+			kernel->getDualPic()->eoi(intNo);
 		}
 	}
 

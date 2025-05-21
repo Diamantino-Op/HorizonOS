@@ -114,6 +114,8 @@ namespace kernel::common::threading {
 
     	void switchContext(u64 *oldCtx, u64 *newCtx);
 
+    	void setRemainingTicks(u8 remainingTicks);
+
     private:
         u8 remainingTicks {};
 
@@ -123,6 +125,8 @@ namespace kernel::common::threading {
 	void idleThread();
 
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
+
+	extern "C" void switchContextMiddle();
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 

@@ -77,6 +77,8 @@ namespace kernel::x86_64::hal {
     public:
         static void handleInterrupt(const Frame &frame);
 
+        static void sendEOI(usize intNo);
+
         static void handlePageFault(const Frame &frame);
 
         static void kernelPanic(const Frame &frame);

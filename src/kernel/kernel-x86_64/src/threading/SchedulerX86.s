@@ -1,3 +1,5 @@
+.global switchContextMiddle
+
 .global switchContextAsm
 switchContextAsm:
     push rbx
@@ -17,5 +19,7 @@ switchContextAsm:
     pop r12
     pop rbp
     pop rbx
+
+    call switchContextMiddle
 
     ret

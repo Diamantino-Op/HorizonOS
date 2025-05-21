@@ -43,23 +43,17 @@ namespace kernel::common::threading {
 			Asm::lhlt();
 		}
 
-		if (this->currentThread->thread->getState() == ThreadState::RUNNING) {
-			if (this->remainingTicks > 0) {
-				this->remainingTicks--;
+		if (this->currentThread->thread->getState() == ThreadState::RUNNING && this->remainingTicks > 0) {
+			this->remainingTicks--;
 
-				this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+			this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
-				Asm::sti();
+			Asm::sti();
 
-				return;
-			}
-
-			switchThreads();
-		} else {
-			switchThreads();
+			return;
 		}
 
-		Asm::sti();
+		switchThreads();
 	}
 
 	void ExecutionNode::switchThreads() {
@@ -94,6 +88,8 @@ namespace kernel::common::threading {
 
 			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
 
+			this->currentThread->thread->setState(ThreadState::RUNNING);
+
 			// TODO: Make trampoline for user threads
 		} else {
 			ThreadListEntry *selectedEntry = nullptr;
@@ -125,11 +121,9 @@ namespace kernel::common::threading {
 
 		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
 
+		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(oldEntry->thread->getContext()));
+
 		switchContext(oldEntry->thread->getContext(), this->currentThread->thread->getContext());
-
-		this->currentThread->thread->getParent()->getProcessContext()->pageMap.load();
-
-		this->remainingTicks = maxTicks;
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
@@ -139,8 +133,20 @@ namespace kernel::common::threading {
 		oldCtxConv->save();
 
 		switchContextAsm(oldCtx, newCtx);
+	}
 
-		oldCtxConv->load();
+	void switchContextMiddle() {
+		ExecutionNode *currNode = &CpuManager::getCurrentCore()->executionNode;
+
+		currNode->getCurrentThread()->thread->getParent()->getProcessContext()->pageMap.load();
+
+		currNode->setRemainingTicks(maxTicks);
+
+		reinterpret_cast<ThreadContext *>(Asm::rdmsr(Msrs::FSBAS))->load();
+
+		Interrupts::sendEOI(0x20); // TODO: Maybe use a dynamic one
+
+		Asm::sti();
 	}
 
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
