@@ -202,12 +202,14 @@ function(DownloadOVMF)
         set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd" CACHE STRING "OVMF Link")
     endif ()
 
-    execute_process(
-            COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
-    )
-
     if (NOT EXISTS "${OVMF_FILE}")
         file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
+    endif ()
+
+    if (${HORIZON_ARCH} STREQUAL "riscv64" OR ${HORIZON_ARCH} STREQUAL "aarch64")
+        execute_process(
+                COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
+        )
     endif ()
 endfunction()
 
