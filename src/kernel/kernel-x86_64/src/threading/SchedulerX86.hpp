@@ -25,6 +25,7 @@ namespace kernel::x86_64::threading {
         bool isUserspace() const;
 
     private:
+        u64 *originalSimdSave {};
         u64 *simdSave {};
 
         bool isUser {};

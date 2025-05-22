@@ -167,6 +167,10 @@ namespace kernel::common::threading {
 		// TODO: Maybe port this to asm
 		currStackPointer -= 7;
 
+		for (int i = 0; i < 6; i++) {
+			currStackPointer[i] = 0xDEADBEEF;
+		}
+
 		currStackPointer[6] = rip;
 
 		context->setStackPointer(reinterpret_cast<u64>(currStackPointer));
@@ -179,13 +183,14 @@ namespace kernel::x86_64::threading {
 	using namespace utils;
 
 	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), stackPointer(stackPointer) {
-		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(malloc(CpuId::getXSaveSize() + 64)), 64));
+		this->originalSimdSave = static_cast<u64 *>(malloc(CpuId::getXSaveSize() + 64));
+		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
 	}
 
 	ThreadContext::~ThreadContext() {
-		free(this->simdSave);
+		free(this->originalSimdSave);
 	}
 
 	u64 *ThreadContext::getStackPointer() {
