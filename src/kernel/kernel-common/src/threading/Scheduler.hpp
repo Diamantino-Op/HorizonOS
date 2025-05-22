@@ -126,8 +126,6 @@ namespace kernel::common::threading {
 
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
 
-	extern "C" void switchContextMiddle();
-
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
     class Scheduler {

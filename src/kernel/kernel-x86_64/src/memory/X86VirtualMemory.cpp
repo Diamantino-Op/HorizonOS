@@ -41,9 +41,10 @@ namespace kernel::common::memory {
 	}
 
 	void PageMap::load() {
-		Terminal* terminal = CommonMain::getTerminal();
+		// TODO: Re-Enable
+		//Terminal* terminal = CommonMain::getTerminal();
 
-		terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm()));
+		//terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm()));
 
 		Asm::writeCr3(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm());
 	}

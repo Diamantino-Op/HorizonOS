@@ -102,7 +102,9 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::kernelPanic(const Frame &frame) {
-		Terminal * terminal = CommonMain::getTerminal();
+		Asm::cli();
+
+		Terminal *terminal = CommonMain::getTerminal();
 
 		terminal->printf(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
 		terminal->printf(true, "\033[0;31m-");

@@ -178,11 +178,11 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->uAcpi = UAcpi();
+		/*this->uAcpi = UAcpi();
 
 		this->uAcpi.init();
 
-		terminal.info("uACPI Initialised... OK", "HorizonOS");
+		terminal.info("uACPI Initialised... OK", "HorizonOS");*/
 
 		//this->shutdown();
 
@@ -193,39 +193,63 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 1", ns);
+			Asm::cli();
+
+			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 1", ns);
+
+			Asm::sti();
 		}
 	}
 
 	void thread2() {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+
+			Asm::cli();
 		
-			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 2", ns);
+			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 2", ns);
+
+			Asm::sti();
 		}
 	}
 
 	void thread3() {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+
+			Asm::cli();
 		
-			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 3", ns);
+			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 3", ns);
+
+			Asm::sti();
 		}
 	}
 
 	void thread4() {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+
+			Asm::cli();
 		
-			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 4", ns);
+			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 4", ns);
+
+			Asm::sti();
 		}
 	}
 
 	void thread5() {
+		auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+
+		CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20);
+
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-		
-			CommonMain::getTerminal()->info("Call NS: %ul", "Thread 5", ns);
+
+			Asm::cli();
+
+			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 5", ns);
+
+			Asm::sti();
 		}
 	}
 

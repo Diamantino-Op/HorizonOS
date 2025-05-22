@@ -17,6 +17,8 @@ namespace kernel::x86_64::threading {
         u64 *getStackPointer();
         void setStackPointer(u64 stackPtr);
 
+        u64 *getSimdSave() const;
+
         void save() const;
         void load() const;
 
@@ -29,8 +31,6 @@ namespace kernel::x86_64::threading {
 
         u64 stackPointer {};
     };
-
-    extern "C" void setStackAsm(u64 rsp, u64 rip);
 }
 
 #endif

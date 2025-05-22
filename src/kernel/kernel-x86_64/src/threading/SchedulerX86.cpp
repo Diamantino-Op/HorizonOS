@@ -21,7 +21,7 @@ namespace kernel::common::threading {
 	void ExecutionNode::schedule() {
 		Asm::cli();
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+		//CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
 		for (Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler(); auto currQueue : schedulerPtr->queues) {
 			while (currQueue != nullptr) {
@@ -46,7 +46,7 @@ namespace kernel::common::threading {
 		if (this->currentThread->thread->getState() == ThreadState::RUNNING && this->remainingTicks > 0) {
 			this->remainingTicks--;
 
-			this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+			//this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
 			Asm::sti();
 
@@ -59,22 +59,20 @@ namespace kernel::common::threading {
 	void ExecutionNode::switchThreads() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		if (this->currentThread != nullptr) {
-			if (const ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
-				ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
+		if (const ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
+			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
 
-				this->currentThread->prev = lastEntry;
-				this->currentThread->next = nullptr;
+			this->currentThread->prev = lastEntry;
+			this->currentThread->next = nullptr;
 
-				if (this->currentThread->prev != nullptr) {
-					this->currentThread->prev->next = this->currentThread;
-				}
-
-				schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
-			} else {
-				schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread;
-				schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			if (this->currentThread->prev != nullptr) {
+				this->currentThread->prev->next = this->currentThread;
 			}
+
+			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+		} else {
+			schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
 		}
 
 		const ThreadListEntry *oldEntry = this->currentThread;
@@ -87,6 +85,9 @@ namespace kernel::common::threading {
 			}
 
 			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
+
+			this->currentThread->next = nullptr;
+			this->currentThread->prev = nullptr;
 
 			this->currentThread->thread->setState(ThreadState::RUNNING);
 
@@ -121,32 +122,41 @@ namespace kernel::common::threading {
 
 		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
 
-		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(oldEntry->thread->getContext()));
+		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
+
+		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(this->currentThread->thread->getContext())->getSimdSave()) < pageSize) {
+			CommonMain::getTerminal()->error("NewEntry simdSave is null!", "Scheduler");
+
+			Asm::lhlt();
+		}
+
+		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(oldEntry->thread->getContext())->getSimdSave()) < pageSize) {
+			CommonMain::getTerminal()->error("OldEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
+
+			Asm::lhlt();
+		}
 
 		switchContext(oldEntry->thread->getContext(), this->currentThread->thread->getContext());
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
 	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) {
-		const auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
+		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
+		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
 
 		oldCtxConv->save();
 
-		switchContextAsm(oldCtx, newCtx);
-	}
+		this->currentThread->thread->getParent()->getProcessContext()->pageMap.load();
 
-	void switchContextMiddle() {
-		ExecutionNode *currNode = &CpuManager::getCurrentCore()->executionNode;
+		newCtxConv->load();
 
-		currNode->getCurrentThread()->thread->getParent()->getProcessContext()->pageMap.load();
+		this->remainingTicks = 50;
 
-		currNode->setRemainingTicks(maxTicks);
-
-		reinterpret_cast<ThreadContext *>(Asm::rdmsr(Msrs::FSBAS))->load();
-
-		Interrupts::sendEOI(0x20); // TODO: Maybe use a dynamic one
+		Interrupts::sendEOI(0x20);
 
 		Asm::sti();
+
+		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer());
 	}
 
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
@@ -184,6 +194,10 @@ namespace kernel::x86_64::threading {
 
 	void ThreadContext::setStackPointer(const u64 stackPtr) {
 		this->stackPointer = stackPtr;
+	}
+
+	u64 *ThreadContext::getSimdSave() const {
+		return this->simdSave;
 	}
 
 	void ThreadContext::save() const {

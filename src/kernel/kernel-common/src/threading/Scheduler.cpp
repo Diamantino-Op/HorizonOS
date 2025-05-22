@@ -105,6 +105,8 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::init() {
 		this->currentThread = CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
+
+		// TODO: Add this to scheduler list
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
