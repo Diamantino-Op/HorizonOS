@@ -15,6 +15,10 @@ namespace kernel::common {
 		TIDAllocator::init();
 	}
 
+	bool CommonMain::isInit() const {
+		return this->isInitFlag;
+	}
+
 	Terminal* CommonMain::getTerminal() {
 		return &terminal;
 	}

@@ -1,8 +1,6 @@
 #ifndef KERNEL_COMMON_COMMONMAIN_HPP
 #define KERNEL_COMMON_COMMONMAIN_HPP
 
-#define LIMINE_API_REVISION 3
-
 #include "Terminal.hpp"
 
 #include "memory/VirtualAllocator.hpp"
@@ -23,6 +21,8 @@ namespace kernel::common {
 		virtual void init();
 
         virtual void shutdown();
+
+    	bool isInit() const;
 
         static Terminal* getTerminal();
 
@@ -49,6 +49,8 @@ namespace kernel::common {
         static CommonMain *instance;
 
         static Terminal terminal;
+
+    	bool isInitFlag {};
 
         uPtr stackTop {};
         AllocContext *kernelAllocContext {};

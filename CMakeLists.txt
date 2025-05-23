@@ -43,6 +43,10 @@ unset(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
 unset(CMAKE_C_IMPLICIT_INCLUDE_DIRECTORIES)
 unset(CMAKE_ASM_IMPLICIT_INCLUDE_DIRECTORIES)
 
+execute_process(
+        COMMAND cloc ${CMAKE_SOURCE_DIR}/src
+)
+
 # ------------------ Source ------------------
 add_subdirectory(src)
 

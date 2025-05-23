@@ -116,7 +116,12 @@ namespace kernel::common::threading {
 
     	void setRemainingTicks(u8 remainingTicks);
 
+    	bool isDisabled() const;
+    	void setDisabled(bool val);
+
     private:
+		bool isDisabledFlag;
+
         u8 remainingTicks {};
 
         ThreadListEntry *currentThread {};
@@ -178,7 +183,7 @@ namespace kernel::common::threading {
 		 *
 		 * @param thread A pointer to the thread to be terminated.
 		 **/
-		void killThread(const Thread *thread);
+		void killThread(Thread *thread);
 
     	/**
 		 * Terminate the specified thread.
@@ -193,7 +198,7 @@ namespace kernel::common::threading {
 		 *  @param thread The thread to be put to sleep.
 		 *  @param ticks The number of ticks for which the thread should remain asleep.
 		 **/
-		void sleepThread(Thread *thread, u64 ticks);
+		void sleepThread(Thread *thread, u64 ticks) const;
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -206,11 +211,10 @@ namespace kernel::common::threading {
 		u64 *createContext(bool isUser, u64 rip);
 
     private:
+    	ExecutionNode *getCurrentExecutionNode() const;
     	u64 *createContextArch(bool isUser, u64 rip, u64 rsp);
 
         u64 executionNodesAmount {};
-
-        ExecutionNode *executionNodes {};
 
     public:
     	ProcessListEntry *processList {};

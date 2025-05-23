@@ -8,6 +8,8 @@
 
 #include "SpinLock.hpp"
 
+#include "threading/Scheduler.hpp"
+
 #define PRINTF_STATE_NORMAL       0
 #define PRINTF_STATE_LENGTH       1
 #define PRINTF_STATE_LENGTH_LONG  2
@@ -21,6 +23,8 @@
 #define PRINTF_LENGTH_LONG_LONG   4
 
 namespace kernel::common {
+    using namespace threading;
+
     enum TextFormatting {
         Regular,
         Bold,
@@ -60,6 +64,8 @@ namespace kernel::common {
         void debug(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
         void error(const char *format, const char *id, ...);
+
+        ExecutionNode *getCurrentCore();
 
         //char* getFormat(const char* mainFormat, ...);
 

@@ -29,9 +29,11 @@ namespace kernel::common::threading {
 					currQueue->thread->setSleepTicks(currQueue->thread->getSleepTicks() - 1);
 
 					if (currQueue->thread->getSleepTicks() == 0) {
-						currQueue->thread->setState(ThreadState::READY);
+						currQueue->thread->setState(ThreadState::RUNNING);
 					}
 				}
+
+				CommonMain::getTerminal()->info("Sched curr: 0x%.16lx", "Scheduler", currQueue);
 
 				currQueue = currQueue->next;
 			}
@@ -59,8 +61,8 @@ namespace kernel::common::threading {
 	void ExecutionNode::switchThreads() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		if (const ThreadListEntry *currEntry = schedulerPtr->queues[currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
-			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()];
+		if (const ThreadListEntry *currEntry = schedulerPtr->queues[this->currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
+			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()];
 
 			this->currentThread->prev = lastEntry;
 			this->currentThread->next = nullptr;
@@ -69,10 +71,10 @@ namespace kernel::common::threading {
 				this->currentThread->prev->next = this->currentThread;
 			}
 
-			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
 		} else {
-			schedulerPtr->queues[currentThread->thread->getParent()->getPriority()] = this->currentThread;
-			schedulerPtr->lastQueueEntry[currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			schedulerPtr->queues[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
 		}
 
 		const ThreadListEntry *oldEntry = this->currentThread;
@@ -102,6 +104,8 @@ namespace kernel::common::threading {
 
 				if (currQueue != nullptr && currQueue->thread->getState() == ThreadState::RUNNING) {
 					selectedEntry = currQueue;
+
+					break;
 				}
 			}
 
@@ -125,7 +129,7 @@ namespace kernel::common::threading {
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
 
 		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(this->currentThread->thread->getContext())->getSimdSave()) < pageSize) {
-			CommonMain::getTerminal()->error("NewEntry simdSave is null!", "Scheduler");
+			CommonMain::getTerminal()->error("NewEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
 
 			Asm::lhlt();
 		}
@@ -162,27 +166,20 @@ namespace kernel::common::threading {
 	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
 		auto *context = new ThreadContext(rsp, isUser);
 
-		u64 *currStackPointer = context->getStackPointer();
-
-		// TODO: Maybe port this to asm
-		currStackPointer -= 7;
-
-		for (int i = 0; i < 6; i++) {
-			currStackPointer[i] = 0xDEADBEEF;
-		}
-
-		currStackPointer[6] = rip;
-
-		context->setStackPointer(reinterpret_cast<u64>(currStackPointer));
+		setStackAsm(context->getStackPointer(), rip);
 
 		return reinterpret_cast<u64 *>(context);
+	}
+
+	ExecutionNode *Scheduler::getCurrentExecutionNode() const {
+		return &CpuManager::getCurrentCore()->executionNode;
 	}
 }
 
 namespace kernel::x86_64::threading {
 	using namespace utils;
 
-	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), stackPointer(stackPointer) {
+	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), originalStackPointer(stackPointer - threadCtxStackSize), stackPointer(stackPointer) {
 		this->originalSimdSave = static_cast<u64 *>(malloc(CpuId::getXSaveSize() + 64));
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
@@ -191,6 +188,7 @@ namespace kernel::x86_64::threading {
 
 	ThreadContext::~ThreadContext() {
 		free(this->originalSimdSave);
+		free(reinterpret_cast<u64 *>(this->originalStackPointer));
 	}
 
 	u64 *ThreadContext::getStackPointer() {

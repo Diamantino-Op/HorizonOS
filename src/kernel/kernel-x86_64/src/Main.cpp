@@ -146,16 +146,14 @@ namespace kernel::x86_64 {
 
 		CpuManager::getCurrentCore()->executionNode.init();
 
-		Scheduler *schedulerInstance = CommonMain::getInstance()->getScheduler();
-
 		auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
-		schedulerInstance->addProcess(exampleProcess);
+		this->scheduler->addProcess(exampleProcess);
 
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		schedulerInstance->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
 
 		terminal.info("Example threads registered... OK", "HorizonOS");
 
@@ -176,6 +174,8 @@ namespace kernel::x86_64 {
 
 		terminal.info("TSC Initialised... OK", "HorizonOS");
 
+		this->isInitFlag = true;
+
 		Asm::sti();
 
 		/*this->uAcpi = UAcpi();
@@ -193,11 +193,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			Asm::cli();
+			//CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);
 
-			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 1", ns);
+			//auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			Asm::sti();
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
 		}
 	}
 
@@ -205,11 +205,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			Asm::cli();
-		
-			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 2", ns);
+			//CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);
 
-			Asm::sti();
+			//auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
 		}
 	}
 
@@ -217,11 +217,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			Asm::cli();
-		
-			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 3", ns);
+			//CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);
 
-			Asm::sti();
+			//auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
 		}
 	}
 
@@ -229,27 +229,23 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			Asm::cli();
-		
-			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 4", ns);
+			//CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);
 
-			Asm::sti();
+			//auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
 		}
 	}
 
 	void thread5() {
-		auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-		CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20);
-
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			Asm::cli();
+			//CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);
 
-			CommonMain::getTerminal()->warn("Call NS: %lu", "Thread 5", ns);
+			//auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			Asm::sti();
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
 		}
 	}
 

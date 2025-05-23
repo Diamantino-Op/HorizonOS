@@ -105,8 +105,6 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::init() {
 		this->currentThread = CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
-
-		// TODO: Add this to scheduler list
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
@@ -119,6 +117,14 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::setRemainingTicks(const u8 remainingTicks) {
 		this->remainingTicks = remainingTicks;
+	}
+
+	bool ExecutionNode::isDisabled() const {
+		return this->isDisabledFlag;
+	}
+
+	void ExecutionNode::setDisabled(const bool val) {
+		this->isDisabledFlag = val;
 	}
 
 	// Scheduler
@@ -188,12 +194,10 @@ namespace kernel::common::threading {
 		return newThreadEntry;
 	}
 
-	void Scheduler::killThread(const Thread *thread) {
-		for (u64 i = 0; i < this->executionNodesAmount; i++) {
-			if (this->executionNodes[i].getCurrentThread()->thread == thread) {
-				this->executionNodes[i].schedule();
-			}
-		}
+	void Scheduler::killThread(Thread *thread) {
+		thread->setState(ThreadState::TERMINATED);
+
+		this->getCurrentExecutionNode()->schedule();
 
 		const ThreadListEntry *selectedEntry = this->queues[thread->getParent()->getPriority()];
 
@@ -233,10 +237,12 @@ namespace kernel::common::threading {
 		delete thread;
 	}
 
-	void Scheduler::sleepThread(Thread *thread, const u64 ticks) {
+	void Scheduler::sleepThread(Thread *thread, const u64 ticks) const {
 		thread->setSleepTicks(ticks);
 
 		thread->setState(ThreadState::BLOCKED);
+
+		this->getCurrentExecutionNode()->schedule();
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {

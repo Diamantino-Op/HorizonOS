@@ -30,8 +30,11 @@ namespace kernel::x86_64::threading {
 
         bool isUser {};
 
+        u64 originalStackPointer {};
         u64 stackPointer {};
     };
+
+    extern "C" void setStackAsm(u64 *stackPointer, u64 rip);
 }
 
 #endif

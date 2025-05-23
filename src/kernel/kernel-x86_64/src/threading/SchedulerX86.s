@@ -19,3 +19,24 @@ switchContextAsm:
     pop rbx
 
     ret
+
+.global setStackAsm
+setStackAsm:
+    mov rax, rsp
+
+    mov rsp, [rdi]
+
+    push rsi
+
+    push 0
+    push 0
+    push 0
+    push 0
+    push 0
+    push 0
+
+    mov [rdi], rsp
+
+    mov rsp, rax
+
+    ret

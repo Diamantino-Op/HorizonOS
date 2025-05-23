@@ -18,7 +18,7 @@ namespace kernel::x86_64::hal {
 		IOPort::out8(div & 0xFF, channel0DataAddress);
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
 
-		Interrupts::setHandler(0x20, reinterpret_cast<HandlerFun>(addTick), nullptr);
+		Interrupts::setHandler(0x20, addTick, nullptr);
 
 		Interrupts::unmask(0x20);
 
@@ -47,7 +47,9 @@ namespace kernel::x86_64::hal {
 	u32 PIT::addTick(u64 *) {
 		ticks++;
 
-		CpuManager::getCurrentCore()->executionNode.schedule();
+		if (not CpuManager::getCurrentCore()->executionNode.isDisabled()) {
+			CpuManager::getCurrentCore()->executionNode.schedule();
+		}
 
 		return 0;
 	}

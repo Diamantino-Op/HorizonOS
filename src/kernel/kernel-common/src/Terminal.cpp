@@ -15,6 +15,8 @@
 
 #include "memory/MainMemory.hpp"
 
+#include "CommonMain.hpp"
+
 namespace kernel::common {
 	using namespace memory;
 
@@ -53,11 +55,19 @@ namespace kernel::common {
 	}
 
 	void Terminal::lock() {
+		if (CommonMain::getInstance()->isInit()) {
+			this->getCurrentCore()->setDisabled(true);
+		}
+
 		this->spinLock.lock();
 	}
 
 	void Terminal::unlock() {
 		this->spinLock.unlock();
+
+		if (CommonMain::getInstance()->isInit()) {
+			this->getCurrentCore()->setDisabled(false);
+		}
 	}
 
 	void Terminal::putChar(char c, void *ctx) {

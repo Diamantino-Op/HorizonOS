@@ -1,8 +1,6 @@
 #ifndef KERNEL_X86_64_CPU_HPP
 #define KERNEL_X86_64_CPU_HPP
 
-#define LIMINE_API_REVISION 3
-
 #include "Types.hpp"
 
 #include "Apic.hpp"
@@ -31,6 +29,7 @@ namespace kernel::x86_64::hal {
         i64 offset {};
     };
 
+    // TODO: Move to a common file
     class CpuManager {
     public:
         CpuManager() = default;
