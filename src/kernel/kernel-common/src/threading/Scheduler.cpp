@@ -104,7 +104,15 @@ namespace kernel::common::threading {
 	// Execution Node
 
 	void ExecutionNode::init() {
-		this->currentThread = CommonMain::getInstance()->getScheduler()->addThread(false, reinterpret_cast<u64>(idleThread), CommonMain::getInstance()->getScheduler()->getProcess(0));
+		auto *newThread = new Thread(CommonMain::getInstance()->getScheduler()->getProcess(0), CommonMain::getInstance()->getScheduler()->createContext(false, reinterpret_cast<u64>(idleThread)));
+
+		newThread->setState(ThreadState::RUNNING);
+
+		this->currentThread = new ThreadListEntry();
+
+		this->currentThread->thread = newThread;
+
+		CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(this->currentThread);
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
@@ -197,7 +205,9 @@ namespace kernel::common::threading {
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
-		this->getCurrentExecutionNode()->schedule();
+		if (this->getCurrentExecutionNode()->getCurrentThread()->thread == thread) {
+			this->getCurrentExecutionNode()->schedule();
+		}
 
 		const ThreadListEntry *selectedEntry = this->queues[thread->getParent()->getPriority()];
 

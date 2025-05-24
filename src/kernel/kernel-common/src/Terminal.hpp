@@ -63,7 +63,9 @@ namespace kernel::common {
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
+        void warnNoLock(const char *format, const char *id, ...);
         void error(const char *format, const char *id, ...);
+        void errorNoLock(const char *format, const char *id, ...);
 
         ExecutionNode *getCurrentCore();
 

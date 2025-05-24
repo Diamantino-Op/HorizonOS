@@ -17,3 +17,5 @@ target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${KERNEL_A
 target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR} ${NANOPRINTF_DIR} ${HOR_UACPI_INCLUDES})
 
 target_link_libraries(kernel-common PUBLIC hos-base)
+
+set_source_files_properties(src/Terminal.cpp TARGET_DIRECTORY kernel-common PROPERTIES COMPILE_FLAGS -fno-sanitize=undefined)

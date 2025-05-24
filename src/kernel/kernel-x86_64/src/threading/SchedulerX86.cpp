@@ -23,8 +23,6 @@ namespace kernel::common::threading {
 
 		//CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
-		CommonMain::getTerminal()->warn("Sched tick!", "Scheduler");
-
 		for (Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler(); auto currQueue : schedulerPtr->queues) {
 			while (currQueue != nullptr) {
 				if (currQueue->thread->getSleepTicks() > 0) {
@@ -35,13 +33,9 @@ namespace kernel::common::threading {
 					}
 				}
 
-				CommonMain::getTerminal()->info("Sched curr: 0x%.16lx", "Scheduler", currQueue);
-
 				currQueue = currQueue->next;
 			}
 		}
-
-		CommonMain::getTerminal()->warn("Sched tick end!", "Scheduler");
 
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
@@ -120,7 +114,10 @@ namespace kernel::common::threading {
 			}
 
 			schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
-			selectedEntry->next->prev = nullptr;
+
+			if (selectedEntry->next != nullptr) {
+				selectedEntry->next->prev = nullptr;
+			}
 
 			this->currentThread = selectedEntry;
 

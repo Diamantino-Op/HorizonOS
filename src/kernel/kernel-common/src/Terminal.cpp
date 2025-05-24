@@ -73,7 +73,9 @@ namespace kernel::common {
 	void Terminal::putChar(char c, void *ctx) {
 		constexpr u16 com1Port = 0x3F8;
 
-	 	flanterm_write(flantermCtx, &c, 1);
+	 	if (flantermCtx != nullptr) {
+	 		flanterm_write(flantermCtx, &c, 1);
+	 	}
 
 		// TODO: Only x86_64
 		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
@@ -137,6 +139,17 @@ namespace kernel::common {
 		this->unlock();
 	}
 
+	void Terminal::warnNoLock(const char *format, const char *id, ...) {
+		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
+	}
+
 	void Terminal::error(const char *format, const char *id, ...) {
 		this->lock();
 
@@ -150,6 +163,17 @@ namespace kernel::common {
 		this->printf(true, "\033[0m");
 
 		this->unlock();
+	}
+
+	void Terminal::errorNoLock(const char *format, const char *id, ...) {
+		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		va_end(val);
+
+		this->printf(true, "\033[0m");
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {

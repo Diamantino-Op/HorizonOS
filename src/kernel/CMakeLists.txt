@@ -6,7 +6,7 @@ set(EXTRA_ASM_FLAGS "")
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
     if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        set(EXTRA_C_FLAGS -g -DHORIZON_DEBUG)
+        set(EXTRA_C_FLAGS -g -fsanitize=undefined -DHORIZON_DEBUG)
     endif ()
 
     set(EXTRA_C_FLAGS ${EXTRA_C_FLAGS} -mno-red-zone -mno-sse -mno-sse2 -mno-mmx -march=x86-64 -m64 -mno-80387 -fPIC -fPIE)
