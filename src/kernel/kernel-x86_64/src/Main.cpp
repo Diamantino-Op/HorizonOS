@@ -174,6 +174,8 @@ namespace kernel::x86_64 {
 
 		terminal.info("TSC Initialised... OK", "HorizonOS");
 
+		this->getCpuManager()->getBootstrapCpu()->executionNode.setDisabled(true);
+
 		this->isInitFlag = true;
 
 		Asm::sti();
@@ -184,6 +186,8 @@ namespace kernel::x86_64 {
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");*/
 
+		this->getCpuManager()->getBootstrapCpu()->executionNode.setDisabled(false);
+
 		//this->shutdown();
 
 		Asm::lhlt();
@@ -191,9 +195,9 @@ namespace kernel::x86_64 {
 
 	void thread1() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);*/
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -203,9 +207,9 @@ namespace kernel::x86_64 {
 
 	void thread2() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);*/
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -215,9 +219,9 @@ namespace kernel::x86_64 {
 
 	void thread3() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);*/
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -227,9 +231,9 @@ namespace kernel::x86_64 {
 
 	void thread4() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);*/
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -239,9 +243,9 @@ namespace kernel::x86_64 {
 
 	void thread5() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);*/
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 

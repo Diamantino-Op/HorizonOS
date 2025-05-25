@@ -104,15 +104,36 @@ namespace kernel::common::threading {
 	// Execution Node
 
 	void ExecutionNode::init() {
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		//schedulerPtr->getSchedLock()->lock();
+
 		auto *newThread = new Thread(CommonMain::getInstance()->getScheduler()->getProcess(0), CommonMain::getInstance()->getScheduler()->createContext(false, reinterpret_cast<u64>(idleThread)));
 
 		newThread->setState(ThreadState::RUNNING);
 
-		this->currentThread = new ThreadListEntry();
+		if (this->currentThread != nullptr) {
+			auto *newThreadEntry = new ThreadListEntry();
 
-		this->currentThread->thread = newThread;
+			newThreadEntry->thread = newThread;
 
-		CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(this->currentThread);
+			if (ThreadListEntry *queueEntry = schedulerPtr->queues[ProcessPriority::LOW]; queueEntry != nullptr) {
+				newThreadEntry->next = queueEntry;
+				queueEntry->prev = newThreadEntry;
+			}
+
+			schedulerPtr->queues[ProcessPriority::LOW] = newThreadEntry;
+
+			CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(newThreadEntry);
+		} else {
+			this->currentThread = new ThreadListEntry();
+
+			this->currentThread->thread = newThread;
+
+			CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(this->currentThread);
+		}
+
+		//schedulerPtr->getSchedLock()->unlock();
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
@@ -259,5 +280,9 @@ namespace kernel::common::threading {
 		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
 
 		return createContextArch(isUser, rip, newRsp);
+	}
+
+	TicketSpinLock *Scheduler::getSchedLock() {
+		return &this->schedLock;
 	}
 }

@@ -92,6 +92,21 @@ namespace kernel::common {
 		}
 	}
 
+	void Terminal::printfLock(const bool autoSN, const char *format, ...) {
+		this->lock();
+
+		va_list val;
+		va_start(val, format);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		va_end(val);
+
+		if (autoSN) {
+			npf_pprintf((npf_putc)(void *)putChar, nullptr, "\n");
+		}
+
+		this->unlock();
+	}
+
 	void Terminal::info(const char *format, const char *id, ...) {
 		this->lock();
 

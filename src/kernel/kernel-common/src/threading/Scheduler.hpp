@@ -210,11 +210,13 @@ namespace kernel::common::threading {
 		 */
 		u64 *createContext(bool isUser, u64 rip);
 
+    	TicketSpinLock *getSchedLock();
+
     private:
     	ExecutionNode *getCurrentExecutionNode() const;
     	u64 *createContextArch(bool isUser, u64 rip, u64 rsp);
 
-        u64 executionNodesAmount {};
+    	TicketSpinLock schedLock {};
 
     public:
     	ProcessListEntry *processList {};

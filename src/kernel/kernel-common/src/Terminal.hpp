@@ -59,6 +59,7 @@ namespace kernel::common {
 
         static void putChar(char c, void *ctx);
         void printf(bool autoSN, const char* format, ...);
+        void printfLock(bool autoSN, const char* format, ...);
 
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);

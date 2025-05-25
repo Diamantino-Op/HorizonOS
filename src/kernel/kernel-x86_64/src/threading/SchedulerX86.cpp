@@ -18,12 +18,18 @@ namespace kernel::common::threading {
 		Asm::lhlt();
 	}
 
+	// TODO: Make Spinlock
 	void ExecutionNode::schedule() {
 		Asm::cli();
 
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		schedulerPtr->getSchedLock()->lock();
+
 		//CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
-		for (Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler(); auto currQueue : schedulerPtr->queues) {
+		// TODO: Use HPET for sleep
+		for (auto currQueue : schedulerPtr->queues) {
 			while (currQueue != nullptr) {
 				if (currQueue->thread->getSleepTicks() > 0) {
 					currQueue->thread->setSleepTicks(currQueue->thread->getSleepTicks() - 1);
@@ -47,6 +53,8 @@ namespace kernel::common::threading {
 			this->remainingTicks--;
 
 			//this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
+
+			schedulerPtr->getSchedLock()->unlock();
 
 			Asm::sti();
 
@@ -125,7 +133,7 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
+		//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId()); // TODO: Maybe re-enable
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
 
@@ -158,6 +166,8 @@ namespace kernel::common::threading {
 		this->remainingTicks = 50;
 
 		Interrupts::sendEOI(0x20);
+
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock();
 
 		Asm::sti();
 

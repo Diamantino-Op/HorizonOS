@@ -141,7 +141,7 @@ namespace kernel::x86_64::hal {
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
 
-				//this->initCore(i, j);
+				this->initCore(i, j);
 
 				++j;
 			}

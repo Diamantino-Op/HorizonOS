@@ -85,28 +85,20 @@ void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
 
 	switch (level) {
 		case UACPI_LOG_ERROR:
-			terminal->lock();
-			terminal->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
-			terminal->unlock();
+			terminal->printfLock(false, "[    \033[0;31merror    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
 			break;
 
 		case UACPI_LOG_WARN:
-			terminal->lock();
-			terminal->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
-			terminal->unlock();
+			terminal->printfLock(false, "[   \033[0;33mwarning   \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
 			break;
 
 		case UACPI_LOG_INFO:
-			terminal->lock();
-			terminal->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
-			terminal->unlock();
+			terminal->printfLock(false, "[ \033[1;34minformation \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
 			break;
 
 		case UACPI_LOG_TRACE:
 		case UACPI_LOG_DEBUG:
-			terminal->lock();
-			terminal->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
-			terminal->unlock();
+			terminal->printfLock(false, "[    \033[0;32mdebug    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
 			break;
 	}
 }
