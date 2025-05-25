@@ -8,13 +8,13 @@ extern "C" {
     typedef __INT16_TYPE__ i16;
     typedef __INT32_TYPE__ i32;
     typedef __INT64_TYPE__ i64;
-    typedef long long int i128;
+    typedef __int128_t i128;
 
     typedef __UINT8_TYPE__ u8;
     typedef __UINT16_TYPE__ u16;
     typedef __UINT32_TYPE__ u32;
     typedef __UINT64_TYPE__ u64;
-    typedef unsigned long long u128;
+    typedef __uint128_t u128;
 
     using f32 = float;
     using f64 = double;

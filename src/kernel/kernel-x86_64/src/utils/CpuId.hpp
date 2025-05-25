@@ -25,6 +25,9 @@ namespace kernel::x86_64::utils {
     public:
         static CpuIdResult get(u32 leaf, u32 subLeaf);
 
+        static bool isHypervisor();
+        static u32 getKvmBase();
+
         static char *getVendor();
         static char *getBrand();
 

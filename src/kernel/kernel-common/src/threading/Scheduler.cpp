@@ -106,34 +106,15 @@ namespace kernel::common::threading {
 	void ExecutionNode::init() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		//schedulerPtr->getSchedLock()->lock();
-
-		auto *newThread = new Thread(CommonMain::getInstance()->getScheduler()->getProcess(0), CommonMain::getInstance()->getScheduler()->createContext(false, reinterpret_cast<u64>(idleThread)));
+		auto *newThread = new Thread(schedulerPtr->getProcess(0), schedulerPtr->createContext(false, reinterpret_cast<u64>(idleThread)));
 
 		newThread->setState(ThreadState::RUNNING);
 
-		if (this->currentThread != nullptr) {
-			auto *newThreadEntry = new ThreadListEntry();
+		this->currentThread = new ThreadListEntry();
 
-			newThreadEntry->thread = newThread;
+		this->currentThread->thread = newThread;
 
-			if (ThreadListEntry *queueEntry = schedulerPtr->queues[ProcessPriority::LOW]; queueEntry != nullptr) {
-				newThreadEntry->next = queueEntry;
-				queueEntry->prev = newThreadEntry;
-			}
-
-			schedulerPtr->queues[ProcessPriority::LOW] = newThreadEntry;
-
-			CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(newThreadEntry);
-		} else {
-			this->currentThread = new ThreadListEntry();
-
-			this->currentThread->thread = newThread;
-
-			CommonMain::getInstance()->getScheduler()->getProcess(0)->addThread(this->currentThread);
-		}
-
-		//schedulerPtr->getSchedLock()->unlock();
+		schedulerPtr->getProcess(0)->addThread(this->currentThread);
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {

@@ -149,11 +149,11 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::setCorePointer(CpuCore *core) {
-		Asm::wrmsr(UGSBAS, reinterpret_cast<u64>(core));
+		Asm::wrmsr(KGSBAS, reinterpret_cast<u64>(core));
 	}
 
 	CpuCore *CpuManager::getCurrentCore() {
-		return reinterpret_cast<CpuCore *>(Asm::rdmsr(UGSBAS));
+		return reinterpret_cast<CpuCore *>(Asm::rdmsr(KGSBAS));
 	}
 
 	void CpuManager::initCore(const u64 coreId, const u64 listIndex) const {

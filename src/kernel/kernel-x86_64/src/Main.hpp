@@ -9,6 +9,7 @@
 #include "hal/PIT.hpp"
 #include "hal/TSS.hpp"
 #include "hal/Cpu.hpp"
+#include "hal/KvmClock.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {
@@ -40,6 +41,8 @@ namespace kernel::x86_64 {
 
         PIT *getPIT();
 
+        KvmClock *getKvmClock();
+
         CpuManager *getCpuManager();
 
     private:
@@ -50,6 +53,8 @@ namespace kernel::x86_64 {
         DualPIC dualPic {};
 
         PIT pit {};
+
+        KvmClock kvmClock {};
 
         CpuManager cpuManager {};
     };

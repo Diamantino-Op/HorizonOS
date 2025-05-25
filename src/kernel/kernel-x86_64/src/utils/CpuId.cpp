@@ -13,6 +13,29 @@ namespace kernel::x86_64::utils {
 		return result;
 	}
 
+	bool CpuId::isHypervisor() {
+		return get(0x1, 0).ecx & ( 1 << 31 );
+	}
+
+	u32 CpuId::getKvmBase() {
+		if (isHypervisor()) {
+			for (u32 base = 0x40000000; base < 0x40010000; base += 0x100) {
+				u32 signature[3] {};
+
+				const CpuIdResult res = get(base, 0);
+
+				signature[0] = res.ebx;
+				signature[1] = res.ecx;
+				signature[2] = res.edx;
+
+				if (!memcmp("KVMKVMKVM\0\0\0", signature, 12))
+					return base;
+			}
+		}
+
+		return 0;
+	}
+
 	char *CpuId::getVendor() {
 		static Vendor vendor {};
 

@@ -2,7 +2,7 @@
 
 #include "hal/Interrupts.hpp"
 #include "utils/Asm.hpp"
-#include "memory/MainMemory.hpp"
+#include "utils/CpuId.hpp"
 
 #include "limine.h"
 
@@ -134,6 +134,9 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.init();
 
+		terminal.info("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
+		terminal.info("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
+
 		terminal.info("Cpu initialized...", "HorizonOS");
 
 		this->cpuManager.startMultithread();
@@ -169,6 +172,18 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
+		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
+
+		this->kvmClock = KvmClock();
+
+		this->kvmClock.init();
+
+		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
+
+		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
+
+		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
+
 		this->cpuManager.getBootstrapCpu()->tsc.init();
 		this->cpuManager.getBootstrapCpu()->tsc.globalInit();
 
@@ -180,11 +195,11 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		/*this->uAcpi = UAcpi();
+		this->uAcpi = UAcpi();
 
 		this->uAcpi.init();
 
-		terminal.info("uACPI Initialised... OK", "HorizonOS");*/
+		terminal.info("uACPI Initialised... OK", "HorizonOS");
 
 		this->getCpuManager()->getBootstrapCpu()->executionNode.setDisabled(false);
 
@@ -277,6 +292,10 @@ namespace kernel::x86_64 {
 
 	PIT *Kernel::getPIT() {
 		return &this->pit;
+	}
+
+	KvmClock *Kernel::getKvmClock() {
+		return &this->kvmClock;
 	}
 
 	CpuManager *Kernel::getCpuManager() {

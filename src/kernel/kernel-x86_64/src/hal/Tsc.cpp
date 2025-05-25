@@ -1,6 +1,7 @@
 #include "Tsc.hpp"
 
 #include "CommonMain.hpp"
+#include "Main.hpp"
 #include "utils/CpuId.hpp"
 #include "Math.hpp"
 
@@ -38,6 +39,11 @@ namespace kernel::x86_64::hal {
 
 		if (const CpuIdResult res = CpuId::get(0x15, 0); res.eax != 0 and res.ebx != 0 and res.ecx != 0) {
 			freq = res.ecx * res.ebx / res.eax;
+
+			this->calibrated = true;
+		} else if (reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->supported()) {
+			freq = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->tscFreq();
+
 			this->calibrated = true;
 		}
 
