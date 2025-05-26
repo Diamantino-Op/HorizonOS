@@ -6,6 +6,8 @@
 #include "Vector.hpp"
 
 namespace kernel::common::hal {
+    using CalibratorFun = void(*)(u64 ms);
+
     struct Clock {
         const char *name {};
         usize priority {};
@@ -23,12 +25,16 @@ namespace kernel::common::hal {
 
         bool stallNs(u64 ns);
 
+        CalibratorFun getCalibrator();
+
+        static void calibrate(u64 ms);
+
     private:
         void archPause();
 
         Clock *mainClock { nullptr };
 
-        Clock *clocks[2] {}; // TODO: Make dynamic
+        Clock *clocks[4] {}; // TODO: Make dynamic
 
         u8 currClockIndex {};
     };

@@ -37,7 +37,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::sendEOI(const usize intNo) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
 		} else {
 			kernel->getDualPic()->eoi(intNo);
@@ -86,7 +86,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::mask(const u8 id) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
 		} else {
 			kernel->getDualPic()->mask(id);
@@ -94,7 +94,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::unmask(const u8 id) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
 		} else {
 			kernel->getDualPic()->unmask(id);

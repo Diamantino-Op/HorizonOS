@@ -3,6 +3,7 @@
 
 #include "Types.hpp"
 #include "uacpi/types.h"
+#include "uacpi/acpi.h"
 
 #include "memory/MainMemory.hpp"
 
@@ -23,10 +24,21 @@ namespace kernel::common::uacpi {
         ~UAcpi() = default;
 
         void init();
+
+        void earlyInit();
+
         void shutdown();
+
+        acpi_fadt *getFadtTable() const;
+        acpi_madt *getMadtTable() const;
 
     private:
         void disableInts();
+
+        u64 *earlyInitTablePtr {};
+
+        acpi_fadt *fadt {};
+        acpi_madt *madt {};
     };
 
     // I/O

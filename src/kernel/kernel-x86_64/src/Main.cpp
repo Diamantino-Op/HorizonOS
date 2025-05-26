@@ -139,6 +139,32 @@ namespace kernel::x86_64 {
 
 		terminal.info("Cpu initialized...", "HorizonOS");
 
+		// Early uAcpi
+
+		this->uAcpi = UAcpi();
+
+		this->uAcpi.earlyInit();
+
+		terminal.info("Early uAcpi init... OK", "HorizonOS");
+
+		// PIT
+
+		this->pit = PIT();
+
+		this->pit.init(1000);
+
+		terminal.info("PIT Initialised... OK", "HorizonOS");
+
+		// Kvm Clock
+
+		this->kvmClock = KvmClock();
+
+		this->kvmClock.init();
+
+		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
+
+		// Multithread
+
 		this->cpuManager.startMultithread();
 
 		// Start of multicore
@@ -164,25 +190,7 @@ namespace kernel::x86_64 {
 			//this->dualPic.disable();
 		}
 
-		// PIT
-
-		this->pit = PIT();
-
-		this->pit.init(1000);
-
-		terminal.info("PIT Initialised... OK", "HorizonOS");
-
-		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
-
-		this->kvmClock = KvmClock();
-
-		this->kvmClock.init();
-
-		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
-
-		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
-
-		terminal.debug("Curr Ns: %lu", "HorizonOS", this->clocks.getMainClock()->getNs());
+		// Tsc
 
 		this->cpuManager.getBootstrapCpu()->tsc.init();
 		this->cpuManager.getBootstrapCpu()->tsc.globalInit();
@@ -195,7 +203,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->uAcpi = UAcpi();
+		// Init uAcpi
 
 		this->uAcpi.init();
 

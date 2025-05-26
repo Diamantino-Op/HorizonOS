@@ -42,4 +42,13 @@ namespace kernel::common::hal {
 
 		return true;
 	}
+
+	CalibratorFun Clocks::getCalibrator() {
+
+		return calibrate;
+	}
+
+	void Clocks::calibrate(u64 ms) {
+
+	}
 }

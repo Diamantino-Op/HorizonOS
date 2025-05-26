@@ -41,7 +41,9 @@ namespace kernel::x86_64::hal {
 	}
 
 	u64 PIT::getNs() {
-		return ((ticks * 1'000) / frequency) * 1'000'000ul;
+		//return ((ticks * 1'000) / frequency) * 1'000'000ul;
+
+		return ticks * 1'000'000ul;
 	}
 
 	u32 PIT::addTick(u64 *) {

@@ -21,6 +21,9 @@ namespace kernel::x86_64::hal {
 
     class KvmClock {
     public:
+        KvmClock() = default;
+        ~KvmClock() = default;
+
         bool supported();
 
         u64 tscFreq();

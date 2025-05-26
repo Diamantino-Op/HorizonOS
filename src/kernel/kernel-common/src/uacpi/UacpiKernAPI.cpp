@@ -295,6 +295,8 @@ void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags) {
 #include "uacpi/uacpi.h"
 #include "uacpi/event.h"
 #include "uacpi/sleep.h"
+#include "uacpi/tables.h"
+#include "uacpi/context.h"
 
 namespace kernel::common::uacpi {
 	void UAcpi::init() {
@@ -316,10 +318,60 @@ namespace kernel::common::uacpi {
 			terminal->error("Failed to initialize GPEs: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
 
+		// Free early init table
+
+		CommonMain::getInstance()->getPMM()->freePages(this->earlyInitTablePtr, 1);
+
 		// Events
 
 		if (const uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, &handlerPowerBtn, nullptr); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to install pwr button handler: %s", "uAcpi", uacpi_status_to_string(ret));
+		}
+	}
+
+	void UAcpi::earlyInit() {
+		uacpi_context_set_log_level(UACPI_LOG_INFO);
+
+		this->earlyInitTablePtr = CommonMain::getInstance()->getPMM()->allocPages(1, true);
+
+		uacpi_setup_early_table_access(this->earlyInitTablePtr, pageSize);
+
+		uacpi_table_fadt(&fadt);
+
+		// Madt
+
+		uacpi_table outTable;
+
+		if (uacpi_table_find_by_signature(ACPI_MADT_SIGNATURE, &outTable) != UACPI_STATUS_OK) {
+			return;
+		}
+
+		this->madt = new acpi_madt();
+
+		const auto *madtPtr = static_cast<acpi_madt *>(outTable.ptr);
+
+		memcpy(this->madt, madtPtr, madtPtr->hdr.length);
+
+		uacpi_table_unref(&outTable);
+
+		const auto madtStart = reinterpret_cast<uPtr>(this->madt->entries);
+		const auto madtEnd = reinterpret_cast<uPtr>(this->madt) + this->madt->hdr.length;
+
+		auto currMadt = reinterpret_cast<acpi_entry_hdr *>(madtStart);
+
+		for (uPtr entry = madtStart; entry < madtEnd; entry += currMadt->length, currMadt = reinterpret_cast<acpi_entry_hdr *>(entry)) {
+			switch (currMadt->type) {
+				case 1:
+					// TODO: Add to IOApic table (reinterpret_cast<acpi_madt_ioapic *>(entry))
+					break;
+
+				case 2:
+					// TODO: Add to interrupt src override table (reinterpret_cast<acpi_madt_interrupt_source_override *>(entry))
+					break;
+
+				default:
+					break;
+			}
 		}
 	}
 
@@ -341,5 +393,13 @@ namespace kernel::common::uacpi {
 		if (const uacpi_status ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to enter S5: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
+	}
+
+	acpi_fadt *UAcpi::getFadtTable() const {
+		return this->fadt;
+	}
+
+	acpi_madt *UAcpi::getMadtTable() const {
+		return this->madt;
 	}
 }
