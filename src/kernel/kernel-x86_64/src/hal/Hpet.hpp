@@ -26,7 +26,7 @@ namespace kernel::x86_64::hal {
 
         void write(u64 offset, u64 val);
 
-        bool isInitialized();
+        bool isInitialized() const;
 
         static void calibrate(u64 ms);
 

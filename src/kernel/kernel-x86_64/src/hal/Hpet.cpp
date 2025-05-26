@@ -91,8 +91,8 @@ namespace kernel::x86_64::hal {
 
 	}
 
-	bool isInitialized() {
-
+	bool Hpet::isInitialized() const {
+		return this->initialized;
 	}
 
 	void Hpet::calibrate(u64 ms) {
