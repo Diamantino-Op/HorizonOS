@@ -35,7 +35,7 @@ namespace kernel::x86_64::hal {
     private:
         static KvmClockInfo info;
 
-        static u64 offset;
+        static i64 offset;
 
 		Clock clock;
     };

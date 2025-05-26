@@ -12,7 +12,7 @@ namespace kernel::x86_64::hal {
 
 	KvmClockInfo KvmClock::info;
 
-	u64 KvmClock::offset;
+	i64 KvmClock::offset;
 
 	bool KvmClock::supported() {
 		if (const u32 kvmBase = CpuId::getKvmBase(); kvmBase != 0) {

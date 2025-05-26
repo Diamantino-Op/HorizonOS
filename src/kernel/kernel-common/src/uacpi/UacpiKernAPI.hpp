@@ -25,6 +25,8 @@ namespace kernel::common::uacpi {
 
         void init();
 
+        void archMiddleInit();
+
         void earlyInit();
 
         void shutdown();

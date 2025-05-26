@@ -3,13 +3,14 @@
 
 #include "CommonMain.hpp"
 
+#include "hal/Cpu.hpp"
 #include "hal/GDT.hpp"
 #include "hal/IDT.hpp"
+#include "hal/KvmClock.hpp"
 #include "hal/PIC.hpp"
 #include "hal/PIT.hpp"
 #include "hal/TSS.hpp"
-#include "hal/Cpu.hpp"
-#include "hal/KvmClock.hpp"
+#include "hal/Hpet.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {
@@ -43,6 +44,8 @@ namespace kernel::x86_64 {
 
         KvmClock *getKvmClock();
 
+        Hpet *getHpet();
+
         CpuManager *getCpuManager();
 
     private:
@@ -55,6 +58,8 @@ namespace kernel::x86_64 {
         PIT pit {};
 
         KvmClock kvmClock {};
+
+        Hpet hpet {};
 
         CpuManager cpuManager {};
     };

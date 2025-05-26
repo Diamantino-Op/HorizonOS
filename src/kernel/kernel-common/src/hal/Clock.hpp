@@ -8,10 +8,12 @@
 namespace kernel::common::hal {
     using CalibratorFun = void(*)(u64 ms);
 
+    using GetNsFun = u64 (*)();
+
     struct Clock {
         const char *name {};
         usize priority {};
-        u64 (*getNs)() {};
+        GetNsFun getNs {};
     };
 
     class Clocks {
@@ -27,9 +29,9 @@ namespace kernel::common::hal {
 
         CalibratorFun getCalibrator();
 
+    private:
         static void calibrate(u64 ms);
 
-    private:
         void archPause();
 
         Clock *mainClock { nullptr };

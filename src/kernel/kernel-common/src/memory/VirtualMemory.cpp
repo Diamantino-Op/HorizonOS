@@ -156,6 +156,98 @@ namespace kernel::common::memory {
 		terminal->debug("Memory Sections mapped!", "VMM");
 
 		currentPageMap->load();
+
+		currentPageMap->initVirtualPageList(kernelAddrVirt);
+	}
+
+	void PageMap::initVirtualPageList(const u64 kernAddr) {
+		this->vPagesListPtr = new VmmListEntry();
+
+		const limine_memmap_entry *lastEntry = memMapRequest.response->entries[memMapRequest.response->entry_count - 1];
+
+		this->vPagesListPtr->base = lastEntry->base + lastEntry->length + CommonMain::getCurrentHhdm();
+
+		this->vPagesListPtr->count = alignDown<u64>(kernAddr - (lastEntry->base + lastEntry->length + CommonMain::getCurrentHhdm()), pageSize) / pageSize;
+	}
+
+	u64 *PageMap::allocVPages(const u64 amount) const {
+		VmmListEntry *currEntry = this->vPagesListPtr;
+
+		while (currEntry != nullptr) {
+			if (currEntry->count > amount and not currEntry->isAllocated) {
+				currEntry->isAllocated = true;
+
+				auto *newEntry = new VmmListEntry();
+
+				newEntry->base = currEntry->base + (amount * pageSize);
+
+				newEntry->count = currEntry->count - amount;
+				currEntry->count = amount;
+
+				newEntry->next = currEntry->next;
+				newEntry->prev = currEntry;
+
+				currEntry->next = newEntry;
+
+				return reinterpret_cast<u64 *>(currEntry->base);
+			}
+
+			if (currEntry->count == amount and not currEntry->isAllocated) {
+				currEntry->isAllocated = true;
+
+				return reinterpret_cast<u64 *>(currEntry->base);
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		return nullptr;
+	}
+
+	void PageMap::freeVPages(const u64 *addr) const {
+		VmmListEntry *currEntry = this->vPagesListPtr;
+
+		while (currEntry != nullptr) {
+			if (currEntry->base == reinterpret_cast<u64>(addr)) {
+				break;
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		if (currEntry == nullptr) {
+			return;
+		}
+
+		currEntry->isAllocated = false;
+
+		if (currEntry->prev != nullptr and not currEntry->prev->isAllocated) {
+			currEntry->prev->count += currEntry->count;
+
+			const VmmListEntry *tmpEntry = currEntry;
+
+			currEntry->prev->next = currEntry->next;
+
+			if (currEntry->next != nullptr) {
+				currEntry->next->prev = currEntry->prev;
+			}
+
+			currEntry = currEntry->prev;
+
+			delete tmpEntry;
+		}
+
+		if (currEntry->next != nullptr and not currEntry->next->isAllocated) {
+			currEntry->count += currEntry->next->count;
+
+			currEntry->next = currEntry->next->next;
+
+			if (currEntry->next != nullptr) {
+				currEntry->next->prev = currEntry;
+			}
+
+			delete currEntry->next;
+		}
 	}
 
 	bool PageMap::level5Paging() const {

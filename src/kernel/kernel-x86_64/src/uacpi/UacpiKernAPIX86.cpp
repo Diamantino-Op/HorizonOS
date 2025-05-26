@@ -5,10 +5,24 @@
 #include "hal/IOPort.hpp"
 #include "Main.hpp"
 
+#include "uacpi/utilities.h"
+
 namespace kernel::common::uacpi {
 	using namespace x86_64;
 	using namespace x86_64::hal;
 	using namespace x86_64::utils;
+
+	void UAcpi::archMiddleInit() {
+		const uacpi_interrupt_model currInterruptModel = CpuManager::getCurrentCore()->apic.isInitialized() ? UACPI_INTERRUPT_MODEL_PIC : UACPI_INTERRUPT_MODEL_IOAPIC;
+
+		if (const uacpi_status ret = uacpi_set_interrupt_model(currInterruptModel); uacpi_unlikely_error(ret)) {
+			CommonMain::getTerminal()->error("Failed to set interrupt model: %s", "uAcpi", uacpi_status_to_string(ret));
+		}
+	}
+
+	void UAcpi::disableInts() {
+		Asm::cli();
+	}
 
 	// I/O
 
@@ -75,10 +89,6 @@ namespace kernel::common::uacpi {
 		// TODO: Mask Interrupt
 
 		return UACPI_STATUS_NOT_FOUND;
-	}
-
-	void UAcpi::disableInts() {
-		Asm::cli();
 	}
 
 	// Events

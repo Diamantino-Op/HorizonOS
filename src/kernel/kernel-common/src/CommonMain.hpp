@@ -5,6 +5,7 @@
 
 #include "memory/VirtualAllocator.hpp"
 #include "hal/Clock.hpp"
+#include "hal/AcpiPM.hpp"
 #include "uacpi/UacpiKernAPI.hpp"
 #include "threading/Scheduler.hpp"
 
@@ -41,6 +42,8 @@ namespace kernel::common {
 
         UAcpi *getUAcpi();
 
+    	AcpiPM *getAcpiPM();
+
     	Scheduler *getScheduler() const;
 
     protected:
@@ -61,6 +64,8 @@ namespace kernel::common {
         Clocks clocks {};
 
         UAcpi uAcpi {};
+
+    	AcpiPM acpiPM {};
 
     	Scheduler *scheduler {};
     };

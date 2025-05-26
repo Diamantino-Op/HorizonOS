@@ -35,14 +35,30 @@ namespace kernel::x86_64::hal {
 	void Tsc::calibrate() {
 		u64 freq = 0;
 
-		// TODO: Add else if for kvm tsc clock and calibrator
-
 		if (const CpuIdResult res = CpuId::get(0x15, 0); res.eax != 0 and res.ebx != 0 and res.ecx != 0) {
 			freq = res.ecx * res.ebx / res.eax;
 
 			this->calibrated = true;
 		} else if (reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->supported()) {
 			freq = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->tscFreq();
+
+			this->calibrated = true;
+		} else if (const CalibratorFun calibrator = CommonMain::getInstance()->getClocks()->getCalibrator(); calibrator != nullptr) {
+			constexpr u64 times = 3;
+
+			for (u64 i = 0; i < times; i++) {
+				constexpr u64 millis = 50;
+
+				const u64 start = this->read();
+
+				calibrator(millis);
+
+				const u64 end = this->read();
+
+				freq += (end - start) * (1'000 / millis);
+			}
+
+			freq /= times;
 
 			this->calibrated = true;
 		}

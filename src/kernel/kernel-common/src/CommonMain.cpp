@@ -59,6 +59,10 @@ namespace kernel::common {
 		return &this->uAcpi;
 	}
 
+	AcpiPM *CommonMain::getAcpiPM() {
+		return &this->acpiPM;
+	}
+
 	Scheduler *CommonMain::getScheduler() const {
 		return this->scheduler;
 	}

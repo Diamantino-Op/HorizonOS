@@ -67,7 +67,7 @@ namespace kernel::common::memory {
 
 		while (current) {
 			if (current->free && current->size >= size) {
-				if (current->size >= size + sizeof(MemoryBlock) + minBlockSize) {
+				if (current->size >= size + sizeof(MemoryBlock)) {
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + size);
 
 					newBlock->size = current->size - size - sizeof(MemoryBlock);

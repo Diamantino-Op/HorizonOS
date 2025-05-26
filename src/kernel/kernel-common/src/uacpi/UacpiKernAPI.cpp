@@ -310,6 +310,8 @@ namespace kernel::common::uacpi {
 			terminal->error("Failed to load namespaces: %s", "uAcpi", uacpi_status_to_string(ret));
 		}
 
+		this->archMiddleInit();
+
 		if (const uacpi_status ret = uacpi_namespace_initialize(); uacpi_unlikely_error(ret)) {
 			terminal->error("Failed to initialize namespaces: %s", "uAcpi", uacpi_status_to_string(ret));
 		}

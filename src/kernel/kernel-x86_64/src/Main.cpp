@@ -155,6 +155,14 @@ namespace kernel::x86_64 {
 
 		terminal.info("PIT Initialised... OK", "HorizonOS");
 
+		// Hpet
+
+		this->hpet = Hpet();
+
+		this->hpet.init();
+
+		terminal.info("Hpet Initialised... OK", "HorizonOS");
+
 		// Kvm Clock
 
 		this->kvmClock = KvmClock();
@@ -162,6 +170,14 @@ namespace kernel::x86_64 {
 		this->kvmClock.init();
 
 		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
+
+		// Acpi PM Clock
+
+		this->acpiPM = AcpiPM();
+
+		this->acpiPM.init();
+
+		terminal.info("AcpiPM Clock Initialised... OK", "HorizonOS");
 
 		// Multithread
 
@@ -304,6 +320,10 @@ namespace kernel::x86_64 {
 
 	KvmClock *Kernel::getKvmClock() {
 		return &this->kvmClock;
+	}
+
+	Hpet *Kernel::getHpet() {
+		return &this->hpet;
 	}
 
 	CpuManager *Kernel::getCpuManager() {

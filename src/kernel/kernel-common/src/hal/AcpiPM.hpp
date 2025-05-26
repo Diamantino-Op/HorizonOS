@@ -1,13 +1,16 @@
-#ifndef KERNEL_X86_64_HORIZONOS_ACPIPM_HPP
-#define KERNEL_X86_64_HORIZONOS_ACPIPM_HPP
+#ifndef KERNEL_COMMON_HORIZONOS_ACPIPM_HPP
+#define KERNEL_COMMON_HORIZONOS_ACPIPM_HPP
 
 #include "Types.hpp"
 
-#include "uacpi/types.h"
 #include "uacpi/acpi.h"
 #include "uacpi/io.h"
 
-namespace kernel::x86_64::hal {
+#include "hal/Clock.hpp"
+
+namespace kernel::common::hal {
+    constexpr u64 frequency = 3579545;
+
     class AcpiPM {
     public:
         AcpiPM() = default;
@@ -15,23 +18,26 @@ namespace kernel::x86_64::hal {
 
         void init();
 
-        u64 read();
+        u64 read() const;
 
         bool supported();
 
-        uacpi_interrupt_ret handleOverflow(uacpi_handle);
+        bool isInit();
 
         static void calibrate(u64 ms);
 
         static u64 getNs();
 
     private:
+        static u64 mask;
+        static i64 offset;
+
+        bool initialized {};
+
         acpi_gas timerBlock {};
         uacpi_mapped_gas *timerBlockMapped {};
 
-        u64 mask {};
-        i64 offset {};
-        u64 overflows {};
+        Clock clock {};
     };
 }
 
