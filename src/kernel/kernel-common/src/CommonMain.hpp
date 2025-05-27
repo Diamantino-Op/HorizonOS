@@ -38,6 +38,8 @@ namespace kernel::common {
         PhysicalMemoryManager *getPMM();
         VirtualMemoryManager *getVMM();
 
+    	VirtualPageAllocator *getVPA();
+
         Clocks *getClocks();
 
         UAcpi *getUAcpi();
@@ -60,6 +62,8 @@ namespace kernel::common {
 
         PhysicalMemoryManager physicalMemoryManager {};
         VirtualMemoryManager virtualMemoryManager {};
+
+    	VirtualPageAllocator virtualPageAllocator {};
 
         Clocks clocks {};
 

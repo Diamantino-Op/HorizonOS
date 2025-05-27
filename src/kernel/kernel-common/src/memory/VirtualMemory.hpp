@@ -13,23 +13,11 @@ extern char dataStart[], dataEnd[];
 namespace kernel::common::memory {
     constexpr u64 kernelStackSize = pageSize * 16; // 64 Kbit
 
-    struct VmmListEntry {
-        VmmListEntry *prev;
-        u64 base;
-        u64 count;
-        bool isAllocated;
-        VmmListEntry *next;
-    };
-
     class PageMap {
     public:
         void init(u64 *pageTable);
 
         void load();
-
-        u64 *allocVPages(u64 amount) const;
-
-        void freeVPages(const u64 *addr) const;
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
 
@@ -41,14 +29,10 @@ namespace kernel::common::memory {
 
         bool level5Paging() const;
 
-        void initVirtualPageList(u64 kernAddr);
-
     private:
         void setPageFlags(u64 * pageAddr, u8 flags);
 
         u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
-
-        VmmListEntry *vPagesListPtr {};
 
         u64* pageTable {};
         bool isLevel5Paging = false;
@@ -60,6 +44,8 @@ namespace kernel::common::memory {
 		explicit VirtualMemoryManager(u64 kernelStackTop);
 
         void archInit();
+
+        u64 getVirtualKernelAddr() const;
 
     private:
         void init();

@@ -1,0 +1,14 @@
+{
+    "tasks": [
+        {
+            "label": "Launch QEMU",
+            "type": "shell",
+            "windows": {
+                "command": "start -FilePath 'qemu-system-x86_64' -ArgumentList '-device qemu-xhci,id=xhci -device usb-kbd,id=usbkbd -device usb-mouse,id=usbmouse -smp 10 -M q35 -m 8G -drive if=pflash,unit=0,format=raw,file=D:/HorizonOS/deps/ovmf/x86_64/OVMF.fd -cdrom D:/HorizonOS/iso/out/HorizonOS-x86_64.iso -no-reboot -no-shutdown -gdb tcp::1234 -S'"
+            },
+            "linux": {
+                "command": "qemu-system-x86_64 -cpu host,+hypervisor,+invtsc,+tsc-deadline -device qemu-xhci,id=xhci -device usb-kbd,id=usbkbd -device usb-mouse,id=usbmouse -smp 10 -M q35 -m 8G -accel kvm -drive if=pflash,unit=0,format=raw,file=/mnt/d/HorizonOS/deps/ovmf/x86_64/OVMF.fd -cdrom /mnt/d/HorizonOS/iso/out/HorizonOS-x86_64.iso -no-reboot -no-shutdown -gdb tcp::1234 -S -daemonize"
+            }
+        }
+    ]
+}

@@ -27,7 +27,7 @@ namespace kernel::x86_64::hal {
 			return;
 		}
 
-		this->virtAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getKernelAllocContext()->pageMap.allocVPages(1));
+		this->virtAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
 
 		terminal->debug("Mapping Hpet at address: 0x%.16lx", "Hpet", this->virtAddr);
 
@@ -121,13 +121,15 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Hpet::calibrate(const u64 ms) {
+		const Hpet *hpetPtr = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
+
 		const u64 ticks = (ms * frequency) / 1'000;
 
-		const u64 start = read();
+		const u64 start = hpetPtr->read();
 		u64 current = start;
 
 		while (current < start + ticks) {
-			current = read();
+			current = hpetPtr->read();
 		}
 	}
 

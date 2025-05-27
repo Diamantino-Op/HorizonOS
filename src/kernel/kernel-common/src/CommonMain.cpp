@@ -51,6 +51,10 @@ namespace kernel::common {
 		return &this->virtualMemoryManager;
 	}
 
+	VirtualPageAllocator *CommonMain::getVPA() {
+		return &this->virtualPageAllocator;
+	}
+
 	Clocks *CommonMain::getClocks() {
 		return &this->clocks;
 	}

@@ -147,6 +147,12 @@ namespace kernel::x86_64 {
 
 		terminal.info("Early uAcpi init... OK", "HorizonOS");
 
+		this->virtualPageAllocator = VirtualPageAllocator();
+
+		this->virtualPageAllocator.init(this->virtualMemoryManager.getVirtualKernelAddr());
+
+		terminal.info("Virtual Page Allocator initialized...", "HorizonOS");
+
 		// PIT
 
 		this->pit = PIT();

@@ -5,6 +5,8 @@
 #include "PhysicalMemory.hpp"
 #include "MainMemory.hpp"
 
+extern limine_memmap_request memMapRequest;
+
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multiarch
 	AllocContext *VirtualAllocator::createContext(const bool isUserspace, const bool isProcess) {
@@ -65,9 +67,9 @@ namespace kernel::common::memory {
 
 		MemoryBlock* current = ctx->blocks;
 
-		while (current) {
+		while (current != nullptr) {
 			if (current->free && current->size >= size) {
-				if (current->size >= size + sizeof(MemoryBlock)) {
+				if (current->size >= size + sizeof(MemoryBlock) + minBlockSize) {
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + size);
 
 					newBlock->size = current->size - size - sizeof(MemoryBlock);
@@ -147,10 +149,12 @@ namespace kernel::common::memory {
 			u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 			if (!newPage) {
+				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
+
 				return;
 			}
 
-			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags, ctx->isUserspace, false);
+			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags, !ctx->isUserspace, false);
 
 			memset(reinterpret_cast<u64 *>(reinterpret_cast<u64>(baseAddress) + offset), 0, pageSize);
 		}
@@ -214,5 +218,100 @@ namespace kernel::common::memory {
 		}
 
 		ctx->heapSize -= pagesToFree * pageSize;
+	}
+
+	void VirtualPageAllocator::init(const u64 kernAddr) {
+		CommonMain::getTerminal()->debug("Heap size: %lu", "VirtualAllocator", CommonMain::getInstance()->getKernelAllocContext()->heapSize);
+
+		const limine_memmap_entry *lastEntry = memMapRequest.response->entries[memMapRequest.response->entry_count - 1];
+
+		CommonMain::getTerminal()->debug("Last entry addr: 0x%.16lx, end: 0x%.16lx", "VirtualAllocator", lastEntry->base, lastEntry->base + lastEntry->length);
+		CommonMain::getTerminal()->debug("Kernel addr: 0x%.16lx", "VirtualAllocator", kernAddr);
+
+		this->vPagesListPtr = new VpaListEntry();
+
+		this->vPagesListPtr->base = lastEntry->base + lastEntry->length + pageSize + CommonMain::getCurrentHhdm();
+
+		this->vPagesListPtr->count = alignDown<u64>(kernAddr - pageSize - this->vPagesListPtr->base, pageSize) / pageSize;
+	}
+
+	u64 *VirtualPageAllocator::allocVPages(const u64 amount) const {
+		VpaListEntry *currEntry = this->vPagesListPtr;
+
+		while (currEntry != nullptr) {
+			if (currEntry->count > amount and not currEntry->isAllocated) {
+				currEntry->isAllocated = true;
+
+				auto *newEntry = new VpaListEntry();
+
+				newEntry->base = currEntry->base + (amount * pageSize);
+
+				newEntry->count = currEntry->count - amount;
+				currEntry->count = amount;
+
+				newEntry->next = currEntry->next;
+				newEntry->prev = currEntry;
+
+				currEntry->next = newEntry;
+
+				return reinterpret_cast<u64 *>(currEntry->base);
+			}
+
+			if (currEntry->count == amount and not currEntry->isAllocated) {
+				currEntry->isAllocated = true;
+
+				return reinterpret_cast<u64 *>(currEntry->base);
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		return nullptr;
+	}
+
+	void VirtualPageAllocator::freeVPages(const u64 *addr) const {
+		VpaListEntry *currEntry = this->vPagesListPtr;
+
+		while (currEntry != nullptr) {
+			if (currEntry->base == reinterpret_cast<u64>(addr)) {
+				break;
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		if (currEntry == nullptr) {
+			return;
+		}
+
+		currEntry->isAllocated = false;
+
+		if (currEntry->prev != nullptr and not currEntry->prev->isAllocated) {
+			currEntry->prev->count += currEntry->count;
+
+			const VpaListEntry *tmpEntry = currEntry;
+
+			currEntry->prev->next = currEntry->next;
+
+			if (currEntry->next != nullptr) {
+				currEntry->next->prev = currEntry->prev;
+			}
+
+			currEntry = currEntry->prev;
+
+			delete tmpEntry;
+		}
+
+		if (currEntry->next != nullptr and not currEntry->next->isAllocated) {
+			currEntry->count += currEntry->next->count;
+
+			currEntry->next = currEntry->next->next;
+
+			if (currEntry->next != nullptr) {
+				currEntry->next->prev = currEntry;
+			}
+
+			delete currEntry->next;
+		}
 	}
 }

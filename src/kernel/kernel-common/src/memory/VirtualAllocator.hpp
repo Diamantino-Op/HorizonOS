@@ -6,6 +6,8 @@
 #include "SpinLock.hpp"
 
 namespace kernel::common::memory {
+    constexpr u8 minBlockSize = 64;
+
     struct __attribute__((packed)) MemoryBlock {
         usize size {};
         bool free {};
@@ -20,6 +22,14 @@ namespace kernel::common::memory {
 		MemoryBlock *blocks {};
         TicketSpinLock lock {};
         bool isUserspace {};
+    };
+
+    struct VpaListEntry {
+        VpaListEntry *prev {};
+        u64 base {};
+        u64 count {};
+        bool isAllocated {};
+        VpaListEntry *next {};
     };
 
     class VirtualAllocator {
@@ -41,6 +51,21 @@ namespace kernel::common::memory {
     private:
         static void growHeap(AllocContext *ctx, u64 minSize);
         static void shrinkHeap(AllocContext *ctx);
+    };
+
+    class VirtualPageAllocator {
+    public:
+        VirtualPageAllocator() = default;
+        ~VirtualPageAllocator() = default;
+
+        void init(u64 kernAddr);
+
+        u64 *allocVPages(u64 amount) const;
+
+        void freeVPages(const u64 *addr) const;
+
+    private:
+        VpaListEntry *vPagesListPtr {};
     };
 }
 

@@ -115,7 +115,7 @@ namespace kernel::x86_64::hal {
 		terminal->printf(true, "\033[0;31m-   At: %s:%llu (%s)", __FILE__, __LINE__, __func__); // TODO: Fix this
 		terminal->printf(true, "\033[0;31m-");
 		terminal->printf(true, "\033[0;31m-   Registers:");
-		terminal->printf(true, "\033[0;31m-   int: 0x%.16lx", frame.intNo);
+		terminal->printf(true, "\033[0;31m-   int: %u", frame.intNo);
 		terminal->printf(true, "\033[0;31m-   err: 0x%.16lx", frame.errNo);
 		terminal->printf(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
 		terminal->printf(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
@@ -134,7 +134,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::userPanic(const Frame &frame) {
-		Terminal * terminal = CommonMain::getTerminal();
+		Terminal *terminal = CommonMain::getTerminal();
 
 		terminal->lock();
 
