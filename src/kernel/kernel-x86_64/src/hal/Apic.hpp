@@ -64,6 +64,14 @@ namespace kernel::x86_64::hal {
 
         bool initialized {};
     };
+
+    class IOApicManager {
+
+    };
+
+    class IOApic {
+
+    };
 }
 
 #endif

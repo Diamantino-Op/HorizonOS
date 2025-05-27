@@ -21,10 +21,10 @@ namespace kernel::x86_64::hal {
 
         bool supported();
 
-        u64 read(u64 offset);
-        u64 read();
+        u64 read(u64 offset) const;
+        u64 read() const;
 
-        void write(u64 offset, u64 val);
+        void write(u64 offset, u64 val) const;
 
         bool isInitialized() const;
 
@@ -39,14 +39,17 @@ namespace kernel::x86_64::hal {
 
         bool is64Bit {};
 
-        u64 frequency {};
-
         u64 physAddr {};
+        u64 virtAddr {};
+
+        static u64 frequency;
 
         static u64 offset;
 
         static u64 p;
         static u64 n;
+
+        static u64 lastReadVal;
     };
 }
 

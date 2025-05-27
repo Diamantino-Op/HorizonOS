@@ -36,7 +36,7 @@ namespace kernel::common::hal {
 
         Clock *mainClock { nullptr };
 
-        Clock *clocks[4] {}; // TODO: Make dynamic
+        Clock *clocks[5] {}; // TODO: Make dynamic
 
         u8 currClockIndex {};
     };

@@ -58,7 +58,7 @@ namespace kernel::x86_64::hal {
 			flags |= 0b00000100;
 		}
 
-		if (!(frame.errNo & 0x1)) { // Present
+		if (not (frame.errNo & 0x1)) { // Present
 			const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false, false);
@@ -86,7 +86,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::mask(const u8 id) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr and kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
 		} else {
 			kernel->getDualPic()->mask(id);
@@ -94,7 +94,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::unmask(const u8 id) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr and kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
 
 		} else {
 			kernel->getDualPic()->unmask(id);

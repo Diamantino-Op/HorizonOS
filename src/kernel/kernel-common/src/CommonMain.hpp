@@ -23,7 +23,7 @@ namespace kernel::common {
 
         virtual void shutdown();
 
-    	bool isInit() const;
+    	[[nodiscard]] bool isInit() const;
 
         static Terminal* getTerminal();
 
@@ -44,7 +44,7 @@ namespace kernel::common {
 
     	AcpiPM *getAcpiPM();
 
-    	Scheduler *getScheduler() const;
+    	[[nodiscard]] Scheduler *getScheduler() const;
 
     protected:
         void rootInit();

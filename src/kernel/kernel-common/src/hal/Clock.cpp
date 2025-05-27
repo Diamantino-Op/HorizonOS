@@ -43,7 +43,11 @@ namespace kernel::common::hal {
 		return true;
 	}
 
-	void Clocks::calibrate(u64 ms) {
+	void Clocks::calibrate(const u64 ms) {
+		const Clock *mainClock = CommonMain::getInstance()->getClocks()->getMainClock();
 
+		const u64 end = mainClock->getNs() + (ms * 1'000'000);
+
+		while (mainClock->getNs() < end) {}
 	}
 }
