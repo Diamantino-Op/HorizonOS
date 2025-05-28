@@ -6,7 +6,7 @@ namespace kernel::x86_64::utils {
 			case sizeof(u8): {
 				u8 value;
 
-				asm volatile ("mov %0, %1" : "=q"(value) : "m"(*reinterpret_cast<volatile u8 *>(addr)) : "memory");
+				asm volatile ("mov %1, %0" : "=q"(value) : "m"(*reinterpret_cast<volatile u8 *>(addr)) : "memory");
 
 				return value;
 			}
@@ -14,7 +14,7 @@ namespace kernel::x86_64::utils {
 			case sizeof(u16): {
 				u16 value;
 
-				asm volatile ("mov %0, %1" : "=q"(value) : "m"(*reinterpret_cast<volatile u16 *>(addr)) : "memory");
+				asm volatile ("mov %1, %0" : "=q"(value) : "m"(*reinterpret_cast<volatile u16 *>(addr)) : "memory");
 
 				return value;
 			}
@@ -22,7 +22,7 @@ namespace kernel::x86_64::utils {
 			case sizeof(u32): {
 				u32 value;
 
-				asm volatile ("mov %0, %1" : "=q"(value) : "m"(*reinterpret_cast<volatile u32 *>(addr)) : "memory");
+				asm volatile ("mov %1, %0" : "=q"(value) : "m"(*reinterpret_cast<volatile u32 *>(addr)) : "memory");
 
 				return value;
 			}
@@ -30,7 +30,7 @@ namespace kernel::x86_64::utils {
 			case sizeof(u64): {
 				u64 value;
 
-				asm volatile ("mov %0, %1" : "=q"(value) : "m"(*reinterpret_cast<volatile u64 *>(addr)) : "memory");
+				asm volatile ("mov %1, %0" : "=r"(value) : "m"(*reinterpret_cast<volatile u64 *>(addr)) : "memory");
 
 				return value;
 			}
@@ -43,19 +43,19 @@ namespace kernel::x86_64::utils {
 	void MMIO::write(u64 addr, u64 data, usize width) {
 		switch (width) {
 			case sizeof(u8):
-				asm volatile ("mov %1, %0" :: "q"(data), "m"(*reinterpret_cast<volatile u8 *>(addr)) : "memory");
+				asm volatile ("mov %0, %1" :: "q"(data), "m"(*reinterpret_cast<volatile u8 *>(addr)) : "memory");
 				break;
 
 			case sizeof(u16):
-				asm volatile ("mov %1, %0" :: "r"(data), "m"(*reinterpret_cast<volatile u16 *>(addr)) : "memory");
+				asm volatile ("mov %0, %1" :: "r"(data), "m"(*reinterpret_cast<volatile u16 *>(addr)) : "memory");
 				break;
 
 			case sizeof(u32):
-				asm volatile ("mov %1, %0" :: "r"(data), "m"(*reinterpret_cast<volatile u32 *>(addr)) : "memory");
+				asm volatile ("mov %0, %1" :: "r"(data), "m"(*reinterpret_cast<volatile u32 *>(addr)) : "memory");
 				break;
 
 			case sizeof(u64):
-				asm volatile ("mov %1, %0" :: "r"(data), "m"(*reinterpret_cast<volatile u64 *>(addr)) : "memory");
+				asm volatile ("mov %0, %1" :: "r"(data), "m"(*reinterpret_cast<volatile u64 *>(addr)) : "memory");
 				break;
 
 			default:

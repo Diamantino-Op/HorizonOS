@@ -120,6 +120,12 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
+		this->virtualPageAllocator = VirtualPageAllocator();
+
+		this->virtualPageAllocator.init(this->virtualMemoryManager.getVirtualKernelAddr());
+
+		terminal.info("Virtual Page Allocator initialized...", "HorizonOS");
+
 		// Tss Stack
 
 		this->tssManager.allocStack();
@@ -146,12 +152,6 @@ namespace kernel::x86_64 {
 		this->uAcpi.earlyInit();
 
 		terminal.info("Early uAcpi init... OK", "HorizonOS");
-
-		this->virtualPageAllocator = VirtualPageAllocator();
-
-		this->virtualPageAllocator.init(this->virtualMemoryManager.getVirtualKernelAddr());
-
-		terminal.info("Virtual Page Allocator initialized...", "HorizonOS");
 
 		// PIT
 

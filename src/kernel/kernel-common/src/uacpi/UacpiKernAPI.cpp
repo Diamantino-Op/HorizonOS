@@ -147,6 +147,8 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 // I/O
 
+// TODO: Use new VPage map
+
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle *out_handle) {
 	*out_handle = reinterpret_cast<u64 *>(base); // TODO: to fix (for other arches)
 
