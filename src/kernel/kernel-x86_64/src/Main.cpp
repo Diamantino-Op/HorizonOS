@@ -140,8 +140,10 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.init();
 
-		terminal.info("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
-		terminal.info("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
+		this->cpuManager.startBootCore();
+
+		terminal.debug("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
+		terminal.debug("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
 
 		terminal.info("Cpu initialized...", "HorizonOS");
 
@@ -187,7 +189,7 @@ namespace kernel::x86_64 {
 
 		// Multithread
 
-		this->cpuManager.startMultithread();
+		//this->cpuManager.startMultithread();
 
 		// Start of multicore
 

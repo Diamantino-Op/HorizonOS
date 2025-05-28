@@ -37,6 +37,8 @@ namespace kernel::x86_64::hal {
 
         void init();
 
+        void startBootCore();
+
         void startMultithread();
 
         u64 getCoreAmount() const;

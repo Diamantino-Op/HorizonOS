@@ -16,7 +16,7 @@ namespace kernel::common::hal {
 			this->mainClock = clock;
 		} else {
 			for (const auto &tmpClock : this->clocks) {
-				if (tmpClock->priority > this->mainClock->priority) {
+				if (tmpClock != nullptr and tmpClock->priority > this->mainClock->priority) {
 					this->mainClock = tmpClock;
 				}
 			}

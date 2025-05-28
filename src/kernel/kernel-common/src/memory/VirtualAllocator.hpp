@@ -6,7 +6,9 @@
 #include "SpinLock.hpp"
 
 namespace kernel::common::memory {
-    struct __attribute__((packed, aligned(64))) MemoryBlock {
+    constexpr u8 minBlockSize = 64;
+
+    struct __attribute__((aligned(64))) MemoryBlock {
         usize size {};
         bool free {};
         MemoryBlock *next {};
@@ -17,6 +19,7 @@ namespace kernel::common::memory {
         u8 pageFlags {};
         u64 *heapStart {};
 		usize heapSize {};
+        u64 freeSpace {};
 		MemoryBlock *blocks {};
         TicketSpinLock lock {};
         bool isUserspace {};
@@ -37,14 +40,14 @@ namespace kernel::common::memory {
 
         static void shareKernelPages(const AllocContext *ctx);
 
-        static void initContext(const AllocContext *ctx);
+        static void initContext(AllocContext *ctx);
 
         static u64 getPhysicalAddress(u64 virtualAddress);
 
         static u64 *alloc(AllocContext *ctx, u64 size);
         static void free(AllocContext *ctx, u64 *ptr);
 
-        static void defrag(const AllocContext *ctx);
+        static void defrag(AllocContext *ctx);
 
     private:
         static void growHeap(AllocContext *ctx, u64 minSize);

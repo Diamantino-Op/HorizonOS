@@ -119,13 +119,10 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void CpuManager::startMultithread() {
+	void CpuManager::startBootCore() {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		this->bootstrapCpu = new CpuCore();
-		this->cpuList = new CoreKernel[this->coreAmount - 1];
-
-		u64 j = 0;
 
 		for (u64 i = 0; i < this->coreAmount; i++) {
 			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
@@ -136,7 +133,19 @@ namespace kernel::x86_64::hal {
 				setCorePointer(this->bootstrapCpu);
 
 				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
-			} else {
+
+				break;
+			}
+		}
+	}
+
+	void CpuManager::startMultithread() {
+		this->cpuList = new CoreKernel[this->coreAmount - 1];
+
+		u64 j = 0;
+
+		for (u64 i = 0; i < this->coreAmount; i++) {
+			if (mpRequest.response->cpus[i]->lapic_id != mpRequest.response->bsp_lapic_id) {
 				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
