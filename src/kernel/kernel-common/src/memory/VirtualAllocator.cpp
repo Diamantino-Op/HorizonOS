@@ -65,21 +65,23 @@ namespace kernel::common::memory {
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
 		ctx->lock.lock();
 
+		const u64 alignedSize = alignUp<u64>(size, 64);
+
 		MemoryBlock* current = ctx->blocks;
 
 		while (current != nullptr) {
-			if (current->free && current->size >= size) {
-				if (current->size >= size + sizeof(MemoryBlock) + minBlockSize) {
-					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + size);
+			if (current->free && current->size >= alignedSize) {
+				if (current->size > alignedSize + sizeof(MemoryBlock)) {
+					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
 
-					newBlock->size = current->size - size - sizeof(MemoryBlock);
+					newBlock->size = current->size - alignedSize - sizeof(MemoryBlock);
 					newBlock->free = true;
 					newBlock->next = current->next;
 					current->next = newBlock;
 				}
 
 				current->free = false;
-				current->size = size;
+				current->size = alignedSize;
 
 				ctx->lock.unlock();
 
@@ -89,17 +91,17 @@ namespace kernel::common::memory {
 			current = current->next;
 		}
 
-		if (CommonMain::getInstance()->getPMM()->getFreeMemory() < size + sizeof(MemoryBlock)) {
+		if (CommonMain::getInstance()->getPMM()->getFreeMemory() < alignedSize + sizeof(MemoryBlock)) {
 			ctx->lock.unlock();
 
 			return nullptr;
 		}
 
-		growHeap(ctx, size);
+		growHeap(ctx, alignedSize);
 
 		ctx->lock.unlock();
 
-		return alloc(ctx, size);
+		return alloc(ctx, alignedSize);
 	}
 
 	// TODO: Maybe improve speed by defragging only the current block

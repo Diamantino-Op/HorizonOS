@@ -6,9 +6,7 @@
 #include "SpinLock.hpp"
 
 namespace kernel::common::memory {
-    constexpr u8 minBlockSize = 64;
-
-    struct __attribute__((packed)) MemoryBlock {
+    struct __attribute__((packed, aligned(64))) MemoryBlock {
         usize size {};
         bool free {};
         MemoryBlock *next {};

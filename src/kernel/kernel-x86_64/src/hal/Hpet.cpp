@@ -29,11 +29,15 @@ namespace kernel::x86_64::hal {
 
 		this->virtAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
 
-		terminal->debug("Mapping Hpet at address: 0x%.16lx", "Hpet", this->virtAddr);
+		terminal->debug("Mapping Hpet at address:", "Hpet");
+		terminal->debug("	Phys: 0x%.16lx", "Hpet", this->virtAddr);
+		terminal->debug("	Virt: 0x%.16lx", "Hpet", this->physAddr);
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->virtAddr, this->physAddr, 0b00000011, true, false);
 
 		const u64 cap = read(regCap);
+
+		terminal->debug("Cap val: 0x%.16lx", "Hpet", cap);
 
 		this->is64Bit = (cap & ACPI_HPET_COUNT_SIZE_CAP);
 
