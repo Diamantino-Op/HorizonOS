@@ -7,10 +7,10 @@
 
 #include "memory/MainMemory.hpp"
 
-#define uacpi_memcpy kernel::common::memory::memcpy
+/*#define uacpi_memcpy kernel::common::memory::memcpy
 #define uacpi_memmove kernel::common::memory::memmove
 #define uacpi_memset kernel::common::memory::memset
-#define uacpi_memcmp kernel::common::memory::memcmp
+#define uacpi_memcmp kernel::common::memory::memcmp*/
 
 namespace kernel::common::uacpi {
     struct IRQOut {

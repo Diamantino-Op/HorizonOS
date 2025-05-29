@@ -350,9 +350,9 @@ namespace kernel::common::uacpi {
 			return;
 		}
 
-		this->madt = new acpi_madt();
-
 		const auto *madtPtr = static_cast<acpi_madt *>(outTable.ptr);
+
+		this->madt = static_cast<acpi_madt *>(malloc(madtPtr->hdr.length));
 
 		memcpy(this->madt, madtPtr, madtPtr->hdr.length);
 

@@ -189,7 +189,7 @@ namespace kernel::x86_64 {
 
 		// Multithread
 
-		//this->cpuManager.startMultithread();
+		this->cpuManager.startMultithread();
 
 		// Start of multicore
 
