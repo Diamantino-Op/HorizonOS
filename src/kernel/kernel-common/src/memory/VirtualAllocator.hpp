@@ -44,6 +44,8 @@ namespace kernel::common::memory {
 
         static u64 getPhysicalAddress(u64 virtualAddress);
 
+        static void fixBlock(AllocContext *ctx, MemoryBlock *blockPtr);
+
         static u64 *alloc(AllocContext *ctx, u64 size);
         static void free(AllocContext *ctx, u64 *ptr);
 

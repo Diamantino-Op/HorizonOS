@@ -65,6 +65,34 @@ namespace kernel::common::memory {
 		return CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPhysAddress(alignedKernAddr) + diff;
 	}
 
+	// TODO: Find a way to not use this! (this is broken when the a middle block corrupts)
+	void VirtualAllocator::fixBlock(AllocContext *ctx, MemoryBlock *blockPtr) {
+		u64 tmpFree = ctx->freeSpace;
+
+		MemoryBlock *tmp = ctx->blocks;
+
+		while (reinterpret_cast<u64>(tmp) > CommonMain::getCurrentHhdm() and tmp != nullptr) {
+			if (tmp->free) {
+				tmpFree -= tmp->size;
+			}
+
+			tmp = tmp->next;
+		}
+
+		const u64 heapEnd = reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize;
+		const u64 blockEnd = reinterpret_cast<u64>(blockPtr) + sizeof(MemoryBlock) + tmpFree;
+
+		if (blockPtr->size > 1'000'000'000'000'000ull) {
+			if (blockEnd < heapEnd and reinterpret_cast<u64>(blockPtr->next) < CommonMain::getCurrentHhdm()) {
+				blockPtr->next = reinterpret_cast<MemoryBlock *>(blockEnd);
+				blockPtr->size = tmpFree;
+			} else if (blockEnd > heapEnd) {
+				blockPtr->next = nullptr;
+				blockPtr->size = tmpFree;
+			}
+		}
+	}
+
 	// TODO: Maybe set to 0 too
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
 		ctx->lock.lock();
@@ -79,13 +107,13 @@ namespace kernel::common::memory {
 
 		while (current != nullptr) {
 			if (current->free and current->size >= alignedSize) {
+				CommonMain::getTerminal()->debug("AN 1 - Next: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
+
 				if (current->size >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
 					CommonMain::getTerminal()->warn("Found block of size: %lu bytes", "VirtualAllocator", current->size);
 
 					if (current->size > pageSize * 1000) {
 						CommonMain::getTerminal()->error("AN 1 - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
-
-						CommonMain::getTerminal()->error("AN 1 - Next: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
 					}
 
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
@@ -94,6 +122,8 @@ namespace kernel::common::memory {
 					newBlock->free = true;
 					newBlock->next = current->next;
 					current->next = newBlock;
+
+					ctx->freeSpace -= sizeof(MemoryBlock);
 
 					if (newBlock->size > pageSize * 1000) {
 						CommonMain::getTerminal()->error("AN - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
@@ -213,7 +243,7 @@ namespace kernel::common::memory {
 		last->next = newBlock;
 
 		ctx->heapSize += allocSize;
-		ctx->freeSpace += allocSize;
+		ctx->freeSpace += newBlock->size;
 
 		defrag(ctx);
 	}
