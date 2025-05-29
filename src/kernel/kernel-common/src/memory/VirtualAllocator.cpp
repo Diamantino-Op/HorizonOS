@@ -107,14 +107,14 @@ namespace kernel::common::memory {
 
 		while (current != nullptr) {
 			if (current->free and current->size >= alignedSize) {
+				if (current->size > pageSize * 1000) {
+					CommonMain::getTerminal()->error("AN 1 - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
+				}
+
 				CommonMain::getTerminal()->debug("AN 1 - Next: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
 
 				if (current->size >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
 					CommonMain::getTerminal()->warn("Found block of size: %lu bytes", "VirtualAllocator", current->size);
-
-					if (current->size > pageSize * 1000) {
-						CommonMain::getTerminal()->error("AN 1 - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
-					}
 
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
 
