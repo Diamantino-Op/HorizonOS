@@ -107,6 +107,10 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
+	Pair Tsc::getPN() const {
+		return { this->p, this->n };
+	}
+
 	u64 Tsc::getNs() {
 		CpuCore *currentCore = CpuManager::getCurrentCore();
 

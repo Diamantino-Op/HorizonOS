@@ -23,6 +23,8 @@ namespace kernel::x86_64::hal {
 
         void globalInit();
 
+        Pair getPN() const;
+
         static u64 getNs();
 
     private:

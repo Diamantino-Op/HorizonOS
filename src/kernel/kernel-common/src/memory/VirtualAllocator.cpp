@@ -69,12 +69,25 @@ namespace kernel::common::memory {
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
 		ctx->lock.lock();
 
+		//CommonMain::getTerminal()->debugNF("Allocating %lu bytes", "VirtualAllocator", size);
+
 		const u64 alignedSize = alignUp<u64>(size, sizeof(MemoryBlock));
+
+		//CommonMain::getTerminal()->debugNF("Allocating %lu aligned bytes", "VirtualAllocator", alignedSize);
+		//CommonMain::getTerminal()->debugNF("Free Space: %lu bytes", "VirtualAllocator", ctx->freeSpace);
+		//CommonMain::getTerminal()->debugNF("Heap size: %lu bytes", "VirtualAllocator", ctx->heapSize);
 
 		MemoryBlock* current = ctx->blocks;
 
 		while (current != nullptr) {
 			if (current->free and current->size >= alignedSize) {
+				if (current->size > pageSize * 1000) {
+					CommonMain::getTerminal()->error("AN 1 - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
+				}
+
+				//CommonMain::getTerminal()->debugNF("AN 1 - Current: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current));
+				//CommonMain::getTerminal()->debugNF("AN 1 - Next: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
+
 				if (current->size >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
 
@@ -83,11 +96,21 @@ namespace kernel::common::memory {
 					newBlock->next = current->next;
 					current->next = newBlock;
 
+					//CommonMain::getTerminal()->debugNF("AN 1 - New: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
+
 					ctx->freeSpace -= sizeof(MemoryBlock);
+
+					if (newBlock->size > pageSize * 1000) {
+						CommonMain::getTerminal()->error("AN - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
+					}
 				}
 
 				current->free = false;
 				current->size = alignedSize;
+
+				if (current->size > pageSize * 1000) {
+					CommonMain::getTerminal()->error("AC - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
+				}
 
 				ctx->freeSpace -= alignedSize;
 
@@ -114,13 +137,11 @@ namespace kernel::common::memory {
 
 	// TODO: Maybe improve speed by defragging only the current block
 	void VirtualAllocator::free(AllocContext *ctx, u64 *ptr) {
-		ctx->lock.lock();
-
-		if (!ptr) {
-			ctx->lock.unlock();
-
+		if (ptr == nullptr) {
 			return;
 		}
+
+		ctx->lock.lock();
 
 		auto* block = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(ptr) - sizeof(MemoryBlock));
 		block->free = true;

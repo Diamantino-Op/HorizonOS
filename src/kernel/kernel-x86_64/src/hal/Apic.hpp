@@ -31,13 +31,13 @@ namespace kernel::x86_64::hal {
 
         bool isInitialized() const;
 
-        void init(bool bootstrap);
+        void init();
 
         void calibrateTimer();
 
         void eoi();
         void ipi(u8 id, Dest dsh, u8 vector);
-        void arm(usize ns, u8 vector);
+        void arm(u64 ns, u8 vector);
 
         void setId(u32 apicId);
         u32 getId() const;

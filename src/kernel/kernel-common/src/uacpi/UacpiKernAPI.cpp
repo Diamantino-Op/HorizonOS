@@ -241,7 +241,7 @@ uacpi_handle uacpi_kernel_create_event() {
 }
 
 void uacpi_kernel_free_event(uacpi_handle handle) {
-	free(handle);
+	delete static_cast<SimpleEvent *>(handle);
 }
 
 void uacpi_kernel_signal_event(uacpi_handle handle) {
@@ -279,7 +279,7 @@ uacpi_handle uacpi_kernel_create_spinlock() {
 }
 
 void uacpi_kernel_free_spinlock(uacpi_handle handle) {
-	free(handle);
+	delete static_cast<TicketSpinLock *>(handle);
 }
 
 uacpi_cpu_flags uacpi_kernel_lock_spinlock(uacpi_handle handle) {

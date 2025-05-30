@@ -70,12 +70,19 @@ namespace kernel::common {
 		}
 	}
 
-	void Terminal::putChar(char c, void *ctx) {
+	void Terminal::putChar(char c, void *) {
 		constexpr u16 com1Port = 0x3F8;
 
 	 	if (flantermCtx != nullptr) {
 	 		flanterm_write(flantermCtx, &c, 1);
 	 	}
+
+		// TODO: Only x86_64
+		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
+	}
+
+	void Terminal::putCharNF(char c, void *) {
+		constexpr u16 com1Port = 0x3F8;
 
 		// TODO: Only x86_64
 		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
@@ -89,6 +96,17 @@ namespace kernel::common {
 
 		if (autoSN) {
 			npf_pprintf((npf_putc)(void *)putChar, nullptr, "\n");
+		}
+	}
+
+	void Terminal::printfNF(const bool autoSN, const char *format, ...) {
+		va_list val;
+		va_start(val, format);
+		npf_vpprintf((npf_putc)(void *)putCharNF, nullptr, format, val);
+		va_end(val);
+
+		if (autoSN) {
+			npf_pprintf((npf_putc)(void *)putCharNF, nullptr, "\n");
 		}
 	}
 
@@ -134,6 +152,23 @@ namespace kernel::common {
 		va_end(val);
 
 		this->printf(true, "\033[0m");
+
+		this->unlock();
+#endif
+	}
+
+	void Terminal::debugNF(const char *format, const char *id, ...) {
+#ifdef HORIZON_DEBUG
+		this->lock();
+
+		this->printfNF(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)putCharNF, nullptr, format, val);
+		va_end(val);
+
+		this->printfNF(true, "\033[0m");
 
 		this->unlock();
 #endif

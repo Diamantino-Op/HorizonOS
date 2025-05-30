@@ -58,11 +58,14 @@ namespace kernel::common {
         void unlock();
 
         static void putChar(char c, void *ctx);
+        static void putCharNF(char c, void *ctx);
         void printf(bool autoSN, const char* format, ...);
+        void printfNF(bool autoSN, const char* format, ...);
         void printfLock(bool autoSN, const char* format, ...);
 
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);
+        void debugNF(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
         void warnNoLock(const char *format, const char *id, ...);
         void error(const char *format, const char *id, ...);

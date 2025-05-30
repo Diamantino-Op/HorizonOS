@@ -6,7 +6,7 @@ set(EXTRA_ASM_FLAGS "")
 
 if (${HORIZON_ARCH} STREQUAL "x86_64")
     if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        set(EXTRA_C_FLAGS -O0 -g -fsanitize=undefined -DHORIZON_DEBUG)
+        set(EXTRA_C_FLAGS -O3 -ffast-math -g -fsanitize=undefined -DHORIZON_DEBUG) # -O0
     else ()
         set(EXTRA_C_FLAGS -O3 -ffast-math)
     endif ()
