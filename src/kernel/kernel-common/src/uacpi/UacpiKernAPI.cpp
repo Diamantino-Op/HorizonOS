@@ -406,4 +406,12 @@ namespace kernel::common::uacpi {
 	acpi_madt *UAcpi::getMadtTable() const {
 		return this->madt;
 	}
+
+	acpi_madt_ioapic *UAcpi::getIoApics() const {
+		return this->ioApics;
+	}
+
+	acpi_madt_interrupt_source_override *UAcpi::getIsos() const {
+		return this->isos;
+	}
 }

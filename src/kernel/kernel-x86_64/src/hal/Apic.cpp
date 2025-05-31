@@ -46,7 +46,7 @@ namespace kernel::x86_64::hal {
 				terminal->debug("	Phys: 0x%.16lx", "Apic", this->physMmio);
 				terminal->debug("	Virt: 0x%.16lx", "Apic", this->mmio);
 
-				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, this->physMmio, 0b00000011, true, false);
+				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, this->physMmio, 0b00000011, true, false); // TODO: Maybe use MMIO flags
 			}
 		}
 
@@ -191,5 +191,154 @@ namespace kernel::x86_64::hal {
 
 	bool Apic::getIsX2Apic() const {
 		return this->isX2Apic;
+	}
+
+	// IOApic
+
+	bool IOApic::isInitialized() const {
+		return this->initialized;
+	}
+
+	void IOApic::init(u64 physMmio, u32 gsiBase) {
+		Terminal *terminal = CommonMain::getTerminal();
+
+		this->mmio = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
+
+		terminal->debug("Mapping IOApic at address:", "IOApic");
+		terminal->debug("	Phys: 0x%.16lx", "IOApic", physMmio);
+		terminal->debug("	Virt: 0x%.16lx", "IOApic", this->mmio);
+
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, physMmio, 0b00000011, true, false); // TODO: Maybe use MMIO flags
+
+		this->redirects = ((this->read(0x01) >> 16) & 0xFF) + 1;
+
+		for (u64 i = 0; i < this->redirects; i++) {
+			this->maskIdx(i);
+		}
+	}
+
+	void IOApic::setIdx(const u64 idx, const u8 vector, const u64 dest, const IOApicFlags flags, const IOApicDelivery delivery) {
+		u64 entry = 0;
+
+		entry |= vector;
+		entry |= delivery & IOApicDelivery::EXT_INT;
+		entry |= flags & ~0x7FF;
+		entry |= dest << 56;
+
+		this->writeEntry(idx, entry);
+	}
+
+	void IOApic::maskIdx(const u64 idx) {
+		u64 entry = readEntry(idx);
+
+		entry |= 1 << 16;
+
+		writeEntry(idx, entry);
+	}
+
+	void IOApic::unmaskIdx(const u64 idx) {
+		u64 entry = readEntry(idx);
+
+		entry |= ~(1 << 16);
+
+		writeEntry(idx, entry);
+	}
+
+	u32 IOApic::entry(const u32 idx) {
+		return 0x10 + (idx * 2);
+	}
+
+	u32 IOApic::read(const u32 reg) const {
+		MMIO::out<u32>(this->mmio, reg);
+
+		return MMIO::in<u32>(this->mmio + 0x10);
+	}
+
+	void IOApic::write(const u32 reg, const u32 data) const {
+		MMIO::out<u32>(this->mmio, reg);
+		MMIO::out<u32>(this->mmio + 0x10, data);
+	}
+
+	u64 IOApic::readEntry(const u32 idx) {
+		const u32 lo = this->read(this->entry(idx));
+		const u32 hi = this->read(this->entry(idx + 1));
+
+		return (static_cast<u64>(hi) << 32) | lo;
+	}
+
+	void IOApic::writeEntry(const u32 idx, const u64 data) {
+		this->write(this->entry(idx), data & 0xFFFFFFFF);
+		this->write(this->entry(idx + 1), data >> 32);
+	}
+
+	Pair IOApic::getGsiRange() const {
+		return { this->gsiBase, this->gsiBase + this->redirects };
+	}
+
+	// IOApic Manager
+
+	void IOApicManager::setGsi(const u64 gsi, const u8 vector, const u64 dest, const IOApicFlags flags, const IOApicDelivery delivery) {
+		CommonMain::getTerminal()->debug("Redirecting gsi %lu to vector %u", "IOApic", gsi, vector);
+
+		IOApic &entry = this->gsiToIOApic(gsi);
+
+		entry.setIdx(gsi - entry.getGsiRange().val1, vector, dest, flags, delivery);
+	}
+
+	void IOApicManager::maskGsi(const u32 gsi) {
+		IOApic &entry = this->gsiToIOApic(gsi);
+
+		entry.maskIdx(gsi - entry.getGsiRange().val1);
+	}
+
+	void IOApicManager::unmaskGsi(const u32 gsi) {
+		IOApic &entry = this->gsiToIOApic(gsi);
+
+		entry.unmaskIdx(gsi - entry.getGsiRange().val1);
+	}
+
+	// TODO: Gsi might normally be 0
+	void IOApicManager::mask(const u8 vector) {
+		if (vector < 0x20) {
+			return;
+		}
+
+		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi > 0) {
+			this->maskGsi(gsi);
+		} else {
+			this->maskGsi(vector - 0x20);
+		}
+	}
+
+	void IOApicManager::unmask(u8 vector) {
+		if (vector < 0x20) {
+			return;
+		}
+
+		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi > 0) {
+			this->unmaskGsi(gsi);
+		} else {
+			this->unmaskGsi(vector - 0x20);
+		}
+	}
+
+	IOApic &IOApicManager::gsiToIOApic(const u32 gsi) {
+		for (IOApic &entry : this->ioApics) {
+			if (auto [start, end] = entry.getGsiRange(); start < gsi and gsi <= end) {
+				return entry;
+			}
+		}
+
+		__builtin_unreachable();
+	}
+
+	u32 IOApicManager::irqToIso(const u8 irq) {
+		for (const acpi_madt_interrupt_source_override &entry : CommonMain::getInstance()->getUAcpi()->getIsos()) {
+			if (entry.source == irq) {
+				return entry.gsi;
+			}
+		}
+
+		return 0;
 	}
 }
