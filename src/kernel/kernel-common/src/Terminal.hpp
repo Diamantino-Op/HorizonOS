@@ -82,7 +82,7 @@ namespace kernel::common {
     private:
         static flanterm_context *flantermCtx;
 
-        SimpleSpinLock spinLock;
+        TicketSpinLock spinLock;
     };
 }
 

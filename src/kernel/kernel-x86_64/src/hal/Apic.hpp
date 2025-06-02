@@ -7,16 +7,33 @@
 
 namespace kernel::x86_64::hal {
     enum ApicMsrs : u64 {
-        APIC_BASE = 0x1B,
-        TPR = 0x80,
-        SIV = 0xF0,
-        ICRL = 0x300,
-        ICRH = 0x310,
-        LVT = 0x320,
-        TDC = 0x3E0,
-        TIC = 0x380,
-        TCC = 0x390,
-        DEADLINE = 0x6E0
+        LAPIC_ID = 0x20, // Local APIC ID
+        LAPIC_VER = 0x30, // Local APIC Version
+        LAPIC_TPR = 0x80, // Task Priority
+        LAPIC_APR = 0x90, // Arbitration Priority
+        LAPIC_BASE = 0x1B, // Local APIC Base
+        LAPIC_PPR = 0xA0, // Processor Priority
+        LAPIC_EOI = 0xB0, // EOI
+        LAPIC_RRD = 0xC0, // Remote Read
+        LAPIC_LDR = 0xD0, // Logical Destination
+        LAPIC_DFR = 0xE0, // Destination Format
+        LAPIC_SIV = 0xF0, // Spurious Interrupt Vector
+        LAPIC_ISR = 0x100, // In-Service (8 registers)
+        LAPIC_TMR = 0x180, // Trigger Mode (8 registers)
+        LAPIC_IRR = 0x200, // Interrupt Request (8 registers)
+        LAPIC_ESR = 0x280, // Error Status
+        LAPIC_ICRL = 0x300, // Interrupt Command (Low)
+        LAPIC_ICRH = 0x310, // Interrupt Command (High)
+        LAPIC_LVT = 0x320, // LVT Timer Initial Count
+        LAPIC_THERMAL = 0x330, // LVT Thermal Sensor
+        LAPIC_PERF = 0x340, // LVT Performance Counter
+        LAPIC_LINT0 = 0x350, // LVT LINT0
+        LAPIC_LINT1 = 0x360, // LVT LINT1
+        LAPIC_ERROR = 0x370, // LVT Error
+        LAPIC_TIC = 0x380, // Initial Count (for Timer)
+        LAPIC_TCC = 0x390, // Current Count (for Timer)
+        LAPIC_TDC = 0x3E0, // Divide Configuration (for Timer)
+        LAPIC_DEADLINE = 0x6E0 // TSC Deadline Mode
     };
 
     enum Dest : u8 {
@@ -55,7 +72,7 @@ namespace kernel::x86_64::hal {
 
         void eoi();
         void ipi(u8 id, Dest dsh, u8 vector);
-        void arm(u64 ns, u8 vector);
+        void arm(u64 ns, u8 vector, bool periodic);
 
         void setId(u32 apicId);
         u32 getId() const;
@@ -88,11 +105,9 @@ namespace kernel::x86_64::hal {
         IOApic() = default;
         ~IOApic() = default;
 
-        bool isInitialized() const;
-
         void init(u64 physMmio, u32 gsiBase);
 
-        void setIdx(u64 idx, u8 vector, u64 dest, IOApicFlags flags, IOApicDelivery delivery);
+        void setIdx(u64 idx, u8 vector, u64 dest, u16 flags, IOApicDelivery delivery);
 
         void maskIdx(u64 idx);
         void unmaskIdx(u64 idx);
@@ -111,8 +126,6 @@ namespace kernel::x86_64::hal {
         u64 mmio {};
         u32 gsiBase {};
         u64 redirects {};
-
-        bool initialized {};
     };
 
     class IOApicManager {
@@ -120,20 +133,26 @@ namespace kernel::x86_64::hal {
         IOApicManager() = default;
         ~IOApicManager() = default;
 
-        void setGsi(u64 gsi, u8 vector, u64 dest, IOApicFlags flags, IOApicDelivery delivery);
+        void init();
 
-        void maskGsi(u32 gsi);
-        void unmaskGsi(u32 gsi);
+        void setGsi(u64 gsi, u8 vector, u64 dest, u16 flags, IOApicDelivery delivery) const;
+
+        void maskGsi(u32 gsi) const;
+        void unmaskGsi(u32 gsi) const;
 
         void mask(u8 vector);
         void unmask(u8 vector);
 
-        IOApic &gsiToIOApic(u32 gsi);
+        IOApic *gsiToIOApic(u32 gsi) const;
 
         u32 irqToIso(u8 irq);
 
+        bool isInitialized() const;
+
     private:
         IOApic *ioApics {};
+
+        bool initialized {};
     };
 }
 

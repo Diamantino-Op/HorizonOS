@@ -105,6 +105,8 @@ namespace kernel::x86_64::utils {
         static void cli();
         static void sti();
 
+        static bool intsEnabled();
+
         static void hlt();
         [[noreturn]] static void lhlt();
         static void pause();

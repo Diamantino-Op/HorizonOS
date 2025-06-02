@@ -74,7 +74,7 @@ namespace kernel::common {
 		constexpr u16 com1Port = 0x3F8;
 
 	 	if (flantermCtx != nullptr) {
-	 		flanterm_write(flantermCtx, &c, 1);
+	 		//flanterm_write(flantermCtx, &c, 1);
 	 	}
 
 		// TODO: Only x86_64

@@ -35,8 +35,10 @@ namespace kernel::common::uacpi {
         acpi_madt *getMadtTable() const;
 
         acpi_madt_ioapic *getIoApics() const;
+        u64 getIoApicsAmount() const;
 
         acpi_madt_interrupt_source_override *getIsos() const;
+        u64 getIsosAmount() const;
 
     private:
         void disableInts();
@@ -46,8 +48,11 @@ namespace kernel::common::uacpi {
         acpi_fadt *fadt {};
         acpi_madt *madt {};
 
-        acpi_madt_ioapic *ioApics {};
-        acpi_madt_interrupt_source_override *isos {};
+        acpi_madt_ioapic *ioApics;
+        acpi_madt_interrupt_source_override *isos;
+
+        u64 ioApicsAmount {};
+        u64 isosAmount {};
     };
 
     // I/O

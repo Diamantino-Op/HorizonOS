@@ -1,9 +1,9 @@
-#ifndef KERNEL_X86_64_MMIO_HPP
-#define KERNEL_X86_64_MMIO_HPP
+#ifndef KERNEL_COMMON_MMIO_HPP
+#define KERNEL_COMMON_MMIO_HPP
 
 #include "Types.hpp"
 
-namespace kernel::x86_64::utils {
+namespace kernel::common::utils {
     class MMIO {
     public:
         static u64 read(u64 addr, usize width);

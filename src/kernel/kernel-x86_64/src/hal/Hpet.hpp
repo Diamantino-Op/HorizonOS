@@ -10,7 +10,10 @@ namespace kernel::x86_64::hal {
 
     constexpr u64 regCap = 0x00;
     constexpr u64 regCfg = 0x10;
+    constexpr u64 regInt = 0x20;
     constexpr u64 regCnt = 0xF0;
+    constexpr u64 regTmrStart = 0x100;
+    constexpr u64 regCmpStart = 0x108;
 
     class Hpet {
     public:
@@ -28,6 +31,13 @@ namespace kernel::x86_64::hal {
 
         bool isInitialized() const;
 
+        u8 getMaxTimers() const;
+
+        u64 getFrequency() const;
+
+        static u64 getTimerRegister(u8 timerId);
+        static u64 getComparatorRegister(u8 timerId);
+
         static void calibrate(u64 ms);
 
         static u64 getNs();
@@ -41,6 +51,8 @@ namespace kernel::x86_64::hal {
 
         u64 physAddr {};
         u64 virtAddr {};
+
+        u8 maxTimers {};
 
         static u64 frequency;
 

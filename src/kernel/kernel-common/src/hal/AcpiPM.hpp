@@ -29,6 +29,8 @@ namespace kernel::common::hal {
         static u64 getNs();
 
     private:
+        u64 readInternal() const;
+
         static u64 mask;
         static i64 offset;
 

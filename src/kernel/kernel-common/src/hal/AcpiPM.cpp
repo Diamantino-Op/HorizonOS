@@ -3,6 +3,8 @@
 #include "CommonMain.hpp"
 #include "Math.hpp"
 
+// TODO: Broken
+
 namespace kernel::common::hal {
 	u64 AcpiPM::mask;
 	i64 AcpiPM::offset;
@@ -30,6 +32,20 @@ namespace kernel::common::hal {
 	}
 
 	u64 AcpiPM::read() const {
+		u32 v1 = 0;
+		u32 v2 = 0;
+		u32 v3 = 0;
+
+		do {
+			v1 = readInternal();
+			v2 = readInternal();
+			v3 = readInternal();
+		} while (__builtin_expect(((v1 > v2 && v1 < v3) || (v2 > v3 && v2 < v1) || (v3 > v1 && v3 < v2)), 0));
+
+		return v2;
+	}
+
+	u64 AcpiPM::readInternal() const {
 		u64 value;
 
 		uacpi_gas_read_mapped(timerBlockMapped, &value);
@@ -38,7 +54,7 @@ namespace kernel::common::hal {
 	}
 
 	bool AcpiPM::supported() {
-		acpi_fadt *fadtTable = CommonMain::getInstance()->getUAcpi()->getFadtTable();
+		const acpi_fadt *fadtTable = CommonMain::getInstance()->getUAcpi()->getFadtTable();
 
 		if (fadtTable == nullptr) {
 			return false;

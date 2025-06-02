@@ -1,14 +1,16 @@
 #include "Apic.hpp"
 
+#include "utils/MMIO.hpp"
 #include "CommonMain.hpp"
 #include "Cpu.hpp"
+#include "Main.hpp"
 #include "Math.hpp"
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
-#include "utils/MMIO.hpp"
 
 namespace kernel::x86_64::hal {
 	using namespace common;
+	using namespace common::utils;
 	using namespace utils;
 
 	bool Apic::isInitialized() const {
@@ -18,7 +20,7 @@ namespace kernel::x86_64::hal {
 	void Apic::init() {
 		Terminal *terminal = CommonMain::getTerminal();
 
-		u64 apicBase = Asm::rdmsr(ApicMsrs::APIC_BASE);
+		u64 apicBase = Asm::rdmsr(ApicMsrs::LAPIC_BASE);
 
 		const bool isBsp = apicBase & (1 << 8);
 
@@ -36,13 +38,13 @@ namespace kernel::x86_64::hal {
 			apicBase |= (1 << 10);
 		}
 
-		Asm::wrmsr(ApicMsrs::APIC_BASE, apicBase);
+		Asm::wrmsr(ApicMsrs::LAPIC_BASE, apicBase);
 
 		if (not this->isX2Apic) {
 			if (isBsp) {
 				this->mmio = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
 
-				terminal->debug("Mapping Hpet at address:", "Apic");
+				terminal->debug("Mapping Apic at address:", "Apic");
 				terminal->debug("	Phys: 0x%.16lx", "Apic", this->physMmio);
 				terminal->debug("	Virt: 0x%.16lx", "Apic", this->mmio);
 
@@ -51,10 +53,10 @@ namespace kernel::x86_64::hal {
 		}
 
 		// Enable external interrupts
-		this->write(ApicMsrs::TPR, 0);
+		this->write(ApicMsrs::LAPIC_TPR, 0);
 
 		// Enable APIC and set the spurious interrupt vector to 0xFF
-		this->write(ApicMsrs::SIV, (1 << 8) | 0xFF);
+		this->write(ApicMsrs::LAPIC_SIV, (1 << 8) | 0xFF);
 
 		/*if (not isBsp) {
 			this->calibrateTimer();
@@ -86,20 +88,20 @@ namespace kernel::x86_64::hal {
 				return;
 			}
 
-			this->write(ApicMsrs::TDC, 0b1011);
+			this->write(ApicMsrs::LAPIC_TDC, 0b1011);
 
 			constexpr u64 times = 3;
 
 			for (u64 i = 0; i < times; i++) {
 				constexpr u64 millis = 50;
 
-				this->write(ApicMsrs::TIC, 0xFFFFFFFF);
+				this->write(ApicMsrs::LAPIC_TIC, 0xFFFFFFFF);
 
 				calibrator(millis);
 
-				const u32 count = this->read(ApicMsrs::TCC);
+				const u32 count = this->read(ApicMsrs::LAPIC_TCC);
 
-				this->write(ApicMsrs::TIC, 0);
+				this->write(ApicMsrs::LAPIC_TIC, 0);
 
 				freq += (0xFFFFFFFF - count) * 100;
 			}
@@ -109,6 +111,8 @@ namespace kernel::x86_64::hal {
 			this->calibrated = true;
 		}
 
+		CommonMain::getTerminal()->debug("Timer frequency: %lu Hz", "Apic", freq);
+
 		auto [val1, val2] = freq2NsPN(freq);
 
 		this->p = val1;
@@ -116,44 +120,61 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Apic::eoi() {
-		this->write(0xB0, 0);
+		this->write(ApicMsrs::LAPIC_EOI, 0);
 	}
 
 	void Apic::ipi(const u8 id, const Dest dsh, const u8 vector) {
 		const auto flags = (static_cast<u32>(dsh) << 18) | vector;
 
 		if (not this->isX2Apic) {
-			write(ApicMsrs::ICRH, static_cast<u32>(id) << 24);
-			write(ApicMsrs::ICRL, flags);
+			write(ApicMsrs::LAPIC_ICRH, static_cast<u32>(id) << 24);
+			write(ApicMsrs::LAPIC_ICRL, flags);
 		} else {
-			write(ApicMsrs::ICRL, (static_cast<u64>(id) << 32) | flags);
+			write(ApicMsrs::LAPIC_ICRL, (static_cast<u64>(id) << 32) | flags);
 		}
 	}
 
-	void Apic::arm(u64 ns, u8 vector) {
+	void Apic::arm(u64 ns, u8 vector, bool periodic) {
 		if (ns == 0) {
 			ns = 1;
 		}
 
-		if (this->tscDeadline) {
+		if (this->p == 0) {
+			CommonMain::getTerminal()->error("P val is 0! Setting to 1...", "Apic");
+
+			this->p = 1;
+		}
+
+		if (this->n == 0) {
+			CommonMain::getTerminal()->error("N val is 0! Setting to 1...", "Apic");
+
+			this->n = 1;
+		}
+
+		if (this->tscDeadline and not periodic) {
 			const u64 tscVal = CpuManager::getCurrentCore()->tsc.read();
 
 			auto [p, n] = CpuManager::getCurrentCore()->tsc.getPN();
 
 			u64 tscTicks = ns2Ticks(ns, p, n);
 
-			this->write(ApicMsrs::LVT, (0b10 << 17) | vector);
+			this->write(ApicMsrs::LAPIC_LVT, (0b10 << 17) | vector);
 
 			asm volatile ("mfence" ::: "memory");
 
-			Asm::wrmsr(ApicMsrs::DEADLINE, tscVal + tscTicks);
+			Asm::wrmsr(ApicMsrs::LAPIC_DEADLINE, tscVal + tscTicks);
 		} else {
-			this->write(ApicMsrs::TIC, 0);
-			this->write(ApicMsrs::LVT, vector);
+			this->write(ApicMsrs::LAPIC_TIC, 0);
+
+			if (periodic) {
+				this->write(ApicMsrs::LAPIC_LVT, (0b1 << 17) | vector);
+			} else {
+				this->write(ApicMsrs::LAPIC_LVT, vector);
+			}
 
 			u64 ticks = ns2Ticks(ns, this->p, this->n);
 
-			this->write(ApicMsrs::TIC, ticks);
+			this->write(ApicMsrs::LAPIC_TIC, ticks);
 		}
 	}
 
@@ -195,10 +216,6 @@ namespace kernel::x86_64::hal {
 
 	// IOApic
 
-	bool IOApic::isInitialized() const {
-		return this->initialized;
-	}
-
 	void IOApic::init(u64 physMmio, u32 gsiBase) {
 		Terminal *terminal = CommonMain::getTerminal();
 
@@ -217,7 +234,7 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void IOApic::setIdx(const u64 idx, const u8 vector, const u64 dest, const IOApicFlags flags, const IOApicDelivery delivery) {
+	void IOApic::setIdx(const u64 idx, const u8 vector, const u64 dest, const u16 flags, const IOApicDelivery delivery) {
 		u64 entry = 0;
 
 		entry |= vector;
@@ -277,24 +294,62 @@ namespace kernel::x86_64::hal {
 
 	// IOApic Manager
 
-	void IOApicManager::setGsi(const u64 gsi, const u8 vector, const u64 dest, const IOApicFlags flags, const IOApicDelivery delivery) {
+	void IOApicManager::init() {
+		reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->disable();
+
+		this->ioApics = new IOApic[CommonMain::getInstance()->getUAcpi()->getIoApicsAmount()];
+
+		for (u64 i = 0; i < CommonMain::getInstance()->getUAcpi()->getIoApicsAmount(); i++) {
+			const acpi_madt_ioapic entry = CommonMain::getInstance()->getUAcpi()->getIoApics()[i];
+
+			this->ioApics[i].init(entry.address, entry.gsi_base);
+
+			auto [start, end] = this->ioApics[i].getGsiRange();
+
+			CommonMain::getTerminal()->debug("IOApic %lu gsi range: %lu - %lu", "IOApic", i, start, end);
+		}
+
+		if (CommonMain::getInstance()->getUAcpi()->getMadtTable()->flags & ACPI_PIC_ENABLED) {
+			for (u8 j = 0; j < 16; j++) {
+				if (j == 2) {
+					continue;
+				}
+
+				for (u64 k = 0; k < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); k++) {
+					if (const acpi_madt_interrupt_source_override entry = CommonMain::getInstance()->getUAcpi()->getIsos()[k]; entry.source == j) {
+						this->setGsi(entry.gsi, entry.source + 0x20, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), entry.flags | IOApicFlags::MASKED, IOApicDelivery::FIXED);
+
+						goto end;
+					}
+				}
+
+				this->setGsi(j, j + 0x20, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED);
+
+				end:
+			}
+		}
+
+		this->initialized = true;
+	}
+
+	void IOApicManager::setGsi(const u64 gsi, const u8 vector, const u64 dest, const u16 flags, const IOApicDelivery delivery) const {
 		CommonMain::getTerminal()->debug("Redirecting gsi %lu to vector %u", "IOApic", gsi, vector);
 
-		IOApic &entry = this->gsiToIOApic(gsi);
+		IOApic *entry = this->gsiToIOApic(gsi);
 
-		entry.setIdx(gsi - entry.getGsiRange().val1, vector, dest, flags, delivery);
+		entry->setIdx(gsi - entry->getGsiRange().val1, vector, dest, flags, delivery);
 	}
 
-	void IOApicManager::maskGsi(const u32 gsi) {
-		IOApic &entry = this->gsiToIOApic(gsi);
+	void IOApicManager::maskGsi(const u32 gsi) const {
+		IOApic *entry = this->gsiToIOApic(gsi);
 
-		entry.maskIdx(gsi - entry.getGsiRange().val1);
+		entry->maskIdx(gsi - entry->getGsiRange().val1);
 	}
 
-	void IOApicManager::unmaskGsi(const u32 gsi) {
-		IOApic &entry = this->gsiToIOApic(gsi);
+	void IOApicManager::unmaskGsi(const u32 gsi) const {
+		IOApic *entry = this->gsiToIOApic(gsi);
 
-		entry.unmaskIdx(gsi - entry.getGsiRange().val1);
+		entry->unmaskIdx(gsi - entry->getGsiRange().val1);
 	}
 
 	// TODO: Gsi might normally be 0
@@ -303,28 +358,30 @@ namespace kernel::x86_64::hal {
 			return;
 		}
 
-		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi > 0) {
+		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi < 1'000'000) {
 			this->maskGsi(gsi);
 		} else {
 			this->maskGsi(vector - 0x20);
 		}
 	}
 
-	void IOApicManager::unmask(u8 vector) {
+	void IOApicManager::unmask(const u8 vector) {
 		if (vector < 0x20) {
 			return;
 		}
 
-		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi > 0) {
+		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi < 1'000'000) {
 			this->unmaskGsi(gsi);
 		} else {
 			this->unmaskGsi(vector - 0x20);
 		}
 	}
 
-	IOApic &IOApicManager::gsiToIOApic(const u32 gsi) {
-		for (IOApic &entry : this->ioApics) {
-			if (auto [start, end] = entry.getGsiRange(); start < gsi and gsi <= end) {
+	IOApic *IOApicManager::gsiToIOApic(const u32 gsi) const {
+		for (u64 i = 0; i < CommonMain::getInstance()->getUAcpi()->getIoApicsAmount(); i++) {
+			IOApic *entry = &this->ioApics[i];
+
+			if (auto [start, end] = entry->getGsiRange(); start < gsi and gsi <= end) {
 				return entry;
 			}
 		}
@@ -333,12 +390,16 @@ namespace kernel::x86_64::hal {
 	}
 
 	u32 IOApicManager::irqToIso(const u8 irq) {
-		for (const acpi_madt_interrupt_source_override &entry : CommonMain::getInstance()->getUAcpi()->getIsos()) {
-			if (entry.source == irq) {
+		for (u64 k = 0; k < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); k++) {
+			if (const acpi_madt_interrupt_source_override entry = CommonMain::getInstance()->getUAcpi()->getIsos()[k]; entry.source == irq) {
 				return entry.gsi;
 			}
 		}
 
-		return 0;
+		return 1'000'000;
+	}
+
+	bool IOApicManager::isInitialized() const {
+		return this->initialized;
 	}
 }

@@ -150,6 +150,8 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 // TODO: Use new VPage map
 
 uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle *out_handle) {
+	CommonMain::getTerminal()->debug("Mapping %u bytes at 0x%.16lx", "uACPI", len, base);
+
 	*out_handle = reinterpret_cast<u64 *>(base); // TODO: to fix (for other arches)
 
 	return UACPI_STATUS_OK;
@@ -366,11 +368,40 @@ namespace kernel::common::uacpi {
 		for (uPtr entry = madtStart; entry < madtEnd; entry += currMadt->length, currMadt = reinterpret_cast<acpi_entry_hdr *>(entry)) {
 			switch (currMadt->type) {
 				case 1:
-					// TODO: Add to IOApic table (reinterpret_cast<acpi_madt_ioapic *>(entry))
+					this->ioApicsAmount++;
+
 					break;
 
 				case 2:
-					// TODO: Add to interrupt src override table (reinterpret_cast<acpi_madt_interrupt_source_override *>(entry))
+					this->isosAmount++;
+
+					break;
+
+				default:
+					break;
+			}
+		}
+
+		this->ioApics = static_cast<acpi_madt_ioapic *>(malloc(this->ioApicsAmount * sizeof(acpi_madt_ioapic)));
+		this->isos = static_cast<acpi_madt_interrupt_source_override *>(malloc(this->isosAmount * sizeof(acpi_madt_interrupt_source_override)));
+
+		u64 i = 0;
+		u64 j = 0;
+
+		for (uPtr entry = madtStart; entry < madtEnd; entry += currMadt->length, currMadt = reinterpret_cast<acpi_entry_hdr *>(entry)) {
+			switch (currMadt->type) {
+				case 1:
+					this->ioApics[i] = *reinterpret_cast<acpi_madt_ioapic *>(entry);
+
+					i++;
+
+					break;
+
+				case 2:
+					this->isos[j] = *reinterpret_cast<acpi_madt_interrupt_source_override *>(entry);
+
+					j++;
+
 					break;
 
 				default:
@@ -411,7 +442,15 @@ namespace kernel::common::uacpi {
 		return this->ioApics;
 	}
 
+	u64 UAcpi::getIoApicsAmount() const {
+		return this->ioApicsAmount;
+	}
+
 	acpi_madt_interrupt_source_override *UAcpi::getIsos() const {
 		return this->isos;
+	}
+
+	u64 UAcpi::getIsosAmount() const {
+		return this->isosAmount;
 	}
 }

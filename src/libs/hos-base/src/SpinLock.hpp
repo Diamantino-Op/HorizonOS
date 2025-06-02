@@ -5,6 +5,8 @@
 #include "Types.hpp"
 #include "stdatomic.h"
 
+// TODO: Maybe disable ints when locking and re-enable when unlocking
+
 class TicketSpinLock {
 public:
     TicketSpinLock() = default;

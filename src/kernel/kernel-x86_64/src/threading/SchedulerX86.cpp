@@ -1,16 +1,18 @@
 #include "SchedulerX86.hpp"
 
+#include "Main.hpp"
 #include "CommonMain.hpp"
+#include "Math.hpp"
 #include "memory/MainMemory.hpp"
 #include "threading/Scheduler.hpp"
 
 #include "hal/Cpu.hpp"
+#include "hal/Hpet.hpp"
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 
-#include <Math.hpp>
-
 namespace kernel::common::threading {
+	using namespace x86_64;
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
@@ -18,30 +20,62 @@ namespace kernel::common::threading {
 		Asm::lhlt();
 	}
 
-	// TODO: Make Spinlock
+	void Scheduler::initArch() {
+		const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
+
+		if (hpet->getMaxTimers() == 0) {
+			CommonMain::getTerminal()->error("Not enough hpet timers!", "Scheduler");
+
+			return;
+		}
+
+		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
+
+		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xb); // 0x2b - irq 11
+
+		if (gsi == 1'000'000) {
+			CommonMain::getTerminal()->error("No gsi found!", "Scheduler");
+
+			gsi = 0xb;
+		} else {
+			CommonMain::getTerminal()->debug("Gsi found: %lu", "Scheduler", gsi);
+		}
+
+		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3) | (1 << 6));
+		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
+		hpet->write(Hpet::getComparatorRegister(0), ticks);
+
+		Interrupts::setHandler(0x2b, sleepTick, nullptr);
+
+		Interrupts::unmask(0x2b);
+	}
+
+	void ExecutionNode::initArch() {
+		Interrupts::setHandler(0x2a, scheduleTick, nullptr); // 0x2a - irq 10
+
+		Interrupts::unmask(0x2a);
+	}
+
+	u32 ExecutionNode::scheduleTick(u64 *) {
+		CommonMain::getTerminal()->debug("Schedule tick!", "Scheduler");
+
+		CpuManager::getCurrentCore()->executionNode.schedule();
+
+		return 0;
+	}
+
 	void ExecutionNode::schedule() {
 		Asm::cli();
 
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		schedulerPtr->getSchedLock()->lock();
+		if (this->isDisabledFlag) {
+			Asm::sti();
 
-		//CommonMain::getInstance()->getKernelAllocContext()->pageMap.load(); // TODO: Prob VERY bad for performance
-
-		// TODO: Use HPET for sleep
-		for (auto currQueue : schedulerPtr->queues) {
-			while (currQueue != nullptr) {
-				if (currQueue->thread->getSleepTicks() > 0) {
-					currQueue->thread->setSleepTicks(currQueue->thread->getSleepTicks() - 1);
-
-					if (currQueue->thread->getSleepTicks() == 0) {
-						currQueue->thread->setState(ThreadState::RUNNING);
-					}
-				}
-
-				currQueue = currQueue->next;
-			}
+			return;
 		}
+
+		schedulerPtr->getSchedLock()->lock();
 
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
@@ -51,8 +85,6 @@ namespace kernel::common::threading {
 
 		if (this->currentThread->thread->getState() == ThreadState::RUNNING && this->remainingTicks > 0) {
 			this->remainingTicks--;
-
-			//this->currentThread->thread->getParent()->getProcessContext()->pageMap.load(); // TODO: Prob VERY bad for performance
 
 			schedulerPtr->getSchedLock()->unlock();
 
@@ -165,7 +197,7 @@ namespace kernel::common::threading {
 
 		this->remainingTicks = 50;
 
-		Interrupts::sendEOI(0x20);
+		Interrupts::sendEOI(0x2a);
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock();
 

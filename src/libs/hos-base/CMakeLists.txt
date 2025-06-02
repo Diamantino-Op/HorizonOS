@@ -1,7 +1,8 @@
-cmake_minimum_required(VERSION 3.28)
-set(CMAKE_CXX_STANDARD 23)
+cmake_minimum_required(VERSION ${HORIZON_CMAKE_VERSION})
+set(CMAKE_CXX_STANDARD ${HORIZON_CXX_STANDARD})
+set(CMAKE_C_STANDARD ${HORIZON_C_STANDARD})
 
-project(hos-base VERSION 0.0.1 LANGUAGES CXX)
+project(hos-base VERSION ${HORIZON_VERSION} LANGUAGES C CXX ASM)
 
 # ------------------ Kernel Common ------------------
 file(GLOB_RECURSE HOS_BASE_SRC "src/*.hpp" "src/*.cpp" "src/*.asm")

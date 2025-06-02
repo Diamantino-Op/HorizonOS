@@ -24,7 +24,29 @@ inline u64 ticks2ns(const u128 ticks, const u64 p, const u64 n) {
 }
 
 template <class T> T log2(T val) {
-    return reinterpret_cast<T>((val) - 1);
+    if (val == 0) {
+        return 0;
+    }
+
+    if (sizeof(T) <= sizeof(u32)) {
+        return reinterpret_cast<T>(__builtin_clz(static_cast<u32>(val)) ^ (sizeof(u32) * 8 - 1));
+    }
+
+    if (sizeof(T) <= sizeof(u64)) {
+        return reinterpret_cast<T>(__builtin_clzl(static_cast<u64>(val)) ^ (sizeof(u64) * 8 - 1));
+    }
+
+    if (sizeof(T) <= sizeof(u128)) {
+        return reinterpret_cast<T>(__builtin_clzll(static_cast<u128>(val)) ^ (sizeof(u128) * 8 - 1));
+    }
+
+    T result = 0;
+
+    while (val >>= 1) {
+        ++result;
+    }
+
+    return result;
 }
 
 inline auto pow2(const usize val) {

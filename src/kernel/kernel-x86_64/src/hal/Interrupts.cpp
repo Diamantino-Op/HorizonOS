@@ -32,15 +32,21 @@ namespace kernel::x86_64::hal {
 		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
 
+			if (frame.intNo > 32) {
+				CommonMain::getTerminal()->debug("Sending EOI for: %lu", "Interrupts", frame.intNo);
+			}
+
 			sendEOI(frame.intNo);
 		}
 	}
 
 	void Interrupts::sendEOI(const usize intNo) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr && kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
+		if (CpuManager::getCurrentCore()->apic.isInitialized()) {
+			CommonMain::getTerminal()->debug("Sending EOI to APIC", "Interrupts");
 
+			CpuManager::getCurrentCore()->apic.eoi();
 		} else {
-			kernel->getDualPic()->eoi(intNo);
+			reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->eoi(intNo);
 		}
 	}
 
@@ -86,8 +92,8 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::mask(const u8 id) {
-		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr and kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
-
+		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getIOApicManager()->isInitialized()) {
+			kernel->getIOApicManager()->mask(id);
 		} else {
 			kernel->getDualPic()->mask(id);
 		}
@@ -95,7 +101,7 @@ namespace kernel::x86_64::hal {
 
 	void Interrupts::unmask(const u8 id) {
 		if (auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance()); kernel->getCpuManager()->getBootstrapCpu() != nullptr and kernel->getCpuManager()->getBootstrapCpu()->apic.isInitialized()) {
-
+			kernel->getIOApicManager()->unmask(id);
 		} else {
 			kernel->getDualPic()->unmask(id);
 		}

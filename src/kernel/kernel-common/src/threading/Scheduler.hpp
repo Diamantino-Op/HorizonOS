@@ -34,11 +34,11 @@ namespace kernel::common::threading {
         void setContext(u64 *context);
         u64 *getContext() const;
 
-        void setSleepTicks(u64 ticks);
-        u64 getSleepTicks() const;
+        void setSleepNs(u64 ns);
+        u64 getSleepNs() const;
 
         void setState(ThreadState state);
-        ThreadState getState();
+        ThreadState getState() const;
 
 		u16 getId() const;
 
@@ -48,7 +48,7 @@ namespace kernel::common::threading {
         Process *parent {};
         u16 id {};
 
-        u64 sleepTicks {};
+        u64 sleepNs {};
 
         u64 *context {};
         ThreadState state {};
@@ -120,6 +120,10 @@ namespace kernel::common::threading {
     	void setDisabled(bool val);
 
     private:
+    	static u32 scheduleTick(u64 *);
+
+    	void initArch();
+
 		bool isDisabledFlag;
 
         u8 remainingTicks {};
@@ -137,6 +141,8 @@ namespace kernel::common::threading {
     public:
         Scheduler();
         ~Scheduler() = default;
+
+    	void initArch();
 
         /**
          *  Get the process with the specified PID.
@@ -196,9 +202,9 @@ namespace kernel::common::threading {
 		 *  Puts the specified thread to sleep for a given number of ticks.
 		 *
 		 *  @param thread The thread to be put to sleep.
-		 *  @param ticks The number of ticks for which the thread should remain asleep.
+		 *  @param ns The number of ticks for which the thread should remain asleep.
 		 **/
-		void sleepThread(Thread *thread, u64 ticks) const;
+		void sleepThread(Thread *thread, u64 ns) const;
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -209,6 +215,8 @@ namespace kernel::common::threading {
 		 *  @return The address of the created context.
 		 */
 		u64 *createContext(bool isUser, u64 rip);
+
+    	static u32 sleepTick(u64 *);
 
     	TicketSpinLock *getSchedLock();
 

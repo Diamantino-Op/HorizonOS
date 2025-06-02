@@ -23,19 +23,19 @@ namespace kernel::common::threading {
 		return this->context;
 	}
 
-	void Thread::setSleepTicks(const u64 ticks) {
-		this->sleepTicks = ticks;
+	void Thread::setSleepNs(const u64 ns) {
+		this->sleepNs = ns;
 	}
 
-	u64 Thread::getSleepTicks() const {
-		return this->sleepTicks;
+	u64 Thread::getSleepNs() const {
+		return this->sleepNs;
 	}
 
 	void Thread::setState(const ThreadState state) {
 		this->state = state;
 	}
 
-	ThreadState Thread::getState() {
+	ThreadState Thread::getState() const {
 		return this->state;
 	}
 
@@ -115,6 +115,8 @@ namespace kernel::common::threading {
 		this->currentThread->thread = newThread;
 
 		schedulerPtr->getProcess(0)->addThread(this->currentThread);
+
+		this->initArch();
 	}
 
 	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
@@ -249,8 +251,8 @@ namespace kernel::common::threading {
 		delete thread;
 	}
 
-	void Scheduler::sleepThread(Thread *thread, const u64 ticks) const {
-		thread->setSleepTicks(ticks);
+	void Scheduler::sleepThread(Thread *thread, const u64 ns) const {
+		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -261,6 +263,24 @@ namespace kernel::common::threading {
 		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
 
 		return createContextArch(isUser, rip, newRsp);
+	}
+
+	u32 Scheduler::sleepTick(u64 *) {
+		for (auto currQueue : CommonMain::getInstance()->getScheduler()->queues) {
+			while (currQueue != nullptr) {
+				if (currQueue->thread->getSleepNs() > 0) {
+					if (currQueue->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+						currQueue->thread->setState(ThreadState::RUNNING);
+
+						currQueue->thread->setSleepNs(0);
+					}
+				}
+
+				currQueue = currQueue->next;
+			}
+		}
+
+		return 0;
 	}
 
 	TicketSpinLock *Scheduler::getSchedLock() {

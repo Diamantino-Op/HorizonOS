@@ -32,7 +32,7 @@ namespace kernel::common::memory {
 
 			ctx->heapStart = reinterpret_cast<u64 *>(pageSize);
 		} else {
-			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize));
+			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize)) + pageSize;
 		}
 
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);

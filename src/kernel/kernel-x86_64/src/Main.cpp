@@ -145,6 +145,8 @@ namespace kernel::x86_64 {
 		terminal.debug("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
 		terminal.debug("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
 
+		CpuManager::initSimd();
+
 		terminal.info("Cpu initialized...", "HorizonOS");
 
 		// Early uAcpi
@@ -154,6 +156,10 @@ namespace kernel::x86_64 {
 		this->uAcpi.earlyInit();
 
 		terminal.info("Early uAcpi init... OK", "HorizonOS");
+
+		this->ioApicManager.init();
+
+		terminal.info("IOApics Initialised... OK", "HorizonOS");
 
 		// PIT
 
@@ -187,15 +193,11 @@ namespace kernel::x86_64 {
 
 		terminal.info("AcpiPM Clock Initialised... OK", "HorizonOS");
 
-		// Multithread
-
-		this->cpuManager.startMultithread();
-
 		// Start of multicore
 
-		CpuManager::initSimd();
+		terminal.info("SIMD Initialised... OK", "HorizonOS");
 
-		terminal.info("All Cpus initialized...", "HorizonOS");
+		this->scheduler->initArch();
 
 		CpuManager::getCurrentCore()->executionNode.init();
 
@@ -210,10 +212,6 @@ namespace kernel::x86_64 {
 
 		terminal.info("Example threads registered... OK", "HorizonOS");
 
-		if (cpuManager.getBootstrapCpu()->apic.isInitialized()) {
-			//this->dualPic.disable();
-		}
-
 		// Tsc
 
 		this->cpuManager.getBootstrapCpu()->tsc.init();
@@ -221,7 +219,9 @@ namespace kernel::x86_64 {
 
 		terminal.info("TSC Initialised... OK", "HorizonOS");
 
-		this->getCpuManager()->getBootstrapCpu()->executionNode.setDisabled(true);
+		// Apic
+
+		this->cpuManager.getBootstrapCpu()->apic.init();
 
 		this->isInitFlag = true;
 
@@ -233,7 +233,13 @@ namespace kernel::x86_64 {
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");
 
-		this->getCpuManager()->getBootstrapCpu()->executionNode.setDisabled(false);
+		// Multithread
+
+		//this->cpuManager.startMultithread();
+
+		terminal.info("All Cpus initialized...", "HorizonOS");
+
+		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, 0x2a, true);
 
 		//this->shutdown();
 
@@ -242,61 +248,61 @@ namespace kernel::x86_64 {
 
 	void thread1() {
 		for (;;) {
-			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);*/
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
 		}
 	}
 
 	void thread2() {
 		for (;;) {
-			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);*/
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
 		}
 	}
 
 	void thread3() {
 		for (;;) {
-			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);*/
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
 		}
 	}
 
 	void thread4() {
 		for (;;) {
-			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);*/
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
 		}
 	}
 
 	void thread5() {
 		for (;;) {
-			/*const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);*/
+			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
 		}
 	}
 
@@ -336,6 +342,10 @@ namespace kernel::x86_64 {
 
 	CpuManager *Kernel::getCpuManager() {
 		return &this->cpuManager;
+	}
+
+	IOApicManager *Kernel::getIOApicManager() {
+		return &this->ioApicManager;
 	}
 
 	// Multicore

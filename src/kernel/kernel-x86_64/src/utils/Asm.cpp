@@ -9,6 +9,14 @@ namespace kernel::x86_64::utils {
 		asm volatile("sti");
 	}
 
+	bool Asm::intsEnabled() {
+		u64 flags;
+
+		asm volatile ("pushfq; popq %0" : "=r"(flags));
+
+		return flags & (1 << 9);
+	}
+
 	void Asm::hlt() {
 		asm volatile("hlt");
 	}

@@ -123,7 +123,7 @@ extern "C" {
 	}
 
 	void __ubsan_handle_shift_out_of_bounds(DataShiftOutOfBounds *data, uPtr lhs, uPtr rhs) {
-	    CommonMain::getTerminal()->warn(
+	    /*CommonMain::getTerminal()->warn(
 	        "shift_out_of_bounds @ %s:%u:%u {lhs: %#lx, rhs: %#lx, rhs_type: %u-bit %s %s, lhs_type: %u-bit %s %s}",
 	        "UBSan",
 	        data->location.filename,
@@ -136,7 +136,7 @@ extern "C" {
 	        data->rhsType->name,
 	        infoToBits(data->lhsType->info),
 	        kindToType(data->lhsType->kind),
-	        data->lhsType->name);
+	        data->lhsType->name);*/ // TODO: Maybe Re Enable
 	}
 
 	void __ubsan_handle_out_of_bounds(DataOutOfBounds *data, u64 index) {

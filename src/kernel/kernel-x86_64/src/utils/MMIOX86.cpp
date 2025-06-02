@@ -1,6 +1,6 @@
-#include "MMIO.hpp"
+#include "utils/MMIO.hpp"
 
-namespace kernel::x86_64::utils {
+namespace kernel::common::utils {
 	u64 MMIO::read(u64 addr, usize width) {
 		switch (width) {
 			case sizeof(u8): {

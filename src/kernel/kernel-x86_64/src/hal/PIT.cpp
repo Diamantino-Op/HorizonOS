@@ -47,10 +47,6 @@ namespace kernel::x86_64::hal {
 	u32 PIT::addTick(u64 *) {
 		ticks++;
 
-		if (not CpuManager::getCurrentCore()->executionNode.isDisabled()) {
-			CpuManager::getCurrentCore()->executionNode.schedule();
-		}
-
 		return 0;
 	}
 }

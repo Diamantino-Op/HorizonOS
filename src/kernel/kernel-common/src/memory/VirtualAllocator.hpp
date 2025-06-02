@@ -21,7 +21,7 @@ namespace kernel::common::memory {
 		usize heapSize {};
         u64 freeSpace {};
 		MemoryBlock *blocks {};
-        TicketSpinLock lock {};
+        SimpleSpinLock lock {};
         bool isUserspace {};
     };
 

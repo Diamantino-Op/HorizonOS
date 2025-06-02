@@ -67,6 +67,8 @@ namespace kernel::common::memory {
 	}
 
 	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {
+		// TODO: Level 5 paging share
+
 		const auto *kernelTable = reinterpret_cast<PageTable *>(CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPageTable());
 
 		for (u64 i = 0; i < 256; i++) {

@@ -48,6 +48,8 @@ namespace kernel::x86_64 {
 
         CpuManager *getCpuManager();
 
+        IOApicManager *getIOApicManager();
+
     private:
         GdtManager gdtManager {};
         TssManager tssManager {};
@@ -62,6 +64,8 @@ namespace kernel::x86_64 {
         Hpet hpet {};
 
         CpuManager cpuManager {};
+
+        IOApicManager ioApicManager {};
     };
 
     class CoreKernel final : CommonCoreMain {

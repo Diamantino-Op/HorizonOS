@@ -1,8 +1,8 @@
 #include "Hpet.hpp"
 
+#include "utils/MMIO.hpp"
 #include "CommonMain.hpp"
 #include "Main.hpp"
-#include "utils/MMIO.hpp"
 #include "Math.hpp"
 #include "stdatomic.h"
 
@@ -10,6 +10,7 @@
 
 namespace kernel::x86_64::hal {
 	using namespace common;
+	using namespace common::utils;
 	using namespace utils;
 
 	u64 Hpet::p;
@@ -41,7 +42,17 @@ namespace kernel::x86_64::hal {
 
 		this->is64Bit = (cap & ACPI_HPET_COUNT_SIZE_CAP);
 
+		this->maxTimers = ((cap >> ACPI_HPET_NUMBER_OF_COMPARATORS_SHIFT) & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK);
+
+		for (u8 i = 0; i < this->maxTimers; i++) {
+			terminal->debug("Timer %u supports periodic: %u", "Hpet", i, this->read(getTimerRegister(i)) >> 5 & 0b1);
+		}
+
+		terminal->debug("Max timers: %u", "Hpet", this->maxTimers);
+
 		frequency = 1'000'000'000'000'000ull / (cap >> 32);
+
+		CommonMain::getTerminal()->debug("Timer frequency: %lu Hz", "Hpet", frequency);
 
 		auto [val1, val2] = freq2NsPN(frequency);
 
@@ -122,6 +133,22 @@ namespace kernel::x86_64::hal {
 
 	bool Hpet::isInitialized() const {
 		return this->initialized;
+	}
+
+	u8 Hpet::getMaxTimers() const {
+		return this->maxTimers;
+	}
+
+	u64 Hpet::getFrequency() const {
+		return frequency;
+	}
+
+	u64 Hpet::getTimerRegister(const u8 timerId) {
+		return regTmrStart + (0x20 * timerId);
+	}
+
+	u64 Hpet::getComparatorRegister(const u8 timerId) {
+		return regCmpStart + (0x20 * timerId);
 	}
 
 	void Hpet::calibrate(const u64 ms) {
