@@ -262,17 +262,19 @@ namespace kernel::common::threading {
 	}
 
 	u32 Scheduler::sleepTick(u64 *) {
-		for (auto currQueue : CommonMain::getInstance()->getScheduler()->queues) {
-			while (currQueue != nullptr) {
-				if (currQueue->thread->getSleepNs() > 0) {
-					if (currQueue->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
-						currQueue->thread->setState(ThreadState::RUNNING);
+		for (const auto currQueue : CommonMain::getInstance()->getScheduler()->queues) {
+			const ThreadListEntry *tmpEntry = currQueue;
 
-						currQueue->thread->setSleepNs(0);
+			while (tmpEntry != nullptr) {
+				if (tmpEntry->thread->getSleepNs() > 0) {
+					if (tmpEntry->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+						tmpEntry->thread->setState(ThreadState::RUNNING);
+
+						tmpEntry->thread->setSleepNs(0);
 					}
 				}
 
-				currQueue = currQueue->next;
+				tmpEntry = tmpEntry->next;
 			}
 		}
 

@@ -123,13 +123,15 @@ namespace kernel::common::threading {
 		} else {
 			ThreadListEntry *selectedEntry = nullptr;
 
-			for (auto currQueue : schedulerPtr->queues) {
-				while (currQueue != nullptr and currQueue->thread->getState() != ThreadState::RUNNING) {
-					currQueue = currQueue->next;
+			for (const auto currQueue : schedulerPtr->queues) {
+				ThreadListEntry *tmpEntry = currQueue;
+
+				while (tmpEntry != nullptr and tmpEntry->next != nullptr and tmpEntry->thread->getState() != ThreadState::RUNNING) {
+					tmpEntry = tmpEntry->next;
 				}
 
-				if (currQueue != nullptr and currQueue->thread->getState() == ThreadState::RUNNING) {
-					selectedEntry = currQueue;
+				if (tmpEntry != nullptr and tmpEntry->thread->getState() == ThreadState::RUNNING) {
+					selectedEntry = tmpEntry;
 
 					break;
 				}
@@ -153,7 +155,7 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId()); // TODO: Maybe re-enable
+		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId()); // TODO: Maybe re-enable
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
 

@@ -250,61 +250,61 @@ namespace kernel::x86_64 {
 
 	void thread1() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 1", ns);
+			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 1", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000ull * 1'000'000ull);
 		}
 	}
 
 	void thread2() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 2", ns);
+			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000ull * 1'000'000ull);
 		}
 	}
 
 	void thread3() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 3", ns);
+			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 3", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000ull * 1'000'000ull);
 		}
 	}
 
 	void thread4() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 4", ns);
+			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 4", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000ull * 1'000'000ull); // 40 ms
 		}
 	}
 
 	void thread5() {
 		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 5", ns);
+			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 5", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000ull * 1'000'000ull);
 		}
 	}
 
