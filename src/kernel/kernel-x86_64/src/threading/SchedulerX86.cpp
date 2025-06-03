@@ -31,12 +31,12 @@ namespace kernel::common::threading {
 
 		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
 
-		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xb); // 0x2b - irq 11
+		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2a - irq 10
 
 		if (gsi == 1'000'000) {
 			CommonMain::getTerminal()->error("No gsi found!", "Scheduler");
 
-			gsi = 0xb;
+			gsi = 0xa;
 		} else {
 			CommonMain::getTerminal()->debug("Gsi found: %lu", "Scheduler", gsi);
 		}
@@ -45,20 +45,20 @@ namespace kernel::common::threading {
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 
-		Interrupts::setHandler(0x2b, sleepTick, nullptr);
-
-		Interrupts::unmask(0x2b);
-	}
-
-	void ExecutionNode::initArch() {
-		Interrupts::setHandler(0x2a, scheduleTick, nullptr); // 0x2a - irq 10
+		Interrupts::setHandler(0x2a, sleepTick, nullptr);
 
 		Interrupts::unmask(0x2a);
 	}
 
-	u32 ExecutionNode::scheduleTick(u64 *) {
-		CommonMain::getTerminal()->debug("Schedule tick!", "Scheduler");
+	void ExecutionNode::initArch() {
+		const u64 intNum = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->getMaxRange() + 0x20;
 
+		Interrupts::setHandler(intNum, scheduleTick, nullptr);
+
+		//Interrupts::unmask(intNum);
+	}
+
+	u32 ExecutionNode::scheduleTick(u64 *) {
 		CpuManager::getCurrentCore()->executionNode.schedule();
 
 		return 0;
@@ -83,25 +83,13 @@ namespace kernel::common::threading {
 			Asm::lhlt();
 		}
 
-		if (this->currentThread->thread->getState() == ThreadState::RUNNING && this->remainingTicks > 0) {
-			this->remainingTicks--;
-
-			schedulerPtr->getSchedLock()->unlock();
-
-			Asm::sti();
-
-			return;
-		}
-
 		switchThreads();
 	}
 
 	void ExecutionNode::switchThreads() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		if (const ThreadListEntry *currEntry = schedulerPtr->queues[this->currentThread->thread->getParent()->getPriority()]; currEntry != nullptr) {
-			ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()];
-
+		if (ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()]; lastEntry != nullptr) {
 			this->currentThread->prev = lastEntry;
 			this->currentThread->next = nullptr;
 
@@ -136,11 +124,11 @@ namespace kernel::common::threading {
 			ThreadListEntry *selectedEntry = nullptr;
 
 			for (auto currQueue : schedulerPtr->queues) {
-				while (currQueue != nullptr && currQueue->thread->getState() != ThreadState::RUNNING) {
+				while (currQueue != nullptr and currQueue->thread->getState() != ThreadState::RUNNING) {
 					currQueue = currQueue->next;
 				}
 
-				if (currQueue != nullptr && currQueue->thread->getState() == ThreadState::RUNNING) {
+				if (currQueue != nullptr and currQueue->thread->getState() == ThreadState::RUNNING) {
 					selectedEntry = currQueue;
 
 					break;
@@ -194,8 +182,6 @@ namespace kernel::common::threading {
 		this->currentThread->thread->getParent()->getProcessContext()->pageMap.load();
 
 		newCtxConv->load();
-
-		this->remainingTicks = 50;
 
 		Interrupts::sendEOI(0x2a);
 

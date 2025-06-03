@@ -32,18 +32,12 @@ namespace kernel::x86_64::hal {
 		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
 
-			if (frame.intNo > 32) {
-				CommonMain::getTerminal()->debug("Sending EOI for: %lu", "Interrupts", frame.intNo);
-			}
-
 			sendEOI(frame.intNo);
 		}
 	}
 
 	void Interrupts::sendEOI(const usize intNo) {
 		if (CpuManager::getCurrentCore()->apic.isInitialized()) {
-			CommonMain::getTerminal()->debug("Sending EOI to APIC", "Interrupts");
-
 			CpuManager::getCurrentCore()->apic.eoi();
 		} else {
 			reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->eoi(intNo);
@@ -83,6 +77,8 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::setHandler(const u8 id, const HandlerFun handler, u64 *ctx) {
+		CommonMain::getTerminal()->debug("Registering handler for int: %u (%u)", "Interrupts", id - 0x20, id);
+
 		handlers[id - 0x20].fun = handler;
 		handlers[id - 0x20].ctx = ctx;
 	}

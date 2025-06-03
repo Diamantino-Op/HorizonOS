@@ -62,6 +62,8 @@ namespace kernel::x86_64::hal {
 			this->calibrateTimer();
 		}*/
 		this->calibrateTimer();
+
+		this->initialized = true;
 	}
 
 	void Apic::calibrateTimer() {
@@ -306,11 +308,15 @@ namespace kernel::x86_64::hal {
 
 			auto [start, end] = this->ioApics[i].getGsiRange();
 
+			if (end > this->maxRange) {
+				this->maxRange = end;
+			}
+
 			CommonMain::getTerminal()->debug("IOApic %lu gsi range: %lu - %lu", "IOApic", i, start, end);
 		}
 
 		if (CommonMain::getInstance()->getUAcpi()->getMadtTable()->flags & ACPI_PIC_ENABLED) {
-			for (u8 j = 0; j < 16; j++) {
+			for (u8 j = 0; j < this->maxRange; j++) {
 				if (j == 2) {
 					continue;
 				}
@@ -401,5 +407,9 @@ namespace kernel::x86_64::hal {
 
 	bool IOApicManager::isInitialized() const {
 		return this->initialized;
+	}
+
+	u8 IOApicManager::getMaxRange() const {
+		return this->maxRange;
 	}
 }

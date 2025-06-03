@@ -239,7 +239,9 @@ namespace kernel::x86_64 {
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
-		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, 0x2a, true);
+		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
+
+		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, ioApicManager.getMaxRange() + 0x20, true);
 
 		//this->shutdown();
 
@@ -250,7 +252,7 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 1", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 1", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -262,11 +264,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 2", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20 * 1'000'000);
 		}
 	}
 
@@ -274,11 +276,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 3", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 3", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30 * 1'000'000);
 		}
 	}
 
@@ -286,11 +288,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 4", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 4", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40 * 1'000'000);
 		}
 	}
 
@@ -298,11 +300,11 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warn("Call NS: %u", "Thread 5", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 5", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10 * 1'000'000);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50 * 1'000'000);
 		}
 	}
 

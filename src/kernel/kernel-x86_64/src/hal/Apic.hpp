@@ -149,7 +149,11 @@ namespace kernel::x86_64::hal {
 
         bool isInitialized() const;
 
+        u8 getMaxRange() const;
+
     private:
+        u8 maxRange {};
+
         IOApic *ioApics {};
 
         bool initialized {};

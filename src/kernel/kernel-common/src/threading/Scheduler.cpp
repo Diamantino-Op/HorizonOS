@@ -127,10 +127,6 @@ namespace kernel::common::threading {
 		return this->currentThread;
 	}
 
-	void ExecutionNode::setRemainingTicks(const u8 remainingTicks) {
-		this->remainingTicks = remainingTicks;
-	}
-
 	bool ExecutionNode::isDisabled() const {
 		return this->isDisabledFlag;
 	}

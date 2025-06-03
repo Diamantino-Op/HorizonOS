@@ -114,8 +114,6 @@ namespace kernel::common::threading {
 
     	void switchContext(u64 *oldCtx, u64 *newCtx);
 
-    	void setRemainingTicks(u8 remainingTicks);
-
     	bool isDisabled() const;
     	void setDisabled(bool val);
 
@@ -125,8 +123,6 @@ namespace kernel::common::threading {
     	void initArch();
 
 		bool isDisabledFlag;
-
-        u8 remainingTicks {};
 
         ThreadListEntry *currentThread {};
     };
