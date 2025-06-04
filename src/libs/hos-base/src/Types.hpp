@@ -23,6 +23,8 @@ extern "C" {
     typedef __INTPTR_TYPE__ iPtr;
     typedef __UINTPTR_TYPE__ uPtr;
 
+    typedef __PTRDIFF_TYPE__ ptrDiff;
+
     typedef __INTMAX_TYPE__ iMax;
     typedef __UINTMAX_TYPE__ uMax;
 
