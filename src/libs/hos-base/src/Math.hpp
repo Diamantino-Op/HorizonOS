@@ -49,7 +49,7 @@ template <class T> T log2(T val) {
     return result;
 }
 
-inline auto pow2(const usize val) {
+inline u64 pow2(const u64 val) {
     return 1ull << val;
 }
 
@@ -58,6 +58,22 @@ inline Pair freq2NsPN(const u64 freq) {
 	const u64 n = (1'000'000'000ull << p) / freq;
 
     return { p, n };
+}
+
+inline u32 popCountByte(u8 b) {
+
+}
+
+inline u64 highestBitPosition(u64 val) {
+
+}
+
+inline u64 ceilingPow2(u64 val) {
+
+}
+
+inline u64 sqrt(u64 f) {
+
 }
 
 #endif
