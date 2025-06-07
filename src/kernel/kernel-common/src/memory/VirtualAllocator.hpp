@@ -88,6 +88,10 @@ namespace kernel::common::memory {
         BUDDY_TREE_RELEASE_FAIL_PARTIALLY_USED,
     };
 
+    enum BuddyTreeFlags {
+        BUDDY_TREE_CHANGE_TRACKING = 1,
+    };
+
     struct BuddyEmbedCheck {
         u32 canFit {};
         u64 offset {};
@@ -114,6 +118,11 @@ namespace kernel::common::memory {
         BuddyTreePos currentPos {};
         u32 goingUp {};
         u32 walkDone {};
+    };
+
+    struct InternalPosition {
+        u64 localOffset {};
+        u64 bitSetOffset {};
     };
 
     #define INVALID_POS BuddyTreePos{ 0, 0 }
@@ -328,6 +337,9 @@ namespace kernel::common::memory {
         u64 buddyFlags {};
     };
 
+    /*
+     * A buddy allocation tree
+     */
     class BuddyTree {
     public:
         /*
@@ -441,6 +453,17 @@ namespace kernel::common::memory {
 
         /* Walk the tree, keeping track in the provided state structure */
         u32 treeWalk(BuddyTreeWalkState *state);
+
+    private:
+        u64 upperPosBound {};
+        u64 sizeForOrderOffset {};
+        u8 order {};
+        u8 flags {};
+
+        /*
+         * struct padding rules mean that there are
+         * 16/48 bits available until the next increment
+         */
     };
 }
 

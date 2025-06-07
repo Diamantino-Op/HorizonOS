@@ -482,6 +482,10 @@ namespace kernel::common::memory {
 	}
 
 	Buddy *Buddy::resizeEmbedded(const u64 newMemorySize) {
+		if (this == nullptr) {
+			return nullptr;
+		}
+
 		auto [canFit, offset, buddySize] = embedOffset(newMemorySize, this->alignment);
 
 		/* Ensure that the embedded allocator can fit */
@@ -619,7 +623,7 @@ namespace kernel::common::memory {
 			return nullptr;
 		}
 
-		const u64 currDepth = tree->treeDepth(origin);
+		const u64 currDepth = BuddyTree::treeDepth(origin);
 		const u64 targetDepth = this->depthForSize(requestedSize);
 
 		/* Release the position and perform a search */
@@ -723,8 +727,47 @@ namespace kernel::common::memory {
 		return tree->treeStatus(pos) == tree->treeOrder();
 	}
 
-	bool Buddy::isFree(u64 from) {
+	/*
+	 * Internal function that checks if there are any allocations
+	 * after the indicated relative memory index. Used to check if
+	 * the arena can be downsized.
+	 * The from argument is already adjusted for alignment by caller
+	 */
+	bool Buddy::isFree(const u64 from) {
+		const u64 effectiveMemorySize = this->effectiveMemorySize();
+		const u64 virtualSlots = this->virtualSlots();
 
+		const u64 to = effectiveMemorySize - ((virtualSlots ? (virtualSlots + 1) : 1) * this->alignment);
+
+		BuddyTree *tree = this->tree();
+
+		const BuddyTreeInterval queryRange = {
+			.from = this->deepestPositionForOffset(from),
+			.to = this->deepestPositionForOffset(to),
+		};
+
+		BuddyTreePos pos = this->deepestPositionForOffset(from);
+
+		while (tree->treeValid(pos) and (pos.index < queryRange.to.index)) {
+			BuddyTreeInterval currentTestRange = tree->treeInterval(pos);
+			BuddyTreeInterval parentTestRange = tree->treeInterval(tree->treeParent(pos));
+
+			while (tree->treeIntervalContains(queryRange, parentTestRange)) {
+				pos = tree->treeParent(pos);
+				currentTestRange = parentTestRange;
+				parentTestRange = tree->treeInterval(tree->treeParent(pos));
+			}
+
+			/* Pos is now tracking an overlapping segment */
+			if (not tree->treeIsFree(pos)) {
+				return false;
+			}
+
+			/* Advance check */
+			pos = tree->treeRightAdjacent(currentTestRange.to);
+		}
+
+		return true;
 	}
 
 	u64 Buddy::getArenaSize() const {
@@ -1045,7 +1088,7 @@ namespace kernel::common::memory {
 		}
 	}
 
-	void Buddy::toggleRangeReservation(void *ptr, u64 requestedSize, u32 state) {
+	void Buddy::toggleRangeReservation(void *ptr, u64 requestedSize, const u32 state) {
 		if (this == nullptr) {
 			return;
 		}
@@ -1068,7 +1111,7 @@ namespace kernel::common::memory {
 		/* Find the deepest position tracking this address */
 		BuddyTree *tree = this->tree();
 
-		u64 offset = reinterpret_cast<u64>(dst) - reinterpret_cast<u64>(main);
+		const u64 offset = reinterpret_cast<u64>(dst) - reinterpret_cast<u64>(main);
 
 		BuddyTreePos pos = this->deepestPositionForOffset(offset);
 
@@ -1086,8 +1129,36 @@ namespace kernel::common::memory {
 		}
 	}
 
-	BuddyEmbedCheck Buddy::embedOffset(u64 memorySize, u64 alignment) {
+	BuddyEmbedCheck Buddy::embedOffset(const u64 memorySize, const u64 alignment) {
+		BuddyEmbedCheck checkResult = {};
 
+		memset(&checkResult, 0, sizeof(checkResult));
+
+		checkResult.canFit = 1;
+		u64 buddySize = buddySizeOfAlignment(memorySize, alignment);
+
+		if (buddySize >= memorySize) {
+			checkResult.canFit = 0;
+		}
+
+		u64 offset = memorySize - buddySize;
+
+		if (offset % BUDDY_ALIGNOF(Buddy) != 0) {
+			buddySize += offset % BUDDY_ALIGNOF(Buddy);
+
+			if (buddySize >= memorySize) {
+				checkResult.canFit = 0;
+			}
+
+			offset = memorySize - buddySize;
+		}
+
+		if (checkResult.canFit) {
+			checkResult.offset = offset;
+			checkResult.buddySize = buddySize;
+		}
+
+		return checkResult;
 	}
 
 	BuddyTreePos Buddy::deepestPositionForOffset(const u64 offset) {
@@ -1101,7 +1172,25 @@ namespace kernel::common::memory {
 	}
 
     void Buddy::debug() {
+		Terminal *terminal = CommonMain::getTerminal();
 
+		terminal->debug("Buddy Allocator Info:", "Buddy");
+		terminal->debug("	Location: %lp", "Buddy", this);
+		terminal->debug("	Arena: %lp", "Buddy", this->main());
+		terminal->debug("	Memory size: %lu", "Buddy", this->memorySize);
+
+		if (this->relativeMode()) {
+			terminal->debug("	Mode: Embedded", "Buddy");
+		} else {
+			terminal->debug("	Mode: Standard", "Buddy");
+		}
+
+		terminal->debug("	Virtual slots: %lu", "Buddy", this->virtualSlots());
+		terminal->debug("	Allocator tree follows:", "Buddy");
+
+		BuddyTree *tree = this->tree();
+
+		tree->treeDebug(tree->treeRoot(), this->effectiveMemorySize());
     }
 
 
