@@ -264,7 +264,7 @@ namespace kernel::x86_64 {
 
 			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000ull * 1'000'000ull);
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, );
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
 		}
 	}
 
@@ -276,7 +276,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000ull * 1'000'000ull);
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000ull * 1'000'000ull);
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
 		}
 	}
 
@@ -288,7 +290,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000ull * 1'000'000ull);
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000ull * 1'000'000ull);
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
 		}
 	}
 
@@ -300,7 +304,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000ull * 1'000'000ull); // 40 ms
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000ull * 1'000'000ull); // 40 ms
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
 		}
 	}
 
@@ -312,7 +318,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000ull * 1'000'000ull);
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000ull * 1'000'000ull);
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
 		}
 	}
 

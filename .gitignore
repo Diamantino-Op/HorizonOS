@@ -8,4 +8,5 @@
 /deps/nanoprintf/
 /iso/
 /out/
-!/Token.txt
+/.idea/
+Token.txt
