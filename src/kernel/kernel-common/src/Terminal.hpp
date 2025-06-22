@@ -65,6 +65,7 @@ namespace kernel::common {
 
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);
+        void debugNS(const char *format, const char *id, ...);
         void debugNF(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
         void warnNoLock(const char *format, const char *id, ...);

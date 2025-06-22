@@ -175,7 +175,7 @@ namespace kernel::common::threading {
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
-	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) {
+	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) const {
 		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
 		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
 

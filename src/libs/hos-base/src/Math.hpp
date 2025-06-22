@@ -3,6 +3,8 @@
 
 #include "Types.hpp"
 
+#include "cstdint"
+
 template<class T> T roundUp(T val, T roundTo) {
     return (val + (roundTo - 1)) / roundTo;
 }
@@ -58,22 +60,6 @@ inline Pair freq2NsPN(const u64 freq) {
 	const u64 n = (1'000'000'000ull << p) / freq;
 
     return { p, n };
-}
-
-inline u32 popCountByte(u8 b) {
-
-}
-
-inline u64 highestBitPosition(u64 val) {
-
-}
-
-inline u64 ceilingPow2(u64 val) {
-
-}
-
-inline u64 sqrt(u64 f) {
-
 }
 
 #endif

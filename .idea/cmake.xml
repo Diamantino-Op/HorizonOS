@@ -2,12 +2,12 @@
 <project version="4">
   <component name="CMakeSharedSettings">
     <configurations>
-      <configuration PROFILE_NAME="Debug - X86_64" ENABLED="true" GENERATION_DIR="out/x86_64/debug" CONFIG_NAME="Debug" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=x86_64" BUILD_OPTIONS="-j 20" />
-      <configuration PROFILE_NAME="Release - X86_64" ENABLED="true" GENERATION_DIR="out/x86_64/release" CONFIG_NAME="Release" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=x86_64" BUILD_OPTIONS="-j 20" />
-      <configuration PROFILE_NAME="Debug - RiscV64" ENABLED="true" GENERATION_DIR="out/riscv64/debug" CONFIG_NAME="Debug" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=riscv64" BUILD_OPTIONS="-j 20" />
-      <configuration PROFILE_NAME="Release - RiscV64" ENABLED="true" GENERATION_DIR="out/riscv64/release" CONFIG_NAME="Release" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=riscv64" BUILD_OPTIONS="-j 20" />
-      <configuration PROFILE_NAME="Debug - Aarch64" ENABLED="true" GENERATION_DIR="out/aarch64/debug" CONFIG_NAME="Debug" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=aarch64" BUILD_OPTIONS="-j 20" />
-      <configuration PROFILE_NAME="Release - Aarch64" ENABLED="true" GENERATION_DIR="out/aarch64/release" CONFIG_NAME="Release" TOOLCHAIN_NAME="WSL" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=aarch64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Debug - X86_64" ENABLED="true" GENERATION_DIR="out/x86_64/debug" CONFIG_NAME="Debug" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=x86_64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Release - X86_64" ENABLED="true" GENERATION_DIR="out/x86_64/release" CONFIG_NAME="Release" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=x86_64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Debug - RiscV64" ENABLED="true" GENERATION_DIR="out/riscv64/debug" CONFIG_NAME="Debug" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=riscv64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Release - RiscV64" ENABLED="true" GENERATION_DIR="out/riscv64/release" CONFIG_NAME="Release" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=riscv64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Debug - Aarch64" ENABLED="true" GENERATION_DIR="out/aarch64/debug" CONFIG_NAME="Debug" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=aarch64" BUILD_OPTIONS="-j 20" />
+      <configuration PROFILE_NAME="Release - Aarch64" ENABLED="true" GENERATION_DIR="out/aarch64/release" CONFIG_NAME="Release" GENERATION_OPTIONS="-G Ninja -DHORIZON_ARCH=aarch64" BUILD_OPTIONS="-j 20" />
     </configurations>
   </component>
 </project>

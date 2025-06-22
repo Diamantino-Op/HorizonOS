@@ -157,6 +157,19 @@ namespace kernel::common {
 #endif
 	}
 
+	void Terminal::debugNS(const char *format, const char *id, ...) {
+#ifdef HORIZON_DEBUG
+		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
+
+		va_list val;
+		va_start(val, id);
+		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		va_end(val);
+
+		this->printf(false, "\033[0m");
+#endif
+	}
+
 	void Terminal::debugNF(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
 		this->lock();

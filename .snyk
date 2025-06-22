@@ -2,6 +2,7 @@
 exclude:
     global:
         - "deps/chdrs/**/*"
+        - "deps/cxxhdrs/**/*"
         - "deps/limine/**/*"
         - "deps/llvm/**/*"
         - "deps/ovmf/**/*"

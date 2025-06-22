@@ -116,7 +116,9 @@ namespace kernel::x86_64 {
 
 		terminal.info("VMM Loaded... OK", "HorizonOS");
 
+#ifndef HORIZON_USE_NEW_ALLOCATOR
 		VirtualAllocator::initContext(this->kernelAllocContext);
+#endif
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
@@ -225,6 +227,10 @@ namespace kernel::x86_64 {
 
 		this->isInitFlag = true;
 
+#ifdef HORIZON_USE_NEW_ALLOCATOR
+		this->kernelAllocContext->libAlloc->dump();
+#endif
+
 		Asm::sti();
 
 		// Init uAcpi
@@ -256,7 +262,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000ull * 1'000'000ull);
+			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000ull * 1'000'000ull);
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, );
 		}
 	}
 

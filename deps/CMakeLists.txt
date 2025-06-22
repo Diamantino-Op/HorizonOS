@@ -63,8 +63,9 @@ BuildLLVM()
 #llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
 
 # ------------------ Tools Setup ------------------
-set(CMAKE_LINKER "${LLVM_BIN_DIR}/ld.lld" CACHE FILEPATH "Linker")
-set(COMMON_LINKER "<CMAKE_LINKER> <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
+set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
+set(COMMON_LINKER "<CMAKE_LINKER> ${LLVM_BIN_DIR}/ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
+set(CMAKE_LINKER_TYPE LLD)
 set(CMAKE_C_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C Linker")
 set(CMAKE_CXX_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C++ Linker")
 set(CMAKE_ASM_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "Asm Linker")
@@ -101,6 +102,31 @@ endfunction()
 CloneChdrs()
 
 include_directories(BEFORE ${CHDRS_INC_DIR})
+
+# ------------------ C++ Headers ------------------
+set(CXXHDRS_REPO "https://codeberg.org/osdev/freestnd-cxx-hdrs.git" CACHE STRING "CXXHDRS Repository")
+set(CXXHDRS_BRANCH "trunk" CACHE STRING "CXXHDRS Branch")
+set(CXXHDRS_DIR "${ROOT_DIR}/deps/cxxhdrs" CACHE PATH "CXXHDRS Directory")
+set(CXXHDRS_INC_DIR "${CXXHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CXXHDRS Include Directory")
+
+function(CloneCxxhdrs)
+    if(NOT EXISTS "${CXXHDRS_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+        message(STATUS "Cloning C++ Headers repository...")
+        execute_process(
+                COMMAND git clone --depth=1 --branch ${CXXHDRS_BRANCH} ${CXXHDRS_REPO} ${CXXHDRS_DIR}
+                WORKING_DIRECTORY ${ROOT_DIR}
+                RESULT_VARIABLE GIT_CLONE_RESULT
+        )
+
+        if(NOT GIT_CLONE_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to clone CXXHDRS repository.")
+        endif()
+    endif()
+endfunction()
+
+CloneCxxhdrs()
+
+include_directories(BEFORE ${CXXHDRS_INC_DIR})
 
 # ------------------ uACPI ------------------
 set(UACPI_REPO "https://github.com/uACPI/uACPI.git" CACHE STRING "uACPI Repository")

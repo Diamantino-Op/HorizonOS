@@ -162,7 +162,7 @@ extern "C" {
 	    if(pointer == nullptr) {
 	        CommonMain::getTerminal()->warn("type_mismatch @ %s:%u:%u (%s nullptr pointer of type %s)", "UBSan", data->location.filename, data->location.line, data->location.column, kind_strs[data->typeCheckKind], data->type->name);
 	    } else if ((1 << data->alignment) - 1) {
-	        CommonMain::getTerminal()->warn("type_mismatch @ %s:%u:%u (%s misaligned address %#lx of type %s)", "UBSan", data->location.filename, data->location.line, data->location.column, kind_strs[data->typeCheckKind], reinterpret_cast<uPtr>(pointer), data->type->name);
+	        //CommonMain::getTerminal()->warn("type_mismatch @ %s:%u:%u (%s misaligned address %#lx of type %s)", "UBSan", data->location.filename, data->location.line, data->location.column, kind_strs[data->typeCheckKind], reinterpret_cast<uPtr>(pointer), data->type->name);
 	    } else {
 	        CommonMain::getTerminal()->warn(
 	            "type_mismatch @ %s:%u:%u (%s address %#lx, not enough spce for type %s)",

@@ -112,7 +112,7 @@ namespace kernel::common::threading {
 
 		void switchThreads();
 
-    	void switchContext(u64 *oldCtx, u64 *newCtx);
+    	void switchContext(u64 *oldCtx, u64 *newCtx) const;
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
