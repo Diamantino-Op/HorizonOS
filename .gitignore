@@ -9,4 +9,4 @@
 /iso/
 /out/
 /.idea/
-Token.txt
+!/Token.txt
