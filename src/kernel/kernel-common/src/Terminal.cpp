@@ -9,7 +9,7 @@
 
 #include "Terminal.hpp"
 
-#include "backends/fb.h"
+#include "flanterm_backends/fb.h"
 #include "nanoprintf.h"
 #include "stdarg.h"
 
