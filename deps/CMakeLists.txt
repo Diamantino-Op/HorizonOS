@@ -33,7 +33,7 @@ function(BuildLLVM)
         )
 
         if(NOT CMAKE_CONFIGURE_RESULT EQUAL 0)
-            message(FATAL_ERROR "Failed to configure LLVM build.")
+            message(FATAL_ERROR "Failed to configure LLVM build: ${CMAKE_CONFIGURE_RESULT}")
         endif()
 
         message(STATUS "Building LLVM...")
@@ -266,7 +266,7 @@ include_directories(${NANOPRINTF_DIR})
 add_custom_target(Update-Main-Deps
         COMMAND rm -rf ${TMP_ISO_DIR}
         COMMAND cd ${CHDRS_DIR} && git pull
-        COMMAND cd ${LIMINE_DIR} && git pull
+        COMMAND cd ${LIMINE_DIR} && git pull && make
         COMMAND cd ${FLANTERM_DIR} && git pull
         WORKING_DIRECTORY ${ROOT_DIR}
 )
