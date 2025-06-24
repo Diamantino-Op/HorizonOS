@@ -105,7 +105,7 @@ namespace kernel::x86_64::hal {
         IOApic() = default;
         ~IOApic() = default;
 
-        void init(u64 physMmio, u32 gsiBase);
+        void init(u64 physMmio, u32 initGsiBase);
 
         void setIdx(u64 idx, u8 vector, u64 dest, u16 flags, IOApicDelivery delivery);
 

@@ -218,8 +218,10 @@ namespace kernel::x86_64::hal {
 
 	// IOApic
 
-	void IOApic::init(u64 physMmio, u32 gsiBase) {
+	void IOApic::init(const u64 physMmio, const u32 initGsiBase) {
 		Terminal *terminal = CommonMain::getTerminal();
+
+		this->gsiBase = initGsiBase;
 
 		this->mmio = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
 

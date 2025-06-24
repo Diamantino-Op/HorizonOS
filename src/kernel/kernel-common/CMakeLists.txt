@@ -14,7 +14,7 @@ target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_F
 target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${KERNEL_CXX_FLAGS}>)
 target_compile_options(kernel-common PUBLIC $<$<COMPILE_LANGUAGE:ASM>:${KERNEL_ASM_FLAGS}>)
 
-target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR} ${CHDRS_INC_DIR} ${CXXHDRS_INC_DIR} ${NANOPRINTF_DIR} ${HOR_UACPI_INCLUDES})
+target_include_directories(kernel-common PUBLIC src ${LIMINE_DIR} ${FLANTERM_DIR}/src ${CHDRS_INC_DIR} ${CXXHDRS_INC_DIR} ${NANOPRINTF_DIR} ${HOR_UACPI_INCLUDES})
 
 target_link_libraries(kernel-common PUBLIC hos-base uacpi)
 

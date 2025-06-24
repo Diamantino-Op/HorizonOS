@@ -214,7 +214,7 @@ endfunction()
 
 CloneFlanterm()
 
-include_directories(${FLANTERM_DIR})
+include_directories(${FLANTERM_DIR}/src)
 
 # ------------------ OVMF Bios ------------------
 set(OVMF_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
