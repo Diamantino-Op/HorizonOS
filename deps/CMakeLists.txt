@@ -26,11 +26,8 @@ function(BuildLLVM)
     if(NOT EXISTS "${LLVM_BUILD_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
         message(STATUS "Configuring LLVM build...")
-        message(${ROOT_DIR})
-        message(${LLVM_BUILD_DIR})
-        message(${LLVM_DIR})
         execute_process(
-                COMMAND "cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=\"clang;clang-tools-extra;lld;lldb\" -DLLVM_TARGETS_TO_BUILD=\"X86;RISCV;AArch64\" -DLLVM_ENABLE_ASSERTIONS=OFF -DCMAKE_INSTALL_PREFIX=${LLVM_DIR}/bin -DLLVM_PARALLEL_COMPILE_JOBS=20 -DLLVM_PARALLEL_LINK_JOBS=20"
+                COMMAND "cmake -S ${LLVM_DIR}/llvm -B ${LLVM_BUILD_DIR} -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS=\"clang;clang-tools-extra;lld;lldb\" -DLLVM_TARGETS_TO_BUILD=\"X86;RISCV;AArch64\" -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_PARALLEL_COMPILE_JOBS=20 -DLLVM_PARALLEL_LINK_JOBS=20"
                 WORKING_DIRECTORY ${ROOT_DIR}
                 RESULT_VARIABLE CMAKE_CONFIGURE_RESULT
         )
