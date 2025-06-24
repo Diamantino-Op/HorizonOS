@@ -250,6 +250,8 @@ namespace kernel::common::threading {
 	void Scheduler::sleepThread(Thread *thread, const u64 ns) const {
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
+		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
+
 		thread->setState(ThreadState::BLOCKED);
 
 		this->getCurrentExecutionNode()->schedule();

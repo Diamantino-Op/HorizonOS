@@ -65,20 +65,32 @@ namespace kernel::x86_64::hal {
 
 	// TODO: Fix this shit, it's off by too much
 	u64 KvmClock::getNs() {
-		while (info.version % 2) {
-			Asm::pause();
+		u128 time = 0;
+
+		while (true) {
+			const u32 version = __atomic_load_n(&info.version, __ATOMIC_ACQUIRE);
+
+			if (version & 1) {
+				continue;
+			}
+
+			auto tmpTime = static_cast<u128>(CpuManager::getCurrentCore()->tsc.read()) - static_cast<u128>(info.tscTimestamp);
+
+			if (info.tscShift >= 0) {
+				tmpTime <<= info.tscShift;
+			} else {
+				tmpTime >>= -info.tscShift;
+			}
+
+			tmpTime = (tmpTime * static_cast<u128>(info.tscToSystemMul)) >> 32;
+			time = tmpTime + static_cast<u128>(info.systemTime);
+
+			__atomic_thread_fence(__ATOMIC_ACQUIRE);
+
+			if (version == __atomic_load_n(&info.version, __ATOMIC_RELAXED)) {
+				break;
+			}
 		}
-
-		auto time = static_cast<u128>(CpuManager::getCurrentCore()->tsc.read()) - info.tscTimestamp;
-
-		if (info.tscShift >= 0) {
-			time <<= info.tscShift;
-		} else {
-			time >>= -info.tscShift;
-		}
-
-		time = (time * info.tscToSystemMul) >> 32;
-		time = time + info.systemTime;
 
 		return time - offset;
 	}

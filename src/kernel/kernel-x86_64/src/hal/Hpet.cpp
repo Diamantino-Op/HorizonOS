@@ -63,8 +63,8 @@ namespace kernel::x86_64::hal {
 
 		this->initialized = true;
 
-		if (const Clock *clock = CommonMain::getInstance()->getClocks()->getMainClock()) {
-			offset = getNs() - clock->getNs();
+		if (const Clock *mainClock = CommonMain::getInstance()->getClocks()->getMainClock()) {
+			offset = getNs() - mainClock->getNs();
 		}
 
 		this->clock = {

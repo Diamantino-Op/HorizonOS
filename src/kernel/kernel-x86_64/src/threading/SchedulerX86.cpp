@@ -145,6 +145,10 @@ namespace kernel::common::threading {
 
 			schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
 
+			if (schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] == selectedEntry) {
+				schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->prev;
+			}
+
 			if (selectedEntry->next != nullptr) {
 				selectedEntry->next->prev = nullptr;
 			}
@@ -155,7 +159,9 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId()); // TODO: Maybe re-enable
+		if (oldEntry != this->currentThread) {
+			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
+		}
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
 

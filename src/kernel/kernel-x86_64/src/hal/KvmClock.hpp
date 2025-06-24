@@ -8,7 +8,7 @@
 namespace kernel::x86_64::hal {
     using namespace common::hal;
 
-    struct __attribute__((packed)) KvmClockInfo {
+    struct __attribute__((packed, aligned(4))) KvmClockInfo {
         u32 version {};
         u32 pad0 {};
         u64 tscTimestamp {};

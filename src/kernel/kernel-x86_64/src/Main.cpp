@@ -241,7 +241,7 @@ namespace kernel::x86_64 {
 
 		// Multithread
 
-		//this->cpuManager.startMultithread();
+		// this->cpuManager.startMultithread();
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
@@ -249,78 +249,68 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, ioApicManager.getMaxRange() + 0x20, true);
 
-		//this->shutdown();
+		// this->shutdown();
 
 		Asm::lhlt();
-    }
+	}
 
 	void thread1() {
-		for (;;) {
-			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		 for (;;) {
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 1", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 1", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000ull * 1'000'000ull);
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000'000ull); // 10 ms
 		}
 	}
 
 	void thread2() {
 		for (;;) {
-			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 2", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000ull * 1'000'000ull);
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000'000ull); // 20 ms
 		}
 	}
 
 	void thread3() {
 		for (;;) {
-			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 3", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 3", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000ull * 1'000'000ull);
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000'000ull); // 30 ms
 		}
 	}
 
 	void thread4() {
 		for (;;) {
-			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 4", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 4", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000ull * 1'000'000ull); // 40 ms
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000'000ull); // 40 ms
 		}
 	}
 
 	void thread5() {
 		for (;;) {
-			//const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			//CommonMain::getTerminal()->warnNoLock("Call NS: %u", "Thread 5", ns);
+			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 5", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000ull * 1'000'000ull);
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, ~0ULL);
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000'000ull); // 50 ms
 		}
 	}
 
@@ -390,6 +380,8 @@ namespace kernel::x86_64 {
 		CpuManager::getCurrentCore()->executionNode.init();
 
 		this->cpuCore.tsc.init();
+
+		this->cpuCore.apic.init();
 
 		Asm::sti();
 
