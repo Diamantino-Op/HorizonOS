@@ -29,7 +29,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/x86_64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=x86_64
@@ -86,7 +86,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/x86_64/debug -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHORIZON_ARCH=x86_64
@@ -155,7 +155,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/aarch64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=aarch64
@@ -212,7 +212,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/aarch64/debug -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHORIZON_ARCH=aarch64
@@ -281,7 +281,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/riscv64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=riscv64
@@ -338,7 +338,7 @@ jobs:
             ${{github.workspace}}/deps/nanoprintf
             ${{github.workspace}}/deps/ovmf
             ${{github.workspace}}/deps/uacpi
-          key: ${{runner.is}}-horizonos-deps
+          key: ${{runner.os}}-horizonos-deps
 
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/out/riscv64/debug -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHORIZON_ARCH=riscv64

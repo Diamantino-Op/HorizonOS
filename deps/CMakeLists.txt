@@ -8,7 +8,7 @@ set(LLVM_BUILD_DIR "${LLVM_DIR}/build" CACHE PATH "LLVM Build Directory")
 set(LLVM_BIN_DIR "${LLVM_BUILD_DIR}/bin" CACHE PATH "LLVM Bin Directory")
 
 function(CloneLLVM)
-    if(NOT EXISTS "${LLVM_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${LLVM_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning LLVM repository...")
         execute_process(
                 COMMAND git clone --depth=1 --branch ${LLVM_BRANCH} ${LLVM_REPO} ${LLVM_DIR}
@@ -23,7 +23,7 @@ function(CloneLLVM)
 endfunction()
 
 function(BuildLLVM)
-    if(NOT EXISTS "${LLVM_BUILD_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${LLVM_BUILD_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         file(MAKE_DIRECTORY ${LLVM_BUILD_DIR})
         message(STATUS "Configuring LLVM build...")
         execute_process(
@@ -85,7 +85,7 @@ set(CHDRS_DIR "${ROOT_DIR}/deps/chdrs" CACHE PATH "CHDRS Directory")
 set(CHDRS_INC_DIR "${CHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CHDRS Include Directory")
 
 function(CloneChdrs)
-    if(NOT EXISTS "${CHDRS_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${CHDRS_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning C Headers repository...")
         execute_process(
                 COMMAND git clone --depth=1 --branch ${CHDRS_BRANCH} ${CHDRS_REPO} ${CHDRS_DIR}
@@ -110,7 +110,7 @@ set(CXXHDRS_DIR "${ROOT_DIR}/deps/cxxhdrs" CACHE PATH "CXXHDRS Directory")
 set(CXXHDRS_INC_DIR "${CXXHDRS_DIR}/${HORIZON_ARCH}/include" CACHE PATH "CXXHDRS Include Directory")
 
 function(CloneCxxhdrs)
-    if(NOT EXISTS "${CXXHDRS_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${CXXHDRS_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning C++ Headers repository...")
         execute_process(
                 COMMAND git clone --depth=1 --branch ${CXXHDRS_BRANCH} ${CXXHDRS_REPO} ${CXXHDRS_DIR}
@@ -133,7 +133,7 @@ set(UACPI_REPO "https://github.com/uACPI/uACPI.git" CACHE STRING "uACPI Reposito
 set(UACPI_DIR "${ROOT_DIR}/deps/uacpi" CACHE PATH "uACPI Directory")
 
 function(CloneUAcpi)
-    if(NOT EXISTS "${UACPI_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${UACPI_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning uACPI repository...")
         execute_process(
                 COMMAND git clone --depth=1 ${UACPI_REPO} ${UACPI_DIR}
@@ -160,7 +160,7 @@ set(LIMINE_BRANCH "v9.x-binary" CACHE STRING "Limine Branch")
 set(LIMINE_DIR "${ROOT_DIR}/deps/limine" CACHE PATH "Limine Directory")
 
 function(CloneLimine)
-    if(NOT EXISTS "${LIMINE_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${LIMINE_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning Limine repository...")
         execute_process(
                 COMMAND git clone --depth=1 --branch ${LIMINE_BRANCH} ${LIMINE_REPO} ${LIMINE_DIR}
@@ -175,7 +175,7 @@ function(CloneLimine)
 endfunction()
 
 function(BuildLimine)
-    if(NOT EXISTS "${LIMINE_DIR}/limine" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${LIMINE_DIR}/limine" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Building Limine...")
         execute_process(
                 COMMAND make
@@ -198,7 +198,7 @@ set(FLANTERM_BRANCH "trunk" CACHE STRING "Flanterm Branch")
 set(FLANTERM_DIR "${ROOT_DIR}/deps/flanterm" CACHE PATH "Flanterm Directory")
 
 function(CloneFlanterm)
-    if(NOT EXISTS "${FLANTERM_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${FLANTERM_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Cloning Flanterm repository...")
         execute_process(
                 COMMAND git clone --depth=1 --branch ${FLANTERM_BRANCH} ${FLANTERM_REPO} ${FLANTERM_DIR}
@@ -247,7 +247,7 @@ set(NANOPRINTF_DIR "${ROOT_DIR}/deps/nanoprintf" CACHE PATH "NanoPrintf Director
 set(NANOPRINTF_FILE "${NANOPRINTF_DIR}/nanoprintf.h" CACHE PATH "NanoPrintf File")
 
 function(DownloadNanoPrintf)
-    if(NOT EXISTS "${NANOPRINTF_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    if(NOT EXISTS "${NANOPRINTF_DIR}" AND ${HORIZON_ARCH} STREQUAL "x86_64" AND ${CMAKE_BUILD_TYPE} STREQUAL "Release")
         message(STATUS "Downloading NanoPrintf...")
         execute_process(
                 COMMAND mkdir ${NANOPRINTF_DIR}
