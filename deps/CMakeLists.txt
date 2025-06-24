@@ -38,7 +38,7 @@ function(BuildLLVM)
 
         message(STATUS "Building LLVM...")
         execute_process(
-                COMMAND "cmake --build ${LLVM_BUILD_DIR} --parallel"
+                COMMAND cmake --build ${LLVM_BUILD_DIR} --parallel
                 WORKING_DIRECTORY ${ROOT_DIR}
                 RESULT_VARIABLE CMAKE_BUILD_RESULT
         )
