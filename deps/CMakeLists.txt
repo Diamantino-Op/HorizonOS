@@ -67,7 +67,7 @@ set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
 
 if (NOT EXISTS ${LLVM_BIN_DIR}/ld.lld)
     execute_process(
-            COMMAND apt install lld
+            COMMAND sudo apt-get install lld
     )
 
     set(COMMON_LINKER "<CMAKE_LINKER> lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
