@@ -273,6 +273,8 @@ namespace kernel::common::threading {
 						tmpEntry->thread->setState(ThreadState::RUNNING);
 
 						tmpEntry->thread->setSleepNs(0);
+
+						CommonMain::getTerminal()->debug("Thread %u is awake", "Scheduler", tmpEntry->thread->getId());
 					}
 				}
 

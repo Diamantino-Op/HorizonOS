@@ -78,6 +78,11 @@ set(CMAKE_ASM_COMPILER "${LLVM_BIN_DIR}/clang" CACHE FILEPATH "Asm Compiler")
 set(CMAKE_ASM_COMPILER_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "Asm Compiler AR")
 set(CMAKE_AR "${LLVM_BIN_DIR}/llvm-ar" CACHE FILEPATH "AR Tool")
 
+execute_process(
+        COMMAND chmod +x ${ROOT_DIR}/deps/LinkWrapper.sh
+        WORKING_DIRECTORY ${ROOT_DIR}
+)
+
 # ------------------ C Headers ------------------
 set(CHDRS_REPO "https://codeberg.org/osdev/freestnd-c-hdrs.git" CACHE STRING "CHDRS Repository")
 set(CHDRS_BRANCH "trunk" CACHE STRING "CHDRS Branch")
