@@ -65,12 +65,16 @@ BuildLLVM()
 # ------------------ Tools Setup ------------------
 set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
 
+execute_process(
+        COMMAND sudo apt-get install -y xorriso
+)
+
 if (NOT EXISTS ${LLVM_BIN_DIR}/ld.lld)
     execute_process(
             COMMAND sudo apt-get install lld
     )
 
-    set(COMMON_LINKER "<CMAKE_LINKER> lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
+    set(COMMON_LINKER "<CMAKE_LINKER> ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
 else ()
     set(COMMON_LINKER "<CMAKE_LINKER> ${LLVM_BIN_DIR}/ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
 endif ()
