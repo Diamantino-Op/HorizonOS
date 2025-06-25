@@ -63,8 +63,13 @@ BuildLLVM()
 #llvm_map_components_to_libnames(LLVM_LIBS support core irreader)
 
 # ------------------ Tools Setup ------------------
+execute_process(
+        COMMAND ls -l ${LLVM_BIN_DIR}
+        WORKING_DIRECTORY ${ROOT_DIR}
+)
+
 set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
-set(COMMON_LINKER "<CMAKE_LINKER> ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
+set(COMMON_LINKER "<CMAKE_LINKER> ${LLVM_BIN_DIR}/ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
 set(CMAKE_LINKER_TYPE LLD)
 set(CMAKE_C_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C Linker")
 set(CMAKE_CXX_LINK_EXECUTABLE "${COMMON_LINKER}" CACHE STRING "C++ Linker")
