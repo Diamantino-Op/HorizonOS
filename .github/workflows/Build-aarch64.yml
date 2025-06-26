@@ -1,0 +1,114 @@
+name: Build Aarch64
+
+on:
+  workflow_run:
+    workflows: [ "Setup Deps" ]
+    types:
+      - completed
+
+jobs:
+  build-aarch64-release:
+    runs-on: ubuntu-latest
+
+    if: ${{github.event.workflow_run.conclusion == 'success'}}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Deps Folder
+        id: cache-deps-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{github.workspace}}/deps/chdrs
+            ${{github.workspace}}/deps/cxxhdrs
+            ${{github.workspace}}/deps/flanterm
+            ${{github.workspace}}/deps/limine
+            ${{github.workspace}}/deps/llvm
+            ${{github.workspace}}/deps/nanoprintf
+            ${{github.workspace}}/deps/ovmf
+            ${{github.workspace}}/deps/uacpi
+          key: ${{runner.os}}-horizonos-deps
+
+      - name: Install lld
+        run: sudo apt-get install lld
+
+      - name: Install xorriso
+        run: sudo apt-get install xorriso
+
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/out/aarch64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=aarch64
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/out/aarch64/release --target HorizonOS-ISO --config Release
+
+      - name: Upload ISO
+        id: upload-iso
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonOS ISO - Release
+          path: ${{github.workspace}}/iso/out/HorizonOS-aarch64.iso
+          if-no-files-found: 'warn'
+          retention-days: 14
+          compression-level: '9'
+          overwrite: 'false'
+          include-hidden-files: 'false'
+
+  build-aarch64-debug:
+    runs-on: ubuntu-latest
+
+    if: ${{github.event.workflow_run.conclusion == 'success'}}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Deps Folder
+        id: cache-deps-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{github.workspace}}/deps/chdrs
+            ${{github.workspace}}/deps/cxxhdrs
+            ${{github.workspace}}/deps/flanterm
+            ${{github.workspace}}/deps/limine
+            ${{github.workspace}}/deps/llvm
+            ${{github.workspace}}/deps/nanoprintf
+            ${{github.workspace}}/deps/ovmf
+            ${{github.workspace}}/deps/uacpi
+          key: ${{runner.os}}-horizonos-deps
+
+      - name: Install lld
+        run: sudo apt-get install lld
+
+      - name: Install xorriso
+        run: sudo apt-get install xorriso
+
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/out/aarch64/debug -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHORIZON_ARCH=aarch64
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/out/aarch64/debug --target HorizonOS-ISO --config Debug
+
+      - name: Upload ISO
+        id: upload-iso
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonOS ISO - Debug
+          path: ${{github.workspace}}/iso/out/HorizonOS-aarch64.iso
+          if-no-files-found: 'warn'
+          retention-days: 14
+          compression-level: '9'
+          overwrite: 'false'
+          include-hidden-files: 'false'
+
+      - name: Upload Kernel
+        id: upload-kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonOS Kernel - Debug
+          path: ${{github.workspace}}/iso/aarch64/boot/HorizonOS/HorizonOS_Kernel
+          if-no-files-found: 'warn'
+          retention-days: 14
+          compression-level: '9'
+          overwrite: 'false'
+          include-hidden-files: 'false'

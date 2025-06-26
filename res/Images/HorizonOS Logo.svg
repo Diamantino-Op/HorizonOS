@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="500"
+   height="500"
+   viewBox="0 0 132.29167 132.29167"
+   version="1.1"
+   id="svg1"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <linearGradient
+       id="linearGradient5">
+      <stop
+         style="stop-color:#003fff;stop-opacity:0;"
+         offset="0"
+         id="stop4" />
+      <stop
+         style="stop-color:#00ffaa;stop-opacity:0;"
+         offset="1"
+         id="stop5" />
+    </linearGradient>
+    <linearGradient
+       id="swatch3">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient23">
+      <stop
+         style="stop-color:#003fff;stop-opacity:1;"
+         offset="0"
+         id="stop24" />
+      <stop
+         style="stop-color:#00ffaa;stop-opacity:1;"
+         offset="1"
+         id="stop25" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient21">
+      <stop
+         style="stop-color:#000000;stop-opacity:0;"
+         offset="0.67344147"
+         id="stop22" />
+      <stop
+         style="stop-color:#0080ff;stop-opacity:0;"
+         offset="1"
+         id="stop23" />
+    </linearGradient>
+    <linearGradient
+       xlink:href="#linearGradient23"
+       id="linearGradient25"
+       x1="17.890129"
+       y1="16.381969"
+       x2="58.648796"
+       y2="57.140636"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       xlink:href="#linearGradient23"
+       id="linearGradient2"
+       x1="52.114182"
+       y1="51.558475"
+       x2="80.177475"
+       y2="79.621773"
+       gradientUnits="userSpaceOnUse"
+       spreadMethod="pad" />
+    <filter
+       style="color-interpolation-filters:sRGB"
+       id="filter3"
+       x="-0.33818602"
+       y="-0.27599611"
+       width="1.676372"
+       height="1.5519922">
+      <feGaussianBlur
+         stdDeviation="5.5198586"
+         id="feGaussianBlur3" />
+    </filter>
+    <linearGradient
+       xlink:href="#linearGradient23"
+       id="linearGradient7"
+       gradientUnits="userSpaceOnUse"
+       x1="17.890129"
+       y1="16.381969"
+       x2="58.648796"
+       y2="57.140636" />
+    <linearGradient
+       xlink:href="#linearGradient5"
+       id="linearGradient8"
+       gradientUnits="userSpaceOnUse"
+       x1="4.8558412"
+       y1="3.3476624"
+       x2="71.683105"
+       y2="70.174927"
+       spreadMethod="repeat" />
+    <filter
+       style="color-interpolation-filters:sRGB"
+       id="filter8"
+       x="-0.031840609"
+       y="-0.02808847"
+       width="1.0636812"
+       height="1.0561769">
+      <feGaussianBlur
+         stdDeviation="0.69124807"
+         id="feGaussianBlur8" />
+    </filter>
+    <linearGradient
+       xlink:href="#linearGradient21"
+       id="linearGradient10"
+       gradientUnits="userSpaceOnUse"
+       x1="9.4487324"
+       y1="36.761303"
+       x2="67.090187"
+       y2="36.761303" />
+    <linearGradient
+       xlink:href="#linearGradient23"
+       id="linearGradient4"
+       gradientUnits="userSpaceOnUse"
+       x1="52.114182"
+       y1="51.558475"
+       x2="80.177475"
+       y2="79.621773"
+       spreadMethod="pad" />
+    <linearGradient
+       xlink:href="#swatch3"
+       id="linearGradient11"
+       gradientUnits="userSpaceOnUse"
+       x1="46.302086"
+       y1="65.590126"
+       x2="85.989586"
+       y2="65.590126" />
+    <linearGradient
+       xlink:href="#swatch3"
+       id="linearGradient12"
+       gradientUnits="userSpaceOnUse"
+       x1="46.302086"
+       y1="65.590126"
+       x2="85.989586"
+       y2="65.590126" />
+  </defs>
+  <g
+     id="layer2">
+    <path
+       style="mix-blend-mode:normal;fill:url(#linearGradient8);fill-opacity:1;fill-rule:nonzero;stroke:url(#linearGradient7);stroke-width:0.329928;stroke-dasharray:none;stroke-opacity:1;paint-order:normal;filter:url(#filter8)"
+       id="outline_aura"
+       d="M 66.924423,52.97398 38.556351,69.683568 9.9013865,53.470891 9.6144948,20.548626 37.982567,3.8390376 66.637531,20.051715 Z"
+       transform="matrix(1.6129112,0.01682288,-0.01680182,1.5979251,5.0384084,6.7600448)" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:66.8421px;font-family:'Adwaita Sans';-inkscape-font-specification:'Adwaita Sans Semi-Bold';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:url(#linearGradient4);stroke:url(#linearGradient11);stroke-width:0.348192;stroke-miterlimit:4;stroke-dasharray:none;filter:url(#filter3)"
+       x="66.145836"
+       y="89.905243"
+       id="main_letter_aura"><tspan
+         id="tspan1"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-family:'Adwaita Sans';-inkscape-font-specification:'Adwaita Sans Semi-Bold';text-align:center;text-anchor:middle;fill:url(#linearGradient4);stroke:url(#linearGradient11);stroke-width:0.348192;stroke-miterlimit:4;stroke-dasharray:none"
+         x="66.145836"
+         y="89.905243">H</tspan></text>
+  </g>
+  <g
+     id="layer1">
+    <path
+       style="display:inline;fill:url(#linearGradient10);fill-opacity:1;fill-rule:nonzero;stroke:url(#linearGradient25);stroke-width:0.329877;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       id="outline"
+       d="M 66.924423,52.97398 38.556351,69.683568 9.9013865,53.470891 9.6144948,20.548626 37.982567,3.8390376 66.637531,20.051715 Z"
+       transform="matrix(1.6129112,0.01682288,-0.01680182,1.5979251,5.0384083,6.7600448)" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:66.8421px;font-family:'Adwaita Sans';-inkscape-font-specification:'Adwaita Sans Semi-Bold';text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:url(#linearGradient2);stroke:url(#linearGradient12);stroke-width:0.198438;stroke-miterlimit:4;stroke-dasharray:none"
+       x="66.145836"
+       y="89.905243"
+       id="text3"><tspan
+         id="tspan3"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-family:'Adwaita Sans';-inkscape-font-specification:'Adwaita Sans Semi-Bold';text-align:center;text-anchor:middle;fill:url(#linearGradient2);stroke:url(#linearGradient12);stroke-width:0.198438;stroke-miterlimit:4;stroke-dasharray:none"
+         x="66.145836"
+         y="89.905243">H</tspan></text>
+  </g>
+</svg>

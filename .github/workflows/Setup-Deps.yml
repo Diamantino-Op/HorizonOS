@@ -1,0 +1,51 @@
+name: Setup Deps
+
+on:
+  push:
+    branches: [ "main" ]
+
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-llvm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore Deps Folder
+        id: cache-deps-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{github.workspace}}/deps/chdrs
+            ${{github.workspace}}/deps/cxxhdrs
+            ${{github.workspace}}/deps/flanterm
+            ${{github.workspace}}/deps/limine
+            ${{github.workspace}}/deps/llvm
+            ${{github.workspace}}/deps/nanoprintf
+            ${{github.workspace}}/deps/ovmf
+            ${{github.workspace}}/deps/uacpi
+          key: ${{runner.os}}-horizonos-deps
+
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/out/x86_64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=x86_64
+
+      - name: Update Dependencies
+        run: cmake --build ${{github.workspace}}/out/x86_64/release --target Update-Main-Deps --config Release
+
+      - name: Save Deps Folder
+        id: cache-deps-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{github.workspace}}/deps/chdrs
+            ${{github.workspace}}/deps/cxxhdrs
+            ${{github.workspace}}/deps/flanterm
+            ${{github.workspace}}/deps/limine
+            ${{github.workspace}}/deps/llvm
+            ${{github.workspace}}/deps/nanoprintf
+            ${{github.workspace}}/deps/ovmf
+            ${{github.workspace}}/deps/uacpi
+          key: ${{steps.cache-deps-restore.outputs.cache-primary-key}}
