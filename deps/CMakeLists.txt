@@ -65,10 +65,6 @@ BuildLLVM()
 # ------------------ Tools Setup ------------------
 set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
 
-execute_process(
-        COMMAND sudo apt-get install -y xorriso
-)
-
 if (NOT EXISTS ${LLVM_BIN_DIR}/ld.lld)
     execute_process(
             COMMAND sudo apt-get install lld

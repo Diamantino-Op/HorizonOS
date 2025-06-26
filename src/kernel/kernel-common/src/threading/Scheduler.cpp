@@ -264,7 +264,11 @@ namespace kernel::common::threading {
 	}
 
 	u32 Scheduler::sleepTick(u64 *) {
-		for (const auto currQueue : CommonMain::getInstance()->getScheduler()->queues) {
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		schedulerPtr->getSchedLock()->lock();
+
+		for (const auto currQueue : schedulerPtr->queues) {
 			const ThreadListEntry *tmpEntry = currQueue;
 
 			while (tmpEntry != nullptr) {
@@ -281,6 +285,8 @@ namespace kernel::common::threading {
 				tmpEntry = tmpEntry->next;
 			}
 		}
+
+		schedulerPtr->getSchedLock()->unlock();
 
 		return 0;
 	}
