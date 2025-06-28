@@ -1,5 +1,4 @@
 # HorizonOS
-***
 ![Build LLVM](https://github.com/Diamantino-Op/HorizonOS/actions/workflows/Setup-Deps.yml/badge.svg) ![Build X86_64](https://github.com/Diamantino-Op/HorizonOS/actions/workflows/Build-x86_64.yml/badge.svg) ![Build Aarch64](https://github.com/Diamantino-Op/HorizonOS/actions/workflows/Build-aarch64.yml/badge.svg) ![Build RiscV64](https://github.com/Diamantino-Op/HorizonOS/actions/workflows/Build-riscv64.yml/badge.svg)
 
 <p align="center">
@@ -9,7 +8,6 @@
 A simple microkernel OS that I am making for fun.
 
 ## Features
-***
 * **Modular:** Easy to add / remove modules such as drivers.
 * **Simple:** Code is very simple to understand + I plan to document it soon.
 * **Modern:** 64-bit os written using C++ 26 and the latest clang compiler.
@@ -17,7 +15,6 @@ A simple microkernel OS that I am making for fun.
 * **Hotplug:** Cpu, Memory and PCI Hotplug / Unplug support (WIP).
 
 ## IRQ Mappings
-***
 * **IRQ 0:** PIT Tick
 * **IRQ 9:** SCI
 * **IRQ 10:** Hpet (Scheduler sleep)
