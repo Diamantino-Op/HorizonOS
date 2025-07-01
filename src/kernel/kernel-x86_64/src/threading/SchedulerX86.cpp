@@ -143,14 +143,20 @@ namespace kernel::common::threading {
 				Asm::lhlt();
 			}
 
-			schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
+			if (schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] == selectedEntry) {
+				schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
+			}
 
 			if (schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] == selectedEntry) {
 				schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->prev;
 			}
 
 			if (selectedEntry->next != nullptr) {
-				selectedEntry->next->prev = nullptr;
+				selectedEntry->next->prev = selectedEntry->prev;
+			}
+
+			if (selectedEntry->prev != nullptr) {
+				selectedEntry->prev->next = selectedEntry->next;
 			}
 
 			this->currentThread = selectedEntry;
