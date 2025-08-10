@@ -30,3 +30,12 @@ volatile limine_rsdp_request rsdpRequest = {
 	.revision = 0,
 	.response = nullptr,
 };
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_module_request moduleRequest = {
+	.id = LIMINE_MODULE_REQUEST,
+	.revision = 0,
+	.response =	nullptr,
+	.internal_module_count = 0,
+	.internal_modules = nullptr,
+};

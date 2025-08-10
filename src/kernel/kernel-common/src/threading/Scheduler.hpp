@@ -124,18 +124,14 @@ namespace kernel::common::threading {
 
 		bool isDisabledFlag;
 
+    	bool prevIF;
+
         ThreadListEntry *currentThread {};
     };
 
 	void idleThread();
 
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
-
-	struct SleepQueueEntry {
-		SleepQueueEntry *prev {};
-		Thread *thread {};
-		SleepQueueEntry *next {};
-	};
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
@@ -235,8 +231,6 @@ namespace kernel::common::threading {
 
     	ThreadListEntry *queues[ProcessPriority::COUNT] {};
     	ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
-
-    	SleepQueueEntry *sleepQueue {};
     };
 }
 

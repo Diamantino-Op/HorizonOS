@@ -1,11 +1,24 @@
 #include "SpinLock.hpp"
 
-void TicketSpinLock::lock() {
+bool TicketSpinLock::lock() {
 	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
+
+	u64 flags;
+
+	asm volatile(
+		"pushfq\n"
+		"popq %0\n"
+		"cli"
+		: "=r"(flags)
+		:
+		: "memory"
+	);
 
 	while(__atomic_load_n(&currentTicket, __ATOMIC_ACQUIRE) != ticket) {
 		lockedFun();
 	}
+
+	return flags & (1 << 9);
 }
 
 void TicketSpinLock::lockedFun() {
@@ -18,16 +31,31 @@ void TicketSpinLock::lockedFun() {
 #endif
 }
 
-void TicketSpinLock::unlock() {
+void TicketSpinLock::unlock(bool prevIF) {
 	const auto current = __atomic_load_n(&currentTicket, __ATOMIC_RELAXED);
 
 	__atomic_store_n(&currentTicket, current + 1, __ATOMIC_RELEASE);
+
+	if (prevIF) {
+		asm volatile("sti" ::: "memory");
+	}
 }
 
-void SimpleSpinLock::lock() {
+bool SimpleSpinLock::lock() {
+	u64 flags;
+
+	asm volatile(
+		"pushfq\n"
+		"popq %0\n"
+		"cli"
+		: "=r"(flags)
+		:
+		: "memory"
+	);
+
 	while (true) {
 		if (!__atomic_exchange_n(&this->locked, true, __ATOMIC_ACQUIRE)) {
-			return;
+			return flags & (1 << 9);
 		}
 
 		while (__atomic_load_n(&this->locked, __ATOMIC_RELAXED)) {
@@ -46,6 +74,10 @@ void SimpleSpinLock::lockedFun() {
 	#endif
 }
 
-void SimpleSpinLock::unlock() {
+void SimpleSpinLock::unlock(bool prevIF) {
 	__atomic_store_n(&this->locked, false, __ATOMIC_RELEASE);
+
+	if (prevIF) {
+		asm volatile("sti" ::: "memory");
+	}
 }

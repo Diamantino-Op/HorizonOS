@@ -1,5 +1,5 @@
-#ifndef KERNEL_X86_64_UACPIKERNAPI_HPP
-#define KERNEL_X86_64_UACPIKERNAPI_HPP
+#ifndef KERNEL_COMMON_UACPIKERNAPI_HPP
+#define KERNEL_COMMON_UACPIKERNAPI_HPP
 
 #include "Types.hpp"
 #include "uacpi/types.h"

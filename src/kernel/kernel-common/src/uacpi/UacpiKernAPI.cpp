@@ -210,7 +210,7 @@ uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle handle, uacpi_u16 timeout) 
 }
 
 void uacpi_kernel_release_mutex(uacpi_handle handle) {
-	static_cast<SimpleSpinLock *>(handle)->unlock();
+	static_cast<SimpleSpinLock *>(handle)->unlock(true);
 }
 
 uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
@@ -285,13 +285,11 @@ void uacpi_kernel_free_spinlock(uacpi_handle handle) {
 }
 
 uacpi_cpu_flags uacpi_kernel_lock_spinlock(uacpi_handle handle) {
-	static_cast<TicketSpinLock *>(handle)->lock();
-
-	return 0;
+	return static_cast<TicketSpinLock *>(handle)->lock();
 }
 
-void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags) {
-	static_cast<TicketSpinLock *>(handle)->unlock();
+void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags prevIF) {
+	static_cast<TicketSpinLock *>(handle)->unlock(prevIF);
 }
 
 // API

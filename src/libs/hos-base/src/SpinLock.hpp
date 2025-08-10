@@ -12,8 +12,8 @@ public:
     TicketSpinLock() = default;
     ~TicketSpinLock() = default;
 
-    void lock();
-    void unlock();
+    bool lock();
+    void unlock(bool prevIF);
 
 private:
     void lockedFun();
@@ -27,8 +27,8 @@ public:
     SimpleSpinLock() = default;
     ~SimpleSpinLock() = default;
 
-    void lock();
-    void unlock();
+    bool lock();
+    void unlock(bool prevIF);
 
 private:
     void lockedFun();

@@ -227,10 +227,6 @@ namespace kernel::x86_64 {
 
 		this->isInitFlag = true;
 
-#ifdef HORIZON_USE_NEW_ALLOCATOR
-		this->kernelAllocContext->libAlloc->dump();
-#endif
-
 		Asm::sti();
 
 		// Init uAcpi
@@ -241,12 +237,13 @@ namespace kernel::x86_64 {
 
 		// Multithread
 
-		// this->cpuManager.startMultithread();
+		this->cpuManager.startMultithread();
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
 		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
 
+		// Todo: make one shot and restart when thread goes to sleep
 		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, ioApicManager.getMaxRange() + 0x20, true);
 
 		// this->shutdown();
@@ -359,6 +356,7 @@ namespace kernel::x86_64 {
 	// Multicore
 
 	void CoreKernel::init() {
+		auto *commonKernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		Terminal* terminal = CommonMain::getTerminal();
 
 		this->coreTssManager = TssManager();
@@ -371,7 +369,7 @@ namespace kernel::x86_64 {
 
 		this->coreTssManager.updateTss();
 
-		this->coreIdtManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIdtManager();
+		this->coreIdtManager = commonKernel->getIdtManager();
 
 		this->coreIdtManager->loadIdt();
 
@@ -384,6 +382,8 @@ namespace kernel::x86_64 {
 		this->cpuCore.apic.init();
 
 		Asm::sti();
+
+		this->cpuCore.apic.arm(50 * 1'000'000, commonKernel->getIOApicManager()->getMaxRange() + 0x20, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

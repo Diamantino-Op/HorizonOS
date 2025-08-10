@@ -75,7 +75,7 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		schedulerPtr->getSchedLock()->lock();
+		this->prevIF = schedulerPtr->getSchedLock()->lock();
 
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
@@ -199,7 +199,7 @@ namespace kernel::common::threading {
 
 		Interrupts::sendEOI(0x2a);
 
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock();
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
 
 		Asm::sti();
 

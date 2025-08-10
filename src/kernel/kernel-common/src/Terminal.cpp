@@ -60,11 +60,11 @@ namespace kernel::common {
 			this->getCurrentCore()->setDisabled(true);
 		}
 
-		this->spinLock.lock();
+		this->prevIF = this->spinLock.lock();
 	}
 
 	void Terminal::unlock() {
-		this->spinLock.unlock();
+		this->spinLock.unlock(this->prevIF);
 
 		if (CommonMain::getInstance()->isInit()) {
 			this->getCurrentCore()->setDisabled(false);
