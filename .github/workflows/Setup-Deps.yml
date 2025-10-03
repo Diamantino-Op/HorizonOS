@@ -35,6 +35,18 @@ jobs:
       - name: Update Dependencies
         run: cmake --build ${{github.workspace}}/out/x86_64/release --target Update-Main-Deps --config Release
 
+      - name: Upload LLVM
+        id: upload-llvm
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonOS LLVM
+          path: ${{github.workspace}}/deps/llvm
+          if-no-files-found: 'warn'
+          retention-days: 1
+          compression-level: '9'
+          overwrite: 'false'
+          include-hidden-files: 'false'
+
       - name: Save Deps Folder
         id: cache-deps-save
         uses: actions/cache/save@v4
