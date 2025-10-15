@@ -35,6 +35,14 @@ namespace kernel::common::threading {
 		this->state = state;
 	}
 
+	void Thread::setIsBlocked(bool isBlocked) {
+		this->isBlocked = isBlocked;
+	}
+
+	bool Thread::getIsBlocked() const {
+		return this->isBlocked;
+	}
+
 	ThreadState Thread::getState() const {
 		return this->state;
 	}
@@ -257,6 +265,26 @@ namespace kernel::common::threading {
 		this->getCurrentExecutionNode()->schedule();
 	}
 
+	void Scheduler::blockThread(Thread *thread) const {
+		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
+
+		thread->setState(ThreadState::BLOCKED);
+
+		thread->setIsBlocked(true); // TODO: Maybe this bool is unnecessary
+
+		this->getCurrentExecutionNode()->schedule();
+	}
+
+	void Scheduler::unblockThread(Thread *thread) const {
+		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
+
+		if (thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+			thread->setState(ThreadState::RUNNING);
+		}
+
+		thread->setIsBlocked(false); // TODO: Maybe this bool is unnecessary
+	}
+
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
 		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
 
@@ -274,7 +302,9 @@ namespace kernel::common::threading {
 			while (tmpEntry != nullptr) {
 				if (tmpEntry->thread->getSleepNs() > 0) {
 					if (tmpEntry->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
-						tmpEntry->thread->setState(ThreadState::RUNNING);
+						if (!tmpEntry->thread->getIsBlocked()) {
+							tmpEntry->thread->setState(ThreadState::RUNNING);
+						}
 
 						tmpEntry->thread->setSleepNs(0);
 					}

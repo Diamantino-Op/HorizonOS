@@ -37,6 +37,9 @@ namespace kernel::common::threading {
         void setSleepNs(u64 ns);
         u64 getSleepNs() const;
 
+    	void setIsBlocked(bool isBlocked);
+    	bool getIsBlocked() const;
+
         void setState(ThreadState state);
         ThreadState getState() const;
 
@@ -49,6 +52,8 @@ namespace kernel::common::threading {
         u16 id {};
 
         u64 sleepNs {};
+
+    	bool isBlocked {};
 
         u64 *context {};
         ThreadState state {};
@@ -135,6 +140,7 @@ namespace kernel::common::threading {
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
+	// TODO: Maybe do sleep queues and block queues
     class Scheduler {
     public:
         Scheduler();
@@ -203,6 +209,20 @@ namespace kernel::common::threading {
 		 *  @param ns The number of ticks for which the thread should remain asleep.
 		 **/
 		void sleepThread(Thread *thread, u64 ns) const;
+
+    	/**
+		 *  Blocks the specified thread until it's unlocked manually.
+		 *
+		 *  @param thread The thread to be put to block.
+		 **/
+    	void blockThread(Thread *thread) const;
+
+    	/**
+		 *  Unblock the specified thread.
+		 *
+		 *  @param thread The thread to be put to unblock.
+		 **/
+    	void unblockThread(Thread *thread) const;
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
