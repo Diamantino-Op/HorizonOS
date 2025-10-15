@@ -126,7 +126,7 @@ namespace kernel::common::threading {
 			for (const auto currQueue : schedulerPtr->queues) {
 				ThreadListEntry *tmpEntry = currQueue;
 
-				while (tmpEntry != nullptr and tmpEntry->next != nullptr and tmpEntry->thread->getState() != ThreadState::RUNNING) {
+				while (tmpEntry != nullptr and tmpEntry->next != nullptr and (tmpEntry->thread->getState() != ThreadState::RUNNING or tmpEntry->thread->getIsBlocked())) {
 					tmpEntry = tmpEntry->next;
 				}
 
