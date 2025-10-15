@@ -130,7 +130,7 @@ namespace kernel::common::threading {
 					tmpEntry = tmpEntry->next;
 				}
 
-				if (tmpEntry != nullptr and tmpEntry->thread->getState() == ThreadState::RUNNING) {
+				if (tmpEntry != nullptr and tmpEntry->thread->getState() == ThreadState::RUNNING and !tmpEntry->thread->getIsBlocked()) {
 					selectedEntry = tmpEntry;
 
 					break;
