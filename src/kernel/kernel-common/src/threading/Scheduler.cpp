@@ -35,14 +35,6 @@ namespace kernel::common::threading {
 		this->state = state;
 	}
 
-	void Thread::setIsBlocked(bool isBlocked) {
-		this->isBlocked = isBlocked;
-	}
-
-	bool Thread::getIsBlocked() const {
-		return this->isBlocked;
-	}
-
 	ThreadState Thread::getState() const {
 		return this->state;
 	}
@@ -179,6 +171,42 @@ namespace kernel::common::threading {
 		return nullptr;
 	}
 
+	ThreadListEntry *Scheduler::getThread(const u16 tid) const {
+		for (ThreadListEntry* currQueue : this->queues) {
+			ThreadListEntry *currEntry = currQueue;
+
+			while (currEntry != nullptr) {
+				if (currEntry->thread->getId() == tid) {
+					return currEntry;
+				}
+
+				currEntry = currEntry->next;
+			}
+		}
+
+		ThreadListEntry *currEntry = this->sleepingThreadList;
+
+		while (currEntry != nullptr) {
+			if (currEntry->thread->getId() == tid) {
+				return currEntry;
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		currEntry = this->blockedThreadList;
+
+		while (currEntry != nullptr) {
+			if (currEntry->thread->getId() == tid) {
+				return currEntry;
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		return nullptr;
+	}
+
 	void Scheduler::addProcess(Process *process) {
 		const auto newEntry = new ProcessListEntry();
 
@@ -255,34 +283,44 @@ namespace kernel::common::threading {
 		delete thread;
 	}
 
-	void Scheduler::sleepThread(Thread *thread, const u64 ns) const {
-		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
+	void Scheduler::sleepThread(u16 threadId, const u64 ns) const {
+		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+
+		currThreadEntry->thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
 		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
-		thread->setState(ThreadState::BLOCKED);
+		currThreadEntry->thread->setState(ThreadState::BLOCKED);
+
+		if (currThreadEntry == this->lastQueueEntry[currThreadEntry->thread->getParent()->getPriority()]) {
+
+		} else if (currThreadEntry == this->queues[currThreadEntry->thread->getParent()->getPriority()])
 
 		this->getCurrentExecutionNode()->schedule();
 	}
 
-	void Scheduler::blockThread(Thread *thread) const {
+	void Scheduler::blockThread(u16 threadId) const {
+		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+
 		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
 
-		thread->setIsBlocked(true); // TODO: Maybe this bool is unnecessary
+
 
 		this->getCurrentExecutionNode()->schedule();
 	}
 
-	void Scheduler::unblockThread(Thread *thread) const {
+	void Scheduler::unblockThread(u16 threadId) const {
+		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+
 		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
 
 		if (thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
 			thread->setState(ThreadState::RUNNING);
 		}
 
-		thread->setIsBlocked(false); // TODO: Maybe this bool is unnecessary
+
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
@@ -296,22 +334,33 @@ namespace kernel::common::threading {
 
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
-		for (const auto currQueue : schedulerPtr->queues) {
-			const ThreadListEntry *tmpEntry = currQueue;
+		ThreadListEntry *tmpEntry = schedulerPtr->sleepingThreadList;
 
-			while (tmpEntry != nullptr) {
-				if (tmpEntry->thread->getSleepNs() > 0) {
-					if (tmpEntry->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
-						if (!tmpEntry->thread->getIsBlocked()) {
-							tmpEntry->thread->setState(ThreadState::RUNNING);
-						}
+		while (tmpEntry != nullptr) {
+			if (tmpEntry->thread->getSleepNs() > 0) {
+				if (tmpEntry->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+					tmpEntry->thread->setState(ThreadState::RUNNING);
 
-						tmpEntry->thread->setSleepNs(0);
+					tmpEntry->thread->setSleepNs(0);
+
+					if (tmpEntry->prev != nullptr) {
+						tmpEntry->prev->next = tmpEntry->next;
 					}
-				}
 
-				tmpEntry = tmpEntry->next;
+					if (tmpEntry->next != nullptr) {
+						tmpEntry->next->prev = tmpEntry->prev;
+					}
+
+					schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()]->next = tmpEntry;
+
+					tmpEntry->prev = schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()];
+					tmpEntry->next = nullptr;
+
+					schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()] = tmpEntry;
+				}
 			}
+
+			tmpEntry = tmpEntry->next;
 		}
 
 		schedulerPtr->getSchedLock()->unlock(prevIF);

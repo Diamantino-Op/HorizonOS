@@ -37,9 +37,6 @@ namespace kernel::common::threading {
         void setSleepNs(u64 ns);
         u64 getSleepNs() const;
 
-    	void setIsBlocked(bool isBlocked);
-    	bool getIsBlocked() const;
-
         void setState(ThreadState state);
         ThreadState getState() const;
 
@@ -52,8 +49,6 @@ namespace kernel::common::threading {
         u16 id {};
 
         u64 sleepNs {};
-
-    	bool isBlocked {};
 
         u64 *context {};
         ThreadState state {};
@@ -140,6 +135,12 @@ namespace kernel::common::threading {
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
+	enum SchedulerFail {
+		THREAD_ALREADY_SLEEPING,
+		THREAD_ALREADY_BLOCKED,
+		THREAD_NOT_FOUND
+	};
+
 	// TODO: Maybe do sleep queues and block queues
     class Scheduler {
     public:
@@ -162,6 +163,13 @@ namespace kernel::common::threading {
          *  @param tid The thread ID.
          **/
         Thread *getThread(const Process *process, u16 tid) const;
+
+    	/**
+		 *  Get the thread with the specified TID.
+		 *
+		 *  @param tid The thread ID.
+		 **/
+    	ThreadListEntry *getThread(u16 tid) const;
 
 		/**
 		 *  Add a new process to the scheduler.
@@ -205,24 +213,24 @@ namespace kernel::common::threading {
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.
 		 *
-		 *  @param thread The thread to be put to sleep.
+		 *  @param threadId The id of the thread to be put to sleep.
 		 *  @param ns The number of ticks for which the thread should remain asleep.
 		 **/
-		void sleepThread(Thread *thread, u64 ns) const;
+		void sleepThread(u16 threadId, u64 ns) const;
 
     	/**
 		 *  Blocks the specified thread until it's unlocked manually.
 		 *
-		 *  @param thread The thread to be put to block.
+		 *  @param threadId The id of the thread to be put to block.
 		 **/
-    	void blockThread(Thread *thread) const;
+    	void blockThread(u16 threadId) const;
 
     	/**
 		 *  Unblock the specified thread.
 		 *
-		 *  @param thread The thread to be put to unblock.
+		 *  @param threadId The id of the thread to be put to unblock.
 		 **/
-    	void unblockThread(Thread *thread) const;
+    	void unblockThread(u16 threadId) const;
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -251,6 +259,9 @@ namespace kernel::common::threading {
 
     	ThreadListEntry *queues[ProcessPriority::COUNT] {};
     	ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
+
+    	ThreadListEntry *blockedThreadList {};
+    	ThreadListEntry *sleepingThreadList {};
     };
 }
 
