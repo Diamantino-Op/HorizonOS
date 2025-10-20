@@ -283,18 +283,35 @@ namespace kernel::common::threading {
 		delete thread;
 	}
 
-	void Scheduler::sleepThread(u16 threadId, const u64 ns) const {
-		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
+		ThreadListEntry *currThreadEntry = this->getThread(threadId);
 
 		currThreadEntry->thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
-		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
+		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", currThreadEntry->thread->getSleepNs(), currThreadEntry->thread->getId());
 
 		currThreadEntry->thread->setState(ThreadState::BLOCKED);
 
 		if (currThreadEntry == this->lastQueueEntry[currThreadEntry->thread->getParent()->getPriority()]) {
+			this->lastQueueEntry[currThreadEntry->thread->getParent()->getPriority()] = currThreadEntry->prev;
+		}
 
-		} else if (currThreadEntry == this->queues[currThreadEntry->thread->getParent()->getPriority()])
+		if (currThreadEntry == this->queues[currThreadEntry->thread->getParent()->getPriority()]) {
+			this->queues[currThreadEntry->thread->getParent()->getPriority()] = currThreadEntry->next;
+		}
+
+		if (currThreadEntry->next != nullptr) {
+			currThreadEntry->next->prev = currThreadEntry->prev;
+		}
+
+		if (currThreadEntry->prev != nullptr) {
+			currThreadEntry->prev->next = currThreadEntry->next;
+		}
+
+		this->sleepingThreadList->prev = currThreadEntry;
+
+		currThreadEntry->next = nullptr;
+		currThreadEntry->next = this->sleepingThreadList;
 
 		this->getCurrentExecutionNode()->schedule();
 	}

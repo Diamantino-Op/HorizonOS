@@ -2,6 +2,7 @@
 #define KERNEL_COMMON_SCHEDULER_HPP
 
 #include "Types.hpp"
+#include "LinkedList.hpp"
 #include "memory/VirtualAllocator.hpp"
 
 namespace kernel::common::threading {
@@ -216,7 +217,7 @@ namespace kernel::common::threading {
 		 *  @param threadId The id of the thread to be put to sleep.
 		 *  @param ns The number of ticks for which the thread should remain asleep.
 		 **/
-		void sleepThread(u16 threadId, u64 ns) const;
+		void sleepThread(u16 threadId, u64 ns);
 
     	/**
 		 *  Blocks the specified thread until it's unlocked manually.
