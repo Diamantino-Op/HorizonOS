@@ -32,13 +32,13 @@ namespace kernel::common::threading {
 		explicit Thread(Process* parent, u64 *context);
         ~Thread();
 
-        void setContext(u64 *context);
+        void setContext(u64 *newContext);
         u64 *getContext() const;
 
         void setSleepNs(u64 ns);
         u64 getSleepNs() const;
 
-        void setState(ThreadState state);
+        void setState(ThreadState newState);
         ThreadState getState() const;
 
 		u16 getId() const;
@@ -75,7 +75,7 @@ namespace kernel::common::threading {
     	explicit Process(ProcessPriority priority, AllocContext *context, bool isUserspace);
         ~Process();
 
-        void setPriority(ProcessPriority priority);
+        void setPriority(ProcessPriority newPriority);
         ProcessPriority getPriority() const;
 
     	AllocContext *getProcessContext() const;

@@ -15,8 +15,8 @@ namespace kernel::common::threading {
 		delete this->context;
 	}
 
-	void Thread::setContext(u64 *context) {
-		this->context = context;
+	void Thread::setContext(u64 *newContext) {
+		this->context = newContext;
 	}
 
 	u64 *Thread::getContext() const {
@@ -31,8 +31,8 @@ namespace kernel::common::threading {
 		return this->sleepNs;
 	}
 
-	void Thread::setState(const ThreadState state) {
-		this->state = state;
+	void Thread::setState(const ThreadState newState) {
+		this->state = newState;
 	}
 
 	ThreadState Thread::getState() const {
@@ -64,18 +64,20 @@ namespace kernel::common::threading {
 	Process::~Process() {
 		PIDAllocator::freePID(this->id);
 
-		while (this->threadList != nullptr) {
-			const ThreadListEntry *tmpEntry = this->threadList;
-			this->threadList = this->threadList->nextProc;
+		const LinkedListEntry<Thread> *tmpEntry = this->threadList.getFirst();
 
-			CommonMain::getInstance()->getScheduler()->killThread(tmpEntry);
+		while (tmpEntry != nullptr) {
+			const LinkedListEntry<Thread> *newTmpEntry = tmpEntry;
+			tmpEntry = tmpEntry->next;
+
+			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
 		}
 
 		VirtualAllocator::destroyContext(this->processContext);
 	}
 
-	void Process::setPriority(const ProcessPriority priority) {
-		this->priority = priority;
+	void Process::setPriority(const ProcessPriority newPriority) {
+		this->priority = newPriority;
 	}
 
 	ProcessPriority Process::getPriority() const {
