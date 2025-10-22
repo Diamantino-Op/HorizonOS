@@ -89,10 +89,14 @@ namespace kernel::common::threading {
 
     	bool isUserspace {};
 
-        ThreadListEntry *mainThread {};
+		LinkedListEntry<Thread> *mainThread {};
 
-    	ThreadListEntry *threadList {};
-    	ThreadListEntry *lastThreadList {};
+        //ThreadListEntry *mainThread {};
+
+		LinkedList<Thread> threadList {};
+
+    	//ThreadListEntry *threadList {};
+    	//ThreadListEntry *lastThreadList {};
 
         AllocContext *processContext {};
 
@@ -109,7 +113,7 @@ namespace kernel::common::threading {
         void schedule();
 
     	void setCurrentThread(ThreadListEntry *thread);
-    	ThreadListEntry *getCurrentThread() const;
+    	LinkedListEntry<Thread> *getCurrentThread() const;
 
 		void switchThreads();
 
@@ -123,11 +127,11 @@ namespace kernel::common::threading {
 
     	void initArch();
 
-		bool isDisabledFlag;
+		bool isDisabledFlag {};
 
-    	bool prevIF;
+    	bool prevIF {};
 
-        ThreadListEntry *currentThread {};
+        LinkedListEntry<Thread> *currentThread {};
     };
 
 	void idleThread();
@@ -170,7 +174,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @param tid The thread ID.
 		 **/
-    	ThreadListEntry *getThread(u16 tid) const;
+    	LinkedListEntry<Thread> *getThread(u16 tid) const;
 
 		/**
 		 *  Add a new process to the scheduler.
@@ -195,7 +199,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The new thread entry.
 		 **/
-		ThreadListEntry *addThread(bool isUser, u64 rip, Process *process);
+		LinkedListEntry<Thread> *addThread(bool isUser, u64 rip, Process *process);
 
 		/**
 		 * Terminate the specified thread.
@@ -209,7 +213,7 @@ namespace kernel::common::threading {
 		 *
 		 * @param thread A pointer to the thread entry to be terminated.
 		 **/
-    	void killThread(const ThreadListEntry *thread);
+    	void killThread(const LinkedListEntry<Thread> *thread);
 
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.
@@ -254,15 +258,22 @@ namespace kernel::common::threading {
     	TicketSpinLock schedLock {};
 
     public:
-    	ProcessListEntry *processList {};
+		LinkedList<Process> processList {};
 
-    	ThreadListEntry *readyThreadList {};
+    	//ProcessListEntry *processList {};
 
-    	ThreadListEntry *queues[ProcessPriority::COUNT] {};
-    	ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
+    	LinkedList<Thread> queues[ProcessPriority::COUNT] {};
 
-    	ThreadListEntry *blockedThreadList {};
-    	ThreadListEntry *sleepingThreadList {};
+    	//ThreadListEntry *queues[ProcessPriority::COUNT] {};
+    	//ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
+
+		LinkedList<Thread> readyThreadList {};
+    	LinkedList<Thread> blockedThreadList {};
+    	LinkedList<Thread> sleepingThreadList {};
+
+    	//ThreadListEntry *readyThreadList {};
+    	//ThreadListEntry *blockedThreadList {};
+    	//ThreadListEntry *sleepingThreadList {};
     };
 }
 

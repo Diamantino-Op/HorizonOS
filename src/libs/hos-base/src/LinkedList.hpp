@@ -3,59 +3,279 @@
 
 template<class T>
 struct LinkedListEntry {
-    LinkedListEntry* next;
-    T* value;
-    LinkedListEntry* prev;
+    LinkedListEntry *next {};
+    T *value {};
+    LinkedListEntry *prev {};
 };
 
 template<class T>
 class LinkedList {
 public:
-    LinkedList();
-    ~LinkedList();
-
-    LinkedListEntry<T>* getFirst() {
-
+    ~LinkedList() {
+        this->clear(true);
     }
 
-    LinkedListEntry<T>* getLast() {
-
+    LinkedListEntry<T> *getFirst() {
+        return this->listStart;
     }
 
-    void addStart(T* val) {
-
+    LinkedListEntry<T> *getLast() {
+        return this->listEnd;
     }
 
-    void addEnd(T* val) {
+    void addStart(T *val) {
+        auto* newEntry = new LinkedListEntry<T>();
 
+        newEntry->value = val;
+
+        if (this->listStart != nullptr) {
+            this->listStart->prev = newEntry;
+
+            this->listStart = newEntry;
+        }
+
+        if (this->listEnd == nullptr) {
+            this->listEnd = newEntry;
+        }
+
+        this->size += 1;
     }
 
-    void remove(LinkedListEntry<T>* val) {
+    void addEnd(T *val) {
+        auto* newEntry = new LinkedListEntry<T>();
 
+        newEntry->value = val;
+
+        if (this->listEnd != nullptr) {
+            this->listEnd->next = newEntry;
+
+            this->listEnd = newEntry;
+        }
+
+        this->size += 1;
     }
 
-    void removeFirst() {
+    T *remove(LinkedListEntry<T> *val, const bool deleteValue) {
+        LinkedListEntry<T>* current = this->listStart;
 
+        while (current != nullptr) {
+            if (current == val) {
+                if (current->prev != nullptr) {
+                    current->prev->next = current->next;
+                }
+
+                if (current->next != nullptr) {
+                    current->next->prev = current->prev;
+                }
+
+                if (this->listStart == current) {
+                    this->listStart = current->next;
+                }
+
+                if (this->listEnd == current) {
+                    this->listEnd = current->prev;
+                }
+
+                if (deleteValue) {
+                    delete current->value;
+
+                    return nullptr;
+                }
+
+                T* tmpVal = current->value;
+
+                delete current;
+
+                return tmpVal;
+            }
+        }
+
+        return nullptr;
     }
 
-    void removeLast() {
+    bool remove(T *val) {
+        LinkedListEntry<T>* current = this->listStart;
 
+        while (current != nullptr) {
+            if (current->value == val) {
+                if (current->prev != nullptr) {
+                    current->prev->next = current->next;
+                }
+
+                if (current->next != nullptr) {
+                    current->next->prev = current->prev;
+                }
+
+                if (this->listStart == current) {
+                    this->listStart = current->next;
+                }
+
+                if (this->listEnd == current) {
+                    this->listEnd = current->prev;
+                }
+
+                delete current->value;
+                delete current;
+
+                return true;
+            }
+
+            current = current->next;
+        }
+
+        return false;
     }
 
-    void clear() {
+    T *removeFirst(const bool deleteValue = true) {
+        LinkedListEntry<T>* current = this->listStart;
 
+        this->listStart->next->prev = nullptr;
+        this->listStart = this->listStart->next;
+
+        this->size -= 1;
+
+        if (this->listEnd == current) {
+            this->listEnd = nullptr;
+        }
+
+        if (deleteValue) {
+            delete current->value;
+            delete current;
+
+            return nullptr;
+        }
+
+        T* tmpVal = current->value;
+
+        delete current;
+
+        return tmpVal;
+    }
+
+    T *removeLast(const bool deleteValue = true) {
+        LinkedListEntry<T>* current = this->listEnd;
+
+        this->listEnd->prev->next = nullptr;
+        this->listEnd = this->listEnd->prev;
+
+        this->size -= 1;
+
+        if (this->listStart == current) {
+            this->listStart = nullptr;
+        }
+
+        if (deleteValue) {
+            delete current->value;
+            delete current;
+
+            return nullptr;
+        }
+
+        T* tmpVal = current->value;
+
+        delete current;
+
+        return tmpVal;
+    }
+
+    void clear(const bool deleteValues = true) {
+        LinkedListEntry<T>* current = this->listStart;
+
+        while (current != nullptr) {
+            LinkedListEntry<T>* tmpCurrent = current->next;
+
+            if (deleteValues) {
+                delete current->value;
+            }
+
+            delete current;
+
+            current = tmpCurrent;
+        }
     }
 
     int getSize() const {
         return this->size;
     }
 
+    // Iterator
+
+    class Iterator {
+    public:
+        explicit Iterator(LinkedListEntry<T>* ptr) : current(ptr) {}
+
+        T& operator*() const {
+            return *(current->value);
+        }
+
+        T* operator->() const {
+            return current->value;
+        }
+
+        Iterator& operator++ () {
+            if (current) {
+                current = current->next;
+            }
+
+            return *this;
+        }
+
+        Iterator operator++ (const int amount) {
+            Iterator temp = *this;
+
+            for (u32 i = 0; i < amount; i++) {
+                ++(*this);
+            }
+
+            return temp;
+        }
+
+        Iterator& operator-- () {
+            if (current) {
+                current = current->prev;
+            }
+
+            return *this;
+        }
+
+        Iterator operator-- (const int amount) {
+            Iterator temp = *this;
+
+            for (u32 i = 0; i < amount; i++) {
+                --(*this);
+            }
+
+            return temp;
+        }
+
+        bool operator== (const Iterator& other) const {
+            return current == other.current;
+        }
+
+        bool operator!= (const Iterator& other) const {
+            return current != other.current;
+        }
+
+    private:
+
+        LinkedListEntry<T>* current;
+    };
+
+    Iterator begin() {
+        return Iterator(this->listStart);
+    }
+
+    Iterator end() {
+        return Iterator(nullptr);
+    }
+
+
 private:
 
-    LinkedListEntry<T>* listStar;
-    LinkedListEntry<T>* listEnd;
+    LinkedListEntry<T>* listStart {};
+    LinkedListEntry<T>* listEnd {};
 
-    int size;
+    u32 size {};
 };
 
 #endif

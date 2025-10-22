@@ -6,7 +6,7 @@ project(kernel VERSION ${HORIZON_VERSION} LANGUAGES CXX C ASM)
 
 file(GLOB_RECURSE KERNEL_X86_64_SRC "src/*.c" "src/*.cpp" "src/*.hpp" "src/*.h" "src/*.asm" "src/*.s")
 
-add_executable(kernel ${KERNEL_X86_64_SRC} )
+add_executable(kernel ${KERNEL_X86_64_SRC})
 
 target_link_options(kernel PUBLIC ${KERNEL_LINK_FLAGS})
 target_compile_options(kernel PUBLIC $<$<COMPILE_LANGUAGE:C>:${KERNEL_C_FLAGS}>)
@@ -18,3 +18,8 @@ target_include_directories(kernel PRIVATE src ${LIMINE_DIR} ${FLANTERM_DIR}/src 
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 
 target_link_libraries(kernel PRIVATE kernel-common)
+
+add_custom_command(TARGET kernel POST_BUILD
+                   COMMAND nm -D $<TARGET_FILE:kernel> > ${CMAKE_CURRENT_BINARY_DIR}/HorizonOS.sym
+                   COMMENT "Generating debug symbol file with nm -D"
+)
