@@ -112,7 +112,7 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
 		this->currentThread = thread;
-	}
+	}W
 
 	LinkedListEntry<Thread> *ExecutionNode::getCurrentThread() const {
 		return this->currentThread;
@@ -129,47 +129,35 @@ namespace kernel::common::threading {
 	// Scheduler
 
 	Scheduler::Scheduler() {
-		this->processList.addStart(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false));
+		this->processList.addStart(new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext(), false));
 	}
 
-	Process *Scheduler::getProcess(const u16 pid) const {
-		auto currEntry = this->processList;
-
-		while (currEntry != nullptr) {
-			if (currEntry->process->getId() == pid) {
-				return currEntry->process;
+	Process *Scheduler::getProcess(const u16 pid) {
+		for (auto &currEntry : this->processList) {
+			if (currEntry.getId() == pid) {
+				return &currEntry;
 			}
-
-			currEntry = currEntry->next;
 		}
 
 		return nullptr;
 	}
 
-	Thread *Scheduler::getThread(const Process *process, const u16 tid) const {
-		auto currEntry = this->queues[process->getPriority()];
-
-		while (currEntry != nullptr) {
-			if (currEntry->thread->getId() == tid) {
-				return currEntry->thread;
+	Thread *Scheduler::getThread(const Process *process, const u16 tid) {
+		for (auto &currEntry : this->queues[process->getPriority()]) {
+			if (currEntry.getId() == tid) {
+				return &currEntry;
 			}
-
-			currEntry = currEntry->next;
 		}
 
 		return nullptr;
 	}
 
-	LinkedListEntry<Thread> *Scheduler::getThread(const u16 tid) const {
-		for (ThreadListEntry* currQueue : this->queues) {
-			ThreadListEntry *currEntry = currQueue;
-
-			while (currEntry != nullptr) {
-				if (currEntry->thread->getId() == tid) {
-					return currEntry;
+	Thread *Scheduler::getThread(const u16 tid) {
+		for (LinkedList<Thread>& currQueue : this->queues) {
+			for (auto &currEntry : currQueue) {
+				if (currEntry.getId() == tid) {
+					return &currEntry;
 				}
-
-				currEntry = currEntry->next;
 			}
 		}
 

@@ -1,6 +1,8 @@
 #ifndef LIB_HOS_BASE_LINKEDLIST_HPP
 #define LIB_HOS_BASE_LINKEDLIST_HPP
 
+#import "Types.hpp"
+
 template<class T>
 struct LinkedListEntry {
     LinkedListEntry *next {};

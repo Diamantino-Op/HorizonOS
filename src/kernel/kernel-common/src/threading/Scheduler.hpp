@@ -159,7 +159,7 @@ namespace kernel::common::threading {
          *
          *  @param pid The process ID.
          **/
-        Process *getProcess(u16 pid) const;
+        Process *getProcess(u16 pid);
 
         /**
          *  Get the thread with the specified TID.
@@ -167,14 +167,14 @@ namespace kernel::common::threading {
          *  @param process The process where the thread resides.
          *  @param tid The thread ID.
          **/
-        Thread *getThread(const Process *process, u16 tid) const;
+        Thread *getThread(const Process *process, u16 tid);
 
     	/**
 		 *  Get the thread with the specified TID.
 		 *
 		 *  @param tid The thread ID.
 		 **/
-    	LinkedListEntry<Thread> *getThread(u16 tid) const;
+    	Thread *getThread(u16 tid);
 
 		/**
 		 *  Add a new process to the scheduler.
