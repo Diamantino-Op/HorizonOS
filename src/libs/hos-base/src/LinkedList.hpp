@@ -23,33 +23,53 @@ public:
         return this->listEnd;
     }
 
-    void addStart(T *val) {
+    LinkedListEntry<T> *addStart(T *val) {
         auto* newEntry = new LinkedListEntry<T>();
 
         newEntry->value = val;
 
-        if (this->listStart != nullptr) {
-            this->listStart->prev = newEntry;
+        this->addStart(newEntry);
 
-            this->listStart = newEntry;
+        return newEntry;
+    }
+
+    void addStart(LinkedListEntry<T> *val) {
+        if (this->listStart != nullptr) {
+            this->listStart->prev = val;
+
+            this->listStart = val;
+        } else {
+            this->listStart = val;
         }
 
         if (this->listEnd == nullptr) {
-            this->listEnd = newEntry;
+            this->listEnd = val;
         }
 
         this->size += 1;
     }
 
-    void addEnd(T *val) {
+    LinkedListEntry<T> *addEnd(T *val) {
         auto* newEntry = new LinkedListEntry<T>();
 
         newEntry->value = val;
 
-        if (this->listEnd != nullptr) {
-            this->listEnd->next = newEntry;
+        this->addEnd(newEntry);
 
-            this->listEnd = newEntry;
+        return newEntry;
+    }
+
+    void addEnd(LinkedListEntry<T> *val) {
+        if (this->listEnd != nullptr) {
+            this->listEnd->next = val;
+
+            this->listEnd = val;
+        } else {
+            this->listEnd = val;
+        }
+
+        if (this->listStart == nullptr) {
+            this->listStart = val;
         }
 
         this->size += 1;

@@ -80,7 +80,7 @@ namespace kernel::common::threading {
 
     	AllocContext *getProcessContext() const;
 
-    	void addThread(ThreadListEntry *entry);
+    	LinkedListEntry<Thread> *addThread(Thread *entry);
 
     	u16 getId() const;
 
@@ -112,7 +112,7 @@ namespace kernel::common::threading {
 
         void schedule();
 
-    	void setCurrentThread(ThreadListEntry *thread);
+    	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
 
 		void switchThreads();
@@ -180,8 +180,10 @@ namespace kernel::common::threading {
 		 *  Add a new process to the scheduler.
 		 *
 		 *  @param process A pointer to the process object to be added.
+		 *
+		 *  @return A pointer to the list entry of the thread.
 		 **/
-		void addProcess(Process *process);
+		LinkedListEntry<Thread> *addProcess(Process *process);
 
 		/**
 		 * Terminate the specified process.
@@ -193,7 +195,7 @@ namespace kernel::common::threading {
 		/**
 		 *  Add a thread to the queue.
 		 *
-    	*  @param isUser Indicates whether it is a user-space thread.
+    	 *  @param isUser Indicates whether it is a user-space thread.
 	     *  @param rip The instruction pointer for the new thread.
 		 *  @param process The parent process of the thread.
 		 *

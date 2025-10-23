@@ -88,15 +88,8 @@ namespace kernel::common::threading {
 		return this->processContext;
 	}
 
-	void Process::addThread(ThreadListEntry *entry) {
-		if (this->threadList != nullptr) {
-			entry->prevProc = this->lastThreadList;
-			this->lastThreadList->nextProc = entry;
-			this->lastThreadList = entry;
-		} else {
-			this->threadList = entry;
-			this->lastThreadList = entry;
-		}
+	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
+		return this->threadList.addStart(entry);
 	}
 
 	u16 Process::getId() const {
@@ -112,20 +105,16 @@ namespace kernel::common::threading {
 
 		newThread->setState(ThreadState::RUNNING);
 
-		this->currentThread = new ThreadListEntry();
-
-		this->currentThread->thread = newThread;
-
-		schedulerPtr->getProcess(0)->addThread(this->currentThread);
+		this->currentThread = schedulerPtr->getProcess(0)->addThread(newThread);
 
 		this->initArch();
 	}
 
-	void ExecutionNode::setCurrentThread(ThreadListEntry *thread) {
+	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
 		this->currentThread = thread;
 	}
 
-	ThreadListEntry *ExecutionNode::getCurrentThread() const {
+	LinkedListEntry<Thread> *ExecutionNode::getCurrentThread() const {
 		return this->currentThread;
 	}
 
@@ -140,9 +129,7 @@ namespace kernel::common::threading {
 	// Scheduler
 
 	Scheduler::Scheduler() {
-		this->processList = new ProcessListEntry();
-
-		this->processList->process = new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false);
+		this->processList.addStart(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false));
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) const {
@@ -173,7 +160,7 @@ namespace kernel::common::threading {
 		return nullptr;
 	}
 
-	ThreadListEntry *Scheduler::getThread(const u16 tid) const {
+	LinkedListEntry<Thread> *Scheduler::getThread(const u16 tid) const {
 		for (ThreadListEntry* currQueue : this->queues) {
 			ThreadListEntry *currEntry = currQueue;
 
@@ -209,7 +196,7 @@ namespace kernel::common::threading {
 		return nullptr;
 	}
 
-	void Scheduler::addProcess(Process *process) {
+	LinkedListEntry<Thread> *Scheduler::addProcess(Process *process) {
 		const auto newEntry = new ProcessListEntry();
 
 		newEntry->process = process;
@@ -223,7 +210,7 @@ namespace kernel::common::threading {
 		delete process;
 	}
 
-	ThreadListEntry *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
+	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
 		auto *newThread = new Thread(process, createContext(isUser, rip));
 
 		newThread->setState(ThreadState::READY);
