@@ -12,6 +12,8 @@ namespace kernel::common::threading {
 	}
 
 	Thread::~Thread() {
+		TIDAllocator::freeTID(this->id);
+
 		delete this->context;
 	}
 
@@ -92,6 +94,10 @@ namespace kernel::common::threading {
 		return this->threadList.addStart(entry);
 	}
 
+	void Process::removeThread(Thread *entry) {
+		this->threadList.remove(entry, false);
+	}
+
 	u16 Process::getId() const {
 		return this->id;
 	}
@@ -112,7 +118,7 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
 		this->currentThread = thread;
-	}W
+	}
 
 	LinkedListEntry<Thread> *ExecutionNode::getCurrentThread() const {
 		return this->currentThread;
@@ -161,41 +167,27 @@ namespace kernel::common::threading {
 			}
 		}
 
-		ThreadListEntry *currEntry = this->sleepingThreadList;
-
-		while (currEntry != nullptr) {
-			if (currEntry->thread->getId() == tid) {
-				return currEntry;
+		for (auto &currEntry : this->sleepingThreadList) {
+			if (currEntry.getId() == tid) {
+				return &currEntry;
 			}
-
-			currEntry = currEntry->next;
 		}
 
-		currEntry = this->blockedThreadList;
-
-		while (currEntry != nullptr) {
-			if (currEntry->thread->getId() == tid) {
-				return currEntry;
+		for (auto &currEntry : this->blockedThreadList) {
+			if (currEntry.getId() == tid) {
+				return &currEntry;
 			}
-
-			currEntry = currEntry->next;
 		}
 
 		return nullptr;
 	}
 
-	LinkedListEntry<Thread> *Scheduler::addProcess(Process *process) {
-		const auto newEntry = new ProcessListEntry();
-
-		newEntry->process = process;
-
-		newEntry->next = this->processList;
-
-		this->processList = newEntry;
+	LinkedListEntry<Process> *Scheduler::addProcess(Process *process) {
+		return this->processList.addStart(process);
 	}
 
-	void Scheduler::killProcess(const Process *process) {
-		delete process;
+	void Scheduler::killProcess(Process *process) {
+		this->processList.remove(process);
 	}
 
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
@@ -203,118 +195,86 @@ namespace kernel::common::threading {
 
 		newThread->setState(ThreadState::READY);
 
-		auto *newThreadEntry = new ThreadListEntry();
+		process->addThread(newThread);
 
-		newThreadEntry->thread = newThread;
-
-		newThreadEntry->next = this->readyThreadList;
-		this->readyThreadList = newThreadEntry;
-
-		process->addThread(newThreadEntry);
-
-		return newThreadEntry;
+		return this->readyThreadList.addEnd(newThread);
 	}
 
+	// TODO: Rework, schedule won't execute the stuff after
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->thread == thread) {
+		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			this->getCurrentExecutionNode()->schedule();
 		}
 
-		const ThreadListEntry *selectedEntry = this->queues[thread->getParent()->getPriority()];
+		this->queues[thread->getParent()->getPriority()].remove(thread);
 
-		while (selectedEntry != nullptr) {
-			if (selectedEntry->thread == thread) {
+		for (auto &currEntry : this->queues[thread->getParent()->getPriority()]) {
+			if (currEntry.getId() == thread->getId()) {
+				killThread(&currEntry);
+
 				break;
 			}
-
-			selectedEntry = selectedEntry->next;
 		}
-
-		killThread(selectedEntry);
 	}
 
-	void Scheduler::killThread(const ThreadListEntry *thread) {
-		if (this->queues[thread->thread->getParent()->getPriority()] == thread) {
-			this->queues[thread->thread->getParent()->getPriority()] = thread->next;
-		}
-
-		if (thread->prev != nullptr) {
-			thread->prev->next = thread->next;
-		}
-
-		if (thread->prevProc != nullptr) {
-			thread->prevProc->nextProc = thread->nextProc;
-		}
-
-		if (thread->next != nullptr) {
-			thread->next->prev = thread->prev;
-		}
-
-		if (thread->nextProc != nullptr) {
-			thread->nextProc->prevProc = thread->prevProc;
-		}
-
-		delete thread->thread;
-		delete thread;
+	void Scheduler::killThread(const LinkedListEntry<Thread> *thread) {
+		this->killThread(thread->value);
 	}
 
 	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
-		ThreadListEntry *currThreadEntry = this->getThread(threadId);
+		Thread *thread = this->getThread(threadId);
 
-		currThreadEntry->thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
+		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
-		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", currThreadEntry->thread->getSleepNs(), currThreadEntry->thread->getId());
+		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
-		currThreadEntry->thread->setState(ThreadState::BLOCKED);
+		thread->setState(ThreadState::BLOCKED);
 
-		if (currThreadEntry == this->lastQueueEntry[currThreadEntry->thread->getParent()->getPriority()]) {
-			this->lastQueueEntry[currThreadEntry->thread->getParent()->getPriority()] = currThreadEntry->prev;
+		this->queues[thread->getParent()->getPriority()].remove(thread);
+
+		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+			// TODO: Make schedule move function to blocked or sleeping
+			this->getCurrentExecutionNode()->schedule();
+		} else if (!this->blockedThreadList.contains(thread)) {
+			this->sleepingThreadList.addStart(thread);
 		}
-
-		if (currThreadEntry == this->queues[currThreadEntry->thread->getParent()->getPriority()]) {
-			this->queues[currThreadEntry->thread->getParent()->getPriority()] = currThreadEntry->next;
-		}
-
-		if (currThreadEntry->next != nullptr) {
-			currThreadEntry->next->prev = currThreadEntry->prev;
-		}
-
-		if (currThreadEntry->prev != nullptr) {
-			currThreadEntry->prev->next = currThreadEntry->next;
-		}
-
-		this->sleepingThreadList->prev = currThreadEntry;
-
-		currThreadEntry->next = nullptr;
-		currThreadEntry->next = this->sleepingThreadList;
-
-		this->getCurrentExecutionNode()->schedule();
 	}
 
-	void Scheduler::blockThread(u16 threadId) const {
-		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+	void Scheduler::blockThread(const u16 threadId) {
+		Thread *thread = this->getThread(threadId);
 
 		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
 
+		if (!this->queues[thread->getParent()->getPriority()].remove(thread, false) && thread->getSleepNs() == 0) {
+			this->sleepingThreadList.remove(thread, false);
+		}
 
-
-		this->getCurrentExecutionNode()->schedule();
+		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+			// TODO: Make schedule move function to blocked or sleeping
+			this->getCurrentExecutionNode()->schedule();
+		} else {
+			this->blockedThreadList.addStart(thread);
+		}
 	}
 
-	void Scheduler::unblockThread(u16 threadId) const {
-		const ThreadListEntry *currThreadEntry = this->getThread(threadId);
+	void Scheduler::unblockThread(const u16 threadId) {
+		Thread *thread = this->getThread(threadId);
 
 		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
 
-		if (thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+		this->blockedThreadList.remove(thread, false);
+
+		if (thread->getSleepNs() == 0) {
 			thread->setState(ThreadState::RUNNING);
+
+			this->queues[thread->getParent()->getPriority()].addEnd(thread);
+		} else {
+			this->sleepingThreadList.addStart(thread);
 		}
-
-
 	}
 
 	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
@@ -328,33 +288,18 @@ namespace kernel::common::threading {
 
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
-		ThreadListEntry *tmpEntry = schedulerPtr->sleepingThreadList;
+		for (auto &currEntry : schedulerPtr->sleepingThreadList) {
+			if (currEntry.getSleepNs() > 0) {
+				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+					currEntry.setState(ThreadState::RUNNING);
 
-		while (tmpEntry != nullptr) {
-			if (tmpEntry->thread->getSleepNs() > 0) {
-				if (tmpEntry->thread->getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
-					tmpEntry->thread->setState(ThreadState::RUNNING);
+					currEntry.setSleepNs(0);
 
-					tmpEntry->thread->setSleepNs(0);
+					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
 
-					if (tmpEntry->prev != nullptr) {
-						tmpEntry->prev->next = tmpEntry->next;
-					}
-
-					if (tmpEntry->next != nullptr) {
-						tmpEntry->next->prev = tmpEntry->prev;
-					}
-
-					schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()]->next = tmpEntry;
-
-					tmpEntry->prev = schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()];
-					tmpEntry->next = nullptr;
-
-					schedulerPtr->lastQueueEntry[tmpEntry->thread->getParent()->getPriority()] = tmpEntry;
+					schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
 				}
 			}
-
-			tmpEntry = tmpEntry->next;
 		}
 
 		schedulerPtr->getSchedLock()->unlock(prevIF);

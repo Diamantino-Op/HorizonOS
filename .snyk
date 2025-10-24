@@ -10,3 +10,4 @@ exclude:
         - "deps/nanoprintf/**/*"
         - "iso/**/*"
         - "out/**/*"
+        - "links/**/*"

@@ -81,6 +81,7 @@ namespace kernel::common::threading {
     	AllocContext *getProcessContext() const;
 
     	LinkedListEntry<Thread> *addThread(Thread *entry);
+    	void removeThread(Thread *entry);
 
     	u16 getId() const;
 
@@ -183,14 +184,14 @@ namespace kernel::common::threading {
 		 *
 		 *  @return A pointer to the list entry of the thread.
 		 **/
-		LinkedListEntry<Thread> *addProcess(Process *process);
+		LinkedListEntry<Process> *addProcess(Process *process);
 
 		/**
 		 * Terminate the specified process.
 		 *
 		 * @param process A pointer to the process to be terminated.
 		 **/
-		void killProcess(const Process *process);
+		void killProcess(Process *process);
 
 		/**
 		 *  Add a thread to the queue.
@@ -230,14 +231,14 @@ namespace kernel::common::threading {
 		 *
 		 *  @param threadId The id of the thread to be put to block.
 		 **/
-    	void blockThread(u16 threadId) const;
+    	void blockThread(u16 threadId);
 
     	/**
 		 *  Unblock the specified thread.
 		 *
 		 *  @param threadId The id of the thread to be put to unblock.
 		 **/
-    	void unblockThread(u16 threadId) const;
+    	void unblockThread(u16 threadId);
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.

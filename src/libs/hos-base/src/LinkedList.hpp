@@ -115,7 +115,7 @@ public:
         return nullptr;
     }
 
-    bool remove(T *val) {
+    bool remove(T *val, const bool deleteValue = true) {
         LinkedListEntry<T>* current = this->listStart;
 
         while (current != nullptr) {
@@ -136,7 +136,10 @@ public:
                     this->listEnd = current->prev;
                 }
 
-                delete current->value;
+                if (deleteValue) {
+                    delete current->value;
+                }
+
                 delete current;
 
                 return true;
@@ -291,6 +294,15 @@ public:
         return Iterator(nullptr);
     }
 
+    bool contains(T *val) {
+        for (const T& currVal : *this) {
+            if (&currVal == val) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
 private:
 

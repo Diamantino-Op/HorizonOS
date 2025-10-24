@@ -171,7 +171,7 @@ set(HOR_UACPI_SOURCES ${UACPI_SOURCES} CACHE STRING "uACPI Sources")
 
 # ------------------ Limine Bootloader ------------------
 set(LIMINE_REPO "https://github.com/limine-bootloader/limine.git" CACHE STRING "Limine Repository")
-set(LIMINE_BRANCH "v9.x-binary" CACHE STRING "Limine Branch")
+set(LIMINE_BRANCH "v10.x-binary" CACHE STRING "Limine Branch")
 set(LIMINE_DIR "${ROOT_DIR}/deps/limine" CACHE PATH "Limine Directory")
 
 function(CloneLimine)
@@ -281,6 +281,7 @@ include_directories(${NANOPRINTF_DIR})
 add_custom_target(Update-Main-Deps
         COMMAND rm -rf ${TMP_ISO_DIR}
         COMMAND cd ${CHDRS_DIR} && git pull
+        COMMAND cd ${UACPI_DIR} && git pull
         COMMAND cd ${LIMINE_DIR} && git pull && make
         COMMAND cd ${FLANTERM_DIR} && git pull
         WORKING_DIRECTORY ${ROOT_DIR}
