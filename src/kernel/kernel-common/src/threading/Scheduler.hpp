@@ -218,6 +218,13 @@ namespace kernel::common::threading {
 		 **/
     	void killThread(const LinkedListEntry<Thread> *thread);
 
+    	/**
+		 * Removes the specified thread and frees the memory.
+		 *
+		 * @param thread A pointer to the thread entry to be removed.
+		 **/
+    	void removeThread(Thread *thread);
+
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.
 		 *
@@ -225,6 +232,14 @@ namespace kernel::common::threading {
 		 *  @param ns The number of ticks for which the thread should remain asleep.
 		 **/
 		void sleepThread(u16 threadId, u64 ns);
+
+    	/**
+		 *  Puts the specified thread to sleep for a given number of ticks.
+		 *
+		 *  @param thread The thread to be put to sleep.
+		 *  @param ns The number of ticks for which the thread should remain asleep.
+		 **/
+    	void sleepThread(Thread *thread, u64 ns);
 
     	/**
 		 *  Blocks the specified thread until it's unlocked manually.
@@ -273,6 +288,8 @@ namespace kernel::common::threading {
 		LinkedList<Thread> readyThreadList {};
     	LinkedList<Thread> blockedThreadList {};
     	LinkedList<Thread> sleepingThreadList {};
+
+    	LinkedList<Thread> awaitingKillThreadList {};
 
     	//ThreadListEntry *readyThreadList {};
     	//ThreadListEntry *blockedThreadList {};

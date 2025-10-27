@@ -89,51 +89,31 @@ namespace kernel::common::threading {
 	void ExecutionNode::switchThreads() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		if (ThreadListEntry *lastEntry = schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()]; lastEntry != nullptr) {
-			this->currentThread->prev = lastEntry;
-			this->currentThread->next = nullptr;
-
-			if (this->currentThread->prev != nullptr) {
-				this->currentThread->prev->next = this->currentThread;
-			}
-
-			schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
+		if (this->currentThread->value->getState() == ThreadState::TERMINATED) {
+			// TODO: This might create nullptr if the reaper thread kills this while it is being used here
+			schedulerPtr->awaitingKillThreadList.addEnd(this->currentThread);
+		} else if (this->currentThread->value->getSleepNs() > 0) {
+			schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
+		} else if (this->currentThread->value->getState() == ThreadState::BLOCKED) {
+			schedulerPtr->blockedThreadList.addEnd(this->currentThread);
 		} else {
-			schedulerPtr->queues[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
-			schedulerPtr->lastQueueEntry[this->currentThread->thread->getParent()->getPriority()] = this->currentThread;
+			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 		}
 
-		const ThreadListEntry *oldEntry = this->currentThread;
+		const LinkedListEntry<Thread> *oldEntry = this->currentThread;
 
-		if (schedulerPtr->readyThreadList != nullptr) {
-			this->currentThread = schedulerPtr->readyThreadList;
+		if (schedulerPtr->readyThreadList.getSize() > 0) {
+			this->currentThread = schedulerPtr->readyThreadList.removeFirstEntry();
 
-			if (schedulerPtr->readyThreadList->next != nullptr) {
-				schedulerPtr->readyThreadList->next->prev = nullptr;
-			}
-
-			schedulerPtr->readyThreadList = schedulerPtr->readyThreadList->next;
-
-			this->currentThread->next = nullptr;
-			this->currentThread->prev = nullptr;
-
-			this->currentThread->thread->setState(ThreadState::RUNNING);
+			this->currentThread->value->setState(ThreadState::RUNNING);
 
 			// TODO: Make trampoline for user threads
 		} else {
-			ThreadListEntry *selectedEntry = nullptr;
+			LinkedListEntry<Thread> *selectedEntry = nullptr;
 
-			for (const auto currQueue : schedulerPtr->queues) {
-				ThreadListEntry *tmpEntry = currQueue;
-
-				while (tmpEntry != nullptr and tmpEntry->next != nullptr and (tmpEntry->thread->getState() != ThreadState::RUNNING or tmpEntry->thread->getIsBlocked())) {
-					tmpEntry = tmpEntry->next;
-				}
-
-				if (tmpEntry != nullptr and tmpEntry->thread->getState() == ThreadState::RUNNING and !tmpEntry->thread->getIsBlocked()) {
-					selectedEntry = tmpEntry;
-
-					break;
+			for (LinkedList<Thread>& currQueue : schedulerPtr->queues) {
+				if (currQueue.getSize() > 0) {
+					selectedEntry = currQueue.removeFirstEntry();
 				}
 			}
 
@@ -143,22 +123,6 @@ namespace kernel::common::threading {
 				Asm::lhlt();
 			}
 
-			if (schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] == selectedEntry) {
-				schedulerPtr->queues[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->next;
-			}
-
-			if (schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] == selectedEntry) {
-				schedulerPtr->lastQueueEntry[selectedEntry->thread->getParent()->getPriority()] = selectedEntry->prev;
-			}
-
-			if (selectedEntry->next != nullptr) {
-				selectedEntry->next->prev = selectedEntry->prev;
-			}
-
-			if (selectedEntry->prev != nullptr) {
-				selectedEntry->prev->next = selectedEntry->next;
-			}
-
 			this->currentThread = selectedEntry;
 
 			this->currentThread->next = nullptr;
@@ -166,24 +130,24 @@ namespace kernel::common::threading {
 		}
 
 		if (oldEntry != this->currentThread) {
-			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->thread->getId(), this->currentThread->thread->getId());
+			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
 
-		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->thread));
+		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(this->currentThread->thread->getContext())->getSimdSave()) < pageSize) {
+		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->getSimdSave()) < pageSize) {
 			CommonMain::getTerminal()->error("NewEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
 
 			Asm::lhlt();
 		}
 
-		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(oldEntry->thread->getContext())->getSimdSave()) < pageSize) {
+		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(oldEntry->value->getContext())->getSimdSave()) < pageSize) {
 			CommonMain::getTerminal()->error("OldEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
 
 			Asm::lhlt();
 		}
 
-		switchContext(oldEntry->thread->getContext(), this->currentThread->thread->getContext());
+		switchContext(oldEntry->value->getContext(), this->currentThread->value->getContext());
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
@@ -193,7 +157,7 @@ namespace kernel::common::threading {
 
 		oldCtxConv->save();
 
-		this->currentThread->thread->getParent()->getProcessContext()->pageMap.load();
+		this->currentThread->value->getParent()->getProcessContext()->pageMap.load();
 
 		newCtxConv->load();
 

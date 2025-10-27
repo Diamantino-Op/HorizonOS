@@ -151,6 +151,33 @@ public:
         return false;
     }
 
+    bool removeEntry(LinkedListEntry<T> *val) {
+        if (val == nullptr) {
+            return false;
+        }
+
+        if (this->listStart == val) {
+            this->listStart = this->listStart->next;
+        }
+
+        if (this->listEnd == val) {
+            this->listEnd = this->listEnd->prev;
+        }
+
+        if (val->next != nullptr) {
+            val->next->prev = val->prev;
+        }
+
+        if (val->prev != nullptr) {
+            val->prev->next = val->next;
+        }
+
+        val->next = nullptr;
+        val->prev = nullptr;
+
+        return true;
+    }
+
     T *removeFirst(const bool deleteValue = true) {
         LinkedListEntry<T>* current = this->listStart;
 
@@ -175,6 +202,14 @@ public:
         delete current;
 
         return tmpVal;
+    }
+
+    LinkedListEntry<T> *removeFirstEntry() {
+        LinkedListEntry<T> *tmpEntry = this->listStart;
+
+        this->removeEntry(tmpEntry);
+
+        return tmpEntry;
     }
 
     T *removeLast(const bool deleteValue = true) {
@@ -203,6 +238,14 @@ public:
         return tmpVal;
     }
 
+    LinkedListEntry<T> *removeLastEntry() {
+        LinkedListEntry<T> *tmpEntry = this->listEnd;
+
+        this->removeEntry(tmpEntry);
+
+        return tmpEntry;
+    }
+
     void clear(const bool deleteValues = true) {
         LinkedListEntry<T>* current = this->listStart;
 
@@ -219,7 +262,7 @@ public:
         }
     }
 
-    int getSize() const {
+    u32 getSize() const {
         return this->size;
     }
 

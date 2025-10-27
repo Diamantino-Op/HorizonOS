@@ -200,22 +200,13 @@ namespace kernel::common::threading {
 		return this->readyThreadList.addEnd(newThread);
 	}
 
-	// TODO: Rework, schedule won't execute the stuff after
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			this->getCurrentExecutionNode()->schedule();
-		}
-
-		this->queues[thread->getParent()->getPriority()].remove(thread);
-
-		for (auto &currEntry : this->queues[thread->getParent()->getPriority()]) {
-			if (currEntry.getId() == thread->getId()) {
-				killThread(&currEntry);
-
-				break;
-			}
+		} else {
+			this->removeThread(thread);
 		}
 	}
 
@@ -223,9 +214,21 @@ namespace kernel::common::threading {
 		this->killThread(thread->value);
 	}
 
-	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
-		Thread *thread = this->getThread(threadId);
+	void Scheduler::removeThread(Thread *thread) {
+		if (!this->queues[thread->getParent()->getPriority()].remove(thread)) {
+			if (!this->sleepingThreadList.remove(thread)) {
+				if (!this->blockedThreadList.remove(thread)) {
+					this->readyThreadList.remove(thread);
+				}
+			}
+		}
+	}
 
+	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
+		this->sleepThread(this->getThread(threadId), ns);
+	}
+
+	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
 		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
@@ -235,7 +238,6 @@ namespace kernel::common::threading {
 		this->queues[thread->getParent()->getPriority()].remove(thread);
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			// TODO: Make schedule move function to blocked or sleeping
 			this->getCurrentExecutionNode()->schedule();
 		} else if (!this->blockedThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
@@ -249,12 +251,11 @@ namespace kernel::common::threading {
 
 		thread->setState(ThreadState::BLOCKED);
 
-		if (!this->queues[thread->getParent()->getPriority()].remove(thread, false) && thread->getSleepNs() == 0) {
+		if (!this->queues[thread->getParent()->getPriority()].remove(thread, false) and thread->getSleepNs() > 0) {
 			this->sleepingThreadList.remove(thread, false);
 		}
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			// TODO: Make schedule move function to blocked or sleeping
 			this->getCurrentExecutionNode()->schedule();
 		} else {
 			this->blockedThreadList.addStart(thread);
