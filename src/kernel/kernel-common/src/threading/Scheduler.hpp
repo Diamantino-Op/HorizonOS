@@ -55,20 +55,6 @@ namespace kernel::common::threading {
         ThreadState state {};
     };
 
-    struct ThreadListEntry {
-    	ThreadListEntry *nextProc {};
-        ThreadListEntry *next {};
-        Thread *thread {};
-        ThreadListEntry *prev {};
-    	ThreadListEntry *prevProc {};
-    };
-
-    struct ProcessListEntry {
-        ProcessListEntry *next {};
-        Process *process {};
-        ProcessListEntry *prev {};
-    };
-
     class Process {
     public:
 		explicit Process(ProcessPriority priority, bool isUserspace);
@@ -92,12 +78,7 @@ namespace kernel::common::threading {
 
 		LinkedListEntry<Thread> *mainThread {};
 
-        //ThreadListEntry *mainThread {};
-
 		LinkedList<Thread> threadList {};
-
-    	//ThreadListEntry *threadList {};
-    	//ThreadListEntry *lastThreadList {};
 
         AllocContext *processContext {};
 
@@ -136,6 +117,8 @@ namespace kernel::common::threading {
     };
 
 	void idleThread();
+
+	[[noreturn]] void reaperFunction();
 
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
 
@@ -269,6 +252,8 @@ namespace kernel::common::threading {
 
     	TicketSpinLock *getSchedLock();
 
+    	static Thread *getCurrentThread();
+
     private:
     	ExecutionNode *getCurrentExecutionNode() const;
     	u64 *createContextArch(bool isUser, u64 rip, u64 rsp);
@@ -278,22 +263,13 @@ namespace kernel::common::threading {
     public:
 		LinkedList<Process> processList {};
 
-    	//ProcessListEntry *processList {};
-
     	LinkedList<Thread> queues[ProcessPriority::COUNT] {};
-
-    	//ThreadListEntry *queues[ProcessPriority::COUNT] {};
-    	//ThreadListEntry *lastQueueEntry[ProcessPriority::COUNT] {};
 
 		LinkedList<Thread> readyThreadList {};
     	LinkedList<Thread> blockedThreadList {};
     	LinkedList<Thread> sleepingThreadList {};
 
     	LinkedList<Thread> awaitingKillThreadList {};
-
-    	//ThreadListEntry *readyThreadList {};
-    	//ThreadListEntry *blockedThreadList {};
-    	//ThreadListEntry *sleepingThreadList {};
     };
 }
 

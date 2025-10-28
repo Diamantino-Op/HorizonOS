@@ -50,6 +50,10 @@ namespace kernel::common::threading {
 		Interrupts::unmask(0x2a);
 	}
 
+	Thread *Scheduler::getCurrentThread() {
+		return reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+	}
+
 	void ExecutionNode::initArch() {
 		const u64 intNum = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->getMaxRange() + 0x20;
 
@@ -114,6 +118,8 @@ namespace kernel::common::threading {
 			for (LinkedList<Thread>& currQueue : schedulerPtr->queues) {
 				if (currQueue.getSize() > 0) {
 					selectedEntry = currQueue.removeFirstEntry();
+
+					break;
 				}
 			}
 

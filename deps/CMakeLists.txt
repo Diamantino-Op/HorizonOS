@@ -233,18 +233,26 @@ include_directories(${FLANTERM_DIR}/src)
 
 # ------------------ OVMF Bios ------------------
 set(OVMF_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
+set(OVMF_VARS_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF_VARS.fd" CACHE FILEPATH "OVMF Vars File")
 
 function(DownloadOVMF)
     if (${HORIZON_ARCH} STREQUAL "x86_64")
-        set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd" CACHE STRING "OVMF Link")
+        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-x86_64.fd" CACHE STRING "OVMF Link")
+        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-x86_64.fd" CACHE STRING "OVMF Vars Link")
     elseif (${HORIZON_ARCH} STREQUAL "riscv64")
-        set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASERISCV64_VIRT_CODE.fd" CACHE STRING "OVMF Link")
+        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-riscv64.fd" CACHE STRING "OVMF Link")
+        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-riscv64.fd" CACHE STRING "OVMF Vars Link")
     elseif (${HORIZON_ARCH} STREQUAL "aarch64")
-        set(OVMF_LINK "https://retrage.github.io/edk2-nightly/bin/RELEASEAARCH64_QEMU_EFI.fd" CACHE STRING "OVMF Link")
+        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-aarch64.fd" CACHE STRING "OVMF Link")
+        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-aarch64.fd" CACHE STRING "OVMF Vars Link")
     endif ()
 
     if (NOT EXISTS "${OVMF_FILE}")
         file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
+    endif ()
+
+    if (NOT EXISTS "${OVMF_VARS_FILE}")
+        file(DOWNLOAD "${OVMF_VARS_LINK}" "${OVMF_VARS_FILE}")
     endif ()
 
     if (${HORIZON_ARCH} STREQUAL "riscv64" OR ${HORIZON_ARCH} STREQUAL "aarch64")

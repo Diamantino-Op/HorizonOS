@@ -111,7 +111,11 @@ namespace kernel::common::threading {
 
 		newThread->setState(ThreadState::RUNNING);
 
-		this->currentThread = schedulerPtr->getProcess(0)->addThread(newThread);
+		schedulerPtr->getProcess(0)->addThread(newThread);
+
+		this->currentThread = new LinkedListEntry<Thread>();
+
+		this->currentThread->value = newThread;
 
 		this->initArch();
 	}
@@ -132,10 +136,34 @@ namespace kernel::common::threading {
 		this->isDisabledFlag = val;
 	}
 
+	// Reaper Thread
+
+	[[noreturn]] void reaperFunction() {
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+
+		for (;;) {
+			auto *currThread = Scheduler::getCurrentThread();
+
+			if (scheduler->awaitingKillThreadList.getSize() > 0) {
+				for (auto &currEntry : scheduler->awaitingKillThreadList) {
+					scheduler->removeThread(&currEntry);
+				}
+			}
+
+			scheduler->sleepThread(currThread, 500ull * 1'000'000ull); // TODO: ms to ns and vice versa function
+		}
+	}
+
 	// Scheduler
 
 	Scheduler::Scheduler() {
-		this->processList.addStart(new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext(), false));
+		this->addProcess(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false));
+
+		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext(), false);
+
+		this->addThread(false, reinterpret_cast<u64>(reaperFunction), reaperProcess);
+
+		this->addProcess(reaperProcess);
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) {
@@ -187,11 +215,11 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::killProcess(Process *process) {
-		this->processList.remove(process);
+		this->processList.remove(process); // TODO: Kill all threads
 	}
 
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
-		auto *newThread = new Thread(process, createContext(isUser, rip));
+		auto *newThread = new Thread(process, this->createContext(isUser, rip));
 
 		newThread->setState(ThreadState::READY);
 

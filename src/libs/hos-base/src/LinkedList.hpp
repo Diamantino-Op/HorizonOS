@@ -2,6 +2,7 @@
 #define LIB_HOS_BASE_LINKEDLIST_HPP
 
 #import "Types.hpp"
+#include "SpinLock.hpp"
 
 template<class T>
 struct LinkedListEntry {
@@ -36,8 +37,12 @@ public:
     }
 
     void addStart(LinkedListEntry<T> *val) {
+        this->prevIF = this->listLock.lock();
+
         if (this->listStart != nullptr) {
             this->listStart->prev = val;
+
+            val->next = this->listStart;
 
             this->listStart = val;
         } else {
@@ -49,6 +54,8 @@ public:
         }
 
         this->size += 1;
+
+        this->listLock.unlock(this->prevIF);
     }
 
     LinkedListEntry<T> *addEnd(T *val) {
@@ -62,8 +69,12 @@ public:
     }
 
     void addEnd(LinkedListEntry<T> *val) {
+        this->prevIF = this->listLock.lock();
+
         if (this->listEnd != nullptr) {
             this->listEnd->next = val;
+
+            val->prev = this->listEnd;
 
             this->listEnd = val;
         } else {
@@ -75,9 +86,13 @@ public:
         }
 
         this->size += 1;
+
+        this->listLock.unlock(this->prevIF);
     }
 
     T *remove(LinkedListEntry<T> *val, const bool deleteValue) {
+        this->prevIF = this->listLock.lock();
+
         LinkedListEntry<T>* current = this->listStart;
 
         while (current != nullptr) {
@@ -98,11 +113,13 @@ public:
                     this->listEnd = current->prev;
                 }
 
+                this->size -= 1;
+
                 if (deleteValue) {
                     delete current;
                     delete current->value;
 
-                    this->size -= 1;
+                    this->listLock.unlock(this->prevIF);
 
                     return nullptr;
                 }
@@ -111,16 +128,20 @@ public:
 
                 delete current;
 
-                this->size -= 1;
+                this->listLock.unlock(this->prevIF);
 
                 return tmpVal;
             }
         }
 
+        this->listLock.unlock(this->prevIF);
+
         return nullptr;
     }
 
     bool remove(T *val, const bool deleteValue = true) {
+        this->prevIF = this->listLock.lock();
+
         LinkedListEntry<T>* current = this->listStart;
 
         while (current != nullptr) {
@@ -149,11 +170,15 @@ public:
 
                 this->size -= 1;
 
+                this->listLock.unlock(this->prevIF);
+
                 return true;
             }
 
             current = current->next;
         }
+
+        this->listLock.unlock(this->prevIF);
 
         return false;
     }
@@ -162,6 +187,8 @@ public:
         if (val == nullptr) {
             return false;
         }
+
+        this->prevIF = this->listLock.lock();
 
         if (this->listStart == val) {
             this->listStart = this->listStart->next;
@@ -184,10 +211,14 @@ public:
 
         this->size -= 1;
 
+        this->listLock.unlock(this->prevIF);
+
         return true;
     }
 
     T *removeFirst(const bool deleteValue = true) {
+        this->prevIF = this->listLock.lock();
+
         LinkedListEntry<T>* current = this->listStart;
 
         this->listStart->next->prev = nullptr;
@@ -203,7 +234,7 @@ public:
             delete current->value;
             delete current;
 
-            this->size -= 1;
+            this->listLock.unlock(this->prevIF);
 
             return nullptr;
         }
@@ -212,7 +243,7 @@ public:
 
         delete current;
 
-        this->size -= 1;
+        this->listLock.unlock(this->prevIF);
 
         return tmpVal;
     }
@@ -226,6 +257,8 @@ public:
     }
 
     T *removeLast(const bool deleteValue = true) {
+        this->prevIF = this->listLock.lock();
+
         LinkedListEntry<T>* current = this->listEnd;
 
         this->listEnd->prev->next = nullptr;
@@ -241,7 +274,7 @@ public:
             delete current->value;
             delete current;
 
-            this->size -= 1;
+            this->listLock.unlock(this->prevIF);
 
             return nullptr;
         }
@@ -250,7 +283,7 @@ public:
 
         delete current;
 
-        this->size -= 1;
+        this->listLock.unlock(this->prevIF);
 
         return tmpVal;
     }
@@ -264,6 +297,8 @@ public:
     }
 
     void clear(const bool deleteValues = true) {
+        this->prevIF = this->listLock.lock();
+
         LinkedListEntry<T>* current = this->listStart;
 
         while (current != nullptr) {
@@ -279,6 +314,8 @@ public:
         }
 
         this->size = 0;
+
+        this->listLock.unlock(this->prevIF);
     }
 
     u32 getSize() const {
@@ -364,6 +401,10 @@ private:
     LinkedListEntry<T>* listEnd {};
 
     u32 size {};
+
+    bool prevIF {}; // TODO: Maybe remove this spinlock
+
+    TicketSpinLock listLock {};
 };
 
 #endif
