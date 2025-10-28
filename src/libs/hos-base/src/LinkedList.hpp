@@ -99,7 +99,10 @@ public:
                 }
 
                 if (deleteValue) {
+                    delete current;
                     delete current->value;
+
+                    this->size -= 1;
 
                     return nullptr;
                 }
@@ -107,6 +110,8 @@ public:
                 T* tmpVal = current->value;
 
                 delete current;
+
+                this->size -= 1;
 
                 return tmpVal;
             }
@@ -142,6 +147,8 @@ public:
 
                 delete current;
 
+                this->size -= 1;
+
                 return true;
             }
 
@@ -175,6 +182,8 @@ public:
         val->next = nullptr;
         val->prev = nullptr;
 
+        this->size -= 1;
+
         return true;
     }
 
@@ -194,12 +203,16 @@ public:
             delete current->value;
             delete current;
 
+            this->size -= 1;
+
             return nullptr;
         }
 
         T* tmpVal = current->value;
 
         delete current;
+
+        this->size -= 1;
 
         return tmpVal;
     }
@@ -228,12 +241,16 @@ public:
             delete current->value;
             delete current;
 
+            this->size -= 1;
+
             return nullptr;
         }
 
         T* tmpVal = current->value;
 
         delete current;
+
+        this->size -= 1;
 
         return tmpVal;
     }
@@ -260,6 +277,8 @@ public:
 
             current = tmpCurrent;
         }
+
+        this->size = 0;
     }
 
     u32 getSize() const {
@@ -288,13 +307,9 @@ public:
             return *this;
         }
 
-        Iterator operator++ (const int amount) {
+        Iterator operator++ (int) {
             Iterator temp = *this;
-
-            for (u32 i = 0; i < amount; i++) {
-                ++(*this);
-            }
-
+            ++(*this);
             return temp;
         }
 
@@ -306,13 +321,9 @@ public:
             return *this;
         }
 
-        Iterator operator-- (const int amount) {
+        Iterator operator-- (int) {
             Iterator temp = *this;
-
-            for (u32 i = 0; i < amount; i++) {
-                --(*this);
-            }
-
+            --(*this);
             return temp;
         }
 
