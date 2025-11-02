@@ -18,6 +18,8 @@ switchContextAsm:
     pop rbp
     pop rbx
 
+    sti
+
     ret
 
 .global setStackAsm
@@ -33,10 +35,29 @@ setStackAsm:
     push 0
     push 0
     push 0
-    push 0
+    push rdx
 
     mov [rdi], rsp
 
     mov rsp, rax
 
     ret
+
+.global threadTrampoline
+threadTrampoline:
+    mov ax, 0x18 | 3
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    mov rax, rsp
+    push 0x18 | 3
+    push rax
+    push 0x200
+    push 0x20 | 3
+    push r15
+
+    mov r15, 0
+
+    iret

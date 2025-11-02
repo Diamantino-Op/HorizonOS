@@ -1,0 +1,4 @@
+#ifndef KERNEL_COMMON_ELF_HPP
+#define KERNEL_COMMON_ELF_HPP
+
+#endif

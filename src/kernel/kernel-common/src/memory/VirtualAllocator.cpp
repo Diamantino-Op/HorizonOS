@@ -9,40 +9,52 @@ extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multi arch
-	AllocContext *VirtualAllocator::createContext(const bool isUserspace, const bool isProcess) {
+	AllocContext *VirtualAllocator::createContext(const bool isProcess) {
 		AllocContext *ctx = nullptr;
 
+		u64 ctxAddr = 0;
+		u64 pageMapAddr = 0;
+
 		if (isProcess) {
-			ctx = new AllocContext();
+			ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize, ctxAddr, 0b00000011, false, false);
+
+			ctx = reinterpret_cast<AllocContext *>(pageSize);
 		} else {
 			const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
 
 			ctx = reinterpret_cast<AllocContext *>(ctxPage);
 		}
 
-		ctx->isUserspace = isUserspace;
-
+		ctx->isUserspace = false;
 		ctx->pageMap = PageMap();
-
 		ctx->heapSize = pageSize;
-
 		ctx->pageFlags = 0b00000011;
 
 		if (isProcess) {
-			if (isUserspace) {
-				ctx->pageFlags |= 0b00000100;
-			}
-
-			ctx->heapStart = reinterpret_cast<u64 *>(pageSize);
+			ctx->heapStart = reinterpret_cast<u64 *>(pageSize * 3);
 		} else {
 			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize)) + pageSize;
 		}
 
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
 
-		ctx->pageMap.init(CommonMain::getInstance()->getPMM()->allocPages(1, true));
+		if (isProcess) {
+			pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize * 2, pageMapAddr, ctx->pageFlags , false, false);
+			ctx->pageMap.init(reinterpret_cast<u64 *>(pageSize * 2), pageMapAddr);
+		} else {
+			u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
+
+			ctx->pageMap.init(newPageMap, reinterpret_cast<u64>(newPageMap) - CommonMain::getCurrentHhdm());
+		}
 
 		memset(ctx->pageMap.getPageTable(), 0, pageSize);
+
+		if (isProcess) {
+			ctx->pageMap.mapPage(pageSize, ctxAddr, ctx->pageFlags, false, false);
+			ctx->pageMap.mapPage(pageSize * 2, pageMapAddr, ctx->pageFlags, false, false);
+		}
 
 		for (u64 i = reinterpret_cast<u64>(ctx->heapStart); i < reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize; i += pageSize) {
 			u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
@@ -51,7 +63,49 @@ namespace kernel::common::memory {
 				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
 			}
 
-			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, true, false);
+			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, not isProcess, false);
+		}
+
+		return ctx;
+	}
+
+	AllocContext *VirtualAllocator::createUserContext() {
+		AllocContext *ctx = nullptr;
+		const u64 ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize, ctxAddr, 0b00000111, false, false);
+		ctx = reinterpret_cast<AllocContext *>(pageSize);
+
+
+
+		ctx->isUserspace = true;
+		ctx->pageMap = PageMap();
+		ctx->heapSize = pageSize;
+		ctx->pageFlags = 0b00000111;
+		ctx->heapStart = reinterpret_cast<u64 *>(pageSize * 3);
+		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+
+
+
+		const u64 pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize * 2, pageMapAddr, ctx->pageFlags, false, false);
+		ctx->pageMap.init(reinterpret_cast<u64 *>(pageSize * 2), pageMapAddr);
+		memset(ctx->pageMap.getPageTable(), 0, pageSize);
+
+
+
+		ctx->pageMap.mapPage(pageSize, ctxAddr, ctx->pageFlags, false, false);
+		ctx->pageMap.mapPage(pageSize * 2, pageMapAddr, ctx->pageFlags, false, false);
+
+
+
+		for (u64 i = reinterpret_cast<u64>(ctx->heapStart); i < reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize; i += pageSize) {
+			u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+
+			if (not newPage) {
+				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
+			}
+
+			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
 		}
 
 		return ctx;

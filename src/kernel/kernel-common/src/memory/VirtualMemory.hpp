@@ -15,9 +15,9 @@ namespace kernel::common::memory {
 
     class PageMap {
     public:
-        void init(u64 *pageTable);
+        void init(u64 *newPageTable, u64 newPhysPageTable);
 
-        void load();
+        void load() const;
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
 
@@ -35,6 +35,7 @@ namespace kernel::common::memory {
         u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
 
         u64* pageTable {};
+        u64 physPageTable {};
         bool isLevel5Paging = false;
     };
 

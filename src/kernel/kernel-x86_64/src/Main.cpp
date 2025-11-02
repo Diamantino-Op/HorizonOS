@@ -17,7 +17,7 @@ static volatile LIMINE_BASE_REVISION(3);
 
 extern limine_framebuffer_request framebufferRequest;
 
-extern "C" void kernelMain() {
+extern "C" __attribute__((no_instrument_function)) void kernelMain() {
     auto kernel = kernel::x86_64::Kernel();
 
 	kernel.init();
@@ -105,7 +105,7 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false, false);
+		this->kernelAllocContext = VirtualAllocator::createContext(false);
 
 		terminal.info("Allocator Context created...", "HorizonOS");
 
@@ -116,9 +116,7 @@ namespace kernel::x86_64 {
 
 		terminal.info("VMM Loaded... OK", "HorizonOS");
 
-#ifndef HORIZON_USE_NEW_ALLOCATOR
 		VirtualAllocator::initContext(this->kernelAllocContext);
-#endif
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
@@ -131,10 +129,6 @@ namespace kernel::x86_64 {
 		// Tss Stack
 
 		this->tssManager.allocStack();
-
-		// Scheduler
-
-		this->scheduler = new Scheduler();
 
 		// Cpu Init
 
@@ -150,6 +144,10 @@ namespace kernel::x86_64 {
 		CpuManager::initSimd();
 
 		terminal.info("Cpu initialized...", "HorizonOS");
+
+		// Scheduler
+
+		this->scheduler = new Scheduler();
 
 		// Early uAcpi
 
@@ -207,10 +205,15 @@ namespace kernel::x86_64 {
 		this->scheduler->addProcess(exampleProcess);
 
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
+		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
+		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
+		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+
+		//auto *exampleUserProcess = new Process(ProcessPriority::HIGH, true);
+		//this->scheduler->addProcess(exampleUserProcess);
+
+		//this->scheduler->addThread(true, reinterpret_cast<u64>(testUserThread), exampleUserProcess);
 
 		terminal.info("Example threads registered... OK", "HorizonOS");
 
@@ -251,6 +254,12 @@ namespace kernel::x86_64 {
 		Asm::lhlt();
 	}
 
+	void testUserThread() {
+		for (;;) {
+			Asm::cli();
+		}
+	}
+
 	void thread1() {
 		 for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
@@ -259,7 +268,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 10ull * 1'000'000ull); // 10 ms
+		 	CommonMain::getTerminal()->warnNoLock("ID: %u", "Thread 1", currThread->getId());
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 100ull * 1'000'000ull); // 10 ms
 		}
 	}
 
@@ -271,7 +282,9 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 20ull * 1'000'000ull); // 20 ms
+			CommonMain::getTerminal()->warnNoLock("ID: %u", "Thread 2", currThread->getId());
+
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 200ull * 1'000'000ull); // 20 ms
 		}
 	}
 
@@ -283,7 +296,7 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 30ull * 1'000'000ull); // 30 ms
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 300ull * 1'000'000ull); // 30 ms
 		}
 	}
 
@@ -295,7 +308,7 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 40ull * 1'000'000ull); // 40 ms
+			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 400ull * 1'000'000ull); // 40 ms
 		}
 	}
 
@@ -383,7 +396,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->cpuCore.apic.arm(50 * 1'000'000, commonKernel->getIOApicManager()->getMaxRange() + 0x20, true);
+		//this->cpuCore.apic.arm(50 * 1'000'000, commonKernel->getIOApicManager()->getMaxRange() + 0x20, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

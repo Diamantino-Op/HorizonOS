@@ -15,26 +15,27 @@ set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/res/${HORIZON_ARCH}/Linker.ld" CACHE FILE
 add_subdirectory(deps)
 
 # ------------------ ISO Directory ------------------
-set(ISO_DIR "${CMAKE_SOURCE_DIR}/iso/${HORIZON_ARCH}")
+set(ISO_DIR "${CMAKE_SOURCE_DIR}/iso/${HORIZON_ARCH}/${CMAKE_BUILD_TYPE}")
 set(RES_DIR "${CMAKE_SOURCE_DIR}/res")
 
 if (NOT EXISTS "${ISO_DIR}")
     file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/iso/out" "${ISO_DIR}" "${ISO_DIR}/efi/boot" "${ISO_DIR}/boot" "${ISO_DIR}/boot/limine" "${ISO_DIR}/boot/HorizonOS")
-
-    if (${HORIZON_ARCH} STREQUAL "x86_64")
-        file(COPY "${LIMINE_DIR}/BOOTX64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    elseif (${HORIZON_ARCH} STREQUAL "riscv64")
-        file(COPY "${LIMINE_DIR}/BOOTRISCV64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    elseif (${HORIZON_ARCH} STREQUAL "aarch64")
-        file(COPY "${LIMINE_DIR}/BOOTAA64.EFI" DESTINATION "${ISO_DIR}/efi/boot")
-    endif ()
-
-    file(COPY "${RES_DIR}/Limine.conf" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios.sys" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-bios-pxe.bin" DESTINATION "${ISO_DIR}/boot/limine")
-    file(COPY "${LIMINE_DIR}/limine-uefi-cd.bin" DESTINATION "${ISO_DIR}/boot/limine")
 endif ()
+
+if (${HORIZON_ARCH} STREQUAL "x86_64")
+    configure_file("${LIMINE_DIR}/BOOTX64.EFI" "${ISO_DIR}/efi/boot/BOOTX64.EFI" COPYONLY)
+elseif (${HORIZON_ARCH} STREQUAL "riscv64")
+    configure_file("${LIMINE_DIR}/BOOTRISCV64.EFI" "${ISO_DIR}/efi/boot/BOOTRISCV64.EFI" COPYONLY)
+elseif (${HORIZON_ARCH} STREQUAL "aarch64")
+    configure_file("${LIMINE_DIR}/BOOTAA64.EFI" "${ISO_DIR}/efi/boot/BOOTAA64.EFI" COPYONLY)
+endif ()
+
+configure_file("${RES_DIR}/Limine-${CMAKE_BUILD_TYPE}.conf" "${ISO_DIR}/boot/limine/Limine.conf" COPYONLY)
+configure_file("${LIMINE_DIR}/limine-bios.sys" "${ISO_DIR}/boot/limine/limine-bios.sys" COPYONLY)
+configure_file("${LIMINE_DIR}/limine-bios-cd.bin" "${ISO_DIR}/boot/limine/limine-bios-cd.bin" COPYONLY)
+configure_file("${LIMINE_DIR}/limine-bios-pxe.bin" "${ISO_DIR}/boot/limine/limine-bios-pxe.bin" COPYONLY)
+configure_file("${LIMINE_DIR}/limine-uefi-cd.bin" "${ISO_DIR}/boot/limine/limine-uefi-cd.bin" COPYONLY)
+configure_file("${RES_DIR}/Images/HorizonOS Logo.png" "${ISO_DIR}/boot/HorizonOS/HorizonOS-Logo.png" COPYONLY)
 
 # ------------------ Project Setup ------------------
 project(HorizonOS)
@@ -54,13 +55,20 @@ add_subdirectory(src)
 set(TMP_ISO_DIR "${CMAKE_SOURCE_DIR}/iso")
 set(ISO_OUTPUT "${TMP_ISO_DIR}/out/HorizonOS-${HORIZON_ARCH}.iso")
 
+add_custom_command(
+        OUTPUT ${ISO_DIR}/boot/HorizonOS/HorizonOS.sym
+        COMMAND nm -C $<TARGET_FILE:kernel> > ${ISO_DIR}/boot/HorizonOS/HorizonOS.sym
+        DEPENDS kernel
+        COMMENT "Generating debug symbol file with nm -D"
+)
+
 # Generate ISO
 add_custom_command(
         OUTPUT ${ISO_OUTPUT}
         COMMAND cp $<TARGET_FILE:kernel> ${ISO_DIR}/boot/HorizonOS/HorizonOS_Kernel
         COMMAND xorriso -as mkisofs -R -r -J -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table -hfsplus -apm-block-size 2048 --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label ${ISO_DIR} -o ${ISO_OUTPUT}
         COMMAND ${LIMINE_DIR}/limine bios-install ${ISO_OUTPUT}
-        DEPENDS kernel
+        DEPENDS ${ISO_DIR}/boot/HorizonOS/HorizonOS.sym
         COMMENT "Generating bootable ISO"
 )
 

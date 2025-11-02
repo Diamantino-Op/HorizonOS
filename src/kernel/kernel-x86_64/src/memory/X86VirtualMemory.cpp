@@ -21,7 +21,7 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	void PageMap::init(u64 *pageTable) {
+	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable) {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		if (pagingModeRequest.response != nullptr) {
@@ -37,16 +37,17 @@ namespace kernel::common::memory {
 			}
 		}
 
-		this->pageTable = pageTable;
+		this->physPageTable = newPhysPageTable;
+		this->pageTable = newPageTable;
 	}
 
-	void PageMap::load() {
+	void PageMap::load() const {
 		// TODO: Re-Enable
 		//Terminal* terminal = CommonMain::getTerminal();
 
 		//terminal->debug("Loading main page table: 0x%.16lx", "VMM", reinterpret_cast<u64 *>(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm()));
 
-		Asm::writeCr3(reinterpret_cast<u64>(this->pageTable) - CommonMain::getCurrentHhdm());
+		Asm::writeCr3(this->physPageTable);
 	}
 
 	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec) {

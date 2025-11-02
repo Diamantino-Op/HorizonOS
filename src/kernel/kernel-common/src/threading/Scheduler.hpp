@@ -235,8 +235,9 @@ namespace kernel::common::threading {
 		 *  Unblock the specified thread.
 		 *
 		 *  @param threadId The id of the thread to be put to unblock.
+		 *  @param top Push the thread to the top of the queue.
 		 **/
-    	void unblockThread(u16 threadId);
+    	void unblockThread(u16 threadId, bool top);
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -246,7 +247,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The address of the created context.
 		 */
-		u64 *createContext(bool isUser, u64 rip);
+		u64 *createContext(const Process *process, bool isUser, u64 rip);
 
     	static u32 sleepTick(u64 *);
 
@@ -256,7 +257,6 @@ namespace kernel::common::threading {
 
     private:
     	ExecutionNode *getCurrentExecutionNode() const;
-    	u64 *createContextArch(bool isUser, u64 rip, u64 rsp);
 
     	TicketSpinLock schedLock {};
 

@@ -20,6 +20,8 @@ namespace kernel::x86_64 {
     using namespace common;
     using namespace common::memory;
 
+    [[noreturn]] void testUserThread();
+
     [[noreturn]] void thread1();
     [[noreturn]] void thread2();
     [[noreturn]] void thread3();

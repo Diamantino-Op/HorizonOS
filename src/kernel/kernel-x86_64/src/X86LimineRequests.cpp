@@ -19,7 +19,7 @@ volatile limine_paging_mode_request pagingModeRequest = {
 	.id = LIMINE_PAGING_MODE_REQUEST,
 	.revision = 0,
 	.response = nullptr,
-	.mode = 1,
+	.mode = 0,
 	.max_mode = 1,
 	.min_mode = 0,
 };

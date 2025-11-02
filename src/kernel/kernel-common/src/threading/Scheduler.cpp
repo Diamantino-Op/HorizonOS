@@ -54,7 +54,11 @@ namespace kernel::common::threading {
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
-		this->processContext = VirtualAllocator::createContext(isUserspace, true);
+		if (isUserspace) {
+			this->processContext = VirtualAllocator::createUserContext();
+		} else {
+			this->processContext = VirtualAllocator::createContext(true);
+		}
 
 		VirtualAllocator::shareKernelPages(this->processContext);
 	}
@@ -107,7 +111,9 @@ namespace kernel::common::threading {
 	void ExecutionNode::init() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		auto *newThread = new Thread(schedulerPtr->getProcess(0), schedulerPtr->createContext(false, reinterpret_cast<u64>(idleThread)));
+		Process *idleProcess = schedulerPtr->getProcess(0);
+
+		auto *newThread = new Thread(idleProcess, schedulerPtr->createContext(idleProcess, false, reinterpret_cast<u64>(idleThread)));
 
 		newThread->setState(ThreadState::RUNNING);
 
@@ -161,9 +167,9 @@ namespace kernel::common::threading {
 
 		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext(), false);
 
-		this->addThread(false, reinterpret_cast<u64>(reaperFunction), reaperProcess);
-
 		this->addProcess(reaperProcess);
+
+		this->addThread(false, reinterpret_cast<u64>(reaperFunction), reaperProcess);
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) {
@@ -215,15 +221,18 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::killProcess(Process *process) {
-		this->processList.remove(process); // TODO: Kill all threads
+		this->processList.remove(process);
 	}
 
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
-		auto *newThread = new Thread(process, this->createContext(isUser, rip));
+		auto *newThread = new Thread(process, this->createContext(process, isUser, rip));
 
 		newThread->setState(ThreadState::READY);
 
 		process->addThread(newThread);
+
+		if (isUser)
+			return this->readyThreadList.addStart(newThread);
 
 		return this->readyThreadList.addEnd(newThread);
 	}
@@ -290,7 +299,7 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void Scheduler::unblockThread(const u16 threadId) {
+	void Scheduler::unblockThread(const u16 threadId, const bool top) {
 		Thread *thread = this->getThread(threadId);
 
 		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
@@ -300,16 +309,14 @@ namespace kernel::common::threading {
 		if (thread->getSleepNs() == 0) {
 			thread->setState(ThreadState::RUNNING);
 
-			this->queues[thread->getParent()->getPriority()].addEnd(thread);
+			if (top) {
+				this->queues[thread->getParent()->getPriority()].addStart(thread);
+			} else {
+				this->queues[thread->getParent()->getPriority()].addEnd(thread);
+			}
 		} else {
 			this->sleepingThreadList.addStart(thread);
 		}
-	}
-
-	u64 *Scheduler::createContext(const bool isUser, const u64 rip) {
-		const auto newRsp = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // TODO: Maybe use process alloc context
-
-		return createContextArch(isUser, rip, newRsp);
 	}
 
 	u32 Scheduler::sleepTick(u64 *) {

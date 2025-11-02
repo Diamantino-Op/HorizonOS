@@ -17,7 +17,9 @@ namespace kernel::common::threading {
 	using namespace x86_64::utils;
 
 	void idleThread() {
-		Asm::lhlt();
+		for (;;) {
+			asm volatile ("pause" ::: "memory");
+		}
 	}
 
 	void Scheduler::initArch() {
@@ -171,15 +173,27 @@ namespace kernel::common::threading {
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
 
-		Asm::sti();
+		// Asm::sti(); //TODO: Maybe needed here
 
 		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer());
 	}
 
-	u64 *Scheduler::createContextArch(const bool isUser, const u64 rip, const u64 rsp) {
-		auto *context = new ThreadContext(rsp, isUser);
+	u64 *Scheduler::createContext(const Process *process, const bool isUser, const u64 rip) {
+		const u64 currPageMap = Asm::readCr3();
 
-		setStackAsm(context->getStackPointer(), rip);
+		process->getProcessContext()->pageMap.load();
+
+		const auto newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+
+		auto *context = new ThreadContext(newRsp, isUser);
+
+		if (isUser) {
+			setStackAsm(context->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip);
+		} else {
+			setStackAsm(context->getStackPointer(), rip, 0);
+		}
+
+		Asm::writeCr3(currPageMap);
 
 		return reinterpret_cast<u64 *>(context);
 	}

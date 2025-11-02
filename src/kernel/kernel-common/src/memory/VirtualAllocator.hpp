@@ -36,7 +36,8 @@ namespace kernel::common::memory {
 
     class VirtualAllocator {
     public:
-        static AllocContext *createContext(bool isUserspace, bool isProcess);
+        static AllocContext *createContext(bool isProcess);
+        static AllocContext *createUserContext();
         static void destroyContext(AllocContext *ctx);
 
         static void shareKernelPages(const AllocContext *ctx);

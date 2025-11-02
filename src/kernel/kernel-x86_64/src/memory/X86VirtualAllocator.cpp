@@ -19,7 +19,7 @@ namespace kernel::common::memory {
 			CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
-		for (u16 page5Level = 0; page5Level < 512; page5Level++) {
+		for (u16 page5Level = 0; page5Level < 256; page5Level++) {
 			auto *level5Table = reinterpret_cast<PageTable *>(ctx->pageMap.getPageTable());
 
 			if (auto *level5Entry = &level5Table->entries[page5Level]; level5Entry != nullptr) {
@@ -62,8 +62,7 @@ namespace kernel::common::memory {
 		}
 
 		CommonMain::getInstance()->getPMM()->freePages(ctx->pageMap.getPageTable(), 1);
-
-		delete ctx;
+		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(ctx), 1);
 	}
 
 	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {

@@ -18,8 +18,3 @@ target_include_directories(kernel PRIVATE src ${HOR_LIBS_INC} ${LIMINE_DIR} ${FL
 set_target_properties(kernel PROPERTIES LINK_DEPENDS ${LINKER_SCRIPT})
 
 target_link_libraries(kernel PRIVATE kernel-common)
-
-add_custom_command(TARGET kernel POST_BUILD
-                   COMMAND nm -D $<TARGET_FILE:kernel> > ${CMAKE_CURRENT_BINARY_DIR}/HorizonOS.sym
-                   COMMENT "Generating debug symbol file with nm -D"
-)

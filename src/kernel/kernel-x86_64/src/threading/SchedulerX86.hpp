@@ -34,7 +34,8 @@ namespace kernel::x86_64::threading {
         u64 stackPointer {};
     };
 
-    extern "C" void setStackAsm(u64 *stackPointer, u64 rip);
+    extern "C" void setStackAsm(u64 *stackPointer, u64 rip, u64 usermodeFun);
+    extern "C" void threadTrampoline();
 }
 
 #endif
