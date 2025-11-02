@@ -64,6 +64,10 @@ namespace kernel::common::memory {
 			}
 
 			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, not isProcess, false);
+
+			if (isProcess) {
+				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
+			}
 		}
 
 		return ctx;
@@ -106,6 +110,8 @@ namespace kernel::common::memory {
 			}
 
 			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
+
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
 		}
 
 		return ctx;

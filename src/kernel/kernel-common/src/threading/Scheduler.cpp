@@ -61,6 +61,8 @@ namespace kernel::common::threading {
 		}
 
 		VirtualAllocator::shareKernelPages(this->processContext);
+
+		VirtualAllocator::initContext(this->processContext);
 	}
 
 	Process::Process(const ProcessPriority priority, AllocContext *context, const bool isUserspace) : isUserspace(isUserspace), processContext(context), priority(priority) {
