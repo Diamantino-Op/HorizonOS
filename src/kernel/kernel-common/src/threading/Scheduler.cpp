@@ -54,18 +54,23 @@ namespace kernel::common::threading {
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
+		CreatedContext createdContext;
+
 		if (isUserspace) {
-			this->processContext = VirtualAllocator::createUserContext();
+			createdContext = VirtualAllocator::createUserContext();
 		} else {
-			this->processContext = VirtualAllocator::createContext(true);
+			createdContext = VirtualAllocator::createContext(true);
 		}
+
+		this->processContext = createdContext.ctx;
+		this->processContextKernel = createdContext.ctkKern;
 
 		VirtualAllocator::shareKernelPages(this->processContext);
 
 		VirtualAllocator::initContext(this->processContext);
 	}
 
-	Process::Process(const ProcessPriority priority, AllocContext *context, const bool isUserspace) : isUserspace(isUserspace), processContext(context), priority(priority) {
+	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 	}
 
@@ -94,6 +99,10 @@ namespace kernel::common::threading {
 
 	AllocContext *Process::getProcessContext() const {
 		return this->processContext;
+	}
+
+	AllocContext *Process::getProcessContextKernel() const {
+		return this->processContextKernel;
 	}
 
 	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
@@ -165,9 +174,9 @@ namespace kernel::common::threading {
 	// Scheduler
 
 	Scheduler::Scheduler() {
-		this->addProcess(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext(), false));
+		this->addProcess(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext()));
 
-		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext(), false);
+		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext());
 
 		this->addProcess(reaperProcess);
 
@@ -233,6 +242,7 @@ namespace kernel::common::threading {
 
 		process->addThread(newThread);
 
+		// TODO: Remove
 		if (isUser)
 			return this->readyThreadList.addStart(newThread);
 
@@ -243,7 +253,7 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::TERMINATED);
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			this->getCurrentExecutionNode()->schedule();
+			ExecutionNode::reSchedule();
 		} else {
 			this->removeThread(thread);
 		}
@@ -277,7 +287,7 @@ namespace kernel::common::threading {
 		this->queues[thread->getParent()->getPriority()].remove(thread);
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			this->getCurrentExecutionNode()->schedule();
+			ExecutionNode::reSchedule();
 		} else if (!this->blockedThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
 		}
@@ -295,7 +305,7 @@ namespace kernel::common::threading {
 		}
 
 		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			this->getCurrentExecutionNode()->schedule();
+			ExecutionNode::reSchedule();
 		} else {
 			this->blockedThreadList.addStart(thread);
 		}
@@ -339,6 +349,8 @@ namespace kernel::common::threading {
 				}
 			}
 		}
+
+		sendSleepEOI();
 
 		schedulerPtr->getSchedLock()->unlock(prevIF);
 

@@ -58,13 +58,22 @@ namespace kernel::common::threading {
     class Process {
     public:
 		explicit Process(ProcessPriority priority, bool isUserspace);
-    	explicit Process(ProcessPriority priority, AllocContext *context, bool isUserspace);
+
+    	/**
+		 *  Process constructor for processes that are owned ONLY by the kernel.
+		 *
+		 *  @param priority The process priority.
+		 *  @param context The kernel alloc context.
+		 **/
+    	explicit Process(ProcessPriority priority, AllocContext *context);
         ~Process();
 
         void setPriority(ProcessPriority newPriority);
         ProcessPriority getPriority() const;
 
     	AllocContext *getProcessContext() const;
+
+    	AllocContext *getProcessContextKernel() const;
 
     	LinkedListEntry<Thread> *addThread(Thread *entry);
     	void removeThread(Thread *entry);
@@ -81,6 +90,7 @@ namespace kernel::common::threading {
 		LinkedList<Thread> threadList {};
 
         AllocContext *processContext {};
+    	AllocContext *processContextKernel {};
 
         ProcessPriority priority {};
     };
@@ -92,7 +102,7 @@ namespace kernel::common::threading {
 
     	void init();
 
-        void schedule();
+    	static void reSchedule();
 
     	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
@@ -101,11 +111,15 @@ namespace kernel::common::threading {
 
     	void switchContext(u64 *oldCtx, u64 *newCtx) const;
 
+    	void switchContextNew(const u64 *newCtx) const;
+
     	bool isDisabled() const;
     	void setDisabled(bool val);
 
     private:
     	static u32 scheduleTick(u64 *);
+
+    	void schedule();
 
     	void initArch();
 
@@ -120,7 +134,9 @@ namespace kernel::common::threading {
 
 	[[noreturn]] void reaperFunction();
 
-	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer);
+	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer, u64 newTableAddr);
+
+	extern "C" void switchContextNewAsm(u64 *newCtx);
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
@@ -248,6 +264,8 @@ namespace kernel::common::threading {
 		 *  @return The address of the created context.
 		 */
 		u64 *createContext(const Process *process, bool isUser, u64 rip);
+
+		static void sendSleepEOI();
 
     	static u32 sleepTick(u64 *);
 

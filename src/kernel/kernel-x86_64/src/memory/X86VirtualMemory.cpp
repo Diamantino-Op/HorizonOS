@@ -194,4 +194,8 @@ namespace kernel::common::memory {
 		pageEntry->dirty = (flags >> 6) & 1;
 		pageEntry->size = (flags >> 7) & 1;
 	}
+
+	u64 PageMap::getAddr() const {
+		return this->physPageTable;
+	}
 }

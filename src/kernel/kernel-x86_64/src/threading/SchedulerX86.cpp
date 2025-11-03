@@ -33,12 +33,12 @@ namespace kernel::common::threading {
 
 		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
 
-		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2a - irq 10
+		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2b - irq 10
 
 		if (gsi == 1'000'000) {
 			CommonMain::getTerminal()->error("No gsi found!", "Scheduler");
 
-			gsi = 0xa;
+			gsi = 0xb;
 		} else {
 			CommonMain::getTerminal()->debug("Gsi found: %lu", "Scheduler", gsi);
 		}
@@ -47,9 +47,9 @@ namespace kernel::common::threading {
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 
-		Interrupts::setHandler(0x2a, sleepTick, nullptr);
+		Interrupts::setHandler(0x2b, sleepTick, nullptr);
 
-		Interrupts::unmask(0x2a);
+		Interrupts::unmask(0x2b);
 	}
 
 	Thread *Scheduler::getCurrentThread() {
@@ -57,9 +57,7 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::initArch() {
-		const u64 intNum = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->getMaxRange() + 0x20;
-
-		Interrupts::setHandler(intNum, scheduleTick, nullptr);
+		Interrupts::setHandler(0x20, scheduleTick, nullptr);
 
 		//Interrupts::unmask(intNum);
 	}
@@ -68,6 +66,10 @@ namespace kernel::common::threading {
 		CpuManager::getCurrentCore()->executionNode.schedule();
 
 		return 0;
+	}
+
+	void ExecutionNode::reSchedule() {
+		asm inline("int %0" :: "i"(0x20));
 	}
 
 	void ExecutionNode::schedule() {
@@ -159,33 +161,40 @@ namespace kernel::common::threading {
 	}
 
 	// Old Ctx = Current Thread, New Ctx = New Thread
+	// TODO: Maybe find a way to not switch cr3 tables this much
 	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) const {
 		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
 		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
 
 		oldCtxConv->save();
 
-		this->currentThread->value->getParent()->getProcessContext()->pageMap.load();
+		// Asm::sti(); //TODO: Maybe needed here
+
+		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer(), this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr());
+	}
+
+	void switchContextNewAsm(u64 *newCtx) {
+		CpuManager::getCurrentCore()->executionNode.switchContextNew(newCtx);
+	}
+
+	void ExecutionNode::switchContextNew(const u64 *newCtx) const {
+		const auto *newCtxConv = reinterpret_cast<const ThreadContext *>(newCtx);
 
 		newCtxConv->load();
 
-		Interrupts::sendEOI(0x2a);
-
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
-
-		// Asm::sti(); //TODO: Maybe needed here
-
-		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer());
 	}
 
 	u64 *Scheduler::createContext(const Process *process, const bool isUser, const u64 rip) {
 		const u64 currPageMap = Asm::readCr3();
 
-		process->getProcessContext()->pageMap.load();
+		process->getProcessContextKernel()->pageMap.load();
 
 		const auto newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
 
-		auto *context = new ThreadContext(newRsp, isUser);
+		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
+
+		*context = ThreadContext(newRsp, isUser);
 
 		if (isUser) {
 			setStackAsm(context->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip);
@@ -196,6 +205,10 @@ namespace kernel::common::threading {
 		Asm::writeCr3(currPageMap);
 
 		return reinterpret_cast<u64 *>(context);
+	}
+
+	void Scheduler::sendSleepEOI() {
+		Interrupts::sendEOI(0x2b);
 	}
 
 	ExecutionNode *Scheduler::getCurrentExecutionNode() const {

@@ -9,7 +9,7 @@ extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multi arch
-	AllocContext *VirtualAllocator::createContext(const bool isProcess) {
+	CreatedContext VirtualAllocator::createContext(const bool isProcess) {
 		AllocContext *ctx = nullptr;
 
 		u64 ctxAddr = 0;
@@ -17,6 +17,7 @@ namespace kernel::common::memory {
 
 		if (isProcess) {
 			ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize, ctxAddr, 0b00000011, false, false);
 
 			ctx = reinterpret_cast<AllocContext *>(pageSize);
@@ -41,7 +42,9 @@ namespace kernel::common::memory {
 
 		if (isProcess) {
 			pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize * 2, pageMapAddr, ctx->pageFlags , false, false);
+
 			ctx->pageMap.init(reinterpret_cast<u64 *>(pageSize * 2), pageMapAddr);
 		} else {
 			u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
@@ -70,10 +73,13 @@ namespace kernel::common::memory {
 			}
 		}
 
-		return ctx;
+		return {
+			.ctx = ctx,
+			.ctkKern = reinterpret_cast<AllocContext *>(ctxAddr + CommonMain::getCurrentHhdm()),
+		};
 	}
 
-	AllocContext *VirtualAllocator::createUserContext() {
+	CreatedContext VirtualAllocator::createUserContext() {
 		AllocContext *ctx = nullptr;
 		const u64 ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageSize, ctxAddr, 0b00000111, false, false);
@@ -114,7 +120,10 @@ namespace kernel::common::memory {
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
 		}
 
-		return ctx;
+		return {
+			.ctx = ctx,
+			.ctkKern = reinterpret_cast<AllocContext *>(ctxAddr + CommonMain::getCurrentHhdm()),
+		};
 	}
 
 	void VirtualAllocator::initContext(AllocContext *ctx) {

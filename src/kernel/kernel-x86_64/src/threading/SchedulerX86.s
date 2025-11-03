@@ -1,3 +1,5 @@
+.extern switchContextNewAsm
+
 .global switchContextAsm
 switchContextAsm:
     push rbx
@@ -9,7 +11,11 @@ switchContextAsm:
 
     mov [rdi], rsp
 
+    mov cr3, rdx
+
     mov rsp, [rsi]
+
+    call switchContextNewAsm
 
     pop r15
     pop r14

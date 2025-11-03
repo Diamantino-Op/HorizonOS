@@ -105,7 +105,7 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false);
+		this->kernelAllocContext = VirtualAllocator::createContext(false).ctx;
 
 		terminal.info("Allocator Context created...", "HorizonOS");
 
@@ -247,7 +247,7 @@ namespace kernel::x86_64 {
 		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, ioApicManager.getMaxRange() + 0x20, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, 0x20, true);
 
 		// this->shutdown();
 
@@ -396,7 +396,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		//this->cpuCore.apic.arm(50 * 1'000'000, commonKernel->getIOApicManager()->getMaxRange() + 0x20, true);
+		//this->cpuCore.apic.arm(50 * 1'000'000, 0x20, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

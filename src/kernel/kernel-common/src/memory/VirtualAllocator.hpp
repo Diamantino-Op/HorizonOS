@@ -34,10 +34,15 @@ namespace kernel::common::memory {
         VpaListEntry *next {};
     };
 
+    struct CreatedContext {
+        AllocContext *ctx {};
+        AllocContext *ctkKern {};
+    };
+
     class VirtualAllocator {
     public:
-        static AllocContext *createContext(bool isProcess);
-        static AllocContext *createUserContext();
+        static CreatedContext createContext(bool isProcess);
+        static CreatedContext createUserContext();
         static void destroyContext(AllocContext *ctx);
 
         static void shareKernelPages(const AllocContext *ctx);

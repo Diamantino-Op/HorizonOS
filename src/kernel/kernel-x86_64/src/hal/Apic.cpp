@@ -325,13 +325,13 @@ namespace kernel::x86_64::hal {
 
 				for (u64 k = 0; k < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); k++) {
 					if (const acpi_madt_interrupt_source_override entry = CommonMain::getInstance()->getUAcpi()->getIsos()[k]; entry.source == j) {
-						this->setGsi(entry.gsi, entry.source + 0x20, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), entry.flags | IOApicFlags::MASKED, IOApicDelivery::FIXED);
+						this->setGsi(entry.gsi, entry.source + 0x21, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), entry.flags | IOApicFlags::MASKED, IOApicDelivery::FIXED);
 
 						goto end;
 					}
 				}
 
-				this->setGsi(j, j + 0x20, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED);
+				this->setGsi(j, j + 0x21, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED);
 
 				end:
 			}

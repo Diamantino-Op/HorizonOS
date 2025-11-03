@@ -26,7 +26,7 @@ endif ()
 
 # -finstrument-functions
 
-set(KERNEL_C_FLAGS -DLIMINE_API_REVISION=3 -Wall -Wextra -Werror -pipe -nostdinc -ffreestanding -fno-exceptions -fno-rtti -fno-omit-frame-pointer -Wno-error=constant-logical-operand -Wno-error=tautological-undefined-compare -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=unused-private-field -Wno-error=cast-function-type-mismatch -Wno-error=deprecated-enum-enum-conversion -static --target=${HORIZON_ARCH}-none-elf ${EXTRA_C_FLAGS} CACHE STRING "Kernel C Flags")
+set(KERNEL_C_FLAGS -DLIMINE_API_REVISION=3 -Wall -Wextra -Werror -pipe -nostdinc -ffreestanding -fno-exceptions -fno-rtti -fno-omit-frame-pointer -Wno-unused-function -Wno-error=constant-logical-operand -Wno-error=tautological-undefined-compare -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=unused-private-field -Wno-error=cast-function-type-mismatch -Wno-error=deprecated-enum-enum-conversion -static --target=${HORIZON_ARCH}-none-elf ${EXTRA_C_FLAGS} CACHE STRING "Kernel C Flags")
 set(KERNEL_CXX_FLAGS ${KERNEL_C_FLAGS} ${EXTRA_CXX_FLAGS} CACHE STRING "Kernel C++ Flags")
 set(KERNEL_ASM_FLAGS -static --target=${HORIZON_ARCH}-none-elf -masm=intel ${EXTRA_ASM_FLAGS} CACHE STRING "Kernel Asm Flags")
 set(KERNEL_LINK_FLAGS -T ${LINKER_SCRIPT} -static -nostdlib CACHE STRING "Kernel Link Flags")
