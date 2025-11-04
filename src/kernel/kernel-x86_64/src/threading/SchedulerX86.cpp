@@ -4,7 +4,6 @@
 #include "CommonMain.hpp"
 #include "Math.hpp"
 #include "memory/MainMemory.hpp"
-#include "threading/Scheduler.hpp"
 
 #include "hal/Cpu.hpp"
 #include "hal/Hpet.hpp"
@@ -145,47 +144,22 @@ namespace kernel::common::threading {
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->getSimdSave()) < pageSize) {
-			CommonMain::getTerminal()->error("NewEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
-
-			Asm::lhlt();
-		}
-
-		if (reinterpret_cast<u64>(reinterpret_cast<ThreadContext *>(oldEntry->value->getContext())->getSimdSave()) < pageSize) {
-			CommonMain::getTerminal()->error("OldEntry simdSave is null!", "Scheduler"); // TODO: Use custom panic
-
-			Asm::lhlt();
-		}
-
-		switchContext(oldEntry->value->getContext(), this->currentThread->value->getContext());
+		switchContext(oldEntry->value, this->currentThread->value);
 	}
 
-	// Old Ctx = Current Thread, New Ctx = New Thread
-	// TODO: Maybe find a way to not switch cr3 tables this much
-	void ExecutionNode::switchContext(u64 *oldCtx, u64 *newCtx) const {
-		auto *oldCtxConv = reinterpret_cast<ThreadContext *>(oldCtx);
-		auto *newCtxConv = reinterpret_cast<ThreadContext *>(newCtx);
+	void ExecutionNode::switchContext(Thread *oldThread, Thread *newThread) const {
+		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
 
-		oldCtxConv->save();
+		switchContextAsm(oldThread->getStackPointer(), newThread->getStackPointer(), newThread->getParent()->getProcessContextKernel()->pageMap.getAddr());
 
-		// Asm::sti(); //TODO: Maybe needed here
-
-		switchContextAsm(oldCtxConv->getStackPointer(), newCtxConv->getStackPointer(), this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr());
-	}
-
-	void switchContextNewAsm(u64 *newCtx) {
-		CpuManager::getCurrentCore()->executionNode.switchContextNew(newCtx);
-	}
-
-	void ExecutionNode::switchContextNew(const u64 *newCtx) const {
-		const auto *newCtxConv = reinterpret_cast<const ThreadContext *>(newCtx);
-
-		newCtxConv->load();
+		reinterpret_cast<ThreadContext *>(newThread->getContext())->load();
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
+
+		switchContextMidAsm();
 	}
 
-	u64 *Scheduler::createContext(const Process *process, const bool isUser, const u64 rip) {
+	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip) {
 		const u64 currPageMap = Asm::readCr3();
 
 		process->getProcessContextKernel()->pageMap.load();
@@ -194,12 +168,14 @@ namespace kernel::common::threading {
 
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
 
-		*context = ThreadContext(newRsp, isUser);
+		context->init(process, newRsp, isUser);
+
+		thread->setStackPointer(newRsp);
 
 		if (isUser) {
-			setStackAsm(context->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip);
+			setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip);
 		} else {
-			setStackAsm(context->getStackPointer(), rip, 0);
+			setStackAsm(thread->getStackPointer(), rip, 0);
 		}
 
 		Asm::writeCr3(currPageMap);
@@ -219,24 +195,23 @@ namespace kernel::common::threading {
 namespace kernel::x86_64::threading {
 	using namespace utils;
 
-	ThreadContext::ThreadContext(const u64 stackPointer, const bool isUserspace) : isUser(isUserspace), originalStackPointer(stackPointer - threadCtxStackSize), stackPointer(stackPointer) {
-		this->originalSimdSave = static_cast<u64 *>(malloc(CpuId::getXSaveSize() + 64));
+	ThreadContext::~ThreadContext() {
+		if (process != nullptr) {
+			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
+			VirtualAllocator::free(process->getProcessContext(), &this->originalStackPointer);
+		}
+	}
+
+	void ThreadContext::init(Process *process, u64 stackPointer, const bool isUserspace) {
+		this->isUser = isUserspace;
+		this->process = process;
+		this->originalStackPointer = stackPointer - threadCtxStackSize;
+		this->process = process;
+
+		this->originalSimdSave = VirtualAllocator::alloc(process->getProcessContext(), CpuId::getXSaveSize() + 64);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
-	}
-
-	ThreadContext::~ThreadContext() {
-		free(this->originalSimdSave);
-		free(reinterpret_cast<u64 *>(this->originalStackPointer));
-	}
-
-	u64 *ThreadContext::getStackPointer() {
-		return &this->stackPointer;
-	}
-
-	void ThreadContext::setStackPointer(const u64 stackPtr) {
-		this->stackPointer = stackPtr;
 	}
 
 	u64 *ThreadContext::getSimdSave() const {

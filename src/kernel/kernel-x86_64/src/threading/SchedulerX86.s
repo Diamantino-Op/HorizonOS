@@ -15,8 +15,10 @@ switchContextAsm:
 
     mov rsp, [rsi]
 
-    call switchContextNewAsm
+    ret
 
+.global switchContextMidAsm
+switchContextMidAsm:
     pop r15
     pop r14
     pop r13

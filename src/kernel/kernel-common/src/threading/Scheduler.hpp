@@ -26,10 +26,12 @@ namespace kernel::common::threading {
     };
 
     class Process;
+	class Scheduler;
 
     class Thread {
     public:
 		explicit Thread(Process* parent, u64 *context);
+    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser);
         ~Thread();
 
         void setContext(u64 *newContext);
@@ -37,6 +39,9 @@ namespace kernel::common::threading {
 
         void setSleepNs(u64 ns);
         u64 getSleepNs() const;
+
+    	void setStackPointer(u64 newStackPointer);
+    	u64 *getStackPointer();
 
         void setState(ThreadState newState);
         ThreadState getState() const;
@@ -52,6 +57,9 @@ namespace kernel::common::threading {
         u64 sleepNs {};
 
         u64 *context {};
+
+		u64 stackPointer {};
+
         ThreadState state {};
     };
 
@@ -109,9 +117,7 @@ namespace kernel::common::threading {
 
 		void switchThreads();
 
-    	void switchContext(u64 *oldCtx, u64 *newCtx) const;
-
-    	void switchContextNew(const u64 *newCtx) const;
+    	void switchContext(Thread *oldThread, Thread *newThread) const;
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
@@ -136,7 +142,7 @@ namespace kernel::common::threading {
 
 	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer, u64 newTableAddr);
 
-	extern "C" void switchContextNewAsm(u64 *newCtx);
+	extern "C" void switchContextMidAsm();
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
@@ -263,7 +269,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The address of the created context.
 		 */
-		u64 *createContext(const Process *process, bool isUser, u64 rip);
+		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip);
 
 		static void sendSleepEOI();
 

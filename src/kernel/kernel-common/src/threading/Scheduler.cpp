@@ -7,6 +7,12 @@
 namespace kernel::common::threading {
 	// Threads
 
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser) : parent(parent) {
+		this->context = scheduler->createContext(this, parent, isUser, rip);
+
+		this->id = TIDAllocator::allocTID();
+	}
+
 	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context) {
 		this->id = TIDAllocator::allocTID();
 	}
@@ -31,6 +37,14 @@ namespace kernel::common::threading {
 
 	u64 Thread::getSleepNs() const {
 		return this->sleepNs;
+	}
+
+	void Thread::setStackPointer(const u64 newStackPointer) {
+		this->stackPointer = newStackPointer;
+	}
+
+	u64 *Thread::getStackPointer() {
+		return &this->stackPointer;
 	}
 
 	void Thread::setState(const ThreadState newState) {
@@ -124,7 +138,7 @@ namespace kernel::common::threading {
 
 		Process *idleProcess = schedulerPtr->getProcess(0);
 
-		auto *newThread = new Thread(idleProcess, schedulerPtr->createContext(idleProcess, false, reinterpret_cast<u64>(idleThread)));
+		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(idleThread), false);
 
 		newThread->setState(ThreadState::RUNNING);
 
@@ -236,7 +250,7 @@ namespace kernel::common::threading {
 	}
 
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
-		auto *newThread = new Thread(process, this->createContext(process, isUser, rip));
+		auto *newThread = new Thread(this, process, rip, isUser);
 
 		newThread->setState(ThreadState::READY);
 

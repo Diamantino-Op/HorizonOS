@@ -4,18 +4,18 @@
 #include "hal/Interrupts.hpp"
 
 #include "memory/VirtualAllocator.hpp"
+#include "threading/Scheduler.hpp"
 
 namespace kernel::x86_64::threading {
     using namespace common::memory;
+    using namespace common::threading;
     using namespace hal;
 
     class ThreadContext {
     public:
-		ThreadContext(u64 stackPointer, bool isUserspace);
         ~ThreadContext();
 
-        u64 *getStackPointer();
-        void setStackPointer(u64 stackPtr);
+        void init(Process *process, u64 stackPointer, bool isUserspace);
 
         u64 *getSimdSave() const;
 
@@ -31,7 +31,8 @@ namespace kernel::x86_64::threading {
         bool isUser {};
 
         u64 originalStackPointer {};
-        u64 stackPointer {};
+
+        Process *process {};
     };
 
     extern "C" void setStackAsm(u64 *stackPointer, u64 rip, u64 usermodeFun);
