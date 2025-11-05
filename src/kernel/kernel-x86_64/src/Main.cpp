@@ -268,8 +268,6 @@ namespace kernel::x86_64 {
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
-		 	CommonMain::getTerminal()->warnNoLock("ID: %u", "Thread 1", currThread->getId());
-
 			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 100ull * 1'000'000ull); // 10 ms
 		}
 	}
@@ -281,8 +279,6 @@ namespace kernel::x86_64 {
 			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getTerminal()->warnNoLock("ID: %u", "Thread 2", currThread->getId());
 
 			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 200ull * 1'000'000ull); // 20 ms
 		}
@@ -396,7 +392,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		//this->cpuCore.apic.arm(50 * 1'000'000, 0x20, true);
+		this->cpuCore.apic.arm(50 * 1'000'000, 0x20, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

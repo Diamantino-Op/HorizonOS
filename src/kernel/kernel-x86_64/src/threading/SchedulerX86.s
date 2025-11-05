@@ -1,4 +1,4 @@
-.extern switchContextNewAsm
+.extern switchContextMidAsm
 
 .global switchContextAsm
 switchContextAsm:
@@ -15,10 +15,10 @@ switchContextAsm:
 
     mov rsp, [rsi]
 
-    ret
+    mov rdi, rcx
 
-.global switchContextMidAsm
-switchContextMidAsm:
+    call switchContextMidAsm
+
     pop r15
     pop r14
     pop r13

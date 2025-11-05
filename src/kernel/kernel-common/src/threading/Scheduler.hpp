@@ -118,6 +118,7 @@ namespace kernel::common::threading {
 		void switchThreads();
 
     	void switchContext(Thread *oldThread, Thread *newThread) const;
+    	void switchContextMid(const Thread *newThread) const;
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
@@ -140,9 +141,9 @@ namespace kernel::common::threading {
 
 	[[noreturn]] void reaperFunction();
 
-	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer, u64 newTableAddr);
+	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer, u64 newTableAddr, Thread *newThread);
 
-	extern "C" void switchContextMidAsm();
+	extern "C" void switchContextMidAsm(const Thread *newThread);
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 
@@ -279,8 +280,9 @@ namespace kernel::common::threading {
 
     	static Thread *getCurrentThread();
 
+    	static ExecutionNode *getCurrentExecutionNode();
+
     private:
-    	ExecutionNode *getCurrentExecutionNode() const;
 
     	TicketSpinLock schedLock {};
 

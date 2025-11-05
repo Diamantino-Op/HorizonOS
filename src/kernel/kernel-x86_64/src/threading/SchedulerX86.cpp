@@ -150,13 +150,17 @@ namespace kernel::common::threading {
 	void ExecutionNode::switchContext(Thread *oldThread, Thread *newThread) const {
 		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
 
-		switchContextAsm(oldThread->getStackPointer(), newThread->getStackPointer(), newThread->getParent()->getProcessContextKernel()->pageMap.getAddr());
+		switchContextAsm(oldThread->getStackPointer(), newThread->getStackPointer(), newThread->getParent()->getProcessContextKernel()->pageMap.getAddr(), newThread);
+	}
 
+	void switchContextMidAsm(const Thread *newThread) {
+		Scheduler::getCurrentExecutionNode()->switchContextMid(newThread);
+	}
+
+	void ExecutionNode::switchContextMid(const Thread *newThread) const {
 		reinterpret_cast<ThreadContext *>(newThread->getContext())->load();
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
-
-		switchContextMidAsm();
 	}
 
 	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip) {
@@ -187,7 +191,7 @@ namespace kernel::common::threading {
 		Interrupts::sendEOI(0x2b);
 	}
 
-	ExecutionNode *Scheduler::getCurrentExecutionNode() const {
+	ExecutionNode *Scheduler::getCurrentExecutionNode() {
 		return &CpuManager::getCurrentCore()->executionNode;
 	}
 }
