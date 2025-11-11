@@ -146,28 +146,18 @@ namespace kernel::common::memory {
 	}
 
 	// TODO: Maybe set to 0 too
-	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size) {
+	// TODO: Use Linked List
+	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size, u64 position = 0) {
 		const bool prevIF = ctx->lock.lock();
 
-		//CommonMain::getTerminal()->debugNF("Allocating %lu bytes", "VirtualAllocator", size);
-
 		const u64 alignedSize = alignUp<u64>(size, sizeof(MemoryBlock));
-
-		//CommonMain::getTerminal()->debugNF("Allocating %lu aligned bytes", "VirtualAllocator", alignedSize);
-		//CommonMain::getTerminal()->debugNF("Free Space: %lu bytes", "VirtualAllocator", ctx->freeSpace);
-		//CommonMain::getTerminal()->debugNF("Heap size: %lu bytes", "VirtualAllocator", ctx->heapSize);
 
 		MemoryBlock* current = ctx->blocks;
 
 		while (current != nullptr) {
-			if (current->free and current->size >= alignedSize) {
-				if (current->size > pageSize * 1000) {
-					CommonMain::getTerminal()->error("AN 1 - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
-				}
+			if (position > 0 and reinterpret_cast<u64>(current) >= position and current->free and current->size >= alignedSize) {
 
-				//CommonMain::getTerminal()->debugNF("AN 1 - Current: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current));
-				//CommonMain::getTerminal()->debugNF("AN 1 - Next: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
-
+			} else if (current->free and current->size >= alignedSize) {
 				if (current->size >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
 					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
 
@@ -176,27 +166,23 @@ namespace kernel::common::memory {
 					newBlock->next = current->next;
 					current->next = newBlock;
 
-					//CommonMain::getTerminal()->debugNF("AN 1 - New: 0x%.16lx", "VirtualAllocator", reinterpret_cast<u64>(current->next));
-
 					ctx->freeSpace -= sizeof(MemoryBlock);
-
-					if (newBlock->size > pageSize * 1000) {
-						CommonMain::getTerminal()->error("AN - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
-					}
 				}
 
 				current->free = false;
 				current->size = alignedSize;
-
-				if (current->size > pageSize * 1000) {
-					CommonMain::getTerminal()->error("AC - Block 0x%.16lx is too big: %lu bytes", "VirtualAllocator", reinterpret_cast<u64>(current), current->size);
-				}
 
 				ctx->freeSpace -= alignedSize;
 
 				ctx->lock.unlock(prevIF);
 
 				return reinterpret_cast<u64 *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock));
+			}
+
+			if (current->next == nullptr and reinterpret_cast<u64>(current) + current->size < position) {
+
+			} else {
+				return nullptr;
 			}
 
 			current = current->next;

@@ -51,7 +51,7 @@ namespace kernel::common::memory {
 
         static u64 getPhysicalAddress(u64 virtualAddress);
 
-        static u64 *alloc(AllocContext *ctx, u64 size);
+        static u64 *alloc(AllocContext *ctx, u64 size, u64 position);
         static void free(AllocContext *ctx, u64 *ptr);
 
         static void defrag(AllocContext *ctx);
