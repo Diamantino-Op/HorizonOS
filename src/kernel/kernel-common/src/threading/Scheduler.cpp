@@ -68,16 +68,10 @@ namespace kernel::common::threading {
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
-		CreatedContext createdContext;
+		auto [ctx, ctkKern] = VirtualAllocator::createContext(true);
 
-		if (isUserspace) {
-			createdContext = VirtualAllocator::createUserContext();
-		} else {
-			createdContext = VirtualAllocator::createContext(true);
-		}
-
-		this->processContext = createdContext.ctx;
-		this->processContextKernel = createdContext.ctkKern;
+		this->processContext = ctx;
+		this->processContextKernel = ctkKern;
 
 		VirtualAllocator::shareKernelPages(this->processContext);
 

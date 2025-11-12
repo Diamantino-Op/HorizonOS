@@ -39,6 +39,10 @@ namespace kernel::common::memory {
 
 		this->physPageTable = newPhysPageTable;
 		this->pageTable = newPageTable;
+
+		for (u16 i = 256; i < 512; i++) {
+			getOrCreatePageTable(this->pageTable, i, 0b00000011, true, false);
+		}
 	}
 
 	void PageMap::load() const {

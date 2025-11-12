@@ -42,7 +42,6 @@ namespace kernel::common::memory {
     class VirtualAllocator {
     public:
         static CreatedContext createContext(bool isProcess);
-        static CreatedContext createUserContext();
         static void destroyContext(AllocContext *ctx);
 
         static void shareKernelPages(const AllocContext *ctx);
@@ -51,13 +50,15 @@ namespace kernel::common::memory {
 
         static u64 getPhysicalAddress(u64 virtualAddress);
 
-        static u64 *alloc(AllocContext *ctx, u64 size, u64 position);
+        static u64 *alloc(AllocContext *ctx, u64 size, bool isUserAlloc = false);
         static void free(AllocContext *ctx, u64 *ptr);
 
         static void defrag(AllocContext *ctx);
 
     private:
-        static void growHeap(AllocContext *ctx, u64 minSize);
+        static u64 getProcessAllocStart();
+
+        static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);
     };
 

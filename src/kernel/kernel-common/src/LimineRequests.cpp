@@ -39,3 +39,35 @@ volatile limine_module_request moduleRequest = {
 	.internal_module_count = 0,
 	.internal_modules = nullptr,
 };
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_framebuffer_request framebufferRequest = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_hhdm_request hhdmRequest = {
+	.id = LIMINE_HHDM_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+};
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_paging_mode_request pagingModeRequest = {
+	.id = LIMINE_PAGING_MODE_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.mode = 0,
+	.max_mode = 1,
+	.min_mode = 0,
+};
+
+__attribute__((used, section(".limine_requests")))
+volatile limine_mp_request mpRequest = {
+	.id = LIMINE_MP_REQUEST,
+	.revision = 0,
+	.response = nullptr,
+	.flags = 0x1
+};
