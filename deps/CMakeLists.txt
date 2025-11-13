@@ -66,9 +66,11 @@ BuildLLVM()
 set(CMAKE_LINKER "${ROOT_DIR}/deps/LinkWrapper.sh" CACHE FILEPATH "Linker")
 
 if (NOT EXISTS ${LLVM_BIN_DIR}/ld.lld)
-    execute_process(
-            COMMAND sudo apt-get install lld
-    )
+    if (NOT EXISTS /usr/bin/lld)
+        execute_process(
+                COMMAND sudo apt-get install lld
+        )
+    endif ()
 
     set(COMMON_LINKER "<CMAKE_LINKER> ld.lld <LINK_FLAGS> -melf_${HORIZON_ARCH} <OBJECTS> -o <TARGET> <LINK_LIBRARIES>" CACHE STRING "Common Linker")
 else ()
@@ -232,33 +234,51 @@ CloneFlanterm()
 include_directories(${FLANTERM_DIR}/src)
 
 # ------------------ OVMF Bios ------------------
-set(OVMF_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF.fd" CACHE FILEPATH "OVMF File")
-set(OVMF_VARS_FILE "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}/OVMF_VARS.fd" CACHE FILEPATH "OVMF Vars File")
+set(OVMF_DIR "${ROOT_DIR}/deps/ovmf/${HORIZON_ARCH}")
+set(OVMF_FILE "${OVMF_DIR}/OVMF.fd" CACHE FILEPATH "OVMF File")
+set(OVMF_VARS_FILE "${OVMF_DIR}/OVMF_VARS.fd" CACHE FILEPATH "OVMF Vars File")
 
 function(DownloadOVMF)
-    if (${HORIZON_ARCH} STREQUAL "x86_64")
-        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-x86_64.fd" CACHE STRING "OVMF Link")
-        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-x86_64.fd" CACHE STRING "OVMF Vars Link")
-    elseif (${HORIZON_ARCH} STREQUAL "riscv64")
-        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-riscv64.fd" CACHE STRING "OVMF Link")
-        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-riscv64.fd" CACHE STRING "OVMF Vars Link")
-    elseif (${HORIZON_ARCH} STREQUAL "aarch64")
-        set(OVMF_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-code-aarch64.fd" CACHE STRING "OVMF Link")
-        set(OVMF_VARS_LINK "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-10-13/ovmf-vars-aarch64.fd" CACHE STRING "OVMF Vars Link")
+    execute_process(
+            COMMAND ${ROOT_DIR}/deps/GetOVMFLinks.sh code ${HORIZON_ARCH}
+            OUTPUT_VARIABLE OVMF_LINK
+    )
+
+    execute_process(
+            COMMAND ${ROOT_DIR}/deps/GetOVMFLinks.sh vars ${HORIZON_ARCH}
+            OUTPUT_VARIABLE OVMF_VARS_LINK
+    )
+
+    file(MAKE_DIRECTORY ${OVMF_DIR})
+
+    string(REPLACE "\"" "" OVMF_LINK ${OVMF_LINK})
+    string(STRIP "${OVMF_LINK}" OVMF_LINK)
+
+    string(REPLACE "\"" "" OVMF_VARS_LINK ${OVMF_VARS_LINK})
+    string(STRIP "${OVMF_VARS_LINK}" OVMF_VARS_LINK)
+
+    if (NOT EXISTS ${OVMF_FILE})
+        if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+            execute_process(
+                    COMMAND wget -O ${OVMF_FILE} ${OVMF_LINK}
+            )
+        endif ()
     endif ()
 
-    if (NOT EXISTS "${OVMF_FILE}")
-        file(DOWNLOAD "${OVMF_LINK}" "${OVMF_FILE}")
-    endif ()
-
-    if (NOT EXISTS "${OVMF_VARS_FILE}")
-        file(DOWNLOAD "${OVMF_VARS_LINK}" "${OVMF_VARS_FILE}")
+    if (NOT EXISTS ${OVMF_VARS_FILE})
+        if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+            execute_process(
+                    COMMAND wget -O ${OVMF_VARS_FILE} ${OVMF_VARS_LINK}
+            )
+        endif ()
     endif ()
 
     if (${HORIZON_ARCH} STREQUAL "riscv64" OR ${HORIZON_ARCH} STREQUAL "aarch64")
-        execute_process(
-                COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
-        )
+        if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+            execute_process(
+                    COMMAND dd if=/dev/zero of=${OVMF_FILE} bs=1 count=0 seek=67108864
+            )
+        endif ()
     endif ()
 endfunction()
 
