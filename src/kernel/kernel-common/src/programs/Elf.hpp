@@ -1,9 +1,13 @@
 #ifndef KERNEL_COMMON_ELF_HPP
 #define KERNEL_COMMON_ELF_HPP
 
+#include "memory/VirtualAllocator.hpp"
+
 #include "Types.hpp"
 
 namespace kernel::common::programs {
+    using namespace memory;
+
     constexpr u8 ElfIdentitySize = 16;
 
     constexpr u8 ElfMagic0 = 0x07;
@@ -87,13 +91,17 @@ namespace kernel::common::programs {
     };
 
     enum ElfType {
-        ET_NONE		= 0, // Unkown Type
+        ET_NONE		= 0, // Unknown Type
         ET_REL		= 1, // Relocatable File
-        ET_EXEC		= 2  // Executable File
+        ET_EXEC		= 2, // Executable File
+        ET_DYN      = 3, // Shared Object File
+        ET_CORE     = 4  // Core File
     };
 
     class Elf {
     public:
+        static u64 *loadElf(const u64 *elfFile, AllocContext *ctx);
+
         static bool isElf(const ElfCommonHeader *elfHeader);
 
         static bool isSupported(const ElfCommonHeader *elfHeader);
@@ -103,6 +111,11 @@ namespace kernel::common::programs {
         static bool is32Bit(const ElfCommonHeader *elfHeader);
 
     private:
+        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx);
+
+        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx);
+
+        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx);
     };
 }
 

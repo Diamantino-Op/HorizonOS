@@ -3,6 +3,44 @@
 #include "CommonMain.hpp"
 
 namespace kernel::common::programs {
+	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx) {
+		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+
+		if (not isSupported(elfHeader)) {
+			CommonMain::getTerminal()->error("ELF is not supported!", "Elf Loader");
+
+			return nullptr;
+		}
+
+		switch (elfHeader->elfType) {
+			case ElfType::ET_REL:
+				return loadRel(elfFile, ctx);
+
+			case ElfType::ET_EXEC:
+				return loadExe(elfFile, ctx);
+
+			case ElfType::ET_DYN:
+				return loadExeDyn(elfFile, ctx);
+
+			default:
+				CommonMain::getTerminal()->error("ELF type is not supported!", "Elf Loader");
+
+				return nullptr;
+		}
+	}
+
+	u64 *Elf::loadRel(const u64 *elfFile, AllocContext *ctx) {
+		return nullptr;
+	}
+
+	u64 *Elf::loadExeDyn(const u64 *elfFile, AllocContext *ctx) {
+		return nullptr;
+	}
+
+	u64 *Elf::loadExe(const u64 *elfFile, AllocContext *ctx) {
+		return nullptr;
+	}
+
 	bool Elf::isElf(const ElfCommonHeader *elfHeader) {
 		if(not elfHeader) {
 			return false;
