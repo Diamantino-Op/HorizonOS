@@ -77,6 +77,32 @@ namespace kernel::common::programs {
         ElfHalf	        elfStringTableSectionHeaderIndex;
     };
 
+    struct Elf32SectionHeader {
+	    ElfWord	    name;
+	    ElfWord	    type;
+	    ElfWord	    flags;
+	    Elf32Addr	addr;
+	    Elf32Off	offset;
+	    ElfWord	    size;
+	    ElfWord	    link;
+	    ElfWord	    info;
+	    ElfWord	    addrAlign;
+	    ElfWord	    entSize;
+    };
+
+    struct Elf64SectionHeader {
+        ElfWord	    name;
+        ElfWord	    type;
+        ElfXWord	flags;
+        Elf64Addr	addr;
+        Elf64Off	offset;
+        ElfXWord	size;
+        ElfWord	    link;
+        ElfWord	    info;
+        ElfXWord	addrAlign;
+        ElfXWord	entSize;
+    };
+
     enum ElfIdent {
         ELF_ID_MAG0		    = 0, // 0x7F
         ELF_ID_MAG1		    = 1, // 'E'
