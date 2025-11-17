@@ -8,6 +8,9 @@
 namespace kernel::common::programs {
     using namespace memory;
 
+    # define ELF32_ST_BIND(INFO)	((INFO) >> 4)
+    # define ELF32_ST_TYPE(INFO)	((INFO) & 0x0F)
+
     constexpr u8 ElfIdentitySize = 16;
 
     constexpr u8 ElfMagic0 = 0x07;
@@ -25,6 +28,10 @@ namespace kernel::common::programs {
     constexpr u16 ElfArmMachine = 40;
 
     constexpr u32 ElfCurrVersion = 1;
+
+    constexpr u16 ShnUndefined = 0x00;
+    constexpr u16 ShnAbsolute = 0xFFF1;
+    constexpr u16 ShnCommon = 0xFFF2;
 
     typedef u64 Elf64Addr;
     typedef u32 Elf32Addr;
@@ -77,6 +84,82 @@ namespace kernel::common::programs {
         ElfHalf	        elfStringTableSectionHeaderIndex;
     };
 
+    struct Elf32SectionHeader {
+        ElfWord	    name;
+        ElfWord	    type;
+        ElfWord	    flags;
+        Elf32Addr	addr;
+        Elf32Off	offset;
+        ElfWord	    size;
+        ElfWord	    link;
+        ElfWord	    info;
+        ElfWord	    addrAlign;
+        ElfWord	    entSize;
+    };
+
+    struct Elf64SectionHeader {
+        ElfWord	    name;
+        ElfWord	    type;
+        ElfXWord	flags;
+        Elf64Addr	addr;
+        Elf64Off	offset;
+        ElfXWord	size;
+        ElfWord	    link;
+        ElfWord	    info;
+        ElfXWord	addrAlign;
+        ElfXWord	entSize;
+    };
+
+    struct Elf32SymbolTable {
+        ElfWord		name;
+        Elf32Addr	value;
+        ElfWord		size;
+        u8			info;
+        u8			other;
+        ElfHalf		sectionIndex;
+    };
+
+    struct Elf64SymbolTable {
+        ElfWord		name;
+        u8			info;
+        u8			other;
+        ElfHalf		sectionIndex;
+        Elf64Addr	value;
+        ElfXWord	size;
+    };
+
+    enum SymbolTableBinding {
+        STB_LOCAL		= 0, // Local scope
+        STB_GLOBAL		= 1, // Global scope
+        STB_WEAK		= 2  // Weak, (ie. __attribute__((weak)))
+    };
+
+    enum SymbolTableType {
+        STT_NOTYPE		= 0, // No type
+        STT_OBJECT		= 1, // Variables, arrays, etc.
+        STT_FUNC		= 2, // Methods or functions
+        STT_SECTION     = 3, // Section
+    };
+
+    enum SectionHeaderType {
+        SHT_NULL	    = 0,   // Null section
+        SHT_PROGBITS	= 1,   // Program information
+        SHT_SYMTAB	    = 2,   // Symbol table
+        SHT_STRTAB	    = 3,   // String table
+        SHT_RELA	    = 4,   // Relocation (w/ addend)
+        SHT_HASH	    = 5,   // Symbol hash table
+        SHT_DYNAMIC	    = 6,   // Dynamic linking information
+        SHT_NOBITS	    = 8,   // Not present in file
+        SHT_REL		    = 9,   // Relocation (no addend)
+        SHT_DYNSYM	    = 11   // Dynamic linker symbol table
+    };
+
+    enum SectionHeaderAttribute {
+        SHF_WRITE	= 0x01, // Writable section
+        SHF_ALLOC	= 0x02,  // Exists in memory
+        SHF_EXECINSTR = 0x04  // Executable section
+    };
+
     enum ElfIdent {
         ELF_ID_MAG0		    = 0, // 0x7F
         ELF_ID_MAG1		    = 1, // 'E'
@@ -102,6 +185,13 @@ namespace kernel::common::programs {
     public:
         static u64 *loadElf(const u64 *elfFile, AllocContext *ctx);
 
+    private:
+        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx);
+
+        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx);
+
+        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx);
+
         static bool isElf(const ElfCommonHeader *elfHeader);
 
         static bool isSupported(const ElfCommonHeader *elfHeader);
@@ -110,12 +200,17 @@ namespace kernel::common::programs {
 
         static bool is32Bit(const ElfCommonHeader *elfHeader);
 
-    private:
-        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx);
+        static Elf64SectionHeader *getElf64SectionHeader(const Elf64Header *elfHeader, u16 index);
 
-        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx);
+        static Elf32SectionHeader *getElf32SectionHeader(const Elf32Header *elfHeader, u16 index);
 
-        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx);
+        static char *elf64LookupString(Elf64Header *elfHeader, u64 offset);
+
+        static char *elf32LookupString(Elf32Header *elfHeader, u64 offset);
+
+        static u64 elf64GetSymValue(Elf64Header *elfHeader, u64 table, u64 idx);
+
+        static u64 elf32GetSymValue(Elf32Header *elfHeader, u64 table, u64 idx);
     };
 }
 
