@@ -13,7 +13,7 @@ namespace kernel::common::programs {
 
     constexpr u8 ElfIdentitySize = 16;
 
-    constexpr u8 ElfMagic0 = 0x07;
+    constexpr u8 ElfMagic0 = 0x7F;
     constexpr u8 ElfMagic1 = 'E';
     constexpr u8 ElfMagic2 = 'L';
     constexpr u8 ElfMagic3 = 'F';
@@ -128,6 +128,101 @@ namespace kernel::common::programs {
         ElfXWord	size;
     };
 
+    struct Elf32Rel {
+        Elf32Addr   offset;
+        ElfWord     info;
+    };
+
+    struct Elf32Rela {
+        Elf32Addr   offset;
+        ElfWord     info;
+        ElfSWord    addend;
+    };
+
+    struct Elf64Rel {
+        Elf64Addr   offset;
+        ElfXWord    info;
+    };
+
+    struct Elf64Rela {
+        Elf64Addr   offset;
+        ElfXWord    info;
+        ElfSXWord   addend;
+    };
+
+    struct Elf32ProgramHeader {
+        ElfWord     type;
+        Elf32Off    offset;
+        Elf32Addr   vaddr;
+        Elf32Addr   paddr;
+        ElfWord     filesz;
+        ElfWord     memsz;
+        ElfWord     flags;
+        ElfWord     align;
+    };
+
+    struct Elf64ProgramHeader {
+        ElfWord     type;
+        ElfWord     flags;
+        Elf64Off    offset;
+        Elf64Addr   vaddr;
+        Elf64Addr   paddr;
+        ElfXWord    filesz;
+        ElfXWord    memsz;
+        ElfXWord    align;
+    };
+
+    #define ELF32_R_SYM(i)    ((i) >> 8)
+    #define ELF32_R_TYPE(i)   ((i) & 0xff)
+    #define ELF64_R_SYM(i)    ((i) >> 32)
+    #define ELF64_R_TYPE(i)   ((i) & 0xffffffff)
+
+    // x86 32-bit relocations
+    enum Elf32RelocationType {
+        R_386_NONE          = 0,
+        R_386_32            = 1,
+        R_386_PC32          = 2,
+        R_386_GOT32         = 3,
+        R_386_PLT32         = 4,
+        R_386_COPY          = 5,
+        R_386_GLOB_DAT      = 6,
+        R_386_JMP_SLOT      = 7,
+        R_386_RELATIVE      = 8,
+        R_386_GOTOFF        = 9,
+        R_386_GOTPC         = 10
+    };
+
+    // x86-64 relocations
+    enum Elf64RelocationType {
+        R_X86_64_NONE       = 0,
+        R_X86_64_64         = 1,
+        R_X86_64_PC32       = 2,
+        R_X86_64_GOT32      = 3,
+        R_X86_64_PLT32      = 4,
+        R_X86_64_COPY       = 5,
+        R_X86_64_GLOB_DAT   = 6,
+        R_X86_64_JUMP_SLOT  = 7,
+        R_X86_64_RELATIVE   = 8,
+        R_X86_64_GOTPCREL   = 9,
+        R_X86_64_32         = 10,
+        R_X86_64_32S        = 11,
+        R_X86_64_16         = 12,
+        R_X86_64_PC16       = 13,
+        R_X86_64_8          = 14,
+        R_X86_64_PC8        = 15
+    };
+
+    enum ProgramHeaderType {
+        PT_NULL             = 0,
+        PT_LOAD             = 1,
+        PT_DYNAMIC          = 2,
+        PT_INTERP           = 3,
+        PT_NOTE             = 4,
+        PT_SHLIB            = 5,
+        PT_PHDR             = 6,
+        PT_TLS              = 7
+    };
+
     enum SymbolTableBinding {
         STB_LOCAL		= 0, // Local scope
         STB_GLOBAL		= 1, // Global scope
@@ -183,14 +278,14 @@ namespace kernel::common::programs {
 
     class Elf {
     public:
-        static u64 *loadElf(const u64 *elfFile, AllocContext *ctx);
+        static u64 *loadElf(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
     private:
-        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx);
+        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
-        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx);
+        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
-        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx);
+        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
         static bool isElf(const ElfCommonHeader *elfHeader);
 

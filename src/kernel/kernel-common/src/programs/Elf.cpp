@@ -3,7 +3,7 @@
 #include "CommonMain.hpp"
 
 namespace kernel::common::programs {
-	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx) {
+	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
 		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (not isSupported(elfHeader)) {
@@ -14,13 +14,13 @@ namespace kernel::common::programs {
 
 		switch (elfHeader->elfType) {
 			case ElfType::ET_REL:
-				return loadRel(elfFile, ctx);
+				return loadRel(elfFile, ctx, baseAddr);
 
 			case ElfType::ET_EXEC:
-				return loadExe(elfFile, ctx);
+				return loadExe(elfFile, ctx, baseAddr);
 
 			case ElfType::ET_DYN:
-				return loadExeDyn(elfFile, ctx);
+				return loadExeDyn(elfFile, ctx, baseAddr);
 
 			default:
 				CommonMain::getTerminal()->error("ELF type is not supported!", "Elf Loader");
@@ -29,15 +29,466 @@ namespace kernel::common::programs {
 		}
 	}
 
-	u64 *Elf::loadRel(const u64 *elfFile, AllocContext *ctx) {
+	u64 *Elf::loadRel(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+
+		if (baseAddr == 0) {
+			CommonMain::getTerminal()->error("Base address required for relocatable ELF!", "Elf Loader");
+
+			return nullptr;
+		}
+
+		if (is64Bit(elfHeader)) {
+			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
+
+			// Allocate sections
+			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
+				Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+
+				if (shdr->type == SHT_NOBITS) {
+					// BSS section - allocate and zero
+					if (shdr->flags & SHF_ALLOC) {
+						const auto dest = reinterpret_cast<u64 *>(baseAddr + shdr->addr);
+
+						for (u64 j = 0; j < shdr->size / sizeof(u64); j++) {
+							dest[j] = 0;
+						}
+
+						shdr->offset = baseAddr + shdr->addr - reinterpret_cast<u64>(elf64Header);
+					}
+				} else if (shdr->flags & SHF_ALLOC) {
+					// Copy section to target address
+					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + shdr->offset;
+					const auto dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
+
+					for (u64 j = 0; j < shdr->size; j++) {
+						dest[j] = src[j];
+					}
+					shdr->addr = baseAddr + shdr->addr;
+				}
+			}
+
+			// Process relocations
+			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
+				const Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+
+				if (shdr->type == SHT_RELA) {
+					// Process RELA relocations
+					const auto rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
+					const u64 relaCount = shdr->size / sizeof(Elf64Rela);
+
+					for (u64 j = 0; j < relaCount; j++) {
+						const u64 sym = ELF64_R_SYM(rela[j].info);
+						const u64 type = ELF64_R_TYPE(rela[j].info);
+						const u64 symVal = elf64GetSymValue(elf64Header, shdr->link, sym);
+
+						const auto ref = reinterpret_cast<u64 *>(baseAddr + rela[j].offset);
+
+						switch (type) {
+							case R_X86_64_NONE:
+								break;
+
+							case R_X86_64_64:
+								*ref = symVal + rela[j].addend;
+								break;
+
+							case R_X86_64_PC32:
+								*reinterpret_cast<u32 *>(ref) = symVal + rela[j].addend - (baseAddr + rela[j].offset);
+								break;
+
+							case R_X86_64_32:
+								*reinterpret_cast<u32 *>(ref) = symVal + rela[j].addend;
+								break;
+
+							case R_X86_64_32S:
+								*reinterpret_cast<i32 *>(ref) = symVal + rela[j].addend;
+								break;
+
+							default:
+								CommonMain::getTerminal()->error("Unsupported relocation type!", "Elf Loader");
+								break;
+						}
+					}
+				} else if (shdr->type == SHT_REL) {
+					// Process REL relocations
+					const auto *rel = reinterpret_cast<Elf64Rel *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
+					const u64 relCount = shdr->size / sizeof(Elf64Rel);
+
+					for (u64 j = 0; j < relCount; j++) {
+						const u64 sym = ELF64_R_SYM(rel[j].info);
+						const u64 type = ELF64_R_TYPE(rel[j].info);
+						const u64 symVal = elf64GetSymValue(elf64Header, shdr->link, sym);
+
+						const auto ref = reinterpret_cast<u64 *>(baseAddr + rel[j].offset);
+
+						switch (type) {
+							case R_X86_64_NONE:
+								break;
+
+							case R_X86_64_64:
+								*ref = symVal + *ref;
+								break;
+
+							case R_X86_64_PC32:
+								*reinterpret_cast<u32 *>(ref) = symVal + *reinterpret_cast<u32 *>(ref) - (baseAddr + rel[j].offset);
+								break;
+
+							case R_X86_64_32:
+								*reinterpret_cast<u32 *>(ref) = symVal + *reinterpret_cast<u32 *>(ref);
+								break;
+
+							default:
+								CommonMain::getTerminal()->error("Unsupported relocation type!", "Elf Loader");
+								break;
+						}
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(elf64Header->elfEntryAddr + baseAddr);
+		}
+
+		if (is32Bit(elfHeader)) {
+			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
+
+			// Allocate sections
+			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
+				Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+
+				if (shdr->type == SHT_NOBITS) {
+					// BSS section - allocate and zero
+					if (shdr->flags & SHF_ALLOC) {
+						const auto dest = reinterpret_cast<u32 *>(baseAddr + shdr->addr);
+
+						for (u32 j = 0; j < shdr->size / sizeof(u32); j++) {
+							dest[j] = 0;
+						}
+
+						shdr->offset = baseAddr + shdr->addr - reinterpret_cast<u64>(elf32Header);
+					}
+				} else if (shdr->flags & SHF_ALLOC) {
+					// Copy section to target address
+					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + shdr->offset;
+					const auto dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
+
+					for (u32 j = 0; j < shdr->size; j++) {
+						dest[j] = src[j];
+					}
+
+					shdr->addr = baseAddr + shdr->addr;
+				}
+			}
+
+			// Process relocations
+			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
+				const Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+
+				if (shdr->type == SHT_RELA) {
+					// Process RELA relocations
+					const auto rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const u32 relaCount = shdr->size / sizeof(Elf32Rela);
+
+					for (u32 j = 0; j < relaCount; j++) {
+						const u32 sym = ELF32_R_SYM(rela[j].info);
+						const u32 type = ELF32_R_TYPE(rela[j].info);
+						const u32 symVal = elf32GetSymValue(elf32Header, shdr->link, sym);
+
+						const auto ref = reinterpret_cast<u32 *>(baseAddr + rela[j].offset);
+
+						switch (type) {
+							case R_386_NONE:
+								break;
+
+							case R_386_32:
+								*ref = symVal + rela[j].addend;
+								break;
+
+							case R_386_PC32:
+								*ref = symVal + rela[j].addend - (baseAddr + rela[j].offset);
+								break;
+
+							default:
+								CommonMain::getTerminal()->error("Unsupported relocation type!", "Elf Loader");
+								break;
+						}
+					}
+				} else if (shdr->type == SHT_REL) {
+					// Process REL relocations
+					const auto rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const u32 relCount = shdr->size / sizeof(Elf32Rel);
+
+					for (u32 j = 0; j < relCount; j++) {
+						const u32 sym = ELF32_R_SYM(rel[j].info);
+						const u32 type = ELF32_R_TYPE(rel[j].info);
+						const u32 symVal = elf32GetSymValue(elf32Header, shdr->link, sym);
+
+						const auto ref = reinterpret_cast<u32 *>(baseAddr + rel[j].offset);
+
+						switch (type) {
+							case R_386_NONE:
+								break;
+
+							case R_386_32:
+								*ref = symVal + *ref;
+								break;
+
+							case R_386_PC32:
+								*ref = symVal + *ref - (baseAddr + rel[j].offset);
+								break;
+
+							default:
+								CommonMain::getTerminal()->error("Unsupported relocation type!", "Elf Loader");
+								break;
+						}
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(elf32Header->elfEntryAddr + baseAddr);
+		}
+
 		return nullptr;
 	}
 
-	u64 *Elf::loadExeDyn(const u64 *elfFile, AllocContext *ctx) {
+	u64 *Elf::loadExeDyn(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+
+		if (is64Bit(elfHeader)) {
+			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
+
+			// Load program headers
+			const auto phdr = reinterpret_cast<Elf64ProgramHeader *>(reinterpret_cast<u8 *>(elf64Header) + elf64Header->elfProgHeaderOff);
+
+			// Find the load base if not provided
+			u64 loadBase = baseAddr;
+			if (loadBase == 0) {
+				// Find the lowest vaddr in loadable segments to determine offset
+				u64 minVAddr = ~0ULL;
+
+				for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
+					if (phdr[i].type == PT_LOAD && phdr[i].vaddr < minVAddr) {
+						minVAddr = phdr[i].vaddr;
+					}
+				}
+
+				loadBase = 0; // No offset when not specified
+			}
+
+			const u64 offset = baseAddr;
+
+			// Load all PT_LOAD segments
+			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
+					const auto dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
+
+					// Copy file contents
+					for (u64 j = 0; j < phdr[i].filesz; j++) {
+						dest[j] = src[j];
+					}
+
+					// Zero remaining memory (BSS)
+					for (u64 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
+						dest[j] = 0;
+					}
+				}
+			}
+
+			// Process relocations if present
+			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
+				Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+
+				if (shdr->type == SHT_RELA) {
+					const auto rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
+					const u64 relaCount = shdr->size / sizeof(Elf64Rela);
+
+					for (u64 j = 0; j < relaCount; j++) {
+						const u64 type = ELF64_R_TYPE(rela[j].info);
+						const auto ref = reinterpret_cast<u64 *>(rela[j].offset + offset);
+
+						switch (type) {
+							case R_X86_64_RELATIVE:
+								*ref = offset + rela[j].addend;
+								break;
+
+							case R_X86_64_64:
+								{
+									const u64 sym = ELF64_R_SYM(rela[j].info);
+									const u64 symVal = elf64GetSymValue(elf64Header, shdr->link, sym);
+									*ref = symVal + rela[j].addend + offset;
+								}
+
+								break;
+							default:
+								// Other relocations handled dynamically
+								break;
+						}
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(elf64Header->elfEntryAddr + offset);
+		}
+
+		if (is32Bit(elfHeader)) {
+			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
+
+			// Load program headers
+			const auto phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
+
+			// Find the load base if not provided
+			u32 loadBase = static_cast<u32>(baseAddr);
+
+			if (loadBase == 0) {
+				u32 minVAddr = ~0U;
+
+				for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
+					if (phdr[i].type == PT_LOAD && phdr[i].vaddr < minVAddr) {
+						minVAddr = phdr[i].vaddr;
+					}
+				}
+
+				loadBase = minVAddr;
+			}
+
+			const u32 offset = loadBase;
+
+			// Load all PT_LOAD segments
+			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
+					const auto dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
+
+					// Copy file contents
+					for (u32 j = 0; j < phdr[i].filesz; j++) {
+						dest[j] = src[j];
+					}
+
+					// Zero remaining memory (BSS)
+					for (u32 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
+						dest[j] = 0;
+					}
+				}
+			}
+
+			// Process relocations if present
+			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
+				Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+
+				if (shdr->type == SHT_RELA) {
+					const auto rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const u32 relaCount = shdr->size / sizeof(Elf32Rela);
+
+					for (u32 j = 0; j < relaCount; j++) {
+						const u32 type = ELF32_R_TYPE(rela[j].info);
+						const auto ref = reinterpret_cast<u32 *>(static_cast<u64>(rela[j].offset + offset));
+
+						switch (type) {
+							case R_386_RELATIVE:
+								*ref = offset + rela[j].addend;
+								break;
+
+							case R_386_32:
+								{
+									const u32 sym = ELF32_R_SYM(rela[j].info);
+									const u32 symVal = elf32GetSymValue(elf32Header, shdr->link, sym);
+									*ref = symVal + rela[j].addend + offset;
+								}
+								break;
+
+							default:
+								break;
+						}
+					}
+				} else if (shdr->type == SHT_REL) {
+					const auto rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const u32 relCount = shdr->size / sizeof(Elf32Rel);
+
+					for (u32 j = 0; j < relCount; j++) {
+						const u32 type = ELF32_R_TYPE(rel[j].info);
+						const auto ref = reinterpret_cast<u32 *>(static_cast<u64>(rel[j].offset + offset));
+
+						switch (type) {
+							case R_386_RELATIVE:
+								*ref = *ref + offset;
+								break;
+
+							default:
+								break;
+						}
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(static_cast<u64>(elf32Header->elfEntryAddr + offset));
+		}
+
 		return nullptr;
 	}
 
-	u64 *Elf::loadExe(const u64 *elfFile, AllocContext *ctx) {
+	u64 *Elf::loadExe(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+
+		if (is64Bit(elfHeader)) {
+			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
+
+			// Load program headers
+			const auto *phdr = reinterpret_cast<Elf64ProgramHeader *>(reinterpret_cast<u8 *>(elf64Header) + elf64Header->elfProgHeaderOff);
+
+			// For non-relocatable executables, we load at their specified addresses
+			// If baseAddr is provided, it's used as an offset
+			const u64 offset = baseAddr;
+
+			// Load all PT_LOAD segments at their specified virtual addresses
+			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
+					const auto dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
+
+					// Copy file contents
+					for (u64 j = 0; j < phdr[i].filesz; j++) {
+						dest[j] = src[j];
+					}
+
+					// Zero remaining memory (BSS)
+					for (u64 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
+						dest[j] = 0;
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(elf64Header->elfEntryAddr + offset);
+		}
+
+		if (is32Bit(elfHeader)) {
+			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
+
+			// Load program headers
+			const auto phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
+
+			const u32 offset = static_cast<u32>(baseAddr);
+
+			// Load all PT_LOAD segments at their specified virtual addresses
+			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
+					const auto dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
+
+					// Copy file contents
+					for (u32 j = 0; j < phdr[i].filesz; j++) {
+						dest[j] = src[j];
+					}
+
+					// Zero remaining memory (BSS)
+					for (u32 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
+						dest[j] = 0;
+					}
+				}
+			}
+
+			return reinterpret_cast<u64 *>(static_cast<u64>(elf32Header->elfEntryAddr + offset));
+		}
+
 		return nullptr;
 	}
 
@@ -98,7 +549,7 @@ namespace kernel::common::programs {
 			return false;
 		}
 
-		if(elfHeader->elfType != ElfType::ET_REL and elfHeader->elfType != ElfType::ET_EXEC) {
+		if(elfHeader->elfType != ElfType::ET_REL and elfHeader->elfType != ElfType::ET_EXEC and elfHeader->elfType != ElfType::ET_DYN) {
 			CommonMain::getTerminal()->error("Unsupported ELF File type!", "Elf Loader");
 
 			return false;
@@ -152,56 +603,66 @@ namespace kernel::common::programs {
 	}
 
 	u64 Elf::elf64GetSymValue(Elf64Header *elfHeader, u64 table, u64 idx) {
+		if (table == ShnUndefined || idx == ShnUndefined) {
+			return 0;
+		}
 
+		Elf64SectionHeader *symtab = getElf64SectionHeader(elfHeader, table);
+
+		u64 symtabEntries = symtab->size / sizeof(Elf64SymbolTable);
+
+		if (idx >= symtabEntries) {
+			CommonMain::getTerminal()->error("Symbol index out of bounds!", "Elf Loader");
+			return 0;
+		}
+
+		Elf64SymbolTable *symbol = &(reinterpret_cast<Elf64SymbolTable *>(
+			reinterpret_cast<u8 *>(elfHeader) + symtab->offset
+		))[idx];
+
+		if (symbol->sectionIndex == ShnUndefined) {
+			// External symbol - would need dynamic linking
+			CommonMain::getTerminal()->error("Undefined symbol!", "Elf Loader");
+			return 0;
+		} else if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
+			// Absolute or common symbol
+			return symbol->value;
+		} else {
+			// Symbol relative to a section
+			Elf64SectionHeader *target = getElf64SectionHeader(elfHeader, symbol->sectionIndex);
+			return target->addr + symbol->value;
+		}
 	}
 
 	u64 Elf::elf32GetSymValue(Elf32Header *elfHeader, u64 table, u64 idx) {
-		if(table == ShnUndefined || idx == ShnUndefined) {
+		if (table == ShnUndefined || idx == ShnUndefined) {
 			return 0;
 		}
 
 		Elf32SectionHeader *symtab = getElf32SectionHeader(elfHeader, table);
 
-		uint32_t symTabEntries = symtab->size / symtab->entSize;
+		u32 symtabEntries = symtab->size / sizeof(Elf32SymbolTable);
 
-		if(idx >= symTabEntries) {
-			CommonMain::getTerminal()->error("Symbol Index out of Range (%d:%u).", "Elf Loader", table, idx);
-
-			return 2;
+		if (idx >= symtabEntries) {
+			CommonMain::getTerminal()->error("Symbol index out of bounds!", "Elf Loader");
+			return 0;
 		}
 
-		u64 symAddr = reinterpret_cast<u64>(elfHeader) + symtab->offset;
-		Elf32SymbolTable *symbol = &reinterpret_cast<Elf32SymbolTable *>(symAddr)[idx];
+		Elf32SymbolTable *symbol = &(reinterpret_cast<Elf32SymbolTable *>(
+			reinterpret_cast<u8 *>(elfHeader) + symtab->offset
+		))[idx];
 
-		if(symbol->sectionIndex == ShnUndefined) {
-			// External symbol, lookup value
-			Elf32SectionHeader *strtab = getElf32SectionHeader(elfHeader, symtab->link);
-			const char *name = reinterpret_cast<const char *>(elfHeader) + strtab->offset + symbol->name;
-
-			extern u64 *elf_lookup_symbol(const char *name); // TODO: Make this
-
-			u64 *target = elf_lookup_symbol(name);
-
-			if(target == nullptr) {
-				// Extern symbol not found
-				if(ELF32_ST_BIND(symbol->info) & STB_WEAK) {
-					// Weak symbol initialized as 0
-					return 0;
-				} else {
-					CommonMain::getTerminal()->error("Undefined External Symbol: %s", "Elf Loader", name);
-
-					return 2;
-				}
-			} else {
-				return reinterpret_cast<u64>(target);
-			}
-		} else if(symbol->sectionIndex == ShnAbsolute) {
-			// Absolute symbol
+		if (symbol->sectionIndex == ShnUndefined) {
+			// External symbol - would need dynamic linking
+			CommonMain::getTerminal()->error("Undefined symbol!", "Elf Loader");
+			return 0;
+		} else if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
+			// Absolute or common symbol
 			return symbol->value;
 		} else {
-			// Internally defined symbol
+			// Symbol relative to a section
 			Elf32SectionHeader *target = getElf32SectionHeader(elfHeader, symbol->sectionIndex);
-			return reinterpret_cast<u64>(elfHeader) + symbol->value + target->offset;
+			return target->addr + symbol->value;
 		}
 	}
 }
