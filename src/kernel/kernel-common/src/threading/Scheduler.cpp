@@ -293,7 +293,7 @@ namespace kernel::common::threading {
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else {
 			this->removeThread(thread);
@@ -327,7 +327,7 @@ namespace kernel::common::threading {
 
 		this->queues[thread->getParent()->getPriority()].remove(thread);
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else if (!this->blockedThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
@@ -345,7 +345,7 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.remove(thread, false);
 		}
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else {
 			this->blockedThreadList.addStart(thread);
