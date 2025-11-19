@@ -1,8 +1,26 @@
 #include "Elf.hpp"
 
 #include "CommonMain.hpp"
+#include "Math.hpp"
 
 namespace kernel::common::programs {
+	// Helper function to map a range of memory for ELF loading
+	void mapMemoryRange(AllocContext *ctx, const u64 baseAddr, const u64 size) {
+		const u64 startPage = alignDown<u64>(baseAddr, pageSize);
+		const u64 endPage = alignUp<u64>(baseAddr + size, pageSize);
+
+		for (u64 addr = startPage; addr < endPage; addr += pageSize) {
+			// Allocate a physical page
+			u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+
+			if (physPage != nullptr) {
+				// Map it to the virtual address
+				ctx->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), ctx->pageFlags, false, false);
+			} else {
+				CommonMain::getTerminal()->error("Failed to allocate physical memory for ELF!", "Elf Loader");
+			}
+		}
+	}
 	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
 		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
@@ -17,7 +35,7 @@ namespace kernel::common::programs {
 				return loadRel(elfFile, ctx, baseAddr);
 
 			case ElfType::ET_EXEC:
-				return loadExe(elfFile, ctx, baseAddr);
+				return loadExe(elfFile, ctx, 0); // TODO: Maybe baseAddr works
 
 			case ElfType::ET_DYN:
 				return loadExeDyn(elfFile, ctx, baseAddr);
@@ -40,6 +58,27 @@ namespace kernel::common::programs {
 
 		if (is64Bit(elfHeader)) {
 			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
+
+			// First pass: determine memory requirements and map memory
+			u64 minAddr = ~0ULL;
+			u64 maxAddr = 0;
+
+			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
+				Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+
+				if (shdr->flags & SHF_ALLOC) {
+					const u64 sectionStart = baseAddr + shdr->addr;
+					const u64 sectionEnd = sectionStart + shdr->size;
+
+					if (sectionStart < minAddr) minAddr = sectionStart;
+					if (sectionEnd > maxAddr) maxAddr = sectionEnd;
+				}
+			}
+
+			// Map the entire memory range needed
+			if (maxAddr > minAddr) {
+				mapMemoryRange(ctx, minAddr, maxAddr - minAddr);
+			}
 
 			// Allocate sections
 			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
@@ -150,6 +189,27 @@ namespace kernel::common::programs {
 
 		if (is32Bit(elfHeader)) {
 			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
+
+			// First pass: determine memory requirements and map memory
+			u64 minAddr = ~0ULL;
+			u64 maxAddr = 0;
+
+			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
+				Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+
+				if (shdr->flags & SHF_ALLOC) {
+					const u64 sectionStart = baseAddr + shdr->addr;
+					const u64 sectionEnd = sectionStart + shdr->size;
+
+					if (sectionStart < minAddr) minAddr = sectionStart;
+					if (sectionEnd > maxAddr) maxAddr = sectionEnd;
+				}
+			}
+
+			// Map the entire memory range needed
+			if (maxAddr > minAddr) {
+				mapMemoryRange(ctx, minAddr, maxAddr - minAddr);
+			}
 
 			// Allocate sections
 			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
@@ -271,10 +331,18 @@ namespace kernel::common::programs {
 					}
 				}
 
-				loadBase = 0; // No offset when not specified
+				loadBase = pageSize; // No offset when not specified
 			}
 
 			const u64 offset = baseAddr;
+
+			// First pass: map memory for all PT_LOAD segments
+			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u64 segmentStart = phdr[i].vaddr + offset;
+					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+				}
+			}
 
 			// Load all PT_LOAD segments
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
@@ -352,6 +420,14 @@ namespace kernel::common::programs {
 			}
 
 			const u32 offset = loadBase;
+
+			// First pass: map memory for all PT_LOAD segments
+			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u64 segmentStart = static_cast<u64>(phdr[i].vaddr + offset);
+					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+				}
+			}
 
 			// Load all PT_LOAD segments
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
@@ -439,6 +515,14 @@ namespace kernel::common::programs {
 			// If baseAddr is provided, it's used as an offset
 			const u64 offset = baseAddr;
 
+			// First pass: map memory for all PT_LOAD segments
+			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u64 segmentStart = phdr[i].vaddr + offset;
+					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+				}
+			}
+
 			// Load all PT_LOAD segments at their specified virtual addresses
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
@@ -467,6 +551,14 @@ namespace kernel::common::programs {
 			const auto phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
 
 			const u32 offset = static_cast<u32>(baseAddr);
+
+			// First pass: map memory for all PT_LOAD segments
+			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
+				if (phdr[i].type == PT_LOAD) {
+					const u64 segmentStart = static_cast<u64>(phdr[i].vaddr + offset);
+					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+				}
+			}
 
 			// Load all PT_LOAD segments at their specified virtual addresses
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {

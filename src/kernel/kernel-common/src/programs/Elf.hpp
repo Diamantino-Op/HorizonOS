@@ -280,14 +280,14 @@ namespace kernel::common::programs {
     public:
         static u64 *loadElf(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
+        static bool isElf(const ElfCommonHeader *elfHeader);
+
     private:
         static u64 *loadRel(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
         static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
 
         static u64 *loadExe(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
-
-        static bool isElf(const ElfCommonHeader *elfHeader);
 
         static bool isSupported(const ElfCommonHeader *elfHeader);
 
