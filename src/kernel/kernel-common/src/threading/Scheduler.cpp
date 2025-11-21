@@ -3,8 +3,11 @@
 #include "CommonMain.hpp"
 #include "IDAllocator.hpp"
 #include "memory/MainMemory.hpp"
+#include "programs/Elf.hpp"
 
 namespace kernel::common::threading {
+	using namespace programs;
+
 	// Threads
 
 	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser) : parent(parent) {
@@ -257,10 +260,40 @@ namespace kernel::common::threading {
 		return this->readyThreadList.addEnd(newThread);
 	}
 
+	void Scheduler::startProcess(const u64 startAddr, const ProcessPriority priority, const bool isUserspace) {
+		auto *newProc = new Process(priority, isUserspace); // TODO: Maybe create process in its own context
+
+		this->addProcess(newProc);
+
+		this->addThread(isUserspace, startAddr, newProc);
+	}
+
+	bool Scheduler::startElfProcess(u64 *elfFile, const ProcessPriority priority, const bool isUserspace) {
+		if (!Elf::isElf(reinterpret_cast<ElfCommonHeader *>(elfFile))) {
+			return false;
+		}
+
+		auto *newProc = new Process(priority, isUserspace);
+
+		u64 *loadedAddr = Elf::loadElf(elfFile, newProc->getProcessContext(), pageSize);
+
+		if (loadedAddr == nullptr) {
+			delete newProc;
+
+			return false;
+		}
+
+		this->addProcess(newProc);
+
+		this->addThread(isUserspace, reinterpret_cast<u64>(loadedAddr), newProc);
+
+		return true;
+	}
+
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else {
 			this->removeThread(thread);
@@ -294,7 +327,7 @@ namespace kernel::common::threading {
 
 		this->queues[thread->getParent()->getPriority()].remove(thread);
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else if (!this->blockedThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
@@ -312,7 +345,7 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.remove(thread, false);
 		}
 
-		if (this->getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
 			ExecutionNode::reSchedule();
 		} else {
 			this->blockedThreadList.addStart(thread);

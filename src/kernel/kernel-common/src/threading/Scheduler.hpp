@@ -161,6 +161,10 @@ namespace kernel::common::threading {
 
     	void initArch();
 
+    	void startProcess(u64 startAddr, ProcessPriority priority, bool isUserspace);
+
+    	bool startElfProcess(u64 *elfFile, ProcessPriority priority, bool isUserspace);
+
         /**
          *  Get the process with the specified PID.
          *
