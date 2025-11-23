@@ -8,9 +8,89 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-llvm:
+  check-runners:
     runs-on: ubuntu-latest
+    outputs:
+      use_self: ${{ steps.check.outputs.use_self }}
+    steps:
+      - name: Check self-hosted runner availability
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          resp=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runners")
+          use=$(echo "$resp" | python3 - <<'PY'
+          import sys, json
+          r = json.load(sys.stdin)
+          runners = r.get("runners", [])
+          ok = any(
+          runner.get("status") == "online" and any(lbl.get("name") == "diamondpc" for lbl in runner.get("labels", []))
+          for runner in runners
+          )
+          print("true" if ok else "false")
+          PY
+          )
+          echo "use_self=$use" >> $GITHUB_OUTPUT
 
+  build-on-self-hosted:
+    needs: check-runners
+    if: needs.check-runners.outputs.use_self == 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
+
+      - name: Restore Deps Folder
+        id: cache-deps-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{github.workspace}}/deps/llvm
+          key: ${{runner.os}}-horizonos-llvm
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: python -m pip install meson==1.9.1 ninja
+
+      - name: Install xorriso
+        run: sudo apt-get install xorriso
+
+      - name: Install CMake
+        run: sudo apt-get install cmake
+
+      - name: Install CCache
+        run: sudo apt-get install ccache
+
+      - name: Setup Meson
+        run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
+
+      - name: Upload LLVM
+        id: upload-llvm
+        uses: actions/upload-artifact@v5
+        with:
+          name: HorizonOS LLVM Build
+          path: ${{github.workspace}}/deps/llvm/build
+          if-no-files-found: 'warn'
+          retention-days: 1
+          compression-level: '9'
+          overwrite: 'false'
+          include-hidden-files: 'false'
+
+      - name: Save Deps Folder
+        id: cache-deps-save
+        uses: actions/cache/save@v4
+        with:
+          path: ${{github.workspace}}/deps/llvm
+          key: ${{steps.cache-deps-restore.outputs.cache-primary-key}}
+
+  build-on-ubuntu:
+    needs: check-runners
+    if: needs.check-runners.outputs.use_self == 'false'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
