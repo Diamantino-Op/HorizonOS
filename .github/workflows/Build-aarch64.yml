@@ -21,7 +21,7 @@ jobs:
         id: cache-deps-restore
         uses: actions/cache/restore@v4
         with:
-          path: ${{github.workspace}}/deps/llvm/build
+          path: ${{github.workspace}}/deps/llvm
           key: ${{runner.os}}-horizonos-llvm
 
       - name: Set up Python
@@ -67,7 +67,7 @@ jobs:
         id: cache-deps-restore
         uses: actions/cache/restore@v4
         with:
-          path: ${{github.workspace}}/deps/llvm/build
+          path: ${{github.workspace}}/deps/llvm
           key: ${{runner.os}}-horizonos-llvm
 
       - name: Set up Python

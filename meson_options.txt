@@ -5,4 +5,4 @@ option('qemu_targets', type : 'boolean', value : true)
 
 # Dependencies
 
-option('build_llvm', type : 'boolean', value : false, description : 'Build LLVM from source', yield: true)
+option('build_llvm', type : 'boolean', value : false, description : 'Build LLVM from source')
