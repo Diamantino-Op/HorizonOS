@@ -12,7 +12,7 @@ freestnd_cxx_hdrs_dep = deps_proj.get_variable('freestnd_cxx_hdrs_dep')
 
 hos_base_inc = include_directories('src')
 
-hos_base_src = run_command(sh, '-c', get_option('globber_path'), join_paths(meson.project_source_root(), 'src'), check: true).stdout().strip().split('\n')
+hos_base_src = run_command(sh, '-c', '@0@ @1@'.format(get_option('globber_path'), join_paths(meson.project_source_root(), 'src')), check: true).stdout().strip().split('\n')
 
 hos_base_lib = static_library('hos_base',
                               hos_base_src,

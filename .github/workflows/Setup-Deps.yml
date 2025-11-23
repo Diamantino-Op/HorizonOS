@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install meson==1.9.1 ninja
 
+      - name: Install xorriso
+        run: sudo apt-get install xorriso
+
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true build
 
