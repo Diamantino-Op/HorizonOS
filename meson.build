@@ -224,28 +224,30 @@ elif arch == 'aarch64'
     ]
 endif
 
-if arch == 'x86_64'
-    run_target('Run_HorizonOS_Kvm',
+if get_option('qemu_targets')
+    if arch == 'x86_64'
+        run_target('Run_HorizonOS_Kvm',
+                   command: [
+                       'qemu-system-@0@'.format(arch),
+                   ] + kvm_qemu_flags + qemu_flags,
+                   depends: horizonos_iso
+        )
+    endif
+
+    run_target('Run_HorizonOS_Gdb',
                command: [
                    'qemu-system-@0@'.format(arch),
+                   '-s', '-S',
                ] + kvm_qemu_flags + qemu_flags,
                depends: horizonos_iso
     )
+
+    run_target('Run_HorizonOS_DInt',
+               command: [
+                   'qemu-system-@0@'.format(arch),
+                   '-d', 'int',
+                   '-D', join_paths(iso_out_path, 'ints.log'),
+               ] + tcg_qemu_flags + qemu_flags,
+               depends: horizonos_iso
+    )
 endif
-
-run_target('Run_HorizonOS_Gdb',
-           command: [
-               'qemu-system-@0@'.format(arch),
-               '-s', '-S',
-           ] + kvm_qemu_flags + qemu_flags,
-           depends: horizonos_iso
-)
-
-run_target('Run_HorizonOS_DInt',
-           command: [
-               'qemu-system-@0@'.format(arch),
-               '-d', 'int',
-               '-D', join_paths(iso_out_path, 'ints.log'),
-           ] + tcg_qemu_flags + qemu_flags,
-           depends: horizonos_iso
-)

@@ -123,5 +123,6 @@ kernel = executable('HorizonOS_Kernel',
                     c_args: kernel_c_flags,
                     cpp_args: kernel_cpp_flags,
                     link_args: kernel_link_flags,
-                    pie: true
+                    pie: true,
+                    native: false
 )

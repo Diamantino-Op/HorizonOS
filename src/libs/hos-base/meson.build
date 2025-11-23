@@ -23,7 +23,8 @@ hos_base_lib = static_library('hos_base',
                               ],
                               c_args: get_option('lib_c_flags'),
                               cpp_args: get_option('lib_cpp_flags'),
-                              pic: true
+                              pic: true,
+                              native: false
 )
 
 hos_base_dep = declare_dependency(include_directories: hos_base_inc, link_with: hos_base_lib)

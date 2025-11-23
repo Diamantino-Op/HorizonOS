@@ -35,14 +35,14 @@ jobs:
         run: sudo apt-get install xorriso
 
       - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true build
+        run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
 
       - name: Upload LLVM
         id: upload-llvm
         uses: actions/upload-artifact@v5
         with:
-          name: HorizonOS LLVM
-          path: ${{github.workspace}}/deps/llvm
+          name: HorizonOS LLVM Build
+          path: ${{github.workspace}}/deps/llvm/build
           if-no-files-found: 'warn'
           retention-days: 1
           compression-level: '9'

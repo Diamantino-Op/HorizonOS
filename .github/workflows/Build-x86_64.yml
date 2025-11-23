@@ -36,7 +36,7 @@ jobs:
         run: sudo apt-get install xorriso
 
       - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg build
+        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Dqemu_targets=false build
 
       - name: Build
         run: cd ${{github.workspace}} && meson compile HorizonOS_ISO
@@ -82,7 +82,7 @@ jobs:
         run: sudo apt-get install xorriso
 
       - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Ddebug_build=true build
+        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Ddebug_build=true -Dqemu_targets=false build
 
       - name: Build
         run: cd ${{github.workspace}} && meson compile HorizonOS_ISO -Ddebug_build=true
