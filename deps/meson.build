@@ -7,12 +7,11 @@ deps_dir = '.'
 mkdir = find_program('cp', required: true)
 git = find_program('git', required: true)
 sh = find_program('sh', required: true)
-cd = find_program('cd', required: true)
 globber = get_option('globber_path')
 
 arch = host_machine.cpu_family()
 
-run_command(cd, '..', '&&', git, 'submodule', 'update', '--recursive')
+run_command(sh, '-c', 'cd', '..', '&&', git, 'submodule', 'update', '--recursive')
 
 
 
