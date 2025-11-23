@@ -21,7 +21,7 @@ using namespace kernel::common::uacpi;
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 	if (rsdpRequest.response != nullptr) {
-		*outRsdpAddress = rsdpRequest.response->address;
+		*outRsdpAddress = reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address);
 	}
 
 	return UACPI_STATUS_OK;

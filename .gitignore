@@ -9,5 +9,7 @@
 /iso/
 /out/
 /.idea/
+/build/
 Token.txt
 .fuse_*
+.wraplock

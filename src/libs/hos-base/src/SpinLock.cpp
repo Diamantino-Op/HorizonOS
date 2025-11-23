@@ -1,8 +1,6 @@
 #include "SpinLock.hpp"
 
 bool TicketSpinLock::lock() {
-	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
-
 	u64 flags;
 
 	asm volatile(
@@ -13,6 +11,8 @@ bool TicketSpinLock::lock() {
 		:
 		: "memory"
 	);
+
+	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
 
 	while(__atomic_load_n(&currentTicket, __ATOMIC_ACQUIRE) != ticket) {
 		lockedFun();

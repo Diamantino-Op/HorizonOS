@@ -7,18 +7,18 @@
 #include "limine.h"
 
 __attribute__((used, section(".limine_requests_start")))
-static volatile LIMINE_REQUESTS_START_MARKER;
+static volatile u64 limineRequestsEndMarker[] = LIMINE_REQUESTS_START_MARKER;
 
 __attribute__((used, section(".limine_requests_end")))
-static volatile LIMINE_REQUESTS_END_MARKER;
+static volatile u64 limineRequestsStartMarker[] = LIMINE_REQUESTS_END_MARKER;
 
 __attribute__((used, section(".limine_requests")))
-static volatile LIMINE_BASE_REVISION(3);
+static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(3);
 
 extern limine_framebuffer_request framebufferRequest;
 
-extern "C" __attribute__((no_instrument_function)) void kernelMain() {
-    auto kernel = kernel::x86_64::Kernel();
+extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp) {
+    auto kernel = kernel::x86_64::Kernel(rsp);
 
 	kernel.init();
 }
@@ -26,14 +26,14 @@ extern "C" __attribute__((no_instrument_function)) void kernelMain() {
 namespace kernel::x86_64 {
 	using namespace utils;
 
-	Kernel::Kernel() {
-		asm volatile("mov %%rsp, %0" : "=r"(this->stackTop));
+	Kernel::Kernel(const u64 rsp) {
+		this->stackTop = rsp;
 	}
 
 	void Kernel::init() {
 		this->rootInit();
 
-		if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+		if (LIMINE_BASE_REVISION_SUPPORTED(limineBaseRevision) == false) {
 			Asm::lhlt();
 		}
 
@@ -105,7 +105,9 @@ namespace kernel::x86_64 {
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
 
 		// Allocator Context
-		this->kernelAllocContext = VirtualAllocator::createContext(false).ctx;
+		this->kernelAllocContextHHDM = VirtualAllocator::createContext();
+
+		this->kernelAllocContext = this->kernelAllocContextHHDM;
 
 		terminal.info("Allocator Context created...", "HorizonOS");
 
@@ -113,6 +115,8 @@ namespace kernel::x86_64 {
 		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
 
 		this->virtualMemoryManager.archInit();
+
+		this->kernelAllocContext = reinterpret_cast<AllocContext *>(reinterpret_cast<u64>(this->kernelAllocContext->heapStart) - sizeof(AllocContext));
 
 		terminal.info("VMM Loaded... OK", "HorizonOS");
 

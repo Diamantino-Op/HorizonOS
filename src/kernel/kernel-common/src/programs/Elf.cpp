@@ -15,7 +15,7 @@ namespace kernel::common::programs {
 
 			if (physPage != nullptr) {
 				// Map it to the virtual address
-				ctx->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), ctx->pageFlags, false, false);
+				ctx->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), ctx->pageFlags | 0b100, false, false);
 			} else {
 				CommonMain::getTerminal()->error("Failed to allocate physical memory for ELF!", "Elf Loader");
 			}

@@ -1,0 +1,13 @@
+# General
+
+option('debug_build', type : 'boolean', value : false)
+
+# Dependencies
+
+option('uacpi_branch', type : 'string', value : 'master', description : 'UAcpi Github Branch', yield: true)
+option('limine_branch', type : 'string', value : 'v10.x-binary', description : 'Limine Codeberg Branch', yield: true)
+option('flanterm_branch', type : 'string', value : 'trunk', description : 'Flanterm Codeberg Branch', yield: true)
+option('chdrs_branch', type : 'string', value : 'trunk', description : 'C Headers Codeberg Branch', yield: true)
+option('cxxhdrs_branch', type : 'string', value : 'trunk', description : 'C++ Headers Codeberg Branch', yield: true)
+option('llvm_branch', type : 'string', value : 'release/21.x', description : 'LLVM Github Branch', yield: true)
+option('build_llvm', type : 'boolean', value : false, description : 'Build LLVM from source', yield: true)

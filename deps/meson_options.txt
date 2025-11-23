@@ -1,0 +1,11 @@
+# Dependencies
+
+option('uacpi_branch', type : 'string', value : 'master')
+option('limine_branch', type : 'string', value : 'v10.x-binary')
+option('flanterm_branch', type : 'string', value : 'trunk')
+option('chdrs_branch', type : 'string', value : 'trunk')
+option('cxxhdrs_branch', type : 'string', value : 'trunk')
+option('llvm_branch', type : 'string', value : 'release/21.x')
+option('build_llvm', type : 'boolean', value : false)
+
+option('globber_path', type : 'string', value : '')

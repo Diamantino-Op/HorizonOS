@@ -21,7 +21,7 @@ namespace kernel::x86_64::hal {
 			this->brand = CpuId::getBrand();
 			this->vendor = CpuId::getVendor();
 
-			this->hasX2Apic = mpRequest.response->flags & LIMINE_MP_X2APIC;
+			this->hasX2Apic = mpRequest.response->flags & LIMINE_MP_RESPONSE_X86_64_X2APIC;
 
 			terminal->info("Brand: %.48s", "Cpu", this->brand);
 			terminal->info("Vendor: %.12s", "Cpu", this->vendor);
@@ -171,7 +171,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void bootCore(const limine_mp_info *info) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
+		CommonMain::getInstance()->getKernelAllocContextHHDM()->pageMap.load();
 
 		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
 

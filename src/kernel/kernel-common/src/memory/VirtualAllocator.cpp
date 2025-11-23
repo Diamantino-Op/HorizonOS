@@ -10,73 +10,63 @@ extern limine_paging_mode_request pagingModeRequest;
 
 namespace kernel::common::memory {
 	// TODO: Change page flags to a class for multi arch
-	CreatedContext VirtualAllocator::createContext(const bool isProcess) {
+	AllocContext *VirtualAllocator::createContext() {
+		AllocContext *ctx = nullptr;
+
+		const u64 kernelEnd = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
+
+		const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
+
+		ctx = reinterpret_cast<AllocContext *>(ctxPage);
+
+		ctx->isUserspace = false;
+		ctx->pageMap = PageMap();
+		ctx->heapSize = pageSize - sizeof(AllocContext);
+		ctx->pageFlags = 0b00000011;
+
+		ctx->heapStart = reinterpret_cast<u64 *>(kernelEnd + sizeof(AllocContext));
+
+		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+
+		u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
+
+		ctx->pageMap.init(newPageMap, reinterpret_cast<u64>(newPageMap) - CommonMain::getCurrentHhdm());
+
+		ctx->pageMap.mapPage(kernelEnd, ctxPage - CommonMain::getCurrentHhdm(), ctx->pageFlags, true, false);
+
+		return ctx;
+	}
+
+	CreatedContext VirtualAllocator::createProcessContext() {
 		const u64 processAddr = getProcessAllocStart();
 
 		AllocContext *ctx = nullptr;
 
-		u64 ctxAddr = 0;
-		u64 pageMapAddr = 0;
+		CommonMain::getTerminal()->debug("Process Address: 0x%.16lx", "VirtualAllocator", processAddr + pageSize);
 
-		if (isProcess) {
-			CommonMain::getTerminal()->debug("Process Address: 0x%.16lx", "VirtualAllocator", processAddr);
+		const u64 ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
-			ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr + pageSize, ctxAddr, 0b00000011, false, false);
 
-			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, ctxAddr, 0b00000011, false, false);
-
-			ctx = reinterpret_cast<AllocContext *>(processAddr);
-		} else {
-			const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
-
-			ctx = reinterpret_cast<AllocContext *>(ctxPage);
-		}
+		ctx = reinterpret_cast<AllocContext *>(processAddr + pageSize);
 
 		ctx->isUserspace = false;
 		ctx->pageMap = PageMap();
-		ctx->heapSize = pageSize;
+		ctx->heapSize = pageSize - sizeof(AllocContext);
 		ctx->pageFlags = 0b00000011;
 
-		if (isProcess) {
-			ctx->heapStart = reinterpret_cast<u64 *>(processAddr + (pageSize * 2));
-		} else {
-			ctx->heapStart = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize)) + pageSize;
-		}
+		ctx->heapStart = reinterpret_cast<u64 *>(processAddr + pageSize + sizeof(AllocContext));
 
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
 
-		if (isProcess) {
-			pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+		const u64 pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
-			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr + pageSize, pageMapAddr, ctx->pageFlags , false, false);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags , false, false);
 
-			ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr + pageSize), pageMapAddr);
-		} else {
-			u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
+		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr);
 
-			ctx->pageMap.init(newPageMap, reinterpret_cast<u64>(newPageMap) - CommonMain::getCurrentHhdm());
-		}
-
-		memset(ctx->pageMap.getPageTable(), 0, pageSize);
-
-		if (isProcess) {
-			ctx->pageMap.mapPage(processAddr, ctxAddr, ctx->pageFlags, false, false);
-			ctx->pageMap.mapPage(processAddr + pageSize, pageMapAddr, ctx->pageFlags, false, false);
-		}
-
-		for (u64 i = reinterpret_cast<u64>(ctx->heapStart); i < reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize; i += pageSize) {
-			u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
-
-			if (not newPage) {
-				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
-			}
-
-			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, not isProcess, false);
-
-			if (isProcess) {
-				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i, reinterpret_cast<u64>(newPage), ctx->pageFlags, false, false);
-			}
-		}
+		ctx->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags, false, false);
+		ctx->pageMap.mapPage(processAddr + pageSize, ctxAddr, ctx->pageFlags, false, false);
 
 		return {
 			.ctx = ctx,
@@ -94,7 +84,7 @@ namespace kernel::common::memory {
 	}
 
 	void VirtualAllocator::initContext(AllocContext *ctx) {
-		memset(ctx->heapStart, 0, pageSize);
+		memset(ctx->heapStart, 0, ctx->heapSize);
 
 		CommonMain::getTerminal()->debug("MemoryBlock size: %lu", "VirtualAllocator", sizeof(MemoryBlock));
 		CommonMain::getTerminal()->debug("Heap start: 0x%.16lx", "VirtualAllocator", ctx->heapStart);

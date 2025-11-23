@@ -71,7 +71,7 @@ namespace kernel::common::threading {
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
-		auto [ctx, ctkKern] = VirtualAllocator::createContext(true);
+		auto [ctx, ctkKern] = VirtualAllocator::createProcessContext();
 
 		this->processContext = ctx;
 		this->processContextKernel = ctkKern;

@@ -1,0 +1,4 @@
+option('lib_c_flags', type : 'array', value : [ ])
+option('lib_cpp_flags', type : 'array', value : [ ])
+
+option('globber_path', type : 'string', value : '')

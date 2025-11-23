@@ -21,7 +21,7 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable) {
+	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, bool isKernel) {
 		Terminal* terminal = CommonMain::getTerminal();
 
 		if (pagingModeRequest.response != nullptr) {
@@ -40,8 +40,12 @@ namespace kernel::common::memory {
 		this->physPageTable = newPhysPageTable;
 		this->pageTable = newPageTable;
 
-		for (u16 i = 256; i < 512; i++) {
-			getOrCreatePageTable(this->pageTable, i, 0b00000011, true, false);
+		memset(this->pageTable, 0, pageSize);
+
+		if (isKernel) {
+			for (u16 i = 256; i < 512; i++) {
+				getOrCreatePageTable(this->pageTable, i, 0b00000011, true, false);
+			}
 		}
 	}
 

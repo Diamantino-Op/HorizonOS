@@ -23,7 +23,7 @@ namespace kernel::common {
 
         virtual void shutdown();
 
-    	[[nodiscard]] bool isInit() const;
+    	bool isInit() const;
 
         static Terminal* getTerminal();
 
@@ -31,9 +31,11 @@ namespace kernel::common {
 
         static u64 getCurrentHhdm();
 
-        [[nodiscard]] uPtr getStackTop() const;
+        uPtr getStackTop() const;
 
-        [[nodiscard]] AllocContext *getKernelAllocContext() const;
+        AllocContext *getKernelAllocContext() const;
+
+    	AllocContext *getKernelAllocContextHHDM() const;
 
         PhysicalMemoryManager *getPMM();
         VirtualMemoryManager *getVMM();
@@ -46,7 +48,7 @@ namespace kernel::common {
 
     	AcpiPM *getAcpiPM();
 
-    	[[nodiscard]] Scheduler *getScheduler() const;
+    	Scheduler *getScheduler() const;
 
     protected:
         void rootInit();
@@ -59,6 +61,9 @@ namespace kernel::common {
 
         uPtr stackTop {};
         AllocContext *kernelAllocContext {};
+
+    	// Workaround because of multicore
+    	AllocContext *kernelAllocContextHHDM {};
 
         PhysicalMemoryManager physicalMemoryManager {};
         VirtualMemoryManager virtualMemoryManager {};

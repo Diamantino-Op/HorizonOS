@@ -13,7 +13,7 @@ namespace kernel::x86_64::hal {
 		asm volatile ("outl %0, %1" : : "a"(data), "d"(address));
 	}
 
-	void IOPort::out64(u64 data, u16 address) {
+	void IOPort::out64(const u64 data, const u16 address) {
 		out32(data, address);
 		out32(data >> 32, address + 4);
 	}
@@ -39,7 +39,7 @@ namespace kernel::x86_64::hal {
 		return ret;
 	}
 
-	u64 IOPort::in64(u16 address) {
+	u64 IOPort::in64(const u16 address) {
 		u64 ret = in32(address);
 		ret |= static_cast<u64>(in32(address + 4)) << 32;
 

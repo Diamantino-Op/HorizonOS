@@ -4,21 +4,21 @@
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_executable_address_request kernelAddressRequest = {
-	.id = LIMINE_EXECUTABLE_ADDRESS_REQUEST,
+	.id = LIMINE_EXECUTABLE_ADDRESS_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 };
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_memmap_request memMapRequest = {
-	.id = LIMINE_MEMMAP_REQUEST,
+	.id = LIMINE_MEMMAP_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 };
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_stack_size_request stackSizeRequest = {
-	.id = LIMINE_STACK_SIZE_REQUEST,
+	.id = LIMINE_STACK_SIZE_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 	.stack_size = kernel::common::memory::kernelStackSize
@@ -26,14 +26,14 @@ volatile limine_stack_size_request stackSizeRequest = {
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_rsdp_request rsdpRequest = {
-	.id = LIMINE_RSDP_REQUEST,
+	.id = LIMINE_RSDP_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 };
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_module_request moduleRequest = {
-	.id = LIMINE_MODULE_REQUEST,
+	.id = LIMINE_MODULE_REQUEST_ID,
 	.revision = 0,
 	.response =	nullptr,
 	.internal_module_count = 0,
@@ -42,21 +42,21 @@ volatile limine_module_request moduleRequest = {
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_framebuffer_request framebufferRequest = {
-	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.id = LIMINE_FRAMEBUFFER_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 };
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_hhdm_request hhdmRequest = {
-	.id = LIMINE_HHDM_REQUEST,
+	.id = LIMINE_HHDM_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 };
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_paging_mode_request pagingModeRequest = {
-	.id = LIMINE_PAGING_MODE_REQUEST,
+	.id = LIMINE_PAGING_MODE_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 	.mode = 0,
@@ -66,7 +66,7 @@ volatile limine_paging_mode_request pagingModeRequest = {
 
 __attribute__((used, section(".limine_requests")))
 volatile limine_mp_request mpRequest = {
-	.id = LIMINE_MP_REQUEST,
+	.id = LIMINE_MP_REQUEST_ID,
 	.revision = 0,
 	.response = nullptr,
 	.flags = 0x1

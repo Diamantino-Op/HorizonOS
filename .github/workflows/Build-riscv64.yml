@@ -13,7 +13,7 @@ jobs:
     if: ${{github.event.workflow_run.conclusion == 'success'}}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Restore Deps Folder
         id: cache-deps-restore
@@ -30,21 +30,26 @@ jobs:
             ${{github.workspace}}/deps/uacpi
           key: ${{runner.os}}-horizonos-deps
 
-      - name: Install lld
-        run: sudo apt-get install lld
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: python -m pip install meson==1.9.1 ninja
 
       - name: Install xorriso
         run: sudo apt-get install xorriso
 
-      - name: Configure CMake
-        run: cmake -B ${{github.workspace}}/out/riscv64/release -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Release -DHORIZON_ARCH=riscv64
+      - name: Setup Meson
+        run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg build
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/out/riscv64/release --target HorizonOS-ISO --config Release
+        run: cd ${{github.workspace}} && meson compile HorizonOS_ISO
 
       - name: Upload ISO
         id: upload-iso
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: HorizonOS ISO - Release
           path: ${{github.workspace}}/iso/out/HorizonOS-riscv64.iso
@@ -60,7 +65,7 @@ jobs:
     if: ${{github.event.workflow_run.conclusion == 'success'}}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Restore Deps Folder
         id: cache-deps-restore
@@ -77,21 +82,26 @@ jobs:
             ${{github.workspace}}/deps/uacpi
           key: ${{runner.os}}-horizonos-deps
 
-      - name: Install lld
-        run: sudo apt-get install lld
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: python -m pip install meson==1.9.1 ninja
 
       - name: Install xorriso
         run: sudo apt-get install xorriso
 
-      - name: Configure CMake
-        run: cmake -B ${{github.workspace}}/out/riscv64/debug -S ${{github.workspace}} -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHORIZON_ARCH=riscv64
+      - name: Setup Meson
+        run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg -Ddebug_build=true build
 
       - name: Build
-        run: cmake --build ${{github.workspace}}/out/riscv64/debug --target HorizonOS-ISO --config Debug
+        run: cd ${{github.workspace}} && meson compile HorizonOS_ISO -Ddebug_build=true
 
       - name: Upload ISO
         id: upload-iso
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: HorizonOS ISO - Debug
           path: ${{github.workspace}}/iso/out/HorizonOS-riscv64.iso
@@ -103,7 +113,7 @@ jobs:
 
       - name: Upload Kernel
         id: upload-kernel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: HorizonOS Kernel - Debug
           path: ${{github.workspace}}/iso/riscv64/boot/HorizonOS/HorizonOS_Kernel

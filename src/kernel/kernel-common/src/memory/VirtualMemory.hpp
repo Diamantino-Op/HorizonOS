@@ -15,7 +15,7 @@ namespace kernel::common::memory {
 
     class PageMap {
     public:
-        void init(u64 *newPageTable, u64 newPhysPageTable);
+        void init(u64 *newPageTable, u64 newPhysPageTable, bool isKernel = false);
 
         void load() const;
 

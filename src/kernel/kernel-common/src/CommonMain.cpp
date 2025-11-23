@@ -31,6 +31,10 @@ namespace kernel::common {
 		return this->kernelAllocContext;
 	}
 
+	AllocContext *CommonMain::getKernelAllocContextHHDM() const {
+		return this->kernelAllocContextHHDM;
+	}
+
 	u64 CommonMain::getCurrentHhdm() {
 		if (hhdmRequest.response != nullptr) {
 			return hhdmRequest.response->offset;

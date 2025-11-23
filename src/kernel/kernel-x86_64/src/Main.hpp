@@ -30,7 +30,7 @@ namespace kernel::x86_64 {
 
     class Kernel final : CommonMain {
     public:
-        Kernel();
+        explicit Kernel(u64 rsp);
         ~Kernel() override = default;
 
         void init() override;
