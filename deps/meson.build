@@ -2,25 +2,23 @@ project('horizon_deps', default_options: ['warning_level=2', 'c_std=gnu2x', 'cpp
 
 # Utils
 
-# deps_dir = join_paths(meson.global_source_root(), 'deps')
 deps_dir = '.'
 
 mkdir = find_program('cp', required: true)
 git = find_program('git', required: true)
 sh = find_program('sh', required: true)
+cd = find_program('cd', required: true)
 globber = get_option('globber_path')
 
 arch = host_machine.cpu_family()
+
+run_command(cd, '..', '&&', git, 'submodule', 'update', '--recursive')
 
 
 
 # UAcpi
 
 uacpi_dep_path = join_paths(deps_dir, 'uacpi')
-
-uacpi_git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(uacpi_dep_path, get_option('uacpi_branch'), 'https://github.com/uACPI/uACPI.git', git)
-
-run_command(sh, '-c', uacpi_git_cmd)
 
 uacpi = subproject('uacpi')
 
@@ -35,12 +33,6 @@ uacpi_dep = declare_dependency(sources: uacpi_src, include_directories: uacpi_in
 
 limine_path = join_paths(deps_dir, 'limine')
 
-limine_dep_path = join_paths(deps_dir, 'limine')
-
-limine_git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(limine_path, get_option('limine_branch'), 'https://codeberg.org/Limine/Limine.git', git)
-
-run_command(sh, '-c', limine_git_cmd)
-
 run_command(sh, '-c', 'cd', limine_path, '&&', 'make')
 
 limine_inc = include_directories(limine_path)
@@ -52,10 +44,6 @@ limine_dep = declare_dependency(include_directories: limine_inc)
 # Flanterm
 
 flanterm_path = join_paths(deps_dir, 'flanterm')
-
-flanterm_git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(flanterm_path, get_option('flanterm_branch'), 'https://codeberg.org/mintsuki/flanterm.git', git)
-
-run_command(sh, '-c', flanterm_git_cmd)
 
 flanterm_src_dir = join_paths(flanterm_path, 'src')
 
@@ -71,10 +59,6 @@ flanterm_dep = declare_dependency(sources: flanterm_src, include_directories: fl
 
 chdrs_path = join_paths(deps_dir, 'chdrs')
 
-chdrs_git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(chdrs_path, get_option('chdrs_branch'), 'https://codeberg.org/osdev/freestnd-c-hdrs.git', git)
-
-run_command(sh, '-c', chdrs_git_cmd)
-
 chdrs_inc = include_directories(join_paths(chdrs_path, arch))
 
 freestnd_c_hdrs_dep = declare_dependency(include_directories: chdrs_inc)
@@ -84,10 +68,6 @@ freestnd_c_hdrs_dep = declare_dependency(include_directories: chdrs_inc)
 # C++ Headers
 
 cxxhdrs_path = join_paths(deps_dir, 'cxxhdrs')
-
-cxxhdrs_git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(cxxhdrs_path, get_option('cxxhdrs_branch'), 'https://codeberg.org/osdev/freestnd-cxx-hdrs.git', git)
-
-run_command(sh, '-c', cxxhdrs_git_cmd)
 
 cxxhdrs_inc = include_directories(join_paths(cxxhdrs_path, arch))
 
@@ -140,10 +120,6 @@ npf_dep = declare_dependency(include_directories: npf_inc)
 
 if get_option('build_llvm')
     llvm_path = join_paths(deps_dir, 'llvm')
-
-    git_cmd = 'if [ - d "@0@/.git" ] then cd @0@ && @3@ pull || true; else @3@ clone --depth=1 --branch "@1@" @2@ @0@; fi'.format(llvm_path, get_option('llvm_branch'), 'https://github.com/llvm/llvm-project.git', git)
-
-    run_command(sh, '-c', git_cmd)
 
     llvm_build_path = join_paths(llvm_path, 'build')
 

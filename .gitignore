@@ -1,11 +1,3 @@
-/deps/llvm/
-/deps/limine/
-/deps/ovmf/
-/deps/chdrs/
-/deps/cxxhdrs/
-/deps/uacpi/
-/deps/flanterm/
-/deps/nanoprintf/
 /iso/
 /out/
 /.idea/
