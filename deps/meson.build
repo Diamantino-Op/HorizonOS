@@ -34,9 +34,13 @@ limine_path = join_paths(deps_dir, 'limine')
 
 run_command(sh, '-c', 'cd', limine_path, '&&', 'make')
 
-limine_inc = include_directories(limine_path)
 
-limine_dep = declare_dependency(include_directories: limine_inc)
+
+# Limine Protocl
+
+limine_protocol_inc = include_directories(join_paths(deps_dir, 'limine_protocol', 'include'))
+
+limine_protocol_dep = declare_dependency(include_directories: limine_protocol_inc)
 
 
 
@@ -58,7 +62,7 @@ flanterm_dep = declare_dependency(sources: flanterm_src, include_directories: fl
 
 chdrs_path = join_paths(deps_dir, 'chdrs')
 
-chdrs_inc = include_directories(join_paths(chdrs_path, arch))
+chdrs_inc = include_directories(join_paths(chdrs_path, arch, 'include'))
 
 freestnd_c_hdrs_dep = declare_dependency(include_directories: chdrs_inc)
 
@@ -68,7 +72,7 @@ freestnd_c_hdrs_dep = declare_dependency(include_directories: chdrs_inc)
 
 cxxhdrs_path = join_paths(deps_dir, 'cxxhdrs')
 
-cxxhdrs_inc = include_directories(join_paths(cxxhdrs_path, arch))
+cxxhdrs_inc = include_directories(join_paths(cxxhdrs_path, arch, 'include'))
 
 freestnd_cxx_hdrs_dep = declare_dependency(include_directories: cxxhdrs_inc)
 

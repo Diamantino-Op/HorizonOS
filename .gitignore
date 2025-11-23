@@ -2,6 +2,8 @@
 /out/
 /.idea/
 /build/
+/deps/ovmf/
+/deps/nanoprintf/
 Token.txt
 .fuse_*
 .wraplock

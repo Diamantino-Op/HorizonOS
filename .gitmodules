@@ -23,3 +23,6 @@
 [submodule "deps/limine"]
 	path = deps/limine
 	url = https://codeberg.org/Limine/Limine.git
+[submodule "deps/limine_protocol"]
+	path = deps/limine_protocol
+	url = https://codeberg.org/Limine/limine-protocol.git

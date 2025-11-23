@@ -62,7 +62,7 @@ limine_boot_path = join_paths(iso_path, 'boot', 'limine')
 deps_proj = subproject('horizon_deps', default_options: [ 'globber_path=@0@'.format(globber) ])
 
 uacpi_dep = deps_proj.get_variable('uacpi_dep')
-limine_dep = deps_proj.get_variable('limine_dep')
+limine_protocol_dep = deps_proj.get_variable('limine_protocol_dep')
 flanterm_dep = deps_proj.get_variable('flanterm_dep')
 freestnd_c_hdrs_dep = deps_proj.get_variable('freestnd_c_hdrs_dep')
 freestnd_cxx_hdrs_dep = deps_proj.get_variable('freestnd_cxx_hdrs_dep')

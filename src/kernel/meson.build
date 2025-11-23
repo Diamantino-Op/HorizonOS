@@ -85,7 +85,7 @@ kernel_cpp_flags += kernel_c_flags
 
 # Kernel Common
 
-kernel_common_src_dir = join_paths('.', 'kernel-common')
+kernel_common_src_dir = join_paths('.', 'kernel-common', 'src')
 
 kernel_common_inc = include_directories(kernel_common_src_dir)
 
@@ -108,7 +108,7 @@ kernel = executable('HorizonOS_Kernel',
                     include_directories: kernel_inc,
                     dependencies: [
                         uacpi_dep,
-                        limine_dep,
+                        limine_protocol_dep,
                         flanterm_dep,
                         freestnd_c_hdrs_dep,
                         freestnd_cxx_hdrs_dep,

@@ -13,21 +13,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: 'recursive'
 
       - name: Restore Deps Folder
         id: cache-deps-restore
         uses: actions/cache/restore@v4
         with:
-          path: |
-            ${{github.workspace}}/deps/chdrs
-            ${{github.workspace}}/deps/cxxhdrs
-            ${{github.workspace}}/deps/flanterm
-            ${{github.workspace}}/deps/limine
-            ${{github.workspace}}/deps/llvm
-            ${{github.workspace}}/deps/nanoprintf
-            ${{github.workspace}}/deps/ovmf
-            ${{github.workspace}}/deps/uacpi
-          key: ${{runner.os}}-horizonos-deps
+          path: ${{github.workspace}}/deps/llvm/build
+          key: ${{runner.os}}-horizonos-llvm
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -56,13 +50,5 @@ jobs:
         id: cache-deps-save
         uses: actions/cache/save@v4
         with:
-          path: |
-            ${{github.workspace}}/deps/chdrs
-            ${{github.workspace}}/deps/cxxhdrs
-            ${{github.workspace}}/deps/flanterm
-            ${{github.workspace}}/deps/limine
-            ${{github.workspace}}/deps/llvm
-            ${{github.workspace}}/deps/nanoprintf
-            ${{github.workspace}}/deps/ovmf
-            ${{github.workspace}}/deps/uacpi
+          path: ${{github.workspace}}/deps/llvm/build
           key: ${{steps.cache-deps-restore.outputs.cache-primary-key}}
