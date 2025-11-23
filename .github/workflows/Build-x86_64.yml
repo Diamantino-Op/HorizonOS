@@ -2,15 +2,13 @@ name: Build X86_64
 
 on:
   workflow_run:
-    workflows: [ "Setup Deps" ]
+    workflows: [ "Setup LLVM" ]
     types:
       - completed
 
 jobs:
   build-x86_64-release:
     runs-on: ubuntu-latest
-
-    if: ${{github.event.workflow_run.conclusion == 'success'}}
 
     steps:
       - uses: actions/checkout@v6
@@ -55,8 +53,6 @@ jobs:
 
   build-x86_64-debug:
     runs-on: ubuntu-latest
-
-    if: ${{github.event.workflow_run.conclusion == 'success'}}
 
     steps:
       - uses: actions/checkout@v6
