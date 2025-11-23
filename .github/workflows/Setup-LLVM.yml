@@ -23,22 +23,7 @@ jobs:
           path: ${{github.workspace}}/deps/llvm
           key: ${{runner.os}}-horizonos-llvm
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
 
-      - name: Install dependencies
-        run: python -m pip install meson==1.9.1 ninja
-
-      - name: Install xorriso
-        run: sudo apt-get install xorriso
-
-      - name: Install CMake
-        run: sudo apt-get install cmake
-
-      - name: Install CCache
-        run: sudo apt-get install ccache
 
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
