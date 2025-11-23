@@ -25,9 +25,6 @@ jobs:
 
 
 
-      - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
-
       - name: Upload LLVM
         id: upload-llvm
         uses: actions/upload-artifact@v5
