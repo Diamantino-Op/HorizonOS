@@ -20,13 +20,13 @@
 #define COM2_LINE_STATUS_THRE 0x20
 
 __attribute__((no_instrument_function)) void outb(u16 port, u8 val) {
-	asm volatile ("out %1, %0" : : "a"(val), "Nd"(port));
+	asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
 __attribute__((no_instrument_function)) u8 inb(u16 port) {
 	u8 ret;
 
-	asm volatile ("in %0, %1" : "=a"(ret) : "Nd"(port));
+	asm volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
 
 	return ret;
 }

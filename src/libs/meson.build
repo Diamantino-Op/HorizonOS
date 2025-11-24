@@ -106,12 +106,6 @@ hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
 
 
 
-# UAcpi
-
-subdir('uacpi')
-
-
-
 # MLibC
 
 common_libs_path = join_paths(meson.global_source_root(), 'build', 'libs')

@@ -67,7 +67,6 @@ iso_libs_path = join_paths(horizonos_boot_path, 'libs')
 deps_proj = subproject('horizon_deps', default_options: [ 'globber_path=@0@'.format(globber) ])
 
 uacpi_dep = deps_proj.get_variable('uacpi_dep')
-uacpi_inc = deps_proj.get_variable('uacpi_inc')
 limine_protocol_dep = deps_proj.get_variable('limine_protocol_dep')
 flanterm_dep = deps_proj.get_variable('flanterm_dep')
 freestnd_c_hdrs_dep = deps_proj.get_variable('freestnd_c_hdrs_dep')
@@ -76,7 +75,7 @@ npf_dep = deps_proj.get_variable('npf_dep')
 
 subdir(join_paths('src', 'libs'))
 
-# subdir(join_paths('src', 'programs'))
+subdir(join_paths('src', 'programs'))
 
 # subdir(join_paths('src', 'services'))
 
@@ -148,6 +147,21 @@ create_sym_file = custom_target('create_sym_file',
     depends: kernel
 )
 
+install_apps = custom_target('install_apps',
+    input: [
+        hello_world_exe
+    ],
+    output: 'InstalledApps.txt',
+    command: [
+        cp, '@INPUT@', iso_programs_path,
+        '&&',
+        sh, '-c', 'for f in @INPUT@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
+    ],
+    depends: [
+        hello_world_exe
+    ]
+)
+
 horizonos_iso = custom_target('HorizonOS_ISO',
     output: 'HorizonOS-@0@.iso'.format(arch),
     input: [
@@ -179,7 +193,8 @@ horizonos_iso = custom_target('HorizonOS_ISO',
     depends: [
         kernel,
         copy_iso_files,
-        create_sym_file
+        create_sym_file,
+        install_apps
     ]
 )
 

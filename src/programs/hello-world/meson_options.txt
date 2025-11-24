@@ -1,0 +1,1 @@
+option('globber_path', type : 'string', value : '')

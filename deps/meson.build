@@ -52,7 +52,7 @@ flanterm_src_dir = join_paths(flanterm_path, 'src')
 
 flanterm_inc = include_directories(flanterm_src_dir)
 
-flanterm_src = run_command(sh, '-c', '@0@ @1@'.format(globber, flanterm_src_dir), check: true).stdout().strip().split('\n')
+flanterm_src = run_command(sh, '-c', '@0@ @1@ *.c *.cpp'.format(globber, flanterm_src_dir), check: true).stdout().strip().split('\n')
 
 flanterm_dep = declare_dependency(sources: flanterm_src, include_directories: flanterm_inc)
 
