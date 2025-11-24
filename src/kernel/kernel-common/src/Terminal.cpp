@@ -71,7 +71,7 @@ namespace kernel::common {
 		}
 	}
 
-	void Terminal::putChar(char c, void *) {
+	void Terminal::putChar(int c, void *) {
 		constexpr u16 com1Port = 0x3F8;
 
 	 	if (flantermCtx != nullptr) {
@@ -82,7 +82,7 @@ namespace kernel::common {
 		asm volatile ("out %1, %0" : : "a"(c), "d"(com1Port));
 	}
 
-	void Terminal::putCharNF(char c, void *) {
+	void Terminal::putCharNF(int c, void *) {
 		constexpr u16 com1Port = 0x3F8;
 
 		// TODO: Only x86_64
@@ -92,22 +92,22 @@ namespace kernel::common {
 	void Terminal::printf(const bool autoSN, const char *format, ...) {
 	 	va_list val;
 	 	va_start(val, format);
-	 	npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+	 	npf_vpprintf(putChar, nullptr, format, val);
 	 	va_end(val);
 
 		if (autoSN) {
-			npf_pprintf((npf_putc)(void *)putChar, nullptr, "\n");
+			npf_pprintf(putChar, nullptr, "\n");
 		}
 	}
 
 	void Terminal::printfNF(const bool autoSN, const char *format, ...) {
 		va_list val;
 		va_start(val, format);
-		npf_vpprintf((npf_putc)(void *)putCharNF, nullptr, format, val);
+		npf_vpprintf(putCharNF, nullptr, format, val);
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf((npf_putc)(void *)putCharNF, nullptr, "\n");
+			npf_pprintf(putCharNF, nullptr, "\n");
 		}
 	}
 
@@ -116,11 +116,11 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, format);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf((npf_putc)(void *)putChar, nullptr, "\n");
+			npf_pprintf(putChar, nullptr, "\n");
 		}
 
 		this->unlock();
@@ -133,7 +133,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -149,7 +149,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -164,7 +164,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(false, "\033[0m");
@@ -179,7 +179,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putCharNF, nullptr, format, val);
+		npf_vpprintf(putCharNF, nullptr, format, val);
 		va_end(val);
 
 		this->printfNF(true, "\033[0m");
@@ -195,7 +195,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -208,7 +208,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -221,7 +221,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");
@@ -234,7 +234,7 @@ namespace kernel::common {
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf((npf_putc)(void *)putChar, nullptr, format, val);
+		npf_vpprintf(putChar, nullptr, format, val);
 		va_end(val);
 
 		this->printf(true, "\033[0m");

@@ -67,6 +67,7 @@ iso_libs_path = join_paths(horizonos_boot_path, 'libs')
 deps_proj = subproject('horizon_deps', default_options: [ 'globber_path=@0@'.format(globber) ])
 
 uacpi_dep = deps_proj.get_variable('uacpi_dep')
+uacpi_inc = deps_proj.get_variable('uacpi_inc')
 limine_protocol_dep = deps_proj.get_variable('limine_protocol_dep')
 flanterm_dep = deps_proj.get_variable('flanterm_dep')
 freestnd_c_hdrs_dep = deps_proj.get_variable('freestnd_c_hdrs_dep')
@@ -149,7 +150,12 @@ create_sym_file = custom_target('create_sym_file',
 
 horizonos_iso = custom_target('HorizonOS_ISO',
     output: 'HorizonOS-@0@.iso'.format(arch),
+    input: [
+        kernel
+    ],
     command: [
+        'mv', '@INPUT0@', join_paths(horizonos_boot_path, 'HorizonOS_Kernel'),
+        '&&',
         mkdir, '-p', iso_out_path,
         '&&',
         'xorriso',
