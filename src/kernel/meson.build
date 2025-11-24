@@ -28,18 +28,19 @@ kernel_c_flags = [
     '-Wno-error=unused-private-field',
     '-Wno-error=cast-function-type-mismatch',
     '-Wno-error=deprecated-enum-enum-conversion',
+    '-Wno-unused-command-line-argument'
 ]
 
 kernel_cpp_flags = []
 
 kernel_link_flags = [
-    '-T @0@'.format(kernel_linker_script),
+    '-T@0@'.format(kernel_linker_script),
     '-static',
     '-nostdlib',
-    '-gc-sections',
-    '--ignore-data-address-equality',
-    '--ignore-function-address-equality',
-    '--icf=all',
+    '-Wl,-gc-sections',
+    '-Wl,--ignore-data-address-equality',
+    '-Wl,--ignore-function-address-equality',
+    '-Wl,--icf=all',
 ]
 
 if arch == 'x86_64'

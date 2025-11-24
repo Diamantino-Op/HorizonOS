@@ -79,14 +79,14 @@ namespace kernel::common {
 	 	}
 
 		// TODO: Only x86_64
-		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
+		asm volatile ("out %1, %0" : : "a"(c), "d"(com1Port));
 	}
 
 	void Terminal::putCharNF(char c, void *) {
 		constexpr u16 com1Port = 0x3F8;
 
 		// TODO: Only x86_64
-		asm volatile ("outb %0, %1" : : "a"(c), "d"(com1Port));
+		asm volatile ("out %1, %0" : : "a"(c), "d"(com1Port));
 	}
 
 	void Terminal::printf(const bool autoSN, const char *format, ...) {

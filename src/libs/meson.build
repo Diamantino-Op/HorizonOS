@@ -27,6 +27,7 @@ library_c_flags = [
     '-Wno-error=unused-private-field',
     '-Wno-error=cast-function-type-mismatch',
     '-Wno-error=deprecated-enum-enum-conversion',
+    '-Wno-unused-command-line-argument'
 ]
 
 base_library_cpp_flags = []
@@ -106,3 +107,14 @@ hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
 
 
 # MLibC
+
+if get_option('debug_build')
+    mlibc_buildtype = 'debugoptimized'
+else
+    mlibc_buildtype = 'release'
+endif
+
+mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(iso_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype) ])
+
+static_libc = mlibc_proj.get_variable('libc_static')
+shared_libc = mlibc_proj.get_variable('libc_shared')

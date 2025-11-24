@@ -2,15 +2,15 @@
 
 namespace kernel::x86_64::hal {
 	void IOPort::out8(u8 data, u16 address) {
-		asm volatile ("outb %0, %1" : : "a"(data), "d"(address));
+		asm volatile ("out %1, %0" : : "a"(data), "d"(address));
 	}
 
 	void IOPort::out16(u16 data, u16 address) {
-		asm volatile ("outw %0, %1" : : "a"(data), "d"(address));
+		asm volatile ("out %1, %0" : : "a"(data), "d"(address));
 	}
 
 	void IOPort::out32(u32 data, u16 address) {
-		asm volatile ("outl %0, %1" : : "a"(data), "d"(address));
+		asm volatile ("out %1, %0" : : "a"(data), "d"(address));
 	}
 
 	void IOPort::out64(const u64 data, const u16 address) {
@@ -20,21 +20,21 @@ namespace kernel::x86_64::hal {
 
 	u8 IOPort::in8(u16 address) {
 		u8 ret = 0;
-		asm volatile ("inb %1, %0" : "=a"(ret) : "d"(address));
+		asm volatile ("in %0, %1" : "=a"(ret) : "d"(address));
 
 		return ret;
 	}
 
 	u16 IOPort::in16(u16 address) {
 		u16 ret = 0;
-		asm volatile ("inw %1, %0" : "=a"(ret) : "d"(address));
+		asm volatile ("in %0, %1" : "=a"(ret) : "d"(address));
 
 		return ret;
 	}
 
 	u32 IOPort::in32(u16 address) {
 		u32 ret = 0;
-		asm volatile ("inl %1, %0" : "=a"(ret) : "d"(address));
+		asm volatile ("in %0, %1" : "=a"(ret) : "d"(address));
 
 		return ret;
 	}

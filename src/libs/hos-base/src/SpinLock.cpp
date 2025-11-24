@@ -4,8 +4,8 @@ bool TicketSpinLock::lock() {
 	u64 flags;
 
 	asm volatile(
-		"pushfq\n"
-		"popq %0\n"
+		"pushf\n"
+		"pop %0\n"
 		"cli"
 		: "=r"(flags)
 		:
@@ -45,8 +45,8 @@ bool SimpleSpinLock::lock() {
 	u64 flags;
 
 	asm volatile(
-		"pushfq\n"
-		"popq %0\n"
+		"pushf\n"
+		"pop %0\n"
 		"cli"
 		: "=r"(flags)
 		:

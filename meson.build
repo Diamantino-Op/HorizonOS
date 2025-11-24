@@ -24,9 +24,10 @@ endif
 # Programs
 
 cp = find_program('cp', required: true)
-mkdir = find_program('cp', required: true)
+mkdir = find_program('mkdir', required: true)
 git = find_program('git', required: true)
 sh = find_program('sh', required: true)
+nm = find_program('nm', required: true)
 
 globber = join_paths(meson.global_source_root(), 'deps', 'Globber.sh')
 
@@ -34,7 +35,7 @@ globber = join_paths(meson.global_source_root(), 'deps', 'Globber.sh')
 
 # Paths
 
-limine_path = join_paths('deps', 'limine')
+limine_path = join_paths(meson.global_source_root(), 'deps', 'limine')
 
 ovmf_file = join_paths('deps', 'ovmf', 'OVMF.fd')
 ovmf_vars_file = join_paths('deps', 'ovmf', 'OVMF_VARS.fd')
@@ -49,11 +50,15 @@ else
     iso_path = join_paths(meson.global_source_root(), 'iso', arch, 'Release')
 endif
 
-iso_out_path = join_paths(iso_path, 'out')
+iso_out_path = join_paths(meson.global_source_root(), 'iso', 'out')
 
 efi_boot_path = join_paths(iso_path, 'efi', 'boot')
 horizonos_boot_path = join_paths(iso_path, 'boot', 'HorizonOS')
 limine_boot_path = join_paths(iso_path, 'boot', 'limine')
+
+iso_programs_path = join_paths(horizonos_boot_path, 'programs')
+iso_services_path = join_paths(horizonos_boot_path, 'services')
+iso_libs_path = join_paths(horizonos_boot_path, 'libs')
 
 
 
@@ -109,6 +114,12 @@ copy_iso_files = custom_target('copy_iso_files',
         '&&',
         mkdir, '-p', horizonos_boot_path,
         '&&',
+        mkdir, '-p', iso_programs_path,
+        '&&',
+        mkdir, '-p', iso_services_path,
+        '&&',
+        mkdir, '-p', iso_libs_path,
+        '&&',
         mkdir, '-p', limine_boot_path,
         '&&',
         cp, '@INPUT0@', join_paths(limine_boot_path, 'Limine.conf'),
@@ -132,19 +143,15 @@ create_sym_file = custom_target('create_sym_file',
     input: [
         kernel
     ],
-    command: [
-        'nm',
-        '-C',
-        '@INPUT0@',
-        '>',
-        sym_out_file
-    ],
+    command: [ sh, '-c', 'nm -C @INPUT0@ > @0@'.format(sym_out_file) ],
     depends: kernel
 )
 
 horizonos_iso = custom_target('HorizonOS_ISO',
     output: 'HorizonOS-@0@.iso'.format(arch),
     command: [
+        mkdir, '-p', iso_out_path,
+        '&&',
         'xorriso',
         '-as', 'mkisofs',
         '-R', '-r', '-J',
@@ -161,7 +168,7 @@ horizonos_iso = custom_target('HorizonOS_ISO',
         iso_path,
         '-o', iso_out_file,
         '&&',
-        join_paths(limine_path, 'limine-install'), 'bios-install', iso_out_file
+        join_paths(limine_path, 'limine'), 'bios-install', iso_out_file
     ],
     depends: [
         kernel,

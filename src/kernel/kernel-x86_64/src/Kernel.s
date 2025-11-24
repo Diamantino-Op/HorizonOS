@@ -1,6 +1,6 @@
-.extern kernelStart
+.extern kernelMain
 .global _start
 _start:
     mov rdi, rsp
 
-    call kernelStart
+    call kernelMain

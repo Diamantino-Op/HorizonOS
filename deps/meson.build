@@ -32,7 +32,7 @@ uacpi_dep = declare_dependency(sources: uacpi_src, include_directories: uacpi_in
 
 limine_path = join_paths(deps_dir, 'limine')
 
-run_command(sh, '-c', 'cd', limine_path, '&&', 'make')
+run_command(sh, '-c', 'cd @0@ && make'.format(limine_path))
 
 
 
