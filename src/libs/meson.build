@@ -106,7 +106,15 @@ hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
 
 
 
+# UAcpi
+
+subdir('uacpi')
+
+
+
 # MLibC
+
+common_libs_path = join_paths(meson.global_source_root(), 'build', 'libs')
 
 if get_option('debug_build')
     mlibc_buildtype = 'debugoptimized'
@@ -114,7 +122,7 @@ else
     mlibc_buildtype = 'release'
 endif
 
-mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(iso_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype) ])
+mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype) ])
 
 static_libc = mlibc_proj.get_variable('libc_static')
 shared_libc = mlibc_proj.get_variable('libc_shared')

@@ -1,6 +1,7 @@
 [submodule "src/libs/mlibc"]
 	path = src/libs/mlibc
 	url = https://github.com/Diamantino-Op/mlibc.git
+	branch = master
 [submodule "deps/uacpi"]
 	path = deps/uacpi
 	url = https://github.com/uACPI/uACPI.git
@@ -20,9 +21,11 @@
 [submodule "deps/llvm"]
 	path = deps/llvm
 	url = https://github.com/llvm/llvm-project.git
+	branch = release/21.x
 [submodule "deps/limine"]
 	path = deps/limine
 	url = https://codeberg.org/Limine/Limine.git
+	branch = v10.x-binary
 [submodule "deps/limine_protocol"]
 	path = deps/limine_protocol
 	url = https://codeberg.org/Limine/limine-protocol.git

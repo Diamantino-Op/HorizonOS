@@ -22,8 +22,8 @@ namespace kernel::common {
         void lock();
         void unlock();
 
-        static void putChar(char c, void *ctx);
-        static void putCharNF(char c, void *ctx);
+        static void putChar(int c, void *ctx);
+        static void putCharNF(int c, void *ctx);
         void printf(bool autoSN, const char* format, ...);
         void printfNF(bool autoSN, const char* format, ...);
         void printfLock(bool autoSN, const char* format, ...);
