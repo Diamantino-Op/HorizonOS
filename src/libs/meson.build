@@ -1,3 +1,9 @@
+# Library Path
+
+hos_libs_path = join_paths(meson.global_source_root(), 'src', 'libs')
+
+
+
 # Library Flags
 
 base_library_c_flags = []
@@ -96,7 +102,7 @@ base_library_cpp_flags += base_library_c_flags
 
 #hos_base_dep = hos_base_proj.get_variable('hos_base_dep')
 
-hos_base_src_path = join_paths(meson.global_source_root(), 'src', 'libs', 'hos-base', 'src')
+hos_base_src_path = join_paths(hos_libs_path, 'hos-base', 'src')
 
 hos_base_inc = include_directories(join_paths('hos-base', 'src'))
 
@@ -121,9 +127,30 @@ hos_base_dep = declare_dependency(include_directories: hos_base_inc, link_with: 
 
 # Hos Lib
 
-hos_lib_proj = subproject('hos_lib', default_options: [ 'lib_c_flags=@0@'.format(','.join(library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
+# hos_lib_proj = subproject('hos_lib', default_options: [ 'lib_c_flags=@0@'.format(','.join(library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
 
-hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
+# hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
+
+hos_libs_src_path = join_paths(hos_libs_path, 'hos-lib', 'src')
+
+hos_lib_inc = include_directories(join_paths('hos-lib', 'src'))
+
+hos_lib_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(globber, hos_libs_src_path), check: true).stdout().strip().split('\n')
+
+hos_lib_lib = static_library('hos_lib',
+                             hos_lib_src,
+                             include_directories: hos_lib_inc,
+                             dependencies: [
+                                 freestnd_c_hdrs_dep,
+                                 freestnd_cxx_hdrs_dep
+                             ],
+                             c_args: library_c_flags,
+                             cpp_args: library_cpp_flags,
+                             pic: true,
+                             native: false
+)
+
+hos_lib_dep = declare_dependency(include_directories: hos_lib_inc, link_with: hos_lib_lib)
 
 
 
@@ -137,7 +164,13 @@ else
     mlibc_buildtype = 'release'
 endif
 
-mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype) ])
+uname_cmd_out = run_command('uname', '-r').stdout().strip()
+
+kernel_headers_path = join_paths('/usr', 'lib', 'modules', uname_cmd_out, 'build')
+
+default_library_paths = []
+
+mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype), 'linux_kernel_headers=@0@'.format(kernel_headers_path) ])
 
 static_libc = mlibc_proj.get_variable('libc_static')
 shared_libc = mlibc_proj.get_variable('libc_shared')
