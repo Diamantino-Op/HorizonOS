@@ -144,6 +144,8 @@ namespace kernel::common::threading {
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
+		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+
 		switchContext(oldEntry->value, this->currentThread->value);
 	}
 
@@ -163,23 +165,34 @@ namespace kernel::common::threading {
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
 	}
 
-	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip) {
+	u64 ExecutionNode::getENThreadRsp() const {
+		return CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0];
+	}
+
+	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp) {
 		const u64 currPageMap = Asm::readCr3();
 
 		process->getProcessContextKernel()->pageMap.load();
 
-		const auto newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+		u64 newRsp = rsp;
+
+		if (rsp == 0) {
+			newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+		}
 
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
 
 		context->init(process, newRsp, isUser);
 
 		thread->setStackPointer(newRsp);
+		thread->setKStackPointer(newRsp);
 
 		if (isUser) {
-			setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip);
+			const u64 userStack = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+
+			setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip, userStack);
 		} else {
-			setStackAsm(thread->getStackPointer(), rip, 0);
+			setStackAsm(thread->getStackPointer(), rip);
 		}
 
 		Asm::writeCr3(currPageMap);
@@ -200,7 +213,7 @@ namespace kernel::x86_64::threading {
 	using namespace utils;
 
 	ThreadContext::~ThreadContext() {
-		if (process != nullptr) {
+		if (this->process != nullptr) {
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
 			VirtualAllocator::free(process->getProcessContext(), &this->originalStackPointer);
 		}

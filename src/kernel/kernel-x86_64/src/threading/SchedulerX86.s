@@ -42,7 +42,7 @@ setStackAsm:
     push 0
     push 0
     push 0
-    push 0
+    push rcx
     push rdx
 
     mov [rdi], rsp
@@ -59,13 +59,14 @@ threadTrampoline:
     mov fs, ax
     mov gs, ax
 
-    mov rax, rsp
+    mov rax, r14
     push 0x18 | 3
     push rax
     push 0x200
     push 0x20 | 3
     push r15
 
+    mov r14, 0
     mov r15, 0
 
     iret

@@ -31,7 +31,7 @@ namespace kernel::common::threading {
     class Thread {
     public:
 		explicit Thread(Process* parent, u64 *context);
-    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser);
+    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0);
         ~Thread();
 
         void setContext(u64 *newContext);
@@ -42,6 +42,9 @@ namespace kernel::common::threading {
 
     	void setStackPointer(u64 newStackPointer);
     	u64 *getStackPointer();
+
+    	void setKStackPointer(u64 newKStackPointer);
+    	u64 getKStackPointer() const;
 
         void setState(ThreadState newState);
         ThreadState getState() const;
@@ -59,6 +62,8 @@ namespace kernel::common::threading {
         u64 *context {};
 
 		u64 stackPointer {};
+
+    	u64 kernelStackPointer {};
 
         ThreadState state {};
     };
@@ -123,6 +128,8 @@ namespace kernel::common::threading {
     	bool isDisabled() const;
     	void setDisabled(bool val);
 
+    	u64 getENThreadRsp() const;
+
     private:
     	static u32 scheduleTick(u64 *);
 
@@ -146,12 +153,6 @@ namespace kernel::common::threading {
 	extern "C" void switchContextMidAsm(const Thread *newThread);
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
-
-	enum SchedulerFail {
-		THREAD_ALREADY_SLEEPING,
-		THREAD_ALREADY_BLOCKED,
-		THREAD_NOT_FOUND
-	};
 
 	// TODO: Maybe do sleep queues and block queues
     class Scheduler {
@@ -274,7 +275,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The address of the created context.
 		 */
-		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip);
+		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0);
 
 		static void sendSleepEOI();
 

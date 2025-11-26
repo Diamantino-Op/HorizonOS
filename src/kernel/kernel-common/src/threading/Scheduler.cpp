@@ -10,8 +10,8 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser) : parent(parent) {
-		this->context = scheduler->createContext(this, parent, isUser, rip);
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp) : parent(parent) {
+		this->context = scheduler->createContext(this, parent, isUser, rip, rsp);
 
 		this->id = TIDAllocator::allocTID();
 	}
@@ -48,6 +48,14 @@ namespace kernel::common::threading {
 
 	u64 *Thread::getStackPointer() {
 		return &this->stackPointer;
+	}
+
+	void Thread::setKStackPointer(const u64 newKStackPointer) {
+		this->kernelStackPointer = newKStackPointer;
+	}
+
+	u64 Thread::getKStackPointer() const {
+		return this->kernelStackPointer;
 	}
 
 	void Thread::setState(const ThreadState newState) {
@@ -135,7 +143,7 @@ namespace kernel::common::threading {
 
 		Process *idleProcess = schedulerPtr->getProcess(0);
 
-		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(idleThread), false);
+		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(idleThread), false, this->getENThreadRsp());
 
 		newThread->setState(ThreadState::RUNNING);
 

@@ -24,10 +24,12 @@ namespace kernel::x86_64::hal {
 
         void updateTss();
 
-        Tss getTss() const;
+        Tss *getTss();
 
     private:
-        Tss tssInstance{};
+        Tss tssInstance {};
+
+        u64 kStackAddr {};
     };
 
     extern "C" void updateTssAsm();

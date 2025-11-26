@@ -3,6 +3,7 @@
 #include "hal/Interrupts.hpp"
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
+#include "Time.hpp"
 
 #include "limine.h"
 
@@ -251,7 +252,7 @@ namespace kernel::x86_64 {
 		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(50 * 1'000'000, 0x20, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x20, true);
 
 		// this->shutdown();
 
@@ -396,10 +397,14 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->cpuCore.apic.arm(50 * 1'000'000, 0x20, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x20, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 
 		Asm::lhlt();
+	}
+
+	TssManager *CoreKernel::getTssManager() {
+		return &this->coreTssManager;
 	}
 }

@@ -63,13 +63,13 @@ namespace kernel::x86_64::hal {
 
 		constexpr GdtTssEntry() = default;
 
-		explicit GdtTssEntry(Tss const& tss):
+		explicit GdtTssEntry(Tss *tss):
 			limitLow(sizeof(Tss)),
-			baseLow(reinterpret_cast<usize>(&tss) & 0xffff),
-			baseMid((reinterpret_cast<usize>(&tss) >> 16) & 0xff),
+			baseLow(reinterpret_cast<usize>(tss) & 0xffff),
+			baseMid((reinterpret_cast<usize>(tss) >> 16) & 0xff),
 			accessByte(0b10001001),
-			baseHigh((reinterpret_cast<usize>(&tss) >> 24) & 0xff),
-			baseUpper32(reinterpret_cast<usize>(&tss) >> 32) {}
+			baseHigh((reinterpret_cast<usize>(tss) >> 24) & 0xff),
+			baseUpper32(reinterpret_cast<usize>(tss) >> 32) {}
 	};
 
 	struct __attribute__((packed)) Gdt {
@@ -94,7 +94,7 @@ namespace kernel::x86_64::hal {
 	class GdtManager {
 	public:
 		GdtManager() = default;
-		explicit GdtManager(Tss const& tss);
+		explicit GdtManager(Tss *tss);
 
 		void loadGdt();
 		void reloadRegisters();

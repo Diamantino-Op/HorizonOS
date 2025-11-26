@@ -4,6 +4,7 @@
 #include "Types.hpp"
 
 #include "Apic.hpp"
+#include "TSS.hpp"
 #include "Tsc.hpp"
 
 #include "threading/Scheduler.hpp"
@@ -23,6 +24,8 @@ namespace kernel::x86_64::hal {
         Apic apic {};
         Tsc tsc {};
         ExecutionNode executionNode {};
+
+        TssManager *tssManager {};
 
         u32 cpuId {};
 

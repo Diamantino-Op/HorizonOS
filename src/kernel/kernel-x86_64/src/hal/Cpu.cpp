@@ -129,6 +129,7 @@ namespace kernel::x86_64::hal {
 				this->bootstrapCpu->apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->bootstrapCpu->apic.setIsX2Apic(this->hasX2Apic);
 				this->bootstrapCpu->cpuId = mpRequest.response->cpus[i]->processor_id;
+				this->bootstrapCpu->tssManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getTssManager();
 
 				setCorePointer(this->bootstrapCpu);
 
@@ -149,6 +150,7 @@ namespace kernel::x86_64::hal {
 				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
+				this->cpuList[j].cpuCore.tssManager = this->cpuList[j].getTssManager();
 
 				this->initCore(i, j);
 

@@ -77,6 +77,8 @@ namespace kernel::x86_64 {
 
         void init() override;
 
+        TssManager *getTssManager();
+
     private:
         GdtManager coreGdtManager {};
         TssManager coreTssManager {};

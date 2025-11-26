@@ -194,7 +194,7 @@ horizonos_iso = custom_target('HorizonOS_ISO',
         kernel,
         copy_iso_files,
         create_sym_file,
-        install_apps
+        # install_apps
     ]
 )
 
