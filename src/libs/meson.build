@@ -13,7 +13,7 @@ library_c_flags = [
     '-nostdinc',
     '-static',
     '-masm=intel',
-    '--target=@0@-none-elf'.format(arch),
+    '--target=@0@-horizonos-elf'.format(arch),
     '-ffreestanding',
     '-ffunction-sections',
     '-fdata-sections',

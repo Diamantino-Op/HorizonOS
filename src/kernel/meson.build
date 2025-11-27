@@ -7,7 +7,7 @@ kernel_c_flags = [
     '-pipe',
     '-nostdinc',
     '-static',
-    '--target=@0@-none-elf'.format(arch),
+    '--target=@0@-horizonos-elf'.format(arch),
     '-ffreestanding',
     '-ffunction-sections',
     '-fdata-sections',
@@ -36,7 +36,7 @@ kernel_asm_flags = [
     '-pipe',
     '-static',
     '-masm=intel',
-    '--target=@0@-none-elf'.format(arch),
+    '--target=@0@-horizonos-elf'.format(arch),
 ]
 
 kernel_link_flags = [
