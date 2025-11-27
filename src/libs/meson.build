@@ -164,13 +164,13 @@ else
     mlibc_buildtype = 'release'
 endif
 
-uname_cmd_out = run_command('uname', '-r').stdout().strip()
-
-kernel_headers_path = join_paths('/usr', 'lib', 'modules', uname_cmd_out, 'build')
-
 default_library_paths = []
 
-mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype), 'linux_kernel_headers=@0@'.format(kernel_headers_path) ])
+linux_headers_path_mlibc = join_paths(linux_headers_path.replace(meson.global_source_root(), '../../..'), 'include')
 
-static_libc = mlibc_proj.get_variable('libc_static')
-shared_libc = mlibc_proj.get_variable('libc_shared')
+mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype), 'linux_kernel_headers=@0@'.format(linux_headers_path_mlibc) ])
+
+static_mlibc = mlibc_proj.get_variable('libc_static')
+mlibc_include_dirs = mlibc_proj.get_variable('libc_include_dirs')
+
+mlibc_static_dep = declare_dependency(include_directories: mlibc_include_dirs, link_with: static_mlibc)

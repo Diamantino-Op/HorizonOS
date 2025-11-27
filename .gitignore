@@ -4,6 +4,8 @@
 /build/
 /deps/ovmf/
 /deps/nanoprintf/
+/deps/linux_kernel/
+/deps/linux-headers-*
 Token.txt
 .fuse_*
 .wraplock

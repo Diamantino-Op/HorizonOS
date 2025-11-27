@@ -72,6 +72,7 @@ flanterm_dep = deps_proj.get_variable('flanterm_dep')
 freestnd_c_hdrs_dep = deps_proj.get_variable('freestnd_c_hdrs_dep')
 freestnd_cxx_hdrs_dep = deps_proj.get_variable('freestnd_cxx_hdrs_dep')
 npf_dep = deps_proj.get_variable('npf_dep')
+linux_headers_path = deps_proj.get_variable('linux_headers_path')
 
 subdir(join_paths('src', 'libs'))
 
@@ -194,7 +195,7 @@ horizonos_iso = custom_target('HorizonOS_ISO',
         kernel,
         copy_iso_files,
         create_sym_file,
-        # install_apps
+        install_apps
     ]
 )
 
