@@ -98,59 +98,17 @@ base_library_cpp_flags += base_library_c_flags
 
 # Hos Base
 
-#hos_base_proj = subproject('hos_base', default_options: [ 'lib_c_flags=@0@'.format(','.join(base_library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(base_library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
+hos_base_proj = subproject('hos_base', default_options: [ 'lib_c_flags=@0@'.format(','.join(base_library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(base_library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
 
-#hos_base_dep = hos_base_proj.get_variable('hos_base_dep')
-
-hos_base_src_path = join_paths(hos_libs_path, 'hos-base', 'src')
-
-hos_base_inc = include_directories(join_paths('hos-base', 'src'))
-
-hos_base_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(globber, hos_base_src_path), check: true).stdout().strip().split('\n')
-
-hos_base_lib = static_library('hos_base',
-                              hos_base_src,
-                              include_directories: hos_base_inc,
-                              dependencies: [
-                                  freestnd_c_hdrs_dep,
-                                  freestnd_cxx_hdrs_dep
-                              ],
-                              c_args: base_library_c_flags,
-                              cpp_args: base_library_cpp_flags,
-                              pic: true,
-                              native: false
-)
-
-hos_base_dep = declare_dependency(include_directories: hos_base_inc, link_with: hos_base_lib)
+hos_base_dep = hos_base_proj.get_variable('hos_base_dep')
 
 
 
 # Hos Lib
 
-# hos_lib_proj = subproject('hos_lib', default_options: [ 'lib_c_flags=@0@'.format(','.join(library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
+hos_lib_proj = subproject('hos_lib', default_options: [ 'lib_c_flags=@0@'.format(','.join(library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
 
-# hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
-
-hos_libs_src_path = join_paths(hos_libs_path, 'hos-lib', 'src')
-
-hos_lib_inc = include_directories(join_paths('hos-lib', 'src'))
-
-hos_lib_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(globber, hos_libs_src_path), check: true).stdout().strip().split('\n')
-
-hos_lib_lib = static_library('hos_lib',
-                             hos_lib_src,
-                             include_directories: hos_lib_inc,
-                             dependencies: [
-                                 freestnd_c_hdrs_dep,
-                                 freestnd_cxx_hdrs_dep
-                             ],
-                             c_args: library_c_flags,
-                             cpp_args: library_cpp_flags,
-                             pic: true,
-                             native: false
-)
-
-hos_lib_dep = declare_dependency(include_directories: hos_lib_inc, link_with: hos_lib_lib)
+hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
 
 
 

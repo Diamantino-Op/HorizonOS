@@ -26,8 +26,6 @@ switchContextAsm:
     pop rbp
     pop rbx
 
-    sti
-
     ret
 
 .global setStackAsm

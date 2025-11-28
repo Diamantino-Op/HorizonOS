@@ -72,13 +72,9 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::schedule() {
-		Asm::cli();
-
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
 		if (this->isDisabledFlag) {
-			Asm::sti();
-
 			return;
 		}
 
@@ -144,8 +140,6 @@ namespace kernel::common::threading {
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
-
 		switchContext(oldEntry->value, this->currentThread->value);
 	}
 
@@ -161,6 +155,8 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::switchContextMid(const Thread *newThread) const {
 		reinterpret_cast<ThreadContext *>(newThread->getContext())->load();
+
+		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
 	}
