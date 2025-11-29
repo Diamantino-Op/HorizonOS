@@ -148,9 +148,9 @@ if get_option('build_llvm')
 
     llvm_build_path = join_paths(llvm_path, 'build')
 
-    run_command(sh, '-c', 'cd @0@ && git apply ../llvm-patches/LLVM.patch'.format(llvm_path), capture: true, check: true)
+    message(run_command(sh, '-c', 'cd @0@ && git apply ../llvm-patches/LLVM.patch'.format(llvm_path), capture: true, check: true).stdout())
 
-    run_command(sh, '-c', 'cmake -S @0@ -B @1@ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_{C,CXX}_FLAGS="-pipe" -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64" -DLLVM_CCACHE_BUILD=ON -DDLLVM_ENABLE_ASSERTIONS=ON -DLLVM_PARALLEL_COMPILE_JOBS=20 -DLLVM_PARALLEL_LINK_JOBS=20'.format(join_paths(llvm_path, 'llvm'), llvm_build_path), capture: true, check: true)
+    message(run_command(sh, '-c', 'cmake -S @0@ -B @1@ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_{C,CXX}_FLAGS="-pipe" -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld;lldb" -DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64" -DLLVM_CCACHE_BUILD=ON -DDLLVM_ENABLE_ASSERTIONS=ON -DLLVM_PARALLEL_COMPILE_JOBS=20 -DLLVM_PARALLEL_LINK_JOBS=20'.format(join_paths(llvm_path, 'llvm'), llvm_build_path), capture: true, check: true).stdout())
 
-    run_command(sh, '-c', 'cmake --build @0@ --parallel'.format(llvm_build_path), capture: true, check: true)
+    message(run_command(sh, '-c', 'cmake --build @0@ --parallel'.format(llvm_build_path), capture: true, check: true).stdout())
 endif
