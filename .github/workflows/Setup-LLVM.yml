@@ -40,6 +40,9 @@ jobs:
       - name: Install CMake
         run: sudo apt-get install cmake
 
+      - name: Install RSync
+        run: sudo apt-get install rsync
+
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
 
