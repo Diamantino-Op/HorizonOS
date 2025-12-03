@@ -75,18 +75,29 @@ namespace kernel::common {
 		constexpr u16 com1Port = 0x3F8;
 
 	 	if (flantermCtx != nullptr) {
-	 		//flanterm_write(flantermCtx, &c, 1);
+	 		flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 	 	}
 
 		// TODO: Only x86_64
 		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(com1Port));
 	}
 
-	void Terminal::putCharNF(int c, void *) {
-		constexpr u16 com1Port = 0x3F8;
+	void Terminal::putCharE9(int c, void *) {
+		constexpr u16 e9Port = 0xe9;
 
 		// TODO: Only x86_64
-		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(com1Port));
+		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
+	}
+
+	void Terminal::putCharBoth(int c, void *) {
+		constexpr u16 e9Port = 0xe9;
+
+		if (flantermCtx != nullptr) {
+			flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
+		}
+
+		// TODO: Only x86_64
+		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
 	}
 
 	void Terminal::printf(const bool autoSN, const char *format, ...) {
@@ -100,18 +111,29 @@ namespace kernel::common {
 		}
 	}
 
-	void Terminal::printfNF(const bool autoSN, const char *format, ...) {
+	void Terminal::printfE9(const bool autoSN, const char *format, ...) {
 		va_list val;
 		va_start(val, format);
-		npf_vpprintf(putCharNF, nullptr, format, val);
+		npf_vpprintf(putCharE9, nullptr, format, val);
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf(putCharNF, nullptr, "\n");
+			npf_pprintf(putCharE9, nullptr, "\n");
 		}
 	}
 
-	void Terminal::printfLock(const bool autoSN, const char *format, ...) {
+	void Terminal::printfBoth(const bool autoSN, const char *format, ...) {
+		va_list val;
+		va_start(val, format);
+		npf_vpprintf(putCharBoth, nullptr, format, val);
+		va_end(val);
+
+		if (autoSN) {
+			npf_pprintf(putCharBoth, nullptr, "\n");
+		}
+	}
+
+	void Terminal::printfUAcpi(const bool autoSN, const char *format, ...) {
 		this->lock();
 
 		va_list val;
@@ -145,44 +167,14 @@ namespace kernel::common {
 #ifdef HORIZON_DEBUG
 		this->lock();
 
-		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfE9(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
+		npf_vpprintf(putCharE9, nullptr, format, val);
 		va_end(val);
 
-		this->printf(true, "\033[0m");
-
-		this->unlock();
-#endif
-	}
-
-	void Terminal::debugNS(const char *format, const char *id, ...) {
-#ifdef HORIZON_DEBUG
-		this->printf(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
-
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
-		va_end(val);
-
-		this->printf(false, "\033[0m");
-#endif
-	}
-
-	void Terminal::debugNF(const char *format, const char *id, ...) {
-#ifdef HORIZON_DEBUG
-		this->lock();
-
-		this->printfNF(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
-
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putCharNF, nullptr, format, val);
-		va_end(val);
-
-		this->printfNF(true, "\033[0m");
+		this->printfE9(true, "\033[0m");
 
 		this->unlock();
 #endif
@@ -204,40 +196,29 @@ namespace kernel::common {
 	}
 
 	void Terminal::warnNoLock(const char *format, const char *id, ...) {
-		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfE9(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
+		npf_vpprintf(putCharE9, nullptr, format, val);
 		va_end(val);
 
-		this->printf(true, "\033[0m");
+		this->printfE9(true, "\033[0m");
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
 		this->lock();
 
-		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfBoth(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
+		npf_vpprintf(putCharBoth, nullptr, format, val);
 		va_end(val);
 
-		this->printf(true, "\033[0m");
+		this->printfBoth(true, "\033[0m");
 
 		this->unlock();
-	}
-
-	void Terminal::errorNoLock(const char *format, const char *id, ...) {
-		this->printf(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
-
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
-		va_end(val);
-
-		this->printf(true, "\033[0m");
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {

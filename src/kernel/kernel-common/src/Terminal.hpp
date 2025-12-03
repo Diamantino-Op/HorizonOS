@@ -23,19 +23,19 @@ namespace kernel::common {
         void unlock();
 
         static void putChar(int c, void *ctx);
-        static void putCharNF(int c, void *ctx);
+        static void putCharE9(int c, void *ctx);
+        static void putCharBoth(int c, void *ctx);
+
         void printf(bool autoSN, const char* format, ...);
-        void printfNF(bool autoSN, const char* format, ...);
-        void printfLock(bool autoSN, const char* format, ...);
+        void printfE9(bool autoSN, const char* format, ...);
+        void printfBoth(bool autoSN, const char* format, ...);
+        void printfUAcpi(bool autoSN, const char* format, ...);
 
         void info(const char *format, const char *id, ...);
         void debug(const char *format, const char *id, ...);
-        void debugNS(const char *format, const char *id, ...);
-        void debugNF(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
         void warnNoLock(const char *format, const char *id, ...);
         void error(const char *format, const char *id, ...);
-        void errorNoLock(const char *format, const char *id, ...);
 
         ExecutionNode *getCurrentCore();
 
