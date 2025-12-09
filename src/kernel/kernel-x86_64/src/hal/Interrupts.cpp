@@ -24,7 +24,7 @@ namespace kernel::x86_64::hal {
 
 			terminal->debug("NMI Received!", "Interrupts");
 		} else if (frame.intNo < 32) {
-			if (frame.cs == (Selector::USER_CODE * 8 | 3)) {
+			if (frame.cs == (Selector::USER_CODE64 * 8 | 3) or frame.cs == (Selector::USER_CODE32 * 8 | 3)) {
 				userPanic(frame);
 			} else {
 				kernelPanic(frame);

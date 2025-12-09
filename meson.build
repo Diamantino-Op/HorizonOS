@@ -156,6 +156,8 @@ install_apps = custom_target('install_apps',
     command: [
         cp, '@INPUT@', iso_programs_path,
         '&&',
+        sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
+        '&&',
         sh, '-c', 'for f in @INPUT@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
     ],
     depends: [

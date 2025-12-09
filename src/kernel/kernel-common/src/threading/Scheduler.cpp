@@ -10,7 +10,7 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp) : parent(parent) {
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit) : parent(parent), bit32(is32Bit) {
 		this->context = scheduler->createContext(this, parent, isUser, rip, rsp);
 
 		this->id = TIDAllocator::allocTID();
@@ -56,6 +56,10 @@ namespace kernel::common::threading {
 
 	u64 Thread::getKStackPointer() const {
 		return this->kernelStackPointer;
+	}
+
+	bool Thread::is32Bit() const {
+		return this->bit32;
 	}
 
 	void Thread::setState(const ThreadState newState) {

@@ -32,12 +32,12 @@ namespace kernel::common::threading {
 
 		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
 
-		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2b - irq 10
+		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2c - irq 10
 
 		if (gsi == 1'000'000) {
 			CommonMain::getTerminal()->error("No gsi found!", "Scheduler");
 
-			gsi = 0xb;
+			gsi = 0xc;
 		} else {
 			CommonMain::getTerminal()->debug("Gsi found: %lu", "Scheduler", gsi);
 		}
@@ -46,9 +46,9 @@ namespace kernel::common::threading {
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 
-		Interrupts::setHandler(0x2b, sleepTick, nullptr);
+		Interrupts::setHandler(0x2c, sleepTick, nullptr);
 
-		Interrupts::unmask(0x2b);
+		Interrupts::unmask(0x2c);
 	}
 
 	Thread *Scheduler::getCurrentThread() {
@@ -56,7 +56,7 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::initArch() {
-		Interrupts::setHandler(0x20, scheduleTick, nullptr);
+		Interrupts::setHandler(0x21, scheduleTick, nullptr);
 
 		//Interrupts::unmask(intNum);
 	}
@@ -68,7 +68,7 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::reSchedule() {
-		asm inline("int %0" :: "i"(0x20));
+		asm inline("int %0" :: "i"(0x21));
 	}
 
 	void ExecutionNode::schedule() {
@@ -186,7 +186,11 @@ namespace kernel::common::threading {
 		if (isUser) {
 			const u64 userStack = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
 
-			setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline), rip, userStack);
+			if (thread->is32Bit()) {
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline32), rip, userStack);
+			} else {
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline64), rip, userStack);
+			}
 		} else {
 			setStackAsm(thread->getStackPointer(), rip);
 		}

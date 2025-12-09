@@ -5,17 +5,18 @@
 #include "TSS.hpp"
 
 namespace kernel::x86_64::hal {
-	enum Selector : u16 {
-		ZERO = 0x0000,
-		KERNEL_CODE = 0x0008,
-		KERNEL_DATA = 0x0010,
-		USER_DATA = 0x0018,
-		USER_CODE = 0x0020,
-		TSS = 0x0028,
+	enum Selector : u8 {
+		ZERO = 0x00,
+		KERNEL_CODE = 0x08,
+		KERNEL_DATA = 0x10,
+		USER_CODE32 = 0x18,
+		USER_DATA = 0x20,
+		USER_CODE64 = 0x28,
+		TSS = 0x30,
 	};
 
 	// User: Ring 3, Driver: Ring 2, System: Ring 1
-	enum AccessBytes : u32 {
+	enum AccessBytes : u8 {
 		PRESENT = 0b10000000,
 		USER = 0b01100000,
 		DRIVER = 0b01000000,
@@ -27,7 +28,7 @@ namespace kernel::x86_64::hal {
 		ACCESSED = 0b00000001,
 	};
 
-	enum Flags : u16 {
+	enum Flags : u8 {
 		PAGE_GRANULARITY = 0b1000,
 		PROTECTED_SEGMENT = 0b0100,
 		LONG_MODE = 0b0010,
@@ -73,7 +74,7 @@ namespace kernel::x86_64::hal {
 	};
 
 	struct __attribute__((packed)) Gdt {
-		GdtEntry entries[5];
+		GdtEntry entries[6];
 
 		GdtTssEntry tssEntry{};
 

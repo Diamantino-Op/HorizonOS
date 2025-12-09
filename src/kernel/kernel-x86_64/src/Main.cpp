@@ -75,11 +75,11 @@ namespace kernel::x86_64 {
 
 		// Exceptions
 		for (u16 i = 0; i <= 31; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::TRAP_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 2, GateType::TRAP_GATE);
 		}
 
 		// NMI
-		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 0, GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 1, GateType::INTERRUPT_GATE);
 
 		// Interrupts
 		for (u16 i = 32; i <= 255; i++) {
@@ -252,7 +252,7 @@ namespace kernel::x86_64 {
 		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x20, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		// this->shutdown();
 
@@ -397,7 +397,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x20, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

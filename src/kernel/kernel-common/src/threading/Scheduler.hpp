@@ -31,7 +31,7 @@ namespace kernel::common::threading {
     class Thread {
     public:
 		explicit Thread(Process* parent, u64 *context);
-    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0);
+    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false);
         ~Thread();
 
         void setContext(u64 *newContext);
@@ -45,6 +45,8 @@ namespace kernel::common::threading {
 
     	void setKStackPointer(u64 newKStackPointer);
     	u64 getKStackPointer() const;
+
+    	bool is32Bit() const;
 
         void setState(ThreadState newState);
         ThreadState getState() const;
@@ -64,6 +66,8 @@ namespace kernel::common::threading {
 		u64 stackPointer {};
 
     	u64 kernelStackPointer {};
+
+    	bool bit32 = {};
 
         ThreadState state {};
     };

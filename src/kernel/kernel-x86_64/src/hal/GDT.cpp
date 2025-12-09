@@ -21,10 +21,10 @@ namespace kernel::x86_64::hal {
             Flags::PAGE_GRANULARITY | Flags::PROTECTED_SEGMENT
         );
 
-        // User Code Segment
+        // User Code 32-Bit Segment
         this->gdtInstance.entries[3] = GdtEntry(
             AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE | AccessBytes::USER,
-            Flags::PAGE_GRANULARITY | Flags::LONG_MODE
+            Flags::PAGE_GRANULARITY
         );
 
         // User Data Segment
@@ -32,6 +32,12 @@ namespace kernel::x86_64::hal {
             AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::USER,
             Flags::PAGE_GRANULARITY | Flags::PROTECTED_SEGMENT
         );
+
+    	// User Code 64-Bit Segment
+    	this->gdtInstance.entries[3] = GdtEntry(
+			AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE | AccessBytes::USER,
+			Flags::PAGE_GRANULARITY | Flags::LONG_MODE
+		);
 
         // TSS Segment
         this->gdtInstance.tssEntry = GdtTssEntry(tss);

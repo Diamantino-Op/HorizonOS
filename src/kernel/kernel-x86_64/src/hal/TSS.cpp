@@ -13,6 +13,10 @@ namespace kernel::x86_64::hal {
 
 	void TssManager::allocStack() {
 		this->tssInstance.rsp[0] = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // 16 Kb Stack
+
+		this->tssInstance.ist[0] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
+		this->tssInstance.ist[1] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
+		this->tssInstance.ist[2] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
 	}
 
     void TssManager::updateTss() {

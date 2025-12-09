@@ -256,8 +256,8 @@ namespace kernel::common::memory {
 		for (usize i = 0; i < pagesToFree * pageSize; i += pageSize) {
 			const auto virtAddress = reinterpret_cast<u64 *>(blockStart + i);
 
+			ctx->pageMap.unMapPage(reinterpret_cast<u64>(virtAddress));
 			CommonMain::getInstance()->getPMM()->freePages(virtAddress, 1);
-			ctx->pageMap.unMapPage(*virtAddress);
 		}
 
 		if (prev) {
