@@ -5,8 +5,16 @@
 #include "LinkedList.hpp"
 #include "memory/VirtualAllocator.hpp"
 
+#if defined(__x86_64__) || defined(_M_X64)
+	#include "hal/Interrupts.hpp"
+#endif
+
 namespace kernel::common::threading {
     using namespace memory;
+
+#if defined(__x86_64__) || defined(_M_X64)
+	using namespace kernel::x86_64::hal;
+#endif
 
     constexpr u8 maxTicks = 50; // 50ms with PIT at 1kHz
 
@@ -25,13 +33,20 @@ namespace kernel::common::threading {
         COUNT = 4
     };
 
+	enum ThreadOS {
+		HORIZONOS = 0,
+		LINUX = 1,
+		WINDOWS = 2,
+		MACOS = 3
+	};
+
     class Process;
 	class Scheduler;
 
     class Thread {
     public:
 		explicit Thread(Process* parent, u64 *context);
-    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false);
+    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false, ThreadOS os = ThreadOS::HORIZONOS);
         ~Thread();
 
         void setContext(u64 *newContext);
@@ -48,12 +63,16 @@ namespace kernel::common::threading {
 
     	bool is32Bit() const;
 
+    	ThreadOS getOS() const;
+
         void setState(ThreadState newState);
         ThreadState getState() const;
 
 		u16 getId() const;
 
         Process *getParent() const;
+
+    	Frame *getFrame();
 
     private:
         Process *parent {};
@@ -69,7 +88,11 @@ namespace kernel::common::threading {
 
     	bool bit32 = {};
 
+    	ThreadOS os = {};
+
         ThreadState state {};
+
+    	Frame frame {};
     };
 
     class Process {
@@ -121,13 +144,12 @@ namespace kernel::common::threading {
 
     	static void reSchedule();
 
+    	u64 schedule(u64 oldRsp);
+
     	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
 
-		void switchThreads();
-
-    	void switchContext(Thread *oldThread, Thread *newThread) const;
-    	void switchContextMid(const Thread *newThread) const;
+		u64 switchThreads(u64 oldRsp);
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
@@ -135,12 +157,6 @@ namespace kernel::common::threading {
     	u64 getENThreadRsp() const;
 
     private:
-    	static u32 scheduleTick(u64 *);
-
-    	void schedule();
-
-    	void initArch();
-
 		bool isDisabledFlag {};
 
     	bool prevIF {};
@@ -152,9 +168,7 @@ namespace kernel::common::threading {
 
 	[[noreturn]] void reaperFunction();
 
-	extern "C" void switchContextAsm(u64 *oldStackPointer, u64 *newStackPointer, u64 newTableAddr, Thread *newThread);
-
-	extern "C" void switchContextMidAsm(const Thread *newThread);
+	extern "C" void switchContextAsm();
 
 	constexpr u64 threadCtxStackSize = pageSize * 4;
 

@@ -40,7 +40,7 @@ jobs:
         run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg -Dqemu_targets=false build
 
       - name: Build
-        run: cd ${{github.workspace}} && meson compile HorizonOS_ISO
+        run: cd ${{github.workspace}}/build && meson compile HorizonOS_ISO
 
       - name: Upload ISO
         id: upload-iso
@@ -84,7 +84,7 @@ jobs:
         run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg -Ddebug_build=true -Dqemu_targets=false build
 
       - name: Build
-        run: cd ${{github.workspace}} && meson compile HorizonOS_ISO -Ddebug_build=true
+        run: cd ${{github.workspace}}/build && meson compile HorizonOS_ISO -Ddebug_build=true
 
       - name: Upload ISO
         id: upload-iso

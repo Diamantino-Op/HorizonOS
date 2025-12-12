@@ -6,7 +6,7 @@
 namespace kernel::common::hal {
     class SyscallManager {
     public:
-        void init();
+        static void init();
     };
 
     extern "C" void syscallHandler();

@@ -21,7 +21,10 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, bool isKernel) {
+	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, AllocContext *ctx, bool isKernel) {
+		this->isKernel = isKernel;
+		this->allocCtx = ctx;
+
 		Terminal* terminal = CommonMain::getTerminal();
 
 		if (pagingModeRequest.response != nullptr) {
@@ -42,7 +45,7 @@ namespace kernel::common::memory {
 
 		memset(this->pageTable, 0, pageSize);
 
-		if (isKernel) {
+		if (this->isKernel) {
 			for (u16 i = 256; i < 512; i++) {
 				getOrCreatePageTable(this->pageTable, i, 0b00000011, true, false);
 			}
@@ -83,10 +86,14 @@ namespace kernel::common::memory {
 		this->setPageFlags(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), flags);
 
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
+
+		if (not isKernel) {
+			this->pageTree.insert(vAddr, 1, reinterpret_cast<u64 *>(this->allocCtx), allocateRBTreeNode);
+		}
 	}
 
 	// TODO: Free pages
-	void PageMap::unMapPage(const u64 vAddr) const {
+	void PageMap::unMapPage(const u64 vAddr) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -123,6 +130,10 @@ namespace kernel::common::memory {
 		auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
 		if (lvl1Table->entries[lvl1].present) {
 			memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
+		}
+
+		if (not isKernel) {
+			this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 		}
 	}
 

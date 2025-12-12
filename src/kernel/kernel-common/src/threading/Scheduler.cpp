@@ -10,7 +10,7 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit) : parent(parent), bit32(is32Bit) {
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os) {
 		this->context = scheduler->createContext(this, parent, isUser, rip, rsp);
 
 		this->id = TIDAllocator::allocTID();
@@ -62,6 +62,10 @@ namespace kernel::common::threading {
 		return this->bit32;
 	}
 
+	ThreadOS Thread::getOS() const {
+		return this->os;
+	}
+
 	void Thread::setState(const ThreadState newState) {
 		this->state = newState;
 	}
@@ -78,6 +82,10 @@ namespace kernel::common::threading {
 		return this->parent;
 	}
 
+	Frame *Thread::getFrame() {
+		return &this->frame;
+	}
+
 	// Process
 
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
@@ -87,10 +95,6 @@ namespace kernel::common::threading {
 
 		this->processContext = ctx;
 		this->processContextKernel = ctkKern;
-
-		VirtualAllocator::shareKernelPages(this->processContext);
-
-		VirtualAllocator::initContext(this->processContext);
 	}
 
 	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), priority(priority) {
@@ -156,8 +160,6 @@ namespace kernel::common::threading {
 		this->currentThread = new LinkedListEntry<Thread>();
 
 		this->currentThread->value = newThread;
-
-		this->initArch();
 	}
 
 	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {

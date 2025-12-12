@@ -158,6 +158,23 @@ namespace kernel::common::memory {
 		currentPageMap->load();
 	}
 
+	RBTreeNode *PageMap::allocateRBTreeNode(const u64 data, const u64 extraData, u64 *extraArgs) {
+		CommonMain::getTerminal()->debug("F", "VMM");
+
+		auto *node = reinterpret_cast<RBTreeNode *>(VirtualAllocator::alloc(reinterpret_cast<AllocContext *>(extraArgs), sizeof(RBTreeNode)));
+
+		CommonMain::getTerminal()->debug("G", "VMM");
+
+		node->data = data;
+		node->extraData = extraData;
+
+		return node;
+	}
+
+	void PageMap::deleteRBTreeNode(RBTreeNode *node, u64 *extraArgs) {
+		VirtualAllocator::free(reinterpret_cast<AllocContext *>(extraArgs), reinterpret_cast<u64 *>(node));
+	}
+
 	u64 VirtualMemoryManager::getVirtualKernelAddr() const {
 		return this->kernelAddrVirt;
 	}
@@ -168,5 +185,9 @@ namespace kernel::common::memory {
 
 	u64 *PageMap::getPageTable() const {
 		return this->pageTable;
+	}
+
+	bool PageMap::getIsKernel() const {
+		return this->isKernel;
 	}
 }

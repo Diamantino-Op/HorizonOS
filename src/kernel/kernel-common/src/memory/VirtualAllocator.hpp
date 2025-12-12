@@ -15,7 +15,7 @@ namespace kernel::common::memory {
     };
 
     struct AllocContext {
-        PageMap pageMap {};
+        PageMap pageMap;
         u8 pageFlags {};
         u64 *heapStart {};
         usize heapSize {};
@@ -58,6 +58,9 @@ namespace kernel::common::memory {
         static void defrag(AllocContext *ctx);
 
     private:
+        static u64 startCreateArch();
+        static void endCreateArch(u64 value);
+
         static u64 getProcessAllocStart();
 
         static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);

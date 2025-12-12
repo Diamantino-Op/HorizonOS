@@ -3,9 +3,11 @@
 #include "CommonMain.hpp"
 #include "X86VirtualMemory.hpp"
 #include "memory/MainMemory.hpp"
+#include "utils/Asm.hpp"
 
 namespace kernel::common::memory {
 	using namespace x86_64::memory;
+	using namespace x86_64::utils;
 
 	// TODO: Optimize this shit
 	void VirtualAllocator::destroyContext(AllocContext *ctx) {
@@ -75,5 +77,17 @@ namespace kernel::common::memory {
 
 			table->entries[256 + i] = kernelTable->entries[256 + i];
 		}
+	}
+
+	u64 VirtualAllocator::startCreateArch() {
+		const u64 currCr3 = Asm::readCr3();
+
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
+
+		return currCr3;
+	}
+
+	void VirtualAllocator::endCreateArch(const u64 value) {
+		Asm::writeCr3(value);
 	}
 }

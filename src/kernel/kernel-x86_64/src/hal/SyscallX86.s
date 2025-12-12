@@ -1,4 +1,5 @@
 .global syscallHandler
+.extern callSyscall
 syscallHandler:
     push rax
     push rbx
@@ -35,4 +36,4 @@ syscallHandler:
     pop rbx
     pop rax
 
-    iretq
+    sysretq

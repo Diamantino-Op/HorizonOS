@@ -133,6 +133,8 @@ namespace kernel::x86_64::hal {
 
 				setCorePointer(this->bootstrapCpu);
 
+				//asm volatile("swapgs" ::: "memory");
+
 				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
 
 				break;
@@ -178,6 +180,8 @@ namespace kernel::x86_64::hal {
 		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
 
 		CpuManager::setCorePointer(&coreKernel->cpuCore);
+
+		//asm volatile("swapgs" ::: "memory");
 
 		coreKernel->init();
 	}

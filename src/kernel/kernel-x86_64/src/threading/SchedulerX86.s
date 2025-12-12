@@ -1,7 +1,24 @@
-.extern switchContextMidAsm
+.extern scheduleEntry
+.extern getCurrThreadRsp
 
 .global switchContextAsm
 switchContextAsm:
+    pop rcx
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+
+    call getCurrThreadRsp
+
+    mov rsp, rax
+
+    push r11
+    push r10
+    push r9
+    push r8
+    push rcx
+
     push rbx
     push rbp
     push r12
@@ -9,15 +26,11 @@ switchContextAsm:
     push r14
     push r15
 
-    mov [rdi], rsp
+    mov rdi, rsp
 
-    mov cr3, rdx
+    call scheduleEntry
 
-    mov rsp, [rsi]
-
-    mov rdi, rcx
-
-    call switchContextMidAsm
+    mov rsp, rax
 
     pop r15
     pop r14
@@ -26,7 +39,7 @@ switchContextAsm:
     pop rbp
     pop rbx
 
-    ret
+    iretq
 
 .global setStackAsm
 setStackAsm:
@@ -34,6 +47,10 @@ setStackAsm:
 
     mov rsp, [rdi]
 
+    push 0x10
+    push [rdi]
+    push 0x292
+    push 0x08
     push rsi
 
     push 0
@@ -51,17 +68,17 @@ setStackAsm:
 
 .global threadTrampoline32
 threadTrampoline32:
-    mov ax, 0x18 | 3
+    mov ax, 0x20 | 3
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
 
     mov rax, r14
-    push 0x18 | 3
+    push 0x20 | 3
     push rax
     push 0x200
-    push 0x20 | 3
+    push 0x18 | 3
     push r15
 
     mov r14, 0
@@ -71,17 +88,17 @@ threadTrampoline32:
 
 .global threadTrampoline64
 threadTrampoline64:
-    mov ax, 0x28 | 3
+    mov ax, 0x20 | 3
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
 
     mov rax, r14
-    push 0x28 | 3
+    push 0x20 | 3
     push rax
     push 0x200
-    push 0x20 | 3
+    push 0x28 | 3
     push r15
 
     mov r14, 0

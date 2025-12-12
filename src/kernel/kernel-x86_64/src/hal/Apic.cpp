@@ -63,6 +63,8 @@ namespace kernel::x86_64::hal {
 		}*/
 		this->calibrateTimer();
 
+		this->tscDeadline = Tsc::supported() and CpuId::get(0x01, 0).ecx & (1 << 24);
+
 		this->initialized = true;
 	}
 
@@ -192,10 +194,20 @@ namespace kernel::x86_64::hal {
 		return MMIO::in<u32>(this->mmio + reg);
 	}
 
-	void Apic::write(const u32 reg, const u32 data) {
+	void Apic::write(const u32 reg, const u64 data) {
 		if (this->isX2Apic) {
+			if (reg == ApicMsrs::LAPIC_ICRL) {
+				asm volatile ("mfence; lfence" ::: "memory");
+			}
+
 			Asm::wrmsr(this->toX2Apic(reg), data);
 		} else {
+			if (reg == ApicMsrs::LAPIC_ICRL) {
+				asm volatile ("" ::: "memory");
+
+				MMIO::out<u32>(this->mmio + ApicMsrs::LAPIC_ICRH, data >> 32);
+			}
+
 			MMIO::out<u32>(this->mmio + reg, data);
 		}
 	}

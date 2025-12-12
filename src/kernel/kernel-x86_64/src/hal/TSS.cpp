@@ -17,6 +17,7 @@ namespace kernel::x86_64::hal {
 		this->tssInstance.ist[0] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
 		this->tssInstance.ist[1] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
 		this->tssInstance.ist[2] = reinterpret_cast<u64>(malloc(pageSize)) + pageSize; // 4 Kb Stack
+		this->tssInstance.ist[3] = 0; // Force the use of RSP (Used for Ctx switch and syscalls)
 	}
 
     void TssManager::updateTss() {

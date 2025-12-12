@@ -17,6 +17,8 @@ namespace kernel::common::threading {
 
 	void idleThread() {
 		for (;;) {
+			CommonMain::getTerminal()->debug("Idle Tick", "Idle");
+
 			asm volatile ("pause" ::: "memory");
 		}
 	}
@@ -55,27 +57,23 @@ namespace kernel::common::threading {
 		return reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 	}
 
-	void ExecutionNode::initArch() {
-		Interrupts::setHandler(0x21, scheduleTick, nullptr);
-
-		//Interrupts::unmask(intNum);
-	}
-
-	u32 ExecutionNode::scheduleTick(u64 *) {
-		CpuManager::getCurrentCore()->executionNode.schedule();
-
-		return 0;
-	}
-
 	void ExecutionNode::reSchedule() {
 		asm inline("int %0" :: "i"(0x21));
 	}
 
-	void ExecutionNode::schedule() {
+	extern "C" u64 getCurrThreadRsp() {
+		return *CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value->getStackPointer();
+	}
+
+	extern "C" u64 scheduleEntry(const u64 oldRsp) {
+		return CpuManager::getCurrentCore()->executionNode.schedule(oldRsp);
+	}
+
+	u64 ExecutionNode::schedule(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
 		if (this->isDisabledFlag) {
-			return;
+			return oldRsp;
 		}
 
 		this->prevIF = schedulerPtr->getSchedLock()->lock();
@@ -86,11 +84,13 @@ namespace kernel::common::threading {
 			Asm::lhlt();
 		}
 
-		switchThreads();
+		return switchThreads(oldRsp);
 	}
 
-	void ExecutionNode::switchThreads() {
+	u64 ExecutionNode::switchThreads(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		// Save the old thread state
 
 		if (this->currentThread->value->getState() == ThreadState::TERMINATED) {
 			// TODO: This might create nullptr if the reaper thread kills this while it is being used here
@@ -105,12 +105,16 @@ namespace kernel::common::threading {
 
 		const LinkedListEntry<Thread> *oldEntry = this->currentThread;
 
+		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->save();
+
+		this->currentThread->value->setStackPointer(oldRsp);
+
+		// Get new thread
+
 		if (schedulerPtr->readyThreadList.getSize() > 0) {
 			this->currentThread = schedulerPtr->readyThreadList.removeFirstEntry();
 
 			this->currentThread->value->setState(ThreadState::RUNNING);
-
-			// TODO: Make trampoline for user threads
 		} else {
 			LinkedListEntry<Thread> *selectedEntry = nullptr;
 
@@ -134,31 +138,23 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
+		this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.load();
+
 		if (oldEntry != this->currentThread) {
 			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		switchContext(oldEntry->value, this->currentThread->value);
-	}
+		CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
 
-	void ExecutionNode::switchContext(Thread *oldThread, Thread *newThread) const {
-		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
-
-		switchContextAsm(oldThread->getStackPointer(), newThread->getStackPointer(), newThread->getParent()->getProcessContextKernel()->pageMap.getAddr(), newThread);
-	}
-
-	void switchContextMidAsm(const Thread *newThread) {
-		Scheduler::getCurrentExecutionNode()->switchContextMid(newThread);
-	}
-
-	void ExecutionNode::switchContextMid(const Thread *newThread) const {
-		reinterpret_cast<ThreadContext *>(newThread->getContext())->load();
+		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->load();
 
 		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
 
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
+
+		return *this->currentThread->value->getStackPointer();
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {
@@ -219,7 +215,7 @@ namespace kernel::x86_64::threading {
 		}
 	}
 
-	void ThreadContext::init(Process *process, u64 stackPointer, const bool isUserspace) {
+	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace) {
 		this->isUser = isUserspace;
 		this->process = process;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;

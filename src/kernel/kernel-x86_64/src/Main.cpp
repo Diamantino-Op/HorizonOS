@@ -4,6 +4,7 @@
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 #include "Time.hpp"
+#include "hal/Syscall.hpp"
 
 #include "limine.h"
 
@@ -75,16 +76,19 @@ namespace kernel::x86_64 {
 
 		// Exceptions
 		for (u16 i = 0; i <= 31; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 2, GateType::TRAP_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 2, GateDPL::KERNEL_DPL | GateType::TRAP_GATE);
 		}
 
 		// NMI
-		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 1, GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 1, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		// Interrupts
 		for (u16 i = 32; i <= 255; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateType::INTERRUPT_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		}
+
+		this->idtManager.addEntry(0x21, reinterpret_cast<u64>(switchContextAsm), Selector::KERNEL_CODE, 3, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 3, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
 
 		this->idtManager.loadIdt();
 
@@ -243,13 +247,15 @@ namespace kernel::x86_64 {
 
 		terminal.info("uACPI Initialised... OK", "HorizonOS");
 
+		SyscallManager::init();
+
+		terminal.info("Syscalls Initialised... OK", "HorizonOS");
+
 		// Multithread
 
 		this->cpuManager.startMultithread();
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
-
-		terminal.info("Apic scheduler interrupt: %u", "HorizonOS", ioApicManager.getMaxRange());
 
 		// Todo: make one shot and restart when thread goes to sleep
 		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);

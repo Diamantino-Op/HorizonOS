@@ -2,6 +2,7 @@
 #define KERNEL_COMMON_VIRTUALMEMORY_HPP
 
 #include "Types.hpp"
+#include "RBTree.hpp"
 
 #include "PhysicalMemory.hpp"
 
@@ -13,15 +14,19 @@ extern char dataStart[], dataEnd[];
 namespace kernel::common::memory {
     constexpr u64 kernelStackSize = pageSize * 16; // 64 Kbit
 
+    struct AllocContext;
+
     class PageMap {
     public:
-        void init(u64 *newPageTable, u64 newPhysPageTable, bool isKernel = false);
+		virtual ~PageMap() = default;
+
+		void init(u64 *newPageTable, u64 newPhysPageTable, AllocContext *ctx, bool isKernel = false);
 
         void load() const;
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
 
-        void unMapPage(u64 vAddr) const;
+        void unMapPage(u64 vAddr);
 
         u64 getPhysAddress(u64 vAddr) const;
 
@@ -31,13 +36,21 @@ namespace kernel::common::memory {
 
         u64 getAddr() const;
 
+        bool getIsKernel() const;
+
     private:
         void setPageFlags(u64 * pageAddr, u8 flags);
 
         u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
 
+        static RBTreeNode *allocateRBTreeNode(u64 data, u64 extraData, u64 *extraArgs);
+        static void deleteRBTreeNode(RBTreeNode *node, u64 *extraArgs);
+
         u64* pageTable {};
         u64 physPageTable {};
+        RBTree pageTree {};
+        AllocContext *allocCtx {};
+        bool isKernel {};
         bool isLevel5Paging = false;
     };
 

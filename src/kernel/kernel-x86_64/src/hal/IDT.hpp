@@ -9,6 +9,11 @@ namespace kernel::x86_64::hal {
 		TRAP_GATE = 0xF,
 	};
 
+	enum GateDPL : u8 {
+		KERNEL_DPL = 0x8,
+		USER_DPL = 0xE,
+	};
+
 	constexpr u8 IDT_ENTRY_PRESENT = 0b10000000;
 
     struct __attribute__((packed)) IDTEntry {

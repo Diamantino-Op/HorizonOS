@@ -12,7 +12,7 @@ namespace kernel::x86_64::hal {
         Tsc() = default;
         ~Tsc() = default;
 
-        bool supported();
+        static bool supported();
 
         u64 read();
         u64 getTimeNs();

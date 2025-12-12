@@ -2,6 +2,7 @@
 #define KERNEL_X86_64_SYSCALLX86_HPP
 
 #include "Types.hpp"
+#include "Interrupts.hpp"
 #include "hal/Syscall.hpp"
 
 namespace kernel::x86_64::hal {
@@ -20,67 +21,11 @@ namespace kernel::x86_64::hal {
     	u64 r13 = {};
     	u64 r14 = {};
     	u64 r15 = {};
-
-    	constexpr u64 *raxReg() {
-    	    return &rax;
-    	}
-
-    	constexpr u64 *rbxReg() {
-    	    return &rax;
-    	}
-
-		constexpr u64 *rcxReg() {
-			return &rax;
-		}
-
-		constexpr u64 *rdxReg() {
-			return &rax;
-		}
-
-		constexpr u64 *rsiReg() {
-			return &rax;
-		}
-
-		constexpr u64 *rdiReg() {
-			return &rax;
-		}
-
-		constexpr u64 *r8Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r9Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r10Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r11Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r12Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r13Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r14Reg() {
-			return &rax;
-		}
-
-		constexpr u64 *r15Reg() {
-			return &rax;
-		}
 	};
 
-	static u32 intSyscallEntry(u64 *regs);
+	void intSyscallEntry(const Frame &frame);
 
-    void callSyscall(SyscallRegs *regs);
+    extern "C" void callSyscall(SyscallRegs *regs);
 }
 
 #endif

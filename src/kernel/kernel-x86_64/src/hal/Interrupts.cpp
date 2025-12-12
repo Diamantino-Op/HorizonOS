@@ -4,6 +4,7 @@
 #include "Main.hpp"
 
 #include "utils/Asm.hpp"
+#include "hal/SyscallX86.hpp"
 
 namespace kernel::x86_64::hal {
 	using namespace utils;
@@ -29,6 +30,8 @@ namespace kernel::x86_64::hal {
 			} else {
 				kernelPanic(frame);
 			}
+		} else if (frame.intNo == 0x80) {
+			intSyscallEntry(frame);
 		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
 

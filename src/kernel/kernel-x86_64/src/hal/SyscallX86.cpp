@@ -13,5 +13,23 @@ namespace kernel::common::hal {
 		Asm::wrmsr(Msrs::STAR, star);
 		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(syscallHandler));
 		Asm::wrmsr(Msrs::FMASK, ~0x2);
+
+		u64 efer = Asm::rdmsr(Msrs::EFER);
+
+		efer |= (1 << 0);
+		// efer |= (1 << 12); // SVME
+		// efer |= (1 << 15); // TCE
+
+		Asm::wrmsr(Msrs::EFER, efer);
+	}
+}
+
+namespace kernel::x86_64::hal {
+	void intSyscallEntry(const Frame &frame) {
+
+	}
+
+	void callSyscall(SyscallRegs *regs) {
+
 	}
 }

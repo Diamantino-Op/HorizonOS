@@ -83,7 +83,7 @@ namespace kernel::x86_64::hal {
     private:
         u32 toX2Apic(u32 reg);
         u32 read(u32 reg);
-        void write(u32 reg, u32 data);
+        void write(u32 reg, u64 data);
 
         u32 apicId {};
 
