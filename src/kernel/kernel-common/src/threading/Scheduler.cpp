@@ -82,10 +82,6 @@ namespace kernel::common::threading {
 		return this->parent;
 	}
 
-	Frame *Thread::getFrame() {
-		return &this->frame;
-	}
-
 	// Process
 
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {

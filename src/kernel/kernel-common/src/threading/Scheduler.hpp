@@ -5,16 +5,8 @@
 #include "LinkedList.hpp"
 #include "memory/VirtualAllocator.hpp"
 
-#if defined(__x86_64__) || defined(_M_X64)
-	#include "hal/Interrupts.hpp"
-#endif
-
 namespace kernel::common::threading {
     using namespace memory;
-
-#if defined(__x86_64__) || defined(_M_X64)
-	using namespace kernel::x86_64::hal;
-#endif
 
     constexpr u8 maxTicks = 50; // 50ms with PIT at 1kHz
 
@@ -72,8 +64,6 @@ namespace kernel::common::threading {
 
         Process *getParent() const;
 
-    	Frame *getFrame();
-
     private:
         Process *parent {};
         u16 id {};
@@ -91,8 +81,6 @@ namespace kernel::common::threading {
     	ThreadOS os = {};
 
         ThreadState state {};
-
-    	Frame frame {};
     };
 
     class Process {
