@@ -62,21 +62,29 @@ namespace kernel::common::threading {
 	}
 
 	extern "C" u64 getCurrThreadRsp() {
-		return *CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value->getStackPointer();
+		if (CpuManager::getCurrentCore()->executionNode.isDisabled()) {
+			CommonMain::getTerminal()->error("EN Disabled!", "Scheduler");
+
+			Interrupts::sendEOI(0x21);
+
+			return 0;
+		}
+
+		return *CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value->getStackPointer() + (sizeof(u64) * 11);
 	}
 
-	extern "C" u64 scheduleEntry(const u64 oldRsp) {
+	extern "C" void loadNewThread() {
+		CpuManager::getCurrentCore()->executionNode.loadNewThread();
+	}
+
+	extern "C" u128 scheduleEntry(const u64 oldRsp) {
 		return CpuManager::getCurrentCore()->executionNode.schedule(oldRsp);
 	}
 
-	u64 ExecutionNode::schedule(const u64 oldRsp) {
+	u128 ExecutionNode::schedule(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		if (this->isDisabledFlag) {
-			return oldRsp;
-		}
-
-		this->prevIF = schedulerPtr->getSchedLock()->lock();
+		schedulerPtr->getSchedLock()->lock();
 
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
@@ -84,10 +92,10 @@ namespace kernel::common::threading {
 			Asm::lhlt();
 		}
 
-		return switchThreads(oldRsp);
+		return this->saveOldThread(oldRsp);
 	}
 
-	u64 ExecutionNode::switchThreads(const u64 oldRsp) {
+	u128 ExecutionNode::saveOldThread(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
 		// Save the old thread state
@@ -138,23 +146,27 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.load();
-
 		if (oldEntry != this->currentThread) {
 			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
+		//CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
 
+		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
+
+		return hi | *this->currentThread->value->getStackPointer();
+	}
+
+	void ExecutionNode::loadNewThread() const {
 		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->load();
 
 		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
 
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->prevIF);
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(false);
 
-		return *this->currentThread->value->getStackPointer();
+		Interrupts::sendEOI(0x21);
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {

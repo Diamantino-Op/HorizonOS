@@ -1,15 +1,21 @@
 .extern scheduleEntry
 .extern getCurrThreadRsp
+.extern loadNewThread
 
 .global switchContextAsm
 switchContextAsm:
+    cli
+
+    call getCurrThreadRsp
+
+    test rax, rax
+    jz coreDisabled
+
     pop rcx
     pop r8
     pop r9
     pop r10
     pop r11
-
-    call getCurrThreadRsp
 
     mov rsp, rax
 
@@ -30,7 +36,11 @@ switchContextAsm:
 
     call scheduleEntry
 
+    mov cr3, rdx
+
     mov rsp, rax
+
+    call loadNewThread
 
     pop r15
     pop r14
@@ -38,6 +48,18 @@ switchContextAsm:
     pop r12
     pop rbp
     pop rbx
+
+    jmp ctxSwitchFinish
+
+coreDisabled:
+    push r11
+    push r10
+    push r9
+    push r8
+    push rcx
+
+ctxSwitchFinish:
+    sti
 
     iretq
 

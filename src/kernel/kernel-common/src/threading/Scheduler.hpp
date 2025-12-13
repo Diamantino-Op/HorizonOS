@@ -132,12 +132,14 @@ namespace kernel::common::threading {
 
     	static void reSchedule();
 
-    	u64 schedule(u64 oldRsp);
+    	u128 schedule(u64 oldRsp);
 
     	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
 
-		u64 switchThreads(u64 oldRsp);
+		u128 saveOldThread(u64 oldRsp);
+
+    	void loadNewThread() const;
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
@@ -146,8 +148,6 @@ namespace kernel::common::threading {
 
     private:
 		bool isDisabledFlag {};
-
-    	bool prevIF {};
 
         LinkedListEntry<Thread> *currentThread {};
     };
