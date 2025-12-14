@@ -28,8 +28,6 @@ namespace kernel::x86_64::hal {
 
     private:
         Tss tssInstance {};
-
-        u64 kStackAddr {};
     };
 
     extern "C" void updateTssAsm();

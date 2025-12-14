@@ -63,7 +63,7 @@ namespace kernel::common::threading {
 
 	extern "C" u64 getCurrThreadRsp() {
 		if (CpuManager::getCurrentCore()->executionNode.isDisabled()) {
-			CommonMain::getTerminal()->error("EN Disabled!", "Scheduler");
+			//CommonMain::getTerminal()->error("EN Disabled!", "Scheduler");
 
 			Interrupts::sendEOI(0x21);
 
@@ -152,7 +152,7 @@ namespace kernel::common::threading {
 
 		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
-		//CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
+		CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
 
 		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 

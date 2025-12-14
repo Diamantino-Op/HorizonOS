@@ -5,11 +5,12 @@
 .global switchContextAsm
 switchContextAsm:
     cli
+    cld
 
     call getCurrThreadRsp
 
-    test rax, rax
-    jz coreDisabled
+    cmp rax, 0
+    je ctxSwitchFinish
 
     pop rcx
     pop r8
@@ -48,15 +49,6 @@ switchContextAsm:
     pop r12
     pop rbp
     pop rbx
-
-    jmp ctxSwitchFinish
-
-coreDisabled:
-    push r11
-    push r10
-    push r9
-    push r8
-    push rcx
 
 ctxSwitchFinish:
     sti

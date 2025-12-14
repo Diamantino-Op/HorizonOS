@@ -113,8 +113,6 @@ namespace kernel::common::threading {
 
     	bool isUserspace {};
 
-		LinkedListEntry<Thread> *mainThread {};
-
 		LinkedList<Thread> threadList {};
 
         AllocContext *processContext {};
