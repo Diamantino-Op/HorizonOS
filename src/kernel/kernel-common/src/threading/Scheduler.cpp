@@ -408,6 +408,20 @@ namespace kernel::common::threading {
 		return 0;
 	}
 
+	bool Scheduler::hasThreads() const {
+		if (this->readyThreadList.getSize() > 0) {
+			return true;
+		}
+
+		for (auto &currEntry : this->queues) {
+			if (currEntry.getSize() > 0) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	TicketSpinLock *Scheduler::getSchedLock() {
 		return &this->schedLock;
 	}

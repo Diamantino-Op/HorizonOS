@@ -281,6 +281,8 @@ namespace kernel::common::threading {
 		 */
 		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0);
 
+    	bool hasThreads() const;
+
 		static void sendSleepEOI();
 
     	static u32 sleepTick(u64 *);

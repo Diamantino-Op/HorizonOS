@@ -275,7 +275,7 @@ namespace kernel::x86_64 {
 		 for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 1", ns);
+			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 1", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -287,7 +287,7 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 2", ns);
+			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 2", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -299,7 +299,7 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 3", ns);
+			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 3", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -311,7 +311,7 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 4", ns);
+			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 4", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
@@ -323,7 +323,7 @@ namespace kernel::x86_64 {
 		for (;;) {
 			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-			CommonMain::getTerminal()->warnNoLock("Call NS: %llu", "Thread 5", ns);
+			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 5", ns);
 
 			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 
