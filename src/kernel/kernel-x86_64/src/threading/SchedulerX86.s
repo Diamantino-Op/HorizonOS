@@ -21,7 +21,7 @@ switchContextAsm:
     mov rsp, rax
 
     push r11
-    push r10
+    push rax
     push r9
     push r8
     push rcx
