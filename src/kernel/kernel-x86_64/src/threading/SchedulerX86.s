@@ -1,31 +1,8 @@
 .extern scheduleEntry
-.extern getCurrThreadRsp
 .extern loadNewThread
 
 .global switchContextAsm
 switchContextAsm:
-    cli
-    cld
-
-    call getCurrThreadRsp
-
-    cmp rax, 0
-    je ctxSwitchFinish
-
-    pop rcx
-    pop r8
-    pop r9
-    pop r10
-    pop r11
-
-    mov rsp, rax
-
-    push r11
-    push rax
-    push r9
-    push r8
-    push rcx
-
     push rbx
     push rbp
     push r12
@@ -50,10 +27,7 @@ switchContextAsm:
     pop rbp
     pop rbx
 
-ctxSwitchFinish:
-    sti
-
-    iretq
+    ret
 
 .global setStackAsm
 setStackAsm:
@@ -61,10 +35,6 @@ setStackAsm:
 
     mov rsp, [rdi]
 
-    push 0x10
-    push [rdi]
-    push 0x292
-    push 0x08
     push rsi
 
     push 0

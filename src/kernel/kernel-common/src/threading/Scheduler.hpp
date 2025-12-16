@@ -287,6 +287,8 @@ namespace kernel::common::threading {
 
     	static u32 sleepTick(u64 *);
 
+    	static u32 intReSchedule(u64 *);
+
     	TicketSpinLock *getSchedLock();
 
     	static Thread *getCurrentThread();

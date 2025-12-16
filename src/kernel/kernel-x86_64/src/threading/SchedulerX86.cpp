@@ -51,26 +51,22 @@ namespace kernel::common::threading {
 		Interrupts::setHandler(0x2c, sleepTick, nullptr);
 
 		Interrupts::unmask(0x2c);
+
+		Interrupts::setHandler(0x21, intReSchedule, nullptr);
 	}
 
 	Thread *Scheduler::getCurrentThread() {
 		return reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
 	}
 
-	void ExecutionNode::reSchedule() {
-		asm inline("int %0" :: "i"(0x21));
+	u32 Scheduler::intReSchedule(u64 *) {
+		ExecutionNode::reSchedule();
+
+		return 0;
 	}
 
-	extern "C" u64 getCurrThreadRsp() {
-		if (CpuManager::getCurrentCore()->executionNode.isDisabled() or not CommonMain::getInstance()->getScheduler()->hasThreads()) {
-			//CommonMain::getTerminal()->error("EN Disabled!", "Scheduler");
-
-			Interrupts::sendEOI(0x21);
-
-			return 0;
-		}
-
-		return *CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value->getStackPointer() + (sizeof(u64) * 11);
+	void ExecutionNode::reSchedule() {
+		switchContextAsm();
 	}
 
 	extern "C" void loadNewThread() {

@@ -87,7 +87,7 @@ namespace kernel::x86_64 {
 			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		}
 
-		this->idtManager.addEntry(0x21, reinterpret_cast<u64>(switchContextAsm), Selector::KERNEL_CODE, 1, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(0x21, interruptTable[0x21], Selector::KERNEL_CODE, 1, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 3, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
 
 		this->idtManager.loadIdt();
@@ -214,10 +214,10 @@ namespace kernel::x86_64 {
 		this->scheduler->addProcess(exampleProcess);
 
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
-		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
-		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
-		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		//this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
 
 		//auto *exampleUserProcess = new Process(ProcessPriority::HIGH, true);
 		//this->scheduler->addProcess(exampleUserProcess);
