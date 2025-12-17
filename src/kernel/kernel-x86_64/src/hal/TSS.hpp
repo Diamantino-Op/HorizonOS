@@ -28,6 +28,10 @@ namespace kernel::x86_64::hal {
 
     private:
         Tss tssInstance {};
+
+        const u8 generalIntStack[2048] = {};
+        const u8 nmiIntStack[2048] = {};
+        const u8 exceptionIntStack[2048] = {};
     };
 
     extern "C" void updateTssAsm();

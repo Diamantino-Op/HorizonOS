@@ -108,6 +108,7 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot() {
 }
 
 void uacpi_kernel_stall(uacpi_u8 uSec) {
+	CommonMain::getTerminal()->debug("Stalling for: %u us", "uACPI", uSec);
 	CommonMain::getInstance()->getClocks()->stallNs(uSec * 1000);
 }
 

@@ -37,8 +37,8 @@ globber = join_paths(meson.global_source_root(), 'deps', 'Globber.sh')
 
 limine_path = join_paths(meson.global_source_root(), 'deps', 'limine')
 
-ovmf_file = join_paths('deps', 'ovmf', 'OVMF.fd')
-ovmf_vars_file = join_paths('deps', 'ovmf', 'OVMF_VARS.fd')
+ovmf_file = join_paths(meson.global_source_root(), 'deps', 'ovmf', arch, 'OVMF.fd')
+ovmf_vars_file = join_paths(meson.global_source_root(), 'deps', 'ovmf', arch, 'OVMF_VARS.fd')
 
 res_path = join_paths(meson.global_source_root(), 'res')
 
@@ -171,7 +171,7 @@ horizonos_iso = custom_target('HorizonOS_ISO',
         kernel
     ],
     command: [
-        'mv', '@INPUT0@', join_paths(horizonos_boot_path, 'HorizonOS_Kernel'),
+        'cp', '@INPUT0@', join_paths(horizonos_boot_path, 'HorizonOS_Kernel'),
         '&&',
         mkdir, '-p', iso_out_path,
         '&&',
@@ -216,7 +216,7 @@ qemu_flags = [
     '-device', 'virtio-net-pci',
     '-smp', '10',
     '-m', '8G',
-    '-drive', 'if=pflash,format=raw,readpnly=on,file=@0@'.format(ovmf_file),
+    '-drive', 'if=pflash,format=raw,readonly=on,file=@0@'.format(ovmf_file),
     '-drive', 'if=pflash,format=raw,file=@0@'.format(ovmf_vars_file),
     '-serial', 'stdio',
     '-no-reboot',

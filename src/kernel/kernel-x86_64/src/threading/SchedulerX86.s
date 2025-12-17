@@ -1,8 +1,14 @@
 .extern scheduleEntry
 .extern loadNewThread
+.extern checkDisabled
 
 .global switchContextAsm
 switchContextAsm:
+    call checkDisabled
+
+    cmp rax, 1
+    je enDisabled
+
     push rbx
     push rbp
     push r12
@@ -27,6 +33,7 @@ switchContextAsm:
     pop rbp
     pop rbx
 
+enDisabled:
     ret
 
 .global setStackAsm

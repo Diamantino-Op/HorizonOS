@@ -283,8 +283,6 @@ namespace kernel::common::threading {
 
     	bool hasThreads() const;
 
-		static void sendSleepEOI();
-
     	static u32 sleepTick(u64 *);
 
     	static u32 intReSchedule(u64 *);

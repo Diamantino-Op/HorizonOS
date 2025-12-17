@@ -385,7 +385,7 @@ namespace kernel::common::threading {
 	u32 Scheduler::sleepTick(u64 *) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		const bool prevIF = schedulerPtr->getSchedLock()->lock();
+		//const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
 		for (auto &currEntry : schedulerPtr->sleepingThreadList) {
 			if (currEntry.getSleepNs() > 0) {
@@ -401,9 +401,7 @@ namespace kernel::common::threading {
 			}
 		}
 
-		sendSleepEOI();
-
-		schedulerPtr->getSchedLock()->unlock(prevIF);
+		//schedulerPtr->getSchedLock()->unlock(prevIF);
 
 		return 0;
 	}

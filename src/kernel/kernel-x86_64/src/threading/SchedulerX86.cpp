@@ -66,7 +66,13 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::reSchedule() {
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->lock();
+
 		switchContextAsm();
+	}
+
+	extern "C" u64 checkDisabled() {
+		return CpuManager::getCurrentCore()->executionNode.isDisabled() ? 1 : 0;
 	}
 
 	extern "C" void loadNewThread() {
@@ -78,8 +84,6 @@ namespace kernel::common::threading {
 	}
 
 	u128 ExecutionNode::schedule(const u64 oldRsp) {
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->lock();
-
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
 
@@ -200,10 +204,6 @@ namespace kernel::common::threading {
 		Asm::writeCr3(currPageMap);
 
 		return reinterpret_cast<u64 *>(context);
-	}
-
-	void Scheduler::sendSleepEOI() {
-		Interrupts::sendEOI(0x2b);
 	}
 
 	ExecutionNode *Scheduler::getCurrentExecutionNode() {

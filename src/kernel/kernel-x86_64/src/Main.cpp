@@ -50,11 +50,6 @@ namespace kernel::x86_64 {
 
 		terminal.info("Initializing HorizonOS...", "HorizonOS");
 
-		// TSS
-		this->tssManager = TssManager();
-
-		terminal.info("TSS Created... OK", "HorizonOS");
-
 		// GDT
 		this->gdtManager = GdtManager(this->tssManager.getTss());
 
@@ -68,11 +63,6 @@ namespace kernel::x86_64 {
 		this->tssManager.updateTss();
 
 		terminal.info("Updated TSS... OK", "HorizonOS");
-
-		// IDT
-		this->idtManager = IdtManager();
-
-		terminal.info("IDT Created... OK", "HorizonOS");
 
 		// Exceptions
 		for (u16 i = 0; i <= 31; i++) {
@@ -95,16 +85,11 @@ namespace kernel::x86_64 {
 		terminal.info("IDT Loaded... OK", "HorizonOS");
 
 		// PIC
-
-		this->dualPic = DualPIC();
-
 		this->dualPic.init();
 
 		terminal.info("PIC Initialised... OK", "HorizonOS");
 
 		// Physical Memory
-		this->physicalMemoryManager = PhysicalMemoryManager();
-
 		this->physicalMemoryManager.init();
 
 		terminal.info("Total Usable Memory: %llu", "HorizonOS", this->physicalMemoryManager.getFreeMemory());
@@ -129,8 +114,6 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context initialized...", "HorizonOS");
 
-		this->virtualPageAllocator = VirtualPageAllocator();
-
 		this->virtualPageAllocator.init(this->virtualMemoryManager.getVirtualKernelAddr());
 
 		terminal.info("Virtual Page Allocator initialized...", "HorizonOS");
@@ -140,9 +123,6 @@ namespace kernel::x86_64 {
 		this->tssManager.allocStack();
 
 		// Cpu Init
-
-		this->cpuManager = CpuManager();
-
 		this->cpuManager.init();
 
 		this->cpuManager.startBootCore();
@@ -187,17 +167,11 @@ namespace kernel::x86_64 {
 		terminal.info("Hpet Initialised... OK", "HorizonOS");
 
 		// Kvm Clock
-
-		this->kvmClock = KvmClock();
-
 		this->kvmClock.init();
 
 		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
 
 		// Acpi PM Clock
-
-		this->acpiPM = AcpiPM();
-
 		this->acpiPM.init();
 
 		terminal.info("AcpiPM Clock Initialised... OK", "HorizonOS");
@@ -379,7 +353,6 @@ namespace kernel::x86_64 {
 		auto *commonKernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		Terminal* terminal = CommonMain::getTerminal();
 
-		this->coreTssManager = TssManager();
 		this->coreGdtManager = GdtManager(this->coreTssManager.getTss());
 
 		this->coreGdtManager.loadGdt();
