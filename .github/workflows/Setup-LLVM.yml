@@ -64,3 +64,14 @@ jobs:
         with:
           path: ${{github.workspace}}/deps/llvm/build
           key: ${{steps.cache-deps-restore.outputs.cache-primary-key}}
+
+when:
+  branch: [ main ]
+  event: [ push, pull_request ]
+
+steps:
+  - name: Build LLVM
+    image: codeberg.org/native-ci/cpp-meson:latest
+
+    commands: |
+      meson setup -Dbuild_llvm=true -Dqemu_targets=false build
