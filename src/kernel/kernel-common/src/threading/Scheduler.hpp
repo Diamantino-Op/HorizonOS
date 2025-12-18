@@ -150,7 +150,7 @@ namespace kernel::common::threading {
         LinkedListEntry<Thread> *currentThread {};
     };
 
-	void idleThread();
+	[[noreturn]] void idleThread();
 
 	[[noreturn]] void reaperFunction();
 

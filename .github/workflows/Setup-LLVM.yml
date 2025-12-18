@@ -21,7 +21,7 @@ jobs:
 
       - name: Restore Deps Folder
         id: cache-deps-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ${{github.workspace}}/deps/llvm/build
           key: ${{runner.os}}-horizonos-llvm
@@ -48,7 +48,7 @@ jobs:
 
       - name: Upload LLVM
         id: upload-llvm
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: HorizonOS LLVM Build
           path: ${{github.workspace}}/deps/llvm/build
@@ -60,7 +60,7 @@ jobs:
 
       - name: Save Deps Folder
         id: cache-deps-save
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ${{github.workspace}}/deps/llvm/build
           key: ${{steps.cache-deps-restore.outputs.cache-primary-key}}
