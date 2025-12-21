@@ -66,8 +66,6 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::reSchedule() {
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->lock();
-
 		switchContextAsm();
 	}
 
@@ -98,6 +96,12 @@ namespace kernel::common::threading {
 
 		// Save the old thread state
 
+		const LinkedListEntry<Thread> *oldEntry = this->currentThread;
+
+		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->save();
+
+		this->currentThread->value->setStackPointer(oldRsp);
+
 		if (this->currentThread->value->getState() == ThreadState::TERMINATED) {
 			// TODO: This might create nullptr if the reaper thread kills this while it is being used here
 			schedulerPtr->awaitingKillThreadList.addEnd(this->currentThread);
@@ -108,12 +112,6 @@ namespace kernel::common::threading {
 		} else {
 			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 		}
-
-		const LinkedListEntry<Thread> *oldEntry = this->currentThread;
-
-		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->save();
-
-		this->currentThread->value->setStackPointer(oldRsp);
 
 		// Get new thread
 
@@ -161,8 +159,6 @@ namespace kernel::common::threading {
 		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->load();
 
 		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
-
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(false);
 
 		Interrupts::sendEOI(0x21);
 	}

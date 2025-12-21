@@ -182,9 +182,12 @@ namespace kernel::common::threading {
 		for (;;) {
 			auto *currThread = Scheduler::getCurrentThread();
 
-			if (scheduler->awaitingKillThreadList.getSize() > 0) {
-				for (auto &currEntry : scheduler->awaitingKillThreadList) {
-					scheduler->removeThread(&currEntry);
+			while (scheduler->awaitingKillThreadList.getSize() > 0) {
+				auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry();
+
+				if (entry != nullptr) {
+					delete entry->value;
+					delete entry;
 				}
 			}
 
@@ -300,6 +303,7 @@ namespace kernel::common::threading {
 		return true;
 	}
 
+	// TODO: Fix
 	void Scheduler::killThread(Thread *thread) {
 		thread->setState(ThreadState::TERMINATED);
 
@@ -325,10 +329,16 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
-		this->sleepThread(this->getThread(threadId), ns);
+		Thread *thread = this->getThread(threadId);
+
+		if (thread != nullptr) {
+			this->sleepThread(thread, ns);
+		}
 	}
 
 	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
+		//const bool prevIF = this->schedLock.lock();
+
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
 		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
@@ -338,16 +348,28 @@ namespace kernel::common::threading {
 		this->queues[thread->getParent()->getPriority()].remove(thread);
 
 		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+			//this->schedLock.unlock(prevIF);
+
 			ExecutionNode::reSchedule();
-		} else if (!this->blockedThreadList.contains(thread)) {
-			this->sleepingThreadList.addStart(thread);
+		} else {
+			if (!this->blockedThreadList.contains(thread)) {
+				this->sleepingThreadList.addStart(thread);
+			}
+
+			//this->schedLock.unlock(prevIF);
 		}
 	}
 
 	void Scheduler::blockThread(const u16 threadId) {
 		Thread *thread = this->getThread(threadId);
 
+		if (thread == nullptr) {
+			return;
+		}
+
 		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
+
+		//const bool prevIF = this->schedLock.lock();
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -356,16 +378,25 @@ namespace kernel::common::threading {
 		}
 
 		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
+			//this->schedLock.unlock(prevIF);
+
 			ExecutionNode::reSchedule();
 		} else {
 			this->blockedThreadList.addStart(thread);
+			//this->schedLock.unlock(prevIF);
 		}
 	}
 
 	void Scheduler::unblockThread(const u16 threadId, const bool top) {
 		Thread *thread = this->getThread(threadId);
 
+		if (thread == nullptr) {
+			return;
+		}
+
 		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
+
+		//const bool prevIF = this->schedLock.lock();
 
 		this->blockedThreadList.remove(thread, false);
 
@@ -380,14 +411,23 @@ namespace kernel::common::threading {
 		} else {
 			this->sleepingThreadList.addStart(thread);
 		}
+
+		//this->schedLock.unlock(prevIF);
 	}
 
 	u32 Scheduler::sleepTick(u64 *) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
-		//const bool prevIF = schedulerPtr->getSchedLock()->lock();
+		const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
-		for (auto &currEntry : schedulerPtr->sleepingThreadList) {
+		auto it = schedulerPtr->sleepingThreadList.begin();
+		auto end = schedulerPtr->sleepingThreadList.end();
+
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
 			if (currEntry.getSleepNs() > 0) {
 				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
 					currEntry.setState(ThreadState::RUNNING);
@@ -399,9 +439,11 @@ namespace kernel::common::threading {
 					schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
 				}
 			}
+
+			it = nextIt;
 		}
 
-		//schedulerPtr->getSchedLock()->unlock(prevIF);
+		schedulerPtr->getSchedLock()->unlock(prevIF);
 
 		return 0;
 	}
@@ -424,3 +466,4 @@ namespace kernel::common::threading {
 		return &this->schedLock;
 	}
 }
+
