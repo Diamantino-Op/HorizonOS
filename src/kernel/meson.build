@@ -144,6 +144,7 @@ endforeach
 kernel_common_inc = include_directories(kernel_common_src_dir)
 
 kernel_common_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(globber, kernel_common_src_dir), check: true).stdout().strip().split('\n')
+kernel_common_src += run_command(sh, '-c', '@0@ @1@ *.hpp'.format(globber, kernel_common_src_dir), check: true).stdout().strip().split('\n')
 
 kernel_common_dep = declare_dependency(sources: kernel_common_src, include_directories: kernel_common_inc)
 
@@ -154,6 +155,7 @@ kernel_common_dep = declare_dependency(sources: kernel_common_src, include_direc
 kernel_inc = include_directories(kernel_src_dir)
 
 kernel_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(globber, kernel_src_dir), check: true).stdout().strip().split('\n')
+kernel_src += run_command(sh, '-c', '@0@ @1@ *.hpp'.format(globber, kernel_src_dir), check: true).stdout().strip().split('\n')
 
 kernel = executable('HorizonOS_Kernel',
                     kernel_src,

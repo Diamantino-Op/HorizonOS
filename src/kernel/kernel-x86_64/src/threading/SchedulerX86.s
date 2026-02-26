@@ -75,6 +75,8 @@ threadTrampoline32:
     mov r14, 0
     mov r15, 0
 
+    swapgs
+
     iret
 
 .global threadTrampoline64
@@ -94,5 +96,7 @@ threadTrampoline64:
 
     mov r14, 0
     mov r15, 0
+
+    swapgs
 
     iret

@@ -5,6 +5,11 @@
 interruptCommon:
     cld
 
+    test byte ptr [rsp + 24], 3
+    jz .handleInterrupt
+    swapgs
+
+.handleInterrupt:
     push rax
     push rbx
     push rcx
@@ -42,6 +47,11 @@ interruptCommon:
 
     add rsp, 16
 
+    test byte ptr [rsp + 8], 3
+    jz .exixInterrupt
+    swapgs
+
+.exixInterrupt:
     iretq
 
 .macro createInterruptHandler interruptNumber
