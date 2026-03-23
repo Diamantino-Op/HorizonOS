@@ -362,6 +362,8 @@ namespace kernel::x86_64 {
 
 		this->coreTssManager.updateTss();
 
+		SyscallManager::init();
+
 		this->coreIdtManager = commonKernel->getIdtManager();
 
 		this->coreIdtManager->loadIdt();

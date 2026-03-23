@@ -19,8 +19,8 @@ namespace kernel::common {
 
         explicit Terminal(const limine_framebuffer *framebuffer);
 
-        void lock();
-        void unlock();
+        bool lock();
+        void unlock(bool prevIF);
 
         static void putChar(int c, void *ctx);
         static void putCharE9(int c, void *ctx);
@@ -42,7 +42,6 @@ namespace kernel::common {
     private:
         static flanterm_context *flantermCtx;
 
-        bool prevIF;
 
         TicketSpinLock spinLock;
     };

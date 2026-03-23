@@ -6,10 +6,10 @@ interruptCommon:
     cld
 
     test byte ptr [rsp + 24], 3
-    jz .handleInterrupt
+    jz handleInterrupt
     swapgs
 
-.handleInterrupt:
+handleInterrupt:
     push rax
     push rbx
     push rcx

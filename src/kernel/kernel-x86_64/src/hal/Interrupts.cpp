@@ -111,7 +111,7 @@ namespace kernel::x86_64::hal {
 
 		Terminal *terminal = CommonMain::getTerminal();
 
-		terminal->lock();
+		const bool prevIF = terminal->lock();
 
 		terminal->printfBoth(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
 		terminal->printfBoth(true, "\033[0;31m-");
@@ -133,7 +133,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
 
-		terminal->unlock();
+		terminal->unlock(prevIF);
 
 		Asm::lhlt();
 	}
@@ -141,7 +141,7 @@ namespace kernel::x86_64::hal {
 	void Interrupts::userPanic(const Frame &frame) {
 		Terminal *terminal = CommonMain::getTerminal();
 
-		terminal->lock();
+		const bool prevIF = terminal->lock();
 
 		terminal->printfBoth(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
 		terminal->printfBoth(true, "\033[0;31m-");
@@ -156,7 +156,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
 
-		terminal->unlock();
+		terminal->unlock(prevIF);
 	}
 
 	void Interrupts::backtrace(const usize rbp) {

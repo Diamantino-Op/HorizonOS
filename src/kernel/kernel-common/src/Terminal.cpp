@@ -55,15 +55,17 @@ namespace kernel::common {
 	 		0);
 	}
 
-	void Terminal::lock() {
+	bool Terminal::lock() {
 		if (CommonMain::getInstance()->isInit()) {
 			this->getCurrentCore()->setDisabled(true);
 		}
 
-		//this->prevIF = this->spinLock.lock();
+		//return this->spinLock.lock();
+
+		return false;
 	}
 
-	void Terminal::unlock() {
+	void Terminal::unlock(const bool prevIF) {
 		//this->spinLock.unlock(this->prevIF);
 
 		if (CommonMain::getInstance()->isInit()) {
@@ -134,7 +136,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::printfUAcpi(const bool autoSN, const char *format, ...) {
-		this->lock();
+		const bool prevIF = this->lock();
 
 		va_list val;
 		va_start(val, format);
@@ -145,11 +147,11 @@ namespace kernel::common {
 			npf_pprintf(putChar, nullptr, "\n");
 		}
 
-		this->unlock();
+		this->unlock(prevIF);
 	}
 
 	void Terminal::info(const char *format, const char *id, ...) {
-		this->lock();
+		const bool prevIF = this->lock();
 
 		this->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -160,12 +162,12 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		this->unlock();
+		this->unlock(prevIF);
 	}
 
 	void Terminal::debug(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
-		this->lock();
+		const bool prevIF = this->lock();
 
 		this->printfE9(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -176,12 +178,12 @@ namespace kernel::common {
 
 		this->printfE9(true, "\033[0m");
 
-		this->unlock();
+		this->unlock(prevIF);
 #endif
 	}
 
 	void Terminal::warn(const char *format, const char *id, ...) {
-		this->lock();
+		const bool prevIF = this->lock();
 
 		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -192,7 +194,7 @@ namespace kernel::common {
 
 		this->printf(true, "\033[0m");
 
-		this->unlock();
+		this->unlock(prevIF);
 	}
 
 	void Terminal::warnNoLock(const char *format, const char *id, ...) {
@@ -207,7 +209,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
-		this->lock();
+		const bool prevIF = this->lock();
 
 		this->printfBoth(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
 
@@ -218,7 +220,7 @@ namespace kernel::common {
 
 		this->printfBoth(true, "\033[0m");
 
-		this->unlock();
+		this->unlock(prevIF);
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {
