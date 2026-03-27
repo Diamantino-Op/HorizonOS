@@ -91,6 +91,12 @@ namespace kernel::x86_64::utils {
 		return res.ebx & (1 << 16);
 	}
 
+	bool CpuId::hasERMS() {
+		const CpuIdResult res = get(0x07, 0x00);
+
+		return res.ebx & (1 << 9);
+	}
+
 	u32 CpuId::getXSaveSize() {
 		if (!hasXSave()) {
 			return 512;

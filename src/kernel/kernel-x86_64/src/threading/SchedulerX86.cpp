@@ -23,6 +23,11 @@ namespace kernel::common::threading {
 		}
 	}
 
+	void Thread::deleteThreadArch() const {
+		const ThreadContext *threadContext = reinterpret_cast<ThreadContext *>(this->context);
+		threadContext->~ThreadContext();
+	}
+
 	void Scheduler::initArch() {
 		const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
 
@@ -77,6 +82,10 @@ namespace kernel::common::threading {
 		CpuManager::getCurrentCore()->executionNode.loadNewThread();
 	}
 
+	extern "C" void finishScheduleSwitch() {
+		CpuManager::getCurrentCore()->executionNode.finishScheduleSwitch();
+	}
+
 	extern "C" u128 scheduleEntry(const u64 oldRsp) {
 		return CpuManager::getCurrentCore()->executionNode.schedule(oldRsp);
 	}
@@ -93,6 +102,8 @@ namespace kernel::common::threading {
 
 	u128 ExecutionNode::saveOldThread(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+		const bool prevIF = schedulerPtr->getSchedLock()->lock();
+		this->setPendingSchedUnlock(prevIF);
 
 		// Save the old thread state
 
@@ -109,7 +120,7 @@ namespace kernel::common::threading {
 			schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
 		} else if (this->currentThread->value->getState() == ThreadState::BLOCKED) {
 			schedulerPtr->blockedThreadList.addEnd(this->currentThread);
-		} else {
+		} else if (this->currentThread != this->idleThread) {
 			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 		}
 
@@ -131,9 +142,7 @@ namespace kernel::common::threading {
 			}
 
 			if (selectedEntry == nullptr) {
-				CommonMain::getTerminal()->error("No thread to switch to for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
-
-				Asm::lhlt();
+				selectedEntry = this->idleThread;
 			}
 
 			this->currentThread = selectedEntry;
@@ -153,6 +162,14 @@ namespace kernel::common::threading {
 		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
 		return hi | *this->currentThread->value->getStackPointer();
+	}
+
+	void ExecutionNode::finishScheduleSwitch() {
+		if (!this->hasPendingSchedUnlock()) {
+			return;
+		}
+
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
 	}
 
 	void ExecutionNode::loadNewThread() const {
@@ -180,7 +197,7 @@ namespace kernel::common::threading {
 
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
 
-		context->init(process, newRsp, isUser);
+		context->init(process, newRsp, isUser, rsp == 0);
 
 		thread->setStackPointer(newRsp);
 		thread->setKStackPointer(newRsp);
@@ -213,14 +230,18 @@ namespace kernel::x86_64::threading {
 	ThreadContext::~ThreadContext() {
 		if (this->process != nullptr) {
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
-			VirtualAllocator::free(process->getProcessContext(), &this->originalStackPointer);
+
+			if (this->ownsKernelStack) {
+				VirtualAllocator::free(process->getProcessContext(), reinterpret_cast<u64 *>(this->originalStackPointer));
+			}
 		}
 	}
 
-	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace) {
+	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
 		this->isUser = isUserspace;
 		this->process = process;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
+		this->ownsKernelStack = ownsKernelStack;
 		this->process = process;
 
 		this->originalSimdSave = VirtualAllocator::alloc(process->getProcessContext(), CpuId::getXSaveSize() + 64);

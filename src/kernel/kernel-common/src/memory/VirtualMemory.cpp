@@ -159,11 +159,7 @@ namespace kernel::common::memory {
 	}
 
 	RBTreeNode *PageMap::allocateRBTreeNode(const u64 data, const u64 extraData, u64 *extraArgs) {
-		CommonMain::getTerminal()->debug("F", "VMM");
-
 		auto *node = reinterpret_cast<RBTreeNode *>(VirtualAllocator::alloc(reinterpret_cast<AllocContext *>(extraArgs), sizeof(RBTreeNode)));
-
-		CommonMain::getTerminal()->debug("G", "VMM");
 
 		node->data = data;
 		node->extraData = extraData;

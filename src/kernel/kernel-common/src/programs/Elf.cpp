@@ -21,8 +21,9 @@ namespace kernel::common::programs {
 			}
 		}
 	}
+
 	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
-		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (not isSupported(elfHeader)) {
 			CommonMain::getTerminal()->error("ELF is not supported!", "Elf Loader");
@@ -64,14 +65,19 @@ namespace kernel::common::programs {
 			u64 maxAddr = 0;
 
 			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
-				Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+				const Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
 
 				if (shdr->flags & SHF_ALLOC) {
 					const u64 sectionStart = baseAddr + shdr->addr;
 					const u64 sectionEnd = sectionStart + shdr->size;
 
-					if (sectionStart < minAddr) minAddr = sectionStart;
-					if (sectionEnd > maxAddr) maxAddr = sectionEnd;
+					if (sectionStart < minAddr) {
+						minAddr = sectionStart;
+					}
+
+					if (sectionEnd > maxAddr) {
+						maxAddr = sectionEnd;
+					}
 				}
 			}
 
@@ -87,7 +93,7 @@ namespace kernel::common::programs {
 				if (shdr->type == SHT_NOBITS) {
 					// BSS section - allocate and zero
 					if (shdr->flags & SHF_ALLOC) {
-						const auto dest = reinterpret_cast<u64 *>(baseAddr + shdr->addr);
+						auto *dest = reinterpret_cast<u64 *>(baseAddr + shdr->addr);
 
 						for (u64 j = 0; j < shdr->size / sizeof(u64); j++) {
 							dest[j] = 0;
@@ -98,7 +104,7 @@ namespace kernel::common::programs {
 				} else if (shdr->flags & SHF_ALLOC) {
 					// Copy section to target address
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + shdr->offset;
-					const auto dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
+					auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
 					for (u64 j = 0; j < shdr->size; j++) {
 						dest[j] = src[j];
@@ -113,7 +119,7 @@ namespace kernel::common::programs {
 
 				if (shdr->type == SHT_RELA) {
 					// Process RELA relocations
-					const auto rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
+					const auto *rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
 					const u64 relaCount = shdr->size / sizeof(Elf64Rela);
 
 					for (u64 j = 0; j < relaCount; j++) {
@@ -121,7 +127,7 @@ namespace kernel::common::programs {
 						const u64 type = ELF64_R_TYPE(rela[j].info);
 						const u64 symVal = elf64GetSymValue(elf64Header, shdr->link, sym);
 
-						const auto ref = reinterpret_cast<u64 *>(baseAddr + rela[j].offset);
+						auto *ref = reinterpret_cast<u64 *>(baseAddr + rela[j].offset);
 
 						switch (type) {
 							case R_X86_64_NONE:
@@ -158,7 +164,7 @@ namespace kernel::common::programs {
 						const u64 type = ELF64_R_TYPE(rel[j].info);
 						const u64 symVal = elf64GetSymValue(elf64Header, shdr->link, sym);
 
-						const auto ref = reinterpret_cast<u64 *>(baseAddr + rel[j].offset);
+						auto *ref = reinterpret_cast<u64 *>(baseAddr + rel[j].offset);
 
 						switch (type) {
 							case R_X86_64_NONE:
@@ -195,14 +201,19 @@ namespace kernel::common::programs {
 			u64 maxAddr = 0;
 
 			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
-				Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+				const Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
 
 				if (shdr->flags & SHF_ALLOC) {
 					const u64 sectionStart = baseAddr + shdr->addr;
 					const u64 sectionEnd = sectionStart + shdr->size;
 
-					if (sectionStart < minAddr) minAddr = sectionStart;
-					if (sectionEnd > maxAddr) maxAddr = sectionEnd;
+					if (sectionStart < minAddr) {
+						minAddr = sectionStart;
+					}
+
+					if (sectionEnd > maxAddr) {
+						maxAddr = sectionEnd;
+					}
 				}
 			}
 
@@ -218,7 +229,7 @@ namespace kernel::common::programs {
 				if (shdr->type == SHT_NOBITS) {
 					// BSS section - allocate and zero
 					if (shdr->flags & SHF_ALLOC) {
-						const auto dest = reinterpret_cast<u32 *>(baseAddr + shdr->addr);
+						auto *dest = reinterpret_cast<u32 *>(baseAddr + shdr->addr);
 
 						for (u32 j = 0; j < shdr->size / sizeof(u32); j++) {
 							dest[j] = 0;
@@ -229,7 +240,7 @@ namespace kernel::common::programs {
 				} else if (shdr->flags & SHF_ALLOC) {
 					// Copy section to target address
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + shdr->offset;
-					const auto dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
+					auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
 					for (u32 j = 0; j < shdr->size; j++) {
 						dest[j] = src[j];
@@ -245,7 +256,7 @@ namespace kernel::common::programs {
 
 				if (shdr->type == SHT_RELA) {
 					// Process RELA relocations
-					const auto rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const auto *rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
 					const u32 relaCount = shdr->size / sizeof(Elf32Rela);
 
 					for (u32 j = 0; j < relaCount; j++) {
@@ -253,7 +264,7 @@ namespace kernel::common::programs {
 						const u32 type = ELF32_R_TYPE(rela[j].info);
 						const u32 symVal = elf32GetSymValue(elf32Header, shdr->link, sym);
 
-						const auto ref = reinterpret_cast<u32 *>(baseAddr + rela[j].offset);
+						auto *ref = reinterpret_cast<u32 *>(baseAddr + rela[j].offset);
 
 						switch (type) {
 							case R_386_NONE:
@@ -274,7 +285,7 @@ namespace kernel::common::programs {
 					}
 				} else if (shdr->type == SHT_REL) {
 					// Process REL relocations
-					const auto rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const auto *rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
 					const u32 relCount = shdr->size / sizeof(Elf32Rel);
 
 					for (u32 j = 0; j < relCount; j++) {
@@ -282,7 +293,7 @@ namespace kernel::common::programs {
 						const u32 type = ELF32_R_TYPE(rel[j].info);
 						const u32 symVal = elf32GetSymValue(elf32Header, shdr->link, sym);
 
-						const auto ref = reinterpret_cast<u32 *>(baseAddr + rel[j].offset);
+						auto *ref = reinterpret_cast<u32 *>(baseAddr + rel[j].offset);
 
 						switch (type) {
 							case R_386_NONE:
@@ -311,16 +322,17 @@ namespace kernel::common::programs {
 	}
 
 	u64 *Elf::loadExeDyn(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
-		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (is64Bit(elfHeader)) {
 			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
 
 			// Load program headers
-			const auto phdr = reinterpret_cast<Elf64ProgramHeader *>(reinterpret_cast<u8 *>(elf64Header) + elf64Header->elfProgHeaderOff);
+			const auto *phdr = reinterpret_cast<Elf64ProgramHeader *>(reinterpret_cast<u8 *>(elf64Header) + elf64Header->elfProgHeaderOff);
 
 			// Find the load base if not provided
 			u64 loadBase = baseAddr;
+
 			if (loadBase == 0) {
 				// Find the lowest vaddr in loadable segments to determine offset
 				u64 minVAddr = ~0ULL;
@@ -331,6 +343,7 @@ namespace kernel::common::programs {
 					}
 				}
 
+				// TODO: Check why unused
 				loadBase = pageSize; // No offset when not specified
 			}
 
@@ -340,6 +353,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
+
 					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
 				}
 			}
@@ -348,7 +362,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
-					const auto dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
+					auto *dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
 
 					// Copy file contents
 					for (u64 j = 0; j < phdr[i].filesz; j++) {
@@ -364,15 +378,15 @@ namespace kernel::common::programs {
 
 			// Process relocations if present
 			for (u16 i = 0; i < elf64Header->elfSectionHeaderAmount; i++) {
-				Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
+				const Elf64SectionHeader *shdr = getElf64SectionHeader(elf64Header, i);
 
 				if (shdr->type == SHT_RELA) {
-					const auto rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
+					const auto *rela = reinterpret_cast<Elf64Rela *>(reinterpret_cast<u8 *>(elf64Header) + shdr->offset);
 					const u64 relaCount = shdr->size / sizeof(Elf64Rela);
 
 					for (u64 j = 0; j < relaCount; j++) {
 						const u64 type = ELF64_R_TYPE(rela[j].info);
-						const auto ref = reinterpret_cast<u64 *>(rela[j].offset + offset);
+						auto *ref = reinterpret_cast<u64 *>(rela[j].offset + offset);
 
 						switch (type) {
 							case R_X86_64_RELATIVE:
@@ -402,7 +416,7 @@ namespace kernel::common::programs {
 			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
 
 			// Load program headers
-			const auto phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
+			const auto *phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
 
 			// Find the load base if not provided
 			u32 loadBase = static_cast<u32>(baseAddr);
@@ -424,7 +438,8 @@ namespace kernel::common::programs {
 			// First pass: map memory for all PT_LOAD segments
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
-					const u64 segmentStart = static_cast<u64>(phdr[i].vaddr + offset);
+					const u64 segmentStart = phdr[i].vaddr + offset;
+
 					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
 				}
 			}
@@ -433,7 +448,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
-					const auto dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
+					auto *dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
 
 					// Copy file contents
 					for (u32 j = 0; j < phdr[i].filesz; j++) {
@@ -449,15 +464,15 @@ namespace kernel::common::programs {
 
 			// Process relocations if present
 			for (u16 i = 0; i < elf32Header->elfSectionHeaderAmount; i++) {
-				Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
+				const Elf32SectionHeader *shdr = getElf32SectionHeader(elf32Header, i);
 
 				if (shdr->type == SHT_RELA) {
-					const auto rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const auto *rela = reinterpret_cast<Elf32Rela *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
 					const u32 relaCount = shdr->size / sizeof(Elf32Rela);
 
 					for (u32 j = 0; j < relaCount; j++) {
 						const u32 type = ELF32_R_TYPE(rela[j].info);
-						const auto ref = reinterpret_cast<u32 *>(static_cast<u64>(rela[j].offset + offset));
+						auto *ref = reinterpret_cast<u32 *>(static_cast<u64>(rela[j].offset + offset));
 
 						switch (type) {
 							case R_386_RELATIVE:
@@ -477,12 +492,12 @@ namespace kernel::common::programs {
 						}
 					}
 				} else if (shdr->type == SHT_REL) {
-					const auto rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
+					const auto *rel = reinterpret_cast<Elf32Rel *>(reinterpret_cast<u8 *>(elf32Header) + shdr->offset);
 					const u32 relCount = shdr->size / sizeof(Elf32Rel);
 
 					for (u32 j = 0; j < relCount; j++) {
 						const u32 type = ELF32_R_TYPE(rel[j].info);
-						const auto ref = reinterpret_cast<u32 *>(static_cast<u64>(rel[j].offset + offset));
+						auto *ref = reinterpret_cast<u32 *>(static_cast<u64>(rel[j].offset + offset));
 
 						switch (type) {
 							case R_386_RELATIVE:
@@ -503,7 +518,7 @@ namespace kernel::common::programs {
 	}
 
 	u64 *Elf::loadExe(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
-		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
+		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (is64Bit(elfHeader)) {
 			auto *elf64Header = reinterpret_cast<Elf64Header *>(const_cast<u64 *>(elfFile));
@@ -519,6 +534,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
+
 					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
 				}
 			}
@@ -527,7 +543,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
-					const auto dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
+					auto *dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
 
 					// Copy file contents
 					for (u64 j = 0; j < phdr[i].filesz; j++) {
@@ -548,14 +564,15 @@ namespace kernel::common::programs {
 			auto *elf32Header = reinterpret_cast<Elf32Header *>(const_cast<u64 *>(elfFile));
 
 			// Load program headers
-			const auto phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
+			const auto *phdr = reinterpret_cast<Elf32ProgramHeader *>(reinterpret_cast<u8 *>(elf32Header) + elf32Header->elfProgHeaderOff);
 
 			const u32 offset = static_cast<u32>(baseAddr);
 
 			// First pass: map memory for all PT_LOAD segments
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
-					const u64 segmentStart = static_cast<u64>(phdr[i].vaddr + offset);
+					const u64 segmentStart = phdr[i].vaddr + offset;
+
 					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
 				}
 			}
@@ -564,7 +581,7 @@ namespace kernel::common::programs {
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
-					const auto dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
+					auto *dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
 
 					// Copy file contents
 					for (u32 j = 0; j < phdr[i].filesz; j++) {
@@ -585,29 +602,29 @@ namespace kernel::common::programs {
 	}
 
 	bool Elf::isElf(const ElfCommonHeader *elfHeader) {
-		if(not elfHeader) {
+		if (not elfHeader) {
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG0] != ElfMagic0) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG0] != ElfMagic0) {
 			CommonMain::getTerminal()->error("ELF Header Magic 0 is incorrect!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG1] != ElfMagic1) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG1] != ElfMagic1) {
 			CommonMain::getTerminal()->error("ELF Header Magic 1 is incorrect!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG2] != ElfMagic2) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG2] != ElfMagic2) {
 			CommonMain::getTerminal()->error("ELF Header Magic 2 is incorrect!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG3] != ElfMagic3) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_MAG3] != ElfMagic3) {
 			CommonMain::getTerminal()->error("ELF Header Magic 3 is incorrect!", "Elf Loader");
 
 			return false;
@@ -617,31 +634,31 @@ namespace kernel::common::programs {
 	}
 
 	bool Elf::isSupported(const ElfCommonHeader *elfHeader) {
-		if(not isElf(elfHeader)) {
+		if (not isElf(elfHeader)) {
 			CommonMain::getTerminal()->error("Invalid ELF file!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_DATA] != ElfLSB) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_DATA] != ElfLSB) {
 			CommonMain::getTerminal()->error("Unsupported ELF File byte order!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfMachine != ElfX86Machine) {
+		if (elfHeader->elfMachine != ElfX86Machine) {
 			CommonMain::getTerminal()->error("Unsupported ELF File target!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfIdentity[ElfIdent::ELF_ID_VERSION] != ElfCurrVersion) {
+		if (elfHeader->elfIdentity[ElfIdent::ELF_ID_VERSION] != ElfCurrVersion) {
 			CommonMain::getTerminal()->error("Unsupported ELF File version!", "Elf Loader");
 
 			return false;
 		}
 
-		if(elfHeader->elfType != ElfType::ET_REL and elfHeader->elfType != ElfType::ET_EXEC and elfHeader->elfType != ElfType::ET_DYN) {
+		if (elfHeader->elfType != ElfType::ET_REL and elfHeader->elfType != ElfType::ET_EXEC and elfHeader->elfType != ElfType::ET_DYN) {
 			CommonMain::getTerminal()->error("Unsupported ELF File type!", "Elf Loader");
 
 			return false;
@@ -694,49 +711,55 @@ namespace kernel::common::programs {
 		return reinterpret_cast<char *>(elfHeader) + getElf32SectionHeader(elfHeader, elfHeader->elfStringTableSectionHeaderIndex)->offset + offset;
 	}
 
-	u64 Elf::elf64GetSymValue(Elf64Header *elfHeader, u64 table, u64 idx) {
+	u64 Elf::elf64GetSymValue(Elf64Header *elfHeader, const u64 table, const u64 idx) {
 		if (table == ShnUndefined || idx == ShnUndefined) {
 			return 0;
 		}
 
-		Elf64SectionHeader *symtab = getElf64SectionHeader(elfHeader, table);
+		const Elf64SectionHeader *symtab = getElf64SectionHeader(elfHeader, table);
 
 		u64 symtabEntries = symtab->size / sizeof(Elf64SymbolTable);
 
 		if (idx >= symtabEntries) {
 			CommonMain::getTerminal()->error("Symbol index out of bounds!", "Elf Loader");
+
 			return 0;
 		}
 
-		Elf64SymbolTable *symbol = &(reinterpret_cast<Elf64SymbolTable *>(
+		const Elf64SymbolTable *symbol = &(reinterpret_cast<Elf64SymbolTable *>(
 			reinterpret_cast<u8 *>(elfHeader) + symtab->offset
 		))[idx];
 
 		if (symbol->sectionIndex == ShnUndefined) {
 			// External symbol - would need dynamic linking
 			CommonMain::getTerminal()->error("Undefined symbol!", "Elf Loader");
+
 			return 0;
-		} else if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
+		}
+
+		if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
 			// Absolute or common symbol
 			return symbol->value;
-		} else {
-			// Symbol relative to a section
-			Elf64SectionHeader *target = getElf64SectionHeader(elfHeader, symbol->sectionIndex);
-			return target->addr + symbol->value;
 		}
+
+		// Symbol relative to a section
+		const Elf64SectionHeader *target = getElf64SectionHeader(elfHeader, symbol->sectionIndex);
+
+		return target->addr + symbol->value;
 	}
 
-	u64 Elf::elf32GetSymValue(Elf32Header *elfHeader, u64 table, u64 idx) {
+	u64 Elf::elf32GetSymValue(Elf32Header *elfHeader, const u64 table, const u64 idx) {
 		if (table == ShnUndefined || idx == ShnUndefined) {
 			return 0;
 		}
 
-		Elf32SectionHeader *symtab = getElf32SectionHeader(elfHeader, table);
+		const Elf32SectionHeader *symtab = getElf32SectionHeader(elfHeader, table);
 
 		u32 symtabEntries = symtab->size / sizeof(Elf32SymbolTable);
 
 		if (idx >= symtabEntries) {
 			CommonMain::getTerminal()->error("Symbol index out of bounds!", "Elf Loader");
+
 			return 0;
 		}
 
@@ -747,14 +770,18 @@ namespace kernel::common::programs {
 		if (symbol->sectionIndex == ShnUndefined) {
 			// External symbol - would need dynamic linking
 			CommonMain::getTerminal()->error("Undefined symbol!", "Elf Loader");
+
 			return 0;
-		} else if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
+		}
+
+		if (symbol->sectionIndex == ShnAbsolute || symbol->sectionIndex == ShnCommon) {
 			// Absolute or common symbol
 			return symbol->value;
-		} else {
-			// Symbol relative to a section
-			Elf32SectionHeader *target = getElf32SectionHeader(elfHeader, symbol->sectionIndex);
-			return target->addr + symbol->value;
 		}
+
+		// Symbol relative to a section
+		const Elf32SectionHeader *target = getElf32SectionHeader(elfHeader, symbol->sectionIndex);
+
+		return target->addr + symbol->value;
 	}
 }

@@ -1,5 +1,6 @@
 .extern scheduleEntry
 .extern loadNewThread
+.extern finishScheduleSwitch
 .extern checkDisabled
 
 .global switchContextAsm
@@ -32,6 +33,8 @@ switchContextAsm:
     pop r12
     pop rbp
     pop rbx
+
+    call finishScheduleSwitch
 
 enDisabled:
     ret

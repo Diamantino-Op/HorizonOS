@@ -2,7 +2,6 @@
 
 #include "CommonMain.hpp"
 #include "IDAllocator.hpp"
-#include "memory/MainMemory.hpp"
 #include "programs/Elf.hpp"
 
 namespace kernel::common::threading {
@@ -23,7 +22,13 @@ namespace kernel::common::threading {
 	Thread::~Thread() {
 		TIDAllocator::freeTID(this->id);
 
-		delete this->context;
+		if (this->context != nullptr) {
+			this->deleteThreadArch();
+
+			if (this->parent != nullptr) {
+				VirtualAllocator::free(this->parent->getProcessContext(), this->context);
+			}
+		}
 	}
 
 	void Thread::setContext(u64 *newContext) {
@@ -153,9 +158,10 @@ namespace kernel::common::threading {
 
 		schedulerPtr->getProcess(0)->addThread(newThread);
 
-		this->currentThread = new LinkedListEntry<Thread>();
+		this->idleThread = new LinkedListEntry<Thread>();
+		this->idleThread->value = newThread;
 
-		this->currentThread->value = newThread;
+		this->currentThread = this->idleThread;
 	}
 
 	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
@@ -174,6 +180,21 @@ namespace kernel::common::threading {
 		this->isDisabledFlag = val;
 	}
 
+	void ExecutionNode::setPendingSchedUnlock(const bool prevIF) {
+		this->pendingSchedUnlock = true;
+		this->pendingSchedUnlockIF = prevIF;
+	}
+
+	bool ExecutionNode::hasPendingSchedUnlock() const {
+		return this->pendingSchedUnlock;
+	}
+
+	bool ExecutionNode::consumePendingSchedUnlock() {
+		this->pendingSchedUnlock = false;
+
+		return this->pendingSchedUnlockIF;
+	}
+
 	// Reaper Thread
 
 	[[noreturn]] void reaperFunction() {
@@ -182,13 +203,9 @@ namespace kernel::common::threading {
 		for (;;) {
 			auto *currThread = Scheduler::getCurrentThread();
 
-			while (scheduler->awaitingKillThreadList.getSize() > 0) {
-				auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry();
-
-				if (entry != nullptr) {
-					delete entry->value;
-					delete entry;
-				}
+			while (const auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry()) {
+				delete entry->value;
+				delete entry;
 			}
 
 			scheduler->sleepThread(currThread, 500ull * 1'000'000ull); // TODO: ms to ns and vice versa function
@@ -208,21 +225,33 @@ namespace kernel::common::threading {
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) {
+		const bool prevIF = this->schedLock.lock();
+
 		for (auto &currEntry : this->processList) {
 			if (currEntry.getId() == pid) {
+				this->schedLock.unlock(prevIF);
+
 				return &currEntry;
 			}
 		}
+
+		this->schedLock.unlock(prevIF);
 
 		return nullptr;
 	}
 
 	Thread *Scheduler::getThread(const Process *process, const u16 tid) {
+		const bool prevIF = this->schedLock.lock();
+
 		for (auto &currEntry : this->queues[process->getPriority()]) {
 			if (currEntry.getId() == tid) {
+				this->schedLock.unlock(prevIF);
+
 				return &currEntry;
 			}
 		}
+
+		this->schedLock.unlock(prevIF);
 
 		return nullptr;
 	}
@@ -252,11 +281,25 @@ namespace kernel::common::threading {
 	}
 
 	LinkedListEntry<Process> *Scheduler::addProcess(Process *process) {
-		return this->processList.addStart(process);
+		const bool prevIF = this->schedLock.lock();
+
+		auto *entry = this->processList.addStart(process);
+
+		this->schedLock.unlock(prevIF);
+
+		return entry;
 	}
 
 	void Scheduler::killProcess(Process *process) {
-		this->processList.remove(process);
+		const bool prevIF = this->schedLock.lock();
+
+		const bool removed = this->processList.remove(process, false);
+
+		this->schedLock.unlock(prevIF);
+
+		if (removed) {
+			delete process;
+		}
 	}
 
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
@@ -264,13 +307,21 @@ namespace kernel::common::threading {
 
 		newThread->setState(ThreadState::READY);
 
+		const bool prevIF = this->schedLock.lock();
+
 		process->addThread(newThread);
 
-		// TODO: Remove
-		if (isUser)
-			return this->readyThreadList.addStart(newThread);
+		LinkedListEntry<Thread> *entry = nullptr;
 
-		return this->readyThreadList.addEnd(newThread);
+		if (isUser) {
+			entry = this->readyThreadList.addStart(newThread);
+		} else {
+			entry = this->readyThreadList.addEnd(newThread);
+		}
+
+		this->schedLock.unlock(prevIF);
+
+		return entry;
 	}
 
 	void Scheduler::startProcess(const u64 startAddr, const ProcessPriority priority, const bool isUserspace) {
@@ -305,12 +356,21 @@ namespace kernel::common::threading {
 
 	// TODO: Fix
 	void Scheduler::killThread(Thread *thread) {
-		thread->setState(ThreadState::TERMINATED);
+		const bool prevIF = this->schedLock.lock();
 
-		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			ExecutionNode::reSchedule();
-		} else {
+		thread->setState(ThreadState::TERMINATED);
+		thread->getParent()->removeThread(thread);
+
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+
+		if (!shouldReschedule) {
 			this->removeThread(thread);
+		}
+
+		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
 		}
 	}
 
@@ -329,15 +389,13 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
+		const bool prevIF = this->schedLock.lock();
 		Thread *thread = this->getThread(threadId);
 
-		if (thread != nullptr) {
-			this->sleepThread(thread, ns);
+		if (thread == nullptr) {
+			this->schedLock.unlock(prevIF);
+			return;
 		}
-	}
-
-	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
-		//const bool prevIF = this->schedLock.lock();
 
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
@@ -345,31 +403,59 @@ namespace kernel::common::threading {
 
 		thread->setState(ThreadState::BLOCKED);
 
-		this->queues[thread->getParent()->getPriority()].remove(thread);
+		this->queues[thread->getParent()->getPriority()].remove(thread, false);
 
-		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			//this->schedLock.unlock(prevIF);
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
-			ExecutionNode::reSchedule();
-		} else {
+		if (!shouldReschedule) {
 			if (!this->blockedThreadList.contains(thread)) {
 				this->sleepingThreadList.addStart(thread);
 			}
+		}
 
-			//this->schedLock.unlock(prevIF);
+		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
+		}
+	}
+
+	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
+		const bool prevIF = this->schedLock.lock();
+
+		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
+
+		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
+
+		thread->setState(ThreadState::BLOCKED);
+
+		this->queues[thread->getParent()->getPriority()].remove(thread, false);
+
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+
+		if (!shouldReschedule) {
+			if (!this->blockedThreadList.contains(thread)) {
+				this->sleepingThreadList.addStart(thread);
+			}
+		}
+
+		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
 		}
 	}
 
 	void Scheduler::blockThread(const u16 threadId) {
+		const bool prevIF = this->schedLock.lock();
 		Thread *thread = this->getThread(threadId);
 
 		if (thread == nullptr) {
+			this->schedLock.unlock(prevIF);
 			return;
 		}
 
 		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
-
-		//const bool prevIF = this->schedLock.lock();
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -377,20 +463,25 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.remove(thread, false);
 		}
 
-		if (getCurrentExecutionNode()->getCurrentThread()->value == thread) {
-			//this->schedLock.unlock(prevIF);
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
-			ExecutionNode::reSchedule();
-		} else {
+		if (!shouldReschedule) {
 			this->blockedThreadList.addStart(thread);
-			//this->schedLock.unlock(prevIF);
+		}
+
+		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
 		}
 	}
 
 	void Scheduler::unblockThread(const u16 threadId, const bool top) {
+		const bool prevIF = this->schedLock.lock();
 		Thread *thread = this->getThread(threadId);
 
 		if (thread == nullptr) {
+			this->schedLock.unlock(prevIF);
 			return;
 		}
 
@@ -412,7 +503,7 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.addStart(thread);
 		}
 
-		//this->schedLock.unlock(prevIF);
+		this->schedLock.unlock(prevIF);
 	}
 
 	u32 Scheduler::sleepTick(u64 *) {
@@ -449,15 +540,23 @@ namespace kernel::common::threading {
 	}
 
 	bool Scheduler::hasThreads() const {
+		const bool prevIF = const_cast<TicketSpinLock &>(this->schedLock).lock();
+
 		if (this->readyThreadList.getSize() > 0) {
+			const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
+
 			return true;
 		}
 
 		for (auto &currEntry : this->queues) {
 			if (currEntry.getSize() > 0) {
+				const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
+
 				return true;
 			}
 		}
+
+		const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
 
 		return false;
 	}

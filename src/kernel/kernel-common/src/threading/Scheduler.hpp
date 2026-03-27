@@ -41,6 +41,8 @@ namespace kernel::common::threading {
     	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false, ThreadOS os = ThreadOS::HORIZONOS);
         ~Thread();
 
+    	void deleteThreadArch() const;
+
         void setContext(u64 *newContext);
         u64 *getContext() const;
 
@@ -144,9 +146,17 @@ namespace kernel::common::threading {
 
     	u64 getENThreadRsp() const;
 
+        void setPendingSchedUnlock(bool prevIF);
+        bool hasPendingSchedUnlock() const;
+        bool consumePendingSchedUnlock();
+        void finishScheduleSwitch();
+
     private:
 		bool isDisabledFlag {};
+        bool pendingSchedUnlock {};
+        bool pendingSchedUnlockIF {};
 
+        LinkedListEntry<Thread> *idleThread {};
         LinkedListEntry<Thread> *currentThread {};
     };
 

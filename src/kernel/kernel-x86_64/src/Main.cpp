@@ -4,6 +4,7 @@
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 #include "Time.hpp"
+#include "programs/Elf.hpp"
 #include "hal/Syscall.hpp"
 
 #include "limine.h"
@@ -18,6 +19,7 @@ __attribute__((used, section(".limine_requests")))
 static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(3);
 
 extern limine_framebuffer_request framebufferRequest;
+extern limine_module_request moduleRequest;
 
 extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp) {
     auto kernel = kernel::x86_64::Kernel(rsp);
@@ -27,6 +29,7 @@ extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp
 
 namespace kernel::x86_64 {
 	using namespace utils;
+	using namespace common::programs;
 
 	Kernel::Kernel(const u64 rsp) {
 		this->stackTop = rsp;
@@ -184,14 +187,27 @@ namespace kernel::x86_64 {
 
 		CpuManager::getCurrentCore()->executionNode.init();
 
-		auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
+		/*auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
 		this->scheduler->addProcess(exampleProcess);
 
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);
+		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);*/
+
+		for (u64 i = 0; i < moduleRequest.response->module_count; i++) {
+			limine_file *moduleFile = moduleRequest.response->modules[i];
+
+			terminal.info("Module %u: %s Size: %u", "HorizonOS", i, moduleFile->path, moduleFile->size);
+
+			if (Elf::isElf(static_cast<ElfCommonHeader *>(moduleFile->address))) {
+				terminal.info("Loading module %u as ELF...", "HorizonOS", i);
+
+				auto *moduleProcess = new Process(ProcessPriority::NORMAL, true);
+				this->scheduler->addProcess(moduleProcess);
+			}
+		}
 
 		//auto *exampleUserProcess = new Process(ProcessPriority::HIGH, true);
 		//this->scheduler->addProcess(exampleUserProcess);
@@ -232,7 +248,7 @@ namespace kernel::x86_64 {
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		//this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		// this->shutdown();
 
@@ -378,7 +394,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		//this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

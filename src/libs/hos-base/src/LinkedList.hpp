@@ -116,8 +116,8 @@ public:
                 this->size -= 1;
 
                 if (deleteValue) {
-                    delete current;
                     delete current->value;
+                	delete current;
 
                     this->listLock.unlock(this->prevIF);
 
@@ -132,6 +132,8 @@ public:
 
                 return tmpVal;
             }
+
+              current = current->next;
         }
 
         this->listLock.unlock(this->prevIF);
@@ -249,9 +251,30 @@ public:
     }
 
     LinkedListEntry<T> *removeFirstEntry() {
+        const bool prevIF = this->listLock.lock();
+
         LinkedListEntry<T> *tmpEntry = this->listStart;
 
-        this->removeEntry(tmpEntry);
+        if (tmpEntry == nullptr) {
+            this->listLock.unlock(prevIF);
+
+            return nullptr;
+        }
+
+        this->listStart = tmpEntry->next;
+
+        if (this->listStart != nullptr) {
+            this->listStart->prev = nullptr;
+        } else {
+            this->listEnd = nullptr;
+        }
+
+        tmpEntry->next = nullptr;
+        tmpEntry->prev = nullptr;
+
+        this->size -= 1;
+
+        this->listLock.unlock(prevIF);
 
         return tmpEntry;
     }
@@ -289,9 +312,30 @@ public:
     }
 
     LinkedListEntry<T> *removeLastEntry() {
+        const bool prevIF = this->listLock.lock();
+
         LinkedListEntry<T> *tmpEntry = this->listEnd;
 
-        this->removeEntry(tmpEntry);
+        if (tmpEntry == nullptr) {
+            this->listLock.unlock(prevIF);
+
+            return nullptr;
+        }
+
+        this->listEnd = tmpEntry->prev;
+
+        if (this->listEnd != nullptr) {
+            this->listEnd->next = nullptr;
+        } else {
+            this->listStart = nullptr;
+        }
+
+        tmpEntry->next = nullptr;
+        tmpEntry->prev = nullptr;
+
+        this->size -= 1;
+
+        this->listLock.unlock(prevIF);
 
         return tmpEntry;
     }

@@ -35,6 +35,8 @@ namespace kernel::x86_64::utils {
         static bool hasAvx();
         static bool hasAvx512();
 
+    	static bool hasERMS();
+
         static u32 getXSaveSize();
     };
 }

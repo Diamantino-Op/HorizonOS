@@ -15,7 +15,7 @@ namespace kernel::x86_64::threading {
     public:
         ~ThreadContext();
 
-        void init(Process *process, u64 stackPointer, bool isUserspace);
+        void init(Process *process, u64 stackPointer, bool isUserspace, bool ownsKernelStack);
 
         u64 *getSimdSave() const;
 
@@ -31,6 +31,7 @@ namespace kernel::x86_64::threading {
         bool isUser {};
 
         u64 originalStackPointer {};
+        bool ownsKernelStack {};
 
         Process *process {};
     };
@@ -38,6 +39,8 @@ namespace kernel::x86_64::threading {
     extern "C" u64 checkDisabled();
     extern "C" u128 scheduleEntry(u64 oldRsp);
     extern "C" void loadNewThread();
+    extern "C" void finishScheduleSwitch();
+    extern "C" void destroyThreadContext(u64 *context, Process *process);
     extern "C" void setStackAsm(u64 *stackPointer, u64 rip, u64 usermodeFun = 0, u64 userStack = 0);
     extern "C" void threadTrampoline32();
     extern "C" void threadTrampoline64();
