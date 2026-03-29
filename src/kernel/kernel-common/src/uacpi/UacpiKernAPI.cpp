@@ -83,22 +83,35 @@ void uacpi_kernel_free(void *mem) {
 void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
 	Terminal* terminal = CommonMain::getTerminal();
 
+	if (str == nullptr) {
+		str = "(null)";
+	}
+
+	usize len = 0;
+	while (str[len] != '\0') {
+		++len;
+	}
+
+	while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r')) {
+		--len;
+	}
+
 	switch (level) {
 		case UACPI_LOG_ERROR:
-			terminal->printfUAcpi(false, "[    \033[0;31merror    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->printfUAcpi(true, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
 			break;
 
 		case UACPI_LOG_WARN:
-			terminal->printfUAcpi(false, "[   \033[0;33mwarning   \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->printfUAcpi(true, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
 			break;
 
 		case UACPI_LOG_INFO:
-			terminal->printfUAcpi(false, "[ \033[1;34minformation \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->printfUAcpi(true, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
 			break;
 
 		case UACPI_LOG_TRACE:
 		case UACPI_LOG_DEBUG:
-			terminal->printfUAcpi(false, "[    \033[0;32mdebug    \033[0m] \033[1;30muACPI: \033[0;37m%s\033[0m", str);
+			terminal->printfUAcpi(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
 			break;
 	}
 }

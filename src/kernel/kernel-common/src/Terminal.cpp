@@ -52,6 +52,7 @@ namespace kernel::common {
 	 		1,
 	 		0,
 	 		0,
+	 		0,
 	 		0);
 	}
 
@@ -109,7 +110,7 @@ namespace kernel::common {
 	 	va_end(val);
 
 		if (autoSN) {
-			npf_pprintf(putChar, nullptr, "\n");
+			npf_pprintf(putChar, nullptr, "\r\n");
 		}
 	}
 
@@ -120,7 +121,7 @@ namespace kernel::common {
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf(putCharE9, nullptr, "\n");
+			npf_pprintf(putCharE9, nullptr, "\r\n");
 		}
 	}
 
@@ -131,7 +132,7 @@ namespace kernel::common {
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf(putCharBoth, nullptr, "\n");
+			npf_pprintf(putCharBoth, nullptr, "\r\n");
 		}
 	}
 
@@ -144,7 +145,7 @@ namespace kernel::common {
 		va_end(val);
 
 		if (autoSN) {
-			npf_pprintf(putChar, nullptr, "\n");
+			npf_pprintf(putChar, nullptr, "\r\n");
 		}
 
 		this->unlock(prevIF);
@@ -153,7 +154,7 @@ namespace kernel::common {
 	void Terminal::info(const char *format, const char *id, ...) {
 		const bool prevIF = this->lock();
 
-		this->printf(false, "[ \033[1;34minformation \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printf(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
@@ -169,7 +170,7 @@ namespace kernel::common {
 #ifdef HORIZON_DEBUG
 		const bool prevIF = this->lock();
 
-		this->printfE9(false, "[    \033[0;32mdebug    \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
@@ -185,7 +186,7 @@ namespace kernel::common {
 	void Terminal::warn(const char *format, const char *id, ...) {
 		const bool prevIF = this->lock();
 
-		this->printf(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printf(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
@@ -198,7 +199,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::warnNoLock(const char *format, const char *id, ...) {
-		this->printfE9(false, "[   \033[0;33mwarning   \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfE9(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 		va_list val;
 		va_start(val, id);
@@ -211,7 +212,7 @@ namespace kernel::common {
 	void Terminal::error(const char *format, const char *id, ...) {
 		const bool prevIF = this->lock();
 
-		this->printfBoth(false, "[    \033[0;31merror    \033[0m] \033[1;30m%s: \033[0;37m", id);
+		this->printfBoth(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 		va_list val;
 		va_start(val, id);

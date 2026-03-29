@@ -197,7 +197,7 @@ namespace kernel::x86_64 {
 		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);*/
 
 		for (u64 i = 0; i < moduleRequest.response->module_count; i++) {
-			limine_file *moduleFile = moduleRequest.response->modules[i];
+			const limine_file *moduleFile = moduleRequest.response->modules[i];
 
 			terminal.info("Module %u: %s Size: %u", "HorizonOS", i, moduleFile->path, moduleFile->size);
 

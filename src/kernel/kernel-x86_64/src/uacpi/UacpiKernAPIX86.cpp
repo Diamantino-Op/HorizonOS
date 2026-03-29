@@ -7,6 +7,37 @@
 
 #include "uacpi/utilities.h"
 
+#include "uacpi/kernel_api.h"
+
+// Interrupts
+
+uacpi_interrupt_state uacpi_kernel_disable_interrupts() {
+	u64 flags;
+
+	asm volatile(
+		"pushf\n"
+		"pop %0\n"
+		"cli"
+		: "=r"(flags)
+		:
+		: "memory"
+	);
+
+	bool hadInts = flags & (1 << 9);
+
+	if (hadInts) {
+		kernel::x86_64::utils::Asm::cli();
+	}
+
+	return hadInts;
+}
+
+void uacpi_kernel_restore_interrupts(const uacpi_interrupt_state state) {
+	if (state) {
+		kernel::x86_64::utils::Asm::sti();
+	}
+}
+
 namespace kernel::common::uacpi {
 	using namespace x86_64;
 	using namespace x86_64::hal;
