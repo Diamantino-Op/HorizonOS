@@ -1,8 +1,16 @@
 # General
 
-option('debug_build', type : 'boolean', value : false)
-option('qemu_targets', type : 'boolean', value : true)
+option('debug_build', type: 'boolean', value: false)
+option('qemu_targets', type: 'boolean', value: true)
 
 # Dependencies
 
-option('build_llvm', type : 'boolean', value : false, description : 'Build LLVM from source')
+option('build_llvm', type: 'boolean', value: false, description: 'Build LLVM from source')
+
+option('chdrs_branch', type: 'string', value: 'trunk', description: 'Freestnd C Headers branch')
+option('cxxhdrs_branch', type: 'string', value: 'trunk', description: 'Freestnd C++ Headers branch')
+option('flanterm_branch', type: 'string', value: 'trunk', description: 'Flanterm branch')
+option('limine_branch', type: 'string', value: 'v11.x-binary', description: 'Limine branch')
+option('limine_protocol_branch', type: 'string', value: 'trunk', description: 'Limine Protocol branch')
+option('llvm_branch', type: 'string', value: 'horizonos_llvm', description: 'LLVM branch')
+option('uacpi_branch', type: 'string', value: 'master', description: 'uAcpi branch')

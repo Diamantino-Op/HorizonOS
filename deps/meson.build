@@ -2,7 +2,7 @@ project('horizon_deps', default_options: ['warning_level=2', 'c_std=gnu2x', 'cpp
 
 # Utils
 
-deps_dir = '.'
+deps_dir = join_paths(meson.global_source_root(), 'deps')
 
 mkdir = find_program('cp', required: true)
 git = find_program('git', required: true)
@@ -11,8 +11,6 @@ fs = import('fs', required: true)
 globber = get_option('globber_path')
 
 arch = host_machine.cpu_family()
-
-run_command(sh, '-c', 'cd', '..', '&&', git, 'submodule', 'update', '--recursive')
 
 
 
@@ -39,7 +37,9 @@ run_command(sh, '-c', 'cd @0@ && make'.format(limine_path))
 
 # Limine Protocl
 
-limine_protocol_inc = include_directories(join_paths(deps_dir, 'limine_protocol', 'include'))
+limine_protocol_path = join_paths(deps_dir, 'limine_protocol', 'include')
+
+limine_protocol_inc = include_directories(limine_protocol_path)
 
 limine_protocol_dep = declare_dependency(include_directories: limine_protocol_inc)
 
@@ -143,9 +143,9 @@ endif
 
 # LLVM
 
-if get_option('build_llvm')
-    llvm_path = join_paths(deps_dir, 'llvm')
+llvm_path = join_paths(deps_dir, 'llvm')
 
+if get_option('build_llvm')
     llvm_build_path = join_paths(llvm_path, 'build')
 
     run_command(sh, '-c', 'cp @0@/HorizonOS.cpp @1@/HorizonOS.cpp'.format(join_paths(deps_dir, 'llvm-patches'), join_paths(deps_dir, 'llvm', 'clang', 'lib', 'Driver', 'ToolChains')), check: true)
@@ -157,3 +157,65 @@ if get_option('build_llvm')
 
     message(run_command(sh, '-c', 'cmake --build @0@ --parallel'.format(llvm_build_path), capture: true, check: true).stderr())
 endif
+
+
+
+# Targets
+
+chdrs_branch = get_option('chdrs_branch')
+cxxhdrs_branch = get_option('cxxhdrs_branch')
+flanterm_branch = get_option('flanterm_branch')
+limine_branch = get_option('limine_branch')
+limine_protocol_branch = get_option('limine_protocol_branch')
+llvm_branch = get_option('llvm_branch')
+uacpi_branch = get_option('uacpi_branch')
+
+custom_target('setup_deps',
+    command: [
+        git, 'clone', '--single-branch', '--depth', '1', '-b', chdrs_branch, 'https://codeberg.org/OSDev/freestnd-c-hdrs.git', chdrs_path,
+        ';',
+        git, 'clone', '--single-branch', '--depth', '1', '-b', cxxhdrs_branch, 'https://codeberg.org/OSDev/freestnd-cxx-hdrs.git', cxxhdrs_path,
+        ';',
+        git, 'clone', '--single-branch', '--depth', '1', '-b', flanterm_branch, 'https://codeberg.org/Mintsuki/Flanterm.git', flanterm_path,
+        ';',
+        git, 'clone', '--single-branch', '--depth', '1', '-b', limine_branch, 'https://codeberg.org/Limine/Limine.git', limine_path,
+        ';',
+        git, 'clone', '--single-branch', '--depth', '1', '-b', limine_protocol_branch, 'https://codeberg.org/Limine/limine-protocol.git', limine_protocol_path,
+        ';',
+        git, 'clone', '--single-branch', '--depth', '1', '-b', uacpi_branch, 'https://github.com/uACPI/uACPI.git', uacpi_dep_path,
+    ]
+)
+
+custom_target('update_deps',
+    command: [
+        'cd', chdrs_path,
+        '&&',
+        git, 'pull',
+        ';',
+        'cd', cxxhdrs_path,
+        '&&',
+        git, 'pull',
+        ';',
+        'cd', flanterm_path,
+        '&&',
+        git, 'pull',
+        ';',
+        'cd', limine_path,
+        '&&',
+        git, 'pull',
+        ';',
+        'cd', limine_protocol_path,
+        '&&',
+        git, 'pull',
+        ';',
+        'cd', uacpi_dep_path,
+        '&&',
+        git, 'pull'
+    ]
+)
+
+custom_target('setup_llvm',
+    command: [
+        git, 'clone', '--single-branch', '--depth', '1', '-b', llvm_branch, 'https://github.com/Diamantino-Op/llvm-project.git', llvm_path
+    ]
+)

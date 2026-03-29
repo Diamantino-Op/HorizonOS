@@ -9,3 +9,11 @@
 Token.txt
 .fuse_*
 .wraplock
+
+/deps/chdrs
+/deps/cxxhdrs
+/deps/flanterm
+/deps/limine
+/deps/limine_protocol
+/deps/llvm
+/deps/uacpi

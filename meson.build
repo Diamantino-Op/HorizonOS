@@ -64,7 +64,26 @@ iso_libs_path = join_paths(horizonos_boot_path, 'libs')
 
 # Subdirs
 
-deps_proj = subproject('horizon_deps', default_options: [ 'globber_path=@0@'.format(globber) ])
+deps_proj = subproject('horizon_deps',
+    default_options: [
+        'globber_path=@0@'.format(globber),
+        'build_llvm=@0@'.format(get_option('build_llvm') ? 'true' : 'false'),
+
+        'chdrs_branch=@0@'.format(get_option('chdrs_branch')),
+        'cxxhdrs_branch=@0@'.format(get_option('cxxhdrs_branch')),
+        'flanterm_branch=@0@'.format(get_option('flanterm_branch')),
+        'limine_branch=@0@'.format(get_option('limine_branch')),
+        'limine_protocol_branch=@0@'.format(get_option('limine_protocol_branch')),
+        'llvm_branch=@0@'.format(get_option('llvm_branch')),
+        'uacpi_branch=@0@'.format(get_option('uacpi_branch')),
+    ]
+)
+
+deps_proj = subproject('horizon_deps',
+    default_options: [
+        'globber_path=@0@'.format(globber)
+    ]
+)
 
 uacpi_dep = deps_proj.get_variable('uacpi_dep')
 limine_protocol_dep = deps_proj.get_variable('limine_protocol_dep')
