@@ -65,13 +65,13 @@ namespace kernel::x86_64::utils {
 	}
 
 	void __cyg_profile_func_enter(void *fn, void *callSite) {
-		CpuCore *currentCore = CpuManager::getCurrentCore();
-
-		const u64 start = currentCore->tsc.read();
-
 		if (!__atomic_load_n(&Profiler::active, __ATOMIC_ACQUIRE)) {
 			return;
 		}
+
+		CpuCore *currentCore = CpuManager::getCurrentCore();
+
+		const u64 start = currentCore->tsc.read();
 
 		const usize idx = currentCore->currFrame++;
 
@@ -99,13 +99,13 @@ namespace kernel::x86_64::utils {
 	}
 
 	void __cyg_profile_func_exit(void *fn, void *callSite) {
-		CpuCore *currentCore = CpuManager::getCurrentCore();
-
-		const u64 start = currentCore->tsc.read();
-
 		if (!__atomic_load_n(&Profiler::active, __ATOMIC_ACQUIRE)) {
 			return;
 		}
+
+		CpuCore *currentCore = CpuManager::getCurrentCore();
+
+		const u64 start = currentCore->tsc.read();
 
 		const bool hadInts = Profiler::lock.lock();
 
