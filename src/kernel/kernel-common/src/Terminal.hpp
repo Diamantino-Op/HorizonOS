@@ -19,23 +19,23 @@ namespace kernel::common {
 
         explicit Terminal(const limine_framebuffer *framebuffer);
 
-        bool lock();
-        void unlock(bool prevIF);
+        __attribute__((no_instrument_function)) bool lock();
+        __attribute__((no_instrument_function)) void unlock(bool prevIF);
 
-        static void putChar(int c, void *ctx);
-        static void putCharE9(int c, void *ctx);
-        static void putCharBoth(int c, void *ctx);
+        __attribute__((no_instrument_function)) static void putChar(int c, void *ctx);
+        __attribute__((no_instrument_function)) static void putCharE9(int c, void *ctx);
+        __attribute__((no_instrument_function)) static void putCharBoth(int c, void *ctx);
 
-        void printf(bool autoSN, const char* format, ...);
-        void printfE9(bool autoSN, const char* format, ...);
-        void printfBoth(bool autoSN, const char* format, ...);
-        void printfUAcpi(bool autoSN, const char* format, ...);
+        __attribute__((no_instrument_function)) void printf(bool autoSN, const char* format, ...);
+        __attribute__((no_instrument_function)) void printfE9(bool autoSN, const char* format, ...);
+        __attribute__((no_instrument_function)) void printfBoth(bool autoSN, const char* format, ...);
+        __attribute__((no_instrument_function)) void printfUAcpi(bool autoSN, const char* format, ...);
 
-        void info(const char *format, const char *id, ...);
-        void debug(const char *format, const char *id, ...);
-        void warn(const char *format, const char *id, ...);
-        void warnNoLock(const char *format, const char *id, ...);
-        void error(const char *format, const char *id, ...);
+        __attribute__((no_instrument_function)) void info(const char *format, const char *id, ...);
+        __attribute__((no_instrument_function)) void debug(const char *format, const char *id, ...);
+        __attribute__((no_instrument_function)) void warn(const char *format, const char *id, ...);
+        __attribute__((no_instrument_function)) void warnNoLock(const char *format, const char *id, ...);
+        __attribute__((no_instrument_function)) void error(const char *format, const char *id, ...);
 
         ExecutionNode *getCurrentCore();
 

@@ -6,7 +6,7 @@
 #include "Apic.hpp"
 #include "TSS.hpp"
 #include "Tsc.hpp"
-
+#include "utils/ProfilerX86.hpp"
 #include "threading/Scheduler.hpp"
 
 #include "limine.h"
@@ -17,6 +17,8 @@ namespace kernel::x86_64 {
 
 namespace kernel::x86_64::hal {
     using namespace common::threading;
+	using namespace utils;
+
     class Apic;
     class Tsc;
 
@@ -30,6 +32,10 @@ namespace kernel::x86_64::hal {
         u32 cpuId {};
 
         i64 offset {};
+
+    	CallFrame frames[maxFrames] {};
+
+    	u64 currFrame {};
     };
 
     // TODO: Move to a common file

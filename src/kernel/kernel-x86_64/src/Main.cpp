@@ -130,6 +130,8 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.startBootCore();
 
+		Profiler::start();
+
 		terminal.debug("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
 		terminal.debug("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
 
@@ -251,6 +253,10 @@ namespace kernel::x86_64 {
 		//this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		// this->shutdown();
+
+		Profiler::stop();
+
+		Profiler::show("Main Profiler");
 
 		Asm::lhlt();
 	}

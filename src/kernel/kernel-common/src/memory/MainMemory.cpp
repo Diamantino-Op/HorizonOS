@@ -1,10 +1,10 @@
 #include "MainMemory.hpp"
 
-#include "VirtualAllocator.hpp"
 #include "CommonMain.hpp"
 
 namespace kernel::common::memory {
-	void *memcpy(void *destAddr, const void *srcAddr, usize size) {
+	// Moved to dedicated arch file
+	/*void *memcpy(void *destAddr, const void *srcAddr, usize size) {
 		const auto pDest = static_cast<u8 *>(destAddr);
 		const auto pSrc = static_cast<const u8 *>(srcAddr);
 
@@ -40,7 +40,7 @@ namespace kernel::common::memory {
 		}
 
 		return destAddr;
-	}
+	}*/
 
 	int memcmp(const void *addr1, const void *addr2, const usize size) {
 		const auto p1 = static_cast<const u8 *>(addr1);

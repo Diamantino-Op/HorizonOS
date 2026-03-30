@@ -33,7 +33,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
 	const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
 
 	for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(alignedAddr + CommonMain::getCurrentHhdm(), alignedAddr, 0b00000011, false, false);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i + CommonMain::getCurrentHhdm(), i, 0b00000011, false, false);
 	}
 
 	return reinterpret_cast<u64 *>(addr + CommonMain::getCurrentHhdm());
@@ -46,7 +46,7 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
 
 	for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.unMapPage(alignedAddr);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.unMapPage(i);
 	}
 }
 
@@ -83,35 +83,22 @@ void uacpi_kernel_free(void *mem) {
 void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
 	Terminal* terminal = CommonMain::getTerminal();
 
-	if (str == nullptr) {
-		str = "(null)";
-	}
-
-	usize len = 0;
-	while (str[len] != '\0') {
-		++len;
-	}
-
-	while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r')) {
-		--len;
-	}
-
 	switch (level) {
 		case UACPI_LOG_ERROR:
-			terminal->printfUAcpi(true, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
+			terminal->printfUAcpi(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_WARN:
-			terminal->printfUAcpi(true, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
+			terminal->printfUAcpi(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_INFO:
-			terminal->printfUAcpi(true, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
+			terminal->printfUAcpi(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_TRACE:
 		case UACPI_LOG_DEBUG:
-			terminal->printfUAcpi(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%.*s\o{33}[0m", static_cast<int>(len), str);
+			terminal->printfUAcpi(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
 			break;
 	}
 }

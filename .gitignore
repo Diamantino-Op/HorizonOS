@@ -17,3 +17,5 @@ Token.txt
 /deps/limine_protocol
 /deps/llvm
 /deps/uacpi
+
+libsmarter.wrap

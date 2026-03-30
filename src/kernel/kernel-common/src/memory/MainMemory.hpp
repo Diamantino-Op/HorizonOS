@@ -2,6 +2,7 @@
 #define KERNEL_COMMON_MAINMEMORY_HPP
 
 #include "Types.hpp"
+#include "VirtualAllocator.hpp"
 
 namespace kernel::common::memory {
     extern "C" void *memcpy(void *destAddr, const void *srcAddr, usize size);
