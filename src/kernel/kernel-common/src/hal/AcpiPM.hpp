@@ -33,6 +33,7 @@ namespace kernel::common::hal {
 
         static u64 mask;
         static i64 offset;
+        static u64 lastExtendedTicks;
 
         bool initialized {};
 

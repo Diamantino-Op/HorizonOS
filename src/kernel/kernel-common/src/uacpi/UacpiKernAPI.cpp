@@ -219,7 +219,7 @@ uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
 
 	if (timeout == 0xFFFF) {
 		while (!event->decrement()) {
-			uacpi_kernel_sleep(10);
+			uacpi_kernel_sleep(1);
 		}
 
 		return true;
@@ -232,8 +232,8 @@ uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
 			return false;
 		}
 
-		uacpi_kernel_sleep(10);
-		remaining -= 10;
+		uacpi_kernel_sleep(1);
+		remaining -= 1;
 	}
 
 	return true;

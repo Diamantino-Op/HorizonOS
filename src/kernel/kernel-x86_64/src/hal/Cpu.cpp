@@ -162,7 +162,11 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::setCorePointer(CpuCore *core) {
-		Asm::wrmsr(KGSBAS, reinterpret_cast<u64>(core));
+		const u64 corePtr = reinterpret_cast<u64>(core);
+
+		// Keep core pointer in KGSBAS (persists through swapgs).
+		// UGSBAS will hold either core ptr (kernel after user entry) or user GS (user mode).
+		Asm::wrmsr(KGSBAS, corePtr);
 	}
 
 	CpuCore *CpuManager::getCurrentCore() {

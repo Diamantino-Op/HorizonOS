@@ -44,7 +44,7 @@ namespace kernel::common::uacpi {
 	using namespace x86_64::utils;
 
 	void UAcpi::archMiddleInit() {
-		const uacpi_interrupt_model currInterruptModel = CpuManager::getCurrentCore()->apic.isInitialized() ? UACPI_INTERRUPT_MODEL_PIC : UACPI_INTERRUPT_MODEL_IOAPIC;
+		const uacpi_interrupt_model currInterruptModel = CpuManager::getCurrentCore()->apic.isInitialized() ?  UACPI_INTERRUPT_MODEL_IOAPIC : UACPI_INTERRUPT_MODEL_PIC;
 
 		if (const uacpi_status ret = uacpi_set_interrupt_model(currInterruptModel); uacpi_unlikely_error(ret)) {
 			CommonMain::getTerminal()->error("Failed to set interrupt model: %s", "uAcpi", uacpi_status_to_string(ret));
@@ -104,7 +104,7 @@ namespace kernel::common::uacpi {
 
 		*outIrqHandle = Interrupts::getHandler(irq + 0x20);
 
-		reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->unmask(irq + 0x20);
+		Interrupts::unmask(irq + 0x20);
 
 		return UACPI_STATUS_OK;
 	}

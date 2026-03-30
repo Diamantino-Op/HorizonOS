@@ -9,29 +9,29 @@ namespace kernel::x86_64::utils {
 	using namespace common;
 	using namespace hal;
 
-	ProfRecord Profiler::records[maxProfRecords];
-	u64 Profiler::numRecords;
-	u8 Profiler::active = 0;
-	TicketSpinLock Profiler::lock {};
+	ProfRecord Profiler::records[maxProfRecords] {};
+	u64 Profiler::numRecords = 0;
+	bool Profiler::active = false;
+	bool Profiler::locked = false;
 
 	void Profiler::start() {
-		__atomic_store_n(&Profiler::active, 1, __ATOMIC_RELEASE);
+		__atomic_store_n(&Profiler::active, true, __ATOMIC_RELEASE);
 	}
 
 	void Profiler::stop() {
-		__atomic_store_n(&Profiler::active, 0, __ATOMIC_RELEASE);
+		__atomic_store_n(&Profiler::active, false, __ATOMIC_RELEASE);
 	}
 
 	void Profiler::reset() {
-		const bool hadInts = lock.lock();
+		const u64 hadInts = lock();
 
 		numRecords = 0;
 
-		lock.unlock(hadInts);
+		unlock(hadInts);
 	}
 
 	void Profiler::show(const char *name) {
-		const bool hadInts = lock.lock();
+		const u64 hadInts = lock();
 
 		Terminal *terminal = CommonMain::getTerminal();
 
@@ -48,13 +48,32 @@ namespace kernel::x86_64::utils {
 
 		terminal->info("Profiler results for '%s' (%lu records):", "Profiler", name, numRecords);
 
-		for (size_t i = 0; i < numRecords; i++) {
+		for (usize i = 0; i < numRecords; i++) {
 			terminal->info("%lu) 0x%.16lx: %lu (%lu calls, avg %lu per call)", "Profiler",
 					i + 1, reinterpret_cast<uPtr>(records[i].fn), records[i].total, records[i].calls,
 					(records[i].total + (records[i].calls / 2)) / records[i].calls);
 		}
 
-		lock.unlock(hadInts);
+		unlock(hadInts);
+	}
+
+	u64 Profiler::lock() {
+		u64 value;
+
+		asm volatile("pushfq; popq %0; cli" : "=rm"(value));
+		while (__atomic_exchange_n(&locked, true, __ATOMIC_ACQUIRE)) {
+			asm("pause");
+		}
+
+		return value;
+	}
+
+	void Profiler::unlock(u64 hadInts) {
+		__atomic_store_n(&locked, false, __ATOMIC_RELEASE);
+
+		if (hadInts & 0x200) {
+			asm("sti");
+		}
 	}
 
 	bool Profiler::pred(const ProfRecord *a, const ProfRecord *b) {
@@ -76,11 +95,13 @@ namespace kernel::x86_64::utils {
 		const usize idx = currentCore->currFrame++;
 
 		if (idx >= maxFrames) {
-			Asm::cli();
+			asm("cli");
 
 			CommonMain::getTerminal()->error("Profiler frame limit of %lu exceeded!", "Profiler", maxFrames);
 
-			Asm::lhlt();
+			while (true) {
+				asm("hlt");
+			}
 		}
 
 		CallFrame *frame = &currentCore->frames[idx];
@@ -107,19 +128,21 @@ namespace kernel::x86_64::utils {
 
 		const u64 start = currentCore->tsc.read();
 
-		const bool hadInts = Profiler::lock.lock();
+		const u64 hadInts = Profiler::lock();
 
 		const size_t idx = --currentCore->currFrame;
 		const CallFrame *frame = &currentCore->frames[idx];
 		uint64_t time = start - frame->start - frame->ptime;
 
 		if (frame->fn != fn && frame->site != callSite) {
-			Asm::cli();
+			asm("cli");
 
 			CommonMain::getTerminal()->error("Profiler function exit does not match any function entry! (fn: 0x%.16lx, callSite: 0x%.16lx)", "Profiler",
 					reinterpret_cast<uPtr>(fn), reinterpret_cast<uPtr>(callSite));
 
-			Asm::lhlt();
+			while (true) {
+				asm("hlt");
+			}
 		}
 
 		for (size_t i = 0; i < Profiler::numRecords; i++) {
@@ -129,18 +152,20 @@ namespace kernel::x86_64::utils {
 				record->total += time;
 				record->calls += 1;
 
-				Profiler::lock.unlock(hadInts);
+				Profiler::unlock(hadInts);
 
 				return;
 			}
 		}
 
 		if (Profiler::numRecords == maxProfRecords) {
-			Asm::cli();
+			asm("cli");
 
 			CommonMain::getTerminal()->error("Profiler record limit of %lu exceeded!", "Profiler", maxProfRecords);
 
-			Asm::lhlt();
+			while (true) {
+				asm("hlt");
+			}
 		}
 
 		ProfRecord *record = &Profiler::records[Profiler::numRecords++];
@@ -148,7 +173,7 @@ namespace kernel::x86_64::utils {
 		record->total = time;
 		record->calls = 1;
 
-		Profiler::lock.unlock(hadInts);
+		Profiler::unlock(hadInts);
 
 		const uint64_t end = currentCore->tsc.read();
 		time = end - start;

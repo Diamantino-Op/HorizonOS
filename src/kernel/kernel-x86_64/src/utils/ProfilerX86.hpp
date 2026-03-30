@@ -28,6 +28,9 @@ namespace kernel::x86_64::utils {
 		__attribute__((no_instrument_function)) static void reset();
 		__attribute__((no_instrument_function)) static void show(const char *name);
 
+		__attribute__((no_instrument_function)) static u64 lock();
+		__attribute__((no_instrument_function)) static void unlock(u64 hadInts);
+
 	private:
 		__attribute__((no_instrument_function)) static bool pred(const ProfRecord *a, const ProfRecord *b);
 
@@ -36,9 +39,9 @@ namespace kernel::x86_64::utils {
 
 		static u64 numRecords;
 
-		static TicketSpinLock lock;
+		static bool locked;
 
-		static u8 active;
+		static bool active;
 	};
 
 	__attribute__((no_instrument_function)) extern "C" void __cyg_profile_func_enter(void *fn, void *callSite);

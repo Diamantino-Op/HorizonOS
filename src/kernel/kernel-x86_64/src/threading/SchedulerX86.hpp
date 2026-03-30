@@ -19,8 +19,8 @@ namespace kernel::x86_64::threading {
 
         u64 *getSimdSave() const;
 
-        void save() const;
-        void load() const;
+        void save();
+        void load();
 
         bool isUserspace() const;
 
@@ -29,6 +29,7 @@ namespace kernel::x86_64::threading {
         u64 *simdSave {};
 
         bool isUser {};
+        u64 userGsBase {};
 
         u64 originalStackPointer {};
         bool ownsKernelStack {};

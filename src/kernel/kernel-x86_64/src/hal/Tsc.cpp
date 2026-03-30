@@ -42,7 +42,9 @@ namespace kernel::x86_64::hal {
 		} else if (reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->supported()) {
 			freq = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->tscFreq();
 
-			this->calibrated = true;
+			if (freq != 0) {
+				this->calibrated = true;
+			}
 		} else if (const CalibratorFun calibrator = CommonMain::getInstance()->getClocks()->getCalibrator(); calibrator != nullptr) {
 			constexpr u64 times = 3;
 
@@ -69,12 +71,14 @@ namespace kernel::x86_64::hal {
 			this->p = val1;
 			this->n = val2;
 
-			if (const Clock *clock = CommonMain::getInstance()->getClocks()->getMainClock()) {
-				CpuManager::getCurrentCore()->offset = getTimeNs() - clock->getNs();
+			if (const Clock *mainClock = CommonMain::getInstance()->getClocks()->getMainClock()) {
+				CpuManager::getCurrentCore()->offset = getTimeNs() - mainClock->getNs();
 			}
 
 			this->calibrated = true;
 		}
+
+		CommonMain::getTerminal()->debug("Timer frequency: %lu Hz", "TSC", freq);
 	}
 
 	void Tsc::init() {

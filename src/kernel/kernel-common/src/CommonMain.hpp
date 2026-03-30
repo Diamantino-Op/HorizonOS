@@ -25,7 +25,7 @@ namespace kernel::common {
 
     	bool isInit() const;
 
-        static Terminal* getTerminal();
+        __attribute__((no_instrument_function)) static Terminal* getTerminal();
 
         static CommonMain *getInstance();
 

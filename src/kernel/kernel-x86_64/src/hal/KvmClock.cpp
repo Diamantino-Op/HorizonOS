@@ -23,6 +23,10 @@ namespace kernel::x86_64::hal {
 	}
 
 	u64 KvmClock::tscFreq() {
+		if (info.tscToSystemMul == 0) {
+			return 0;
+		}
+
 		u64 freq = (1'000'000'000ull << 32) / info.tscToSystemMul;
 
 		if (info.tscShift < 0) {
@@ -50,6 +54,26 @@ namespace kernel::x86_64::hal {
 
 		Asm::wrmsr(0x4B564D01, infoPhysAddr | 1);
 
+		bool ready = false;
+
+		for (u64 i = 0; i < 100000; i++) {
+			const u32 version = __atomic_load_n(&info.version, __ATOMIC_ACQUIRE);
+
+			if ((version & 1) == 0 and __atomic_load_n(&info.tscToSystemMul, __ATOMIC_RELAXED) != 0) {
+				ready = true;
+
+				break;
+			}
+
+			Asm::pause();
+		}
+
+		if (!ready) {
+			terminal->debug("Kvm clock params not ready!", "KvmClock");
+
+			return;
+		}
+
 		if (const Clock *currClock = CommonMain::getInstance()->getClocks()->getMainClock(); currClock != nullptr) {
 			offset = getNs() - currClock->getNs();
 		}
@@ -65,6 +89,10 @@ namespace kernel::x86_64::hal {
 
 	// TODO: Fix this shit, it's off by too much
 	u64 KvmClock::getNs() {
+		if (__atomic_load_n(&info.tscToSystemMul, __ATOMIC_RELAXED) == 0) {
+			return 0;
+		}
+
 		u128 time = 0;
 
 		while (true) {

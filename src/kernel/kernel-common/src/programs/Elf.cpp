@@ -93,11 +93,9 @@ namespace kernel::common::programs {
 				if (shdr->type == SHT_NOBITS) {
 					// BSS section - allocate and zero
 					if (shdr->flags & SHF_ALLOC) {
-						auto *dest = reinterpret_cast<u64 *>(baseAddr + shdr->addr);
+						auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
-						for (u64 j = 0; j < shdr->size / sizeof(u64); j++) {
-							dest[j] = 0;
-						}
+						memset(dest, 0, shdr->size);
 
 						shdr->offset = baseAddr + shdr->addr - reinterpret_cast<u64>(elf64Header);
 					}
@@ -106,9 +104,8 @@ namespace kernel::common::programs {
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + shdr->offset;
 					auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
-					for (u64 j = 0; j < shdr->size; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, shdr->size);
+
 					shdr->addr = baseAddr + shdr->addr;
 				}
 			}
@@ -229,11 +226,9 @@ namespace kernel::common::programs {
 				if (shdr->type == SHT_NOBITS) {
 					// BSS section - allocate and zero
 					if (shdr->flags & SHF_ALLOC) {
-						auto *dest = reinterpret_cast<u32 *>(baseAddr + shdr->addr);
+						auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
-						for (u32 j = 0; j < shdr->size / sizeof(u32); j++) {
-							dest[j] = 0;
-						}
+						memset(dest, 0, shdr->size);
 
 						shdr->offset = baseAddr + shdr->addr - reinterpret_cast<u64>(elf32Header);
 					}
@@ -242,9 +237,7 @@ namespace kernel::common::programs {
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + shdr->offset;
 					auto *dest = reinterpret_cast<u8 *>(baseAddr + shdr->addr);
 
-					for (u32 j = 0; j < shdr->size; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, shdr->size);
 
 					shdr->addr = baseAddr + shdr->addr;
 				}
@@ -361,18 +354,20 @@ namespace kernel::common::programs {
 			// Load all PT_LOAD segments
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
+					if (phdr[i].filesz > phdr[i].memsz) {
+						CommonMain::getTerminal()->error("Invalid ELF segment: filesz > memsz!", "Elf Loader");
+
+						return nullptr;
+					}
+
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
 					auto *dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
 
 					// Copy file contents
-					for (u64 j = 0; j < phdr[i].filesz; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, phdr[i].filesz);
 
 					// Zero remaining memory (BSS)
-					for (u64 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
-						dest[j] = 0;
-					}
+					memset(dest + phdr[i].filesz, 0, phdr[i].memsz - phdr[i].filesz);
 				}
 			}
 
@@ -447,18 +442,19 @@ namespace kernel::common::programs {
 			// Load all PT_LOAD segments
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
+					if (phdr[i].filesz > phdr[i].memsz) {
+						CommonMain::getTerminal()->error("Invalid ELF segment: filesz > memsz!", "Elf Loader");
+						return nullptr;
+					}
+
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
 					auto *dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
 
 					// Copy file contents
-					for (u32 j = 0; j < phdr[i].filesz; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, phdr[i].filesz);
 
 					// Zero remaining memory (BSS)
-					for (u32 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
-						dest[j] = 0;
-					}
+					memset(dest + phdr[i].filesz, 0, phdr[i].memsz - phdr[i].filesz);
 				}
 			}
 
@@ -542,18 +538,20 @@ namespace kernel::common::programs {
 			// Load all PT_LOAD segments at their specified virtual addresses
 			for (u16 i = 0; i < elf64Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
+					if (phdr[i].filesz > phdr[i].memsz) {
+						CommonMain::getTerminal()->error("Invalid ELF segment: filesz > memsz!", "Elf Loader");
+
+						return nullptr;
+					}
+
 					const u8 *src = reinterpret_cast<u8 *>(elf64Header) + phdr[i].offset;
 					auto *dest = reinterpret_cast<u8 *>(phdr[i].vaddr + offset);
 
 					// Copy file contents
-					for (u64 j = 0; j < phdr[i].filesz; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, phdr[i].filesz);
 
 					// Zero remaining memory (BSS)
-					for (u64 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
-						dest[j] = 0;
-					}
+					memset(dest + phdr[i].filesz, 0, phdr[i].memsz - phdr[i].filesz);
 				}
 			}
 
@@ -580,18 +578,19 @@ namespace kernel::common::programs {
 			// Load all PT_LOAD segments at their specified virtual addresses
 			for (u16 i = 0; i < elf32Header->elfProgHeaderAmount; i++) {
 				if (phdr[i].type == PT_LOAD) {
+					if (phdr[i].filesz > phdr[i].memsz) {
+						CommonMain::getTerminal()->error("Invalid ELF segment: filesz > memsz!", "Elf Loader");
+						return nullptr;
+					}
+
 					const u8 *src = reinterpret_cast<u8 *>(elf32Header) + phdr[i].offset;
 					auto *dest = reinterpret_cast<u8 *>(static_cast<u64>(phdr[i].vaddr + offset));
 
 					// Copy file contents
-					for (u32 j = 0; j < phdr[i].filesz; j++) {
-						dest[j] = src[j];
-					}
+					memcpy(dest, src, phdr[i].filesz);
 
 					// Zero remaining memory (BSS)
-					for (u32 j = phdr[i].filesz; j < phdr[i].memsz; j++) {
-						dest[j] = 0;
-					}
+					memset(dest + phdr[i].filesz, 0, phdr[i].memsz - phdr[i].filesz);
 				}
 			}
 
@@ -647,7 +646,7 @@ namespace kernel::common::programs {
 		}
 
 		if (elfHeader->elfMachine != ElfX86Machine) {
-			CommonMain::getTerminal()->error("Unsupported ELF File target!", "Elf Loader");
+			CommonMain::getTerminal()->error("Unsupported ELF File target: %lu", "Elf Loader", elfHeader->elfMachine);
 
 			return false;
 		}
@@ -659,7 +658,7 @@ namespace kernel::common::programs {
 		}
 
 		if (elfHeader->elfType != ElfType::ET_REL and elfHeader->elfType != ElfType::ET_EXEC and elfHeader->elfType != ElfType::ET_DYN) {
-			CommonMain::getTerminal()->error("Unsupported ELF File type!", "Elf Loader");
+			CommonMain::getTerminal()->error("Unsupported ELF File type: %lu", "Elf Loader", elfHeader->elfType);
 
 			return false;
 		}

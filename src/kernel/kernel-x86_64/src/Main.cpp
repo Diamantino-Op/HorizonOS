@@ -130,8 +130,6 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.startBootCore();
 
-		Profiler::start();
-
 		terminal.debug("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
 		terminal.debug("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
 
@@ -174,7 +172,13 @@ namespace kernel::x86_64 {
 		// Kvm Clock
 		this->kvmClock.init();
 
-		terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
+		if (const u64 kvmFreq = this->kvmClock.tscFreq(); kvmFreq != 0) {
+			terminal.debug("Timer frequency: %lu Hz", "KvmClock", kvmFreq);
+			terminal.info("Kvm Clock Initialised... OK", "HorizonOS");
+		} else {
+			terminal.debug("Kvm clock frequency unavailable", "KvmClock");
+			terminal.info("Kvm Clock unavailable", "HorizonOS");
+		}
 
 		// Acpi PM Clock
 		this->acpiPM.init();
@@ -208,6 +212,20 @@ namespace kernel::x86_64 {
 
 				auto *moduleProcess = new Process(ProcessPriority::NORMAL, true);
 				this->scheduler->addProcess(moduleProcess);
+
+				const u64 currPageMap = Asm::readCr3();
+
+				moduleProcess->getProcessContextKernel()->pageMap.load();
+
+				auto *elfLocation = Elf::loadElf(static_cast<const u64 *>(moduleFile->address), moduleProcess->getProcessContext(), pageSize);
+
+				Asm::writeCr3(currPageMap);
+
+				if (elfLocation != nullptr) {
+					this->scheduler->addThread(true, reinterpret_cast<u64>(elfLocation), moduleProcess);
+				} else {
+					this->scheduler->killProcess(moduleProcess);
+				}
 			}
 		}
 
@@ -224,6 +242,8 @@ namespace kernel::x86_64 {
 		this->cpuManager.getBootstrapCpu()->tsc.globalInit();
 
 		terminal.info("TSC Initialised... OK", "HorizonOS");
+
+		//Profiler::start();
 
 		// Apic
 
@@ -250,13 +270,13 @@ namespace kernel::x86_64 {
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
 		// Todo: make one shot and restart when thread goes to sleep
-		//this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		// this->shutdown();
 
-		Profiler::stop();
+		//Profiler::stop();
 
-		Profiler::show("Main Profiler");
+		//Profiler::show("Main Profiler");
 
 		Asm::lhlt();
 	}

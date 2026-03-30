@@ -142,8 +142,8 @@ namespace kernel::x86_64::utils {
 
         // Msrs
 
-        static u64 rdmsr(u64 msr);
-        static void wrmsr(u64 msr, u64 value);
+        __attribute__((no_instrument_function)) static u64 rdmsr(u64 msr);
+        __attribute__((no_instrument_function)) static void wrmsr(u64 msr, u64 value);
     };
 }
 

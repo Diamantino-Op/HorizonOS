@@ -89,7 +89,7 @@ if get_option('debug_build')
         '-g',
         '-ggdb3',
         '-fsanitize=undefined',
-        '-finstrument-functions',
+        #'-finstrument-functions',
         '-DHORIZON_DEBUG',
     ]
 else

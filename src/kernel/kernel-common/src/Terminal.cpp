@@ -57,21 +57,21 @@ namespace kernel::common {
 	}
 
 	bool Terminal::lock() {
-		if (CommonMain::getInstance()->isInit()) {
+		/*if (CommonMain::getInstance()->isInit()) {
 			this->getCurrentCore()->setDisabled(true);
-		}
+		}*/
 
-		//return this->spinLock.lock();
+		return this->spinLock.lock();
 
 		return false;
 	}
 
 	void Terminal::unlock(const bool prevIF) {
-		//this->spinLock.unlock(this->prevIF);
+		this->spinLock.unlock(prevIF);
 
-		if (CommonMain::getInstance()->isInit()) {
+		/*if (CommonMain::getInstance()->isInit()) {
 			this->getCurrentCore()->setDisabled(false);
-		}
+		}*/
 	}
 
 	void Terminal::putChar(int c, void *) {

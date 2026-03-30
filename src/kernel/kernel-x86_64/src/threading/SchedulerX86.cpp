@@ -239,6 +239,7 @@ namespace kernel::x86_64::threading {
 
 	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
 		this->isUser = isUserspace;
+		this->userGsBase = 0;
 		this->process = process;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
 		this->ownsKernelStack = ownsKernelStack;
@@ -254,12 +255,20 @@ namespace kernel::x86_64::threading {
 		return this->simdSave;
 	}
 
-	void ThreadContext::save() const {
+	void ThreadContext::save() {
 		CpuManager::saveSimdContext(this->simdSave);
+
+		if (this->isUser) {
+			this->userGsBase = Asm::rdmsr(Msrs::UGSBAS);
+		}
 	}
 
-	void ThreadContext::load() const {
+	void ThreadContext::load() {
 		CpuManager::loadSimdContext(this->simdSave);
+
+		if (this->isUser) {
+			Asm::wrmsr(Msrs::UGSBAS, this->userGsBase);
+		}
 	}
 
 	bool ThreadContext::isUserspace() const {

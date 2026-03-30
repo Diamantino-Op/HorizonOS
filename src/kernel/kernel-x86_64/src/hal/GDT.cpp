@@ -34,7 +34,7 @@ namespace kernel::x86_64::hal {
         );
 
     	// User Code 64-Bit Segment
-    	this->gdtInstance.entries[3] = GdtEntry(
+    	this->gdtInstance.entries[5] = GdtEntry(
 			AccessBytes::PRESENT | AccessBytes::CD_SEGMENT | AccessBytes::READ_WRITE | AccessBytes::EXECUTABLE | AccessBytes::USER,
 			Flags::PAGE_GRANULARITY | Flags::LONG_MODE
 		);

@@ -24,8 +24,9 @@ namespace kernel::common::programs {
     constexpr u8 ElfLSB = 1;
     constexpr u8 ElfMSB = 2;
 
-    constexpr u16 ElfX86Machine = 3;
+    constexpr u16 ElfX86Machine = 62;
     constexpr u16 ElfArmMachine = 40;
+	constexpr u16 ElfRiscVMachine = 243;
 
     constexpr u32 ElfCurrVersion = 1;
 

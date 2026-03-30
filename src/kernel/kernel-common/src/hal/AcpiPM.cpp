@@ -8,6 +8,7 @@
 namespace kernel::common::hal {
 	u64 AcpiPM::mask;
 	i64 AcpiPM::offset;
+	u64 AcpiPM::lastExtendedTicks;
 
 	void AcpiPM::init() {
 		if (not supported()) {
@@ -42,13 +43,19 @@ namespace kernel::common::hal {
 			v3 = readInternal();
 		} while (__builtin_expect(((v1 > v2 && v1 < v3) || (v2 > v3 && v2 < v1) || (v3 > v1 && v3 < v2)), 0));
 
-		return v2;
+		return v2 & mask;
 	}
 
 	u64 AcpiPM::readInternal() const {
 		u64 value;
 
-		uacpi_gas_read_mapped(timerBlockMapped, &value);
+		if (timerBlockMapped == nullptr) {
+			return 0;
+		}
+
+		if (uacpi_gas_read_mapped(timerBlockMapped, &value) != UACPI_STATUS_OK) {
+			return 0;
+		}
 
 		return value;
 	}
@@ -66,17 +73,30 @@ namespace kernel::common::hal {
 
 		this->timerBlock = fadtTable->x_pm_tmr_blk;
 
-		uacpi_map_gas(&timerBlock, &timerBlockMapped);
+		if (this->timerBlock.address == 0) {
+			return false;
+		}
+
+		if (timerBlockMapped == nullptr) {
+			if (uacpi_map_gas(&timerBlock, &timerBlockMapped) != UACPI_STATUS_OK) {
+				return false;
+			}
+		}
 
 		mask = (fadtTable->flags & (1 << 8)) ? 0xFFFFFFFF : 0xFFFFFF;
 
 		return true;
 	}
 
+	bool AcpiPM::isInit() {
+		return this->initialized;
+	}
+
 	void AcpiPM::calibrate(const u64 ms) {
 		AcpiPM *currAcpiPM = CommonMain::getInstance()->getAcpiPM();
+		const u64 wrapTicks = mask + 1;
 
-		if (!currAcpiPM->supported() or (ms * frequency) / 1000 > mask) {
+		if (!currAcpiPM->supported() or (ms * frequency) / 1000 >= wrapTicks) {
 			return;
 		}
 
@@ -86,18 +106,51 @@ namespace kernel::common::hal {
 
 		u64 current = start;
 
-		while (current < start + ticks) {
+		while (true) {
 			current = currAcpiPM->read();
 
-			if (current < start) {
-				current += mask;
+			u64 elapsed = 0;
+
+			if (current >= start) {
+				elapsed = current - start;
+			} else {
+				elapsed = (wrapTicks - start) + current;
+			}
+
+			if (elapsed >= ticks) {
+				break;
 			}
 		}
 	}
 
 	u64 AcpiPM::getNs() {
+		AcpiPM *acpiPm = CommonMain::getInstance()->getAcpiPM();
+		const u64 raw = acpiPm->read();
+		u64 prev = __atomic_load_n(&lastExtendedTicks, __ATOMIC_RELAXED);
+		u64 extended = 0;
+		const u64 wrapTicks = mask + 1;
+
+		while (true) {
+			const u64 prevRaw = prev & mask;
+			u64 base = prev & ~mask;
+
+			if (raw < prevRaw && (prevRaw - raw) > (mask >> 1)) {
+				base += wrapTicks;
+			}
+
+			extended = base + raw;
+
+			if (extended < prev) {
+				extended = prev;
+			}
+
+			if (__atomic_compare_exchange_n(&lastExtendedTicks, &prev, extended, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+				break;
+			}
+		}
+
 		const auto [val1, val2] = freq2NsPN(frequency);
 
-		return ticks2ns(CommonMain::getInstance()->getAcpiPM()->read(), val1, val2) - offset;
+		return ticks2ns(extended, val1, val2) - offset;
 	}
 }
