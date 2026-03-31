@@ -80,7 +80,7 @@ threadTrampoline32:
 
     swapgs
 
-    iret
+    iretq
 
 .global threadTrampoline64
 threadTrampoline64:
@@ -102,4 +102,4 @@ threadTrampoline64:
 
     swapgs
 
-    iret
+    iretq

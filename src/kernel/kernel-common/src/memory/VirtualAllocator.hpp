@@ -2,7 +2,6 @@
 #define KERNEL_COMMON_VIRTUALALLOCATOR_HPP
 
 #include "VirtualMemory.hpp"
-
 #include "SpinLock.hpp"
 
 namespace kernel::common::memory {
@@ -57,11 +56,11 @@ namespace kernel::common::memory {
 
         static void defrag(AllocContext *ctx);
 
+    	static u64 getProcessAllocStart();
+
     private:
         static u64 startCreateArch();
         static void endCreateArch(u64 value);
-
-        static u64 getProcessAllocStart();
 
         static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);

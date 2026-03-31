@@ -21,8 +21,8 @@ namespace kernel::common::memory {
 		this->init();
 	}
 
-	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, AllocContext *ctx, bool isKernel) {
-		this->isKernel = isKernel;
+	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, AllocContext *ctx, const bool newIsKernel) {
+		this->isKernel = newIsKernel;
 		this->allocCtx = ctx;
 
 		Terminal* terminal = CommonMain::getTerminal();

@@ -6,6 +6,7 @@
 namespace kernel::common::threading {
     constexpr u16 maxProcesses = 32768;
     constexpr u16 maxThreads = 65535;
+	constexpr u8 maxProcThreads = 255; // TODO: Maybe increase this?
 
     class PIDAllocator {
     public:
@@ -17,6 +18,17 @@ namespace kernel::common::threading {
         static u16 freePIDs[maxProcesses];
         static i32 pidTop;
     };
+
+	class PRIDAllocator {
+	public:
+		void init();
+		u8 allocPRID();
+		void freePRID(u8 prid);
+
+	private:
+		u8 freePRIDs[maxThreads] {};
+		i32 pridTop {};
+	};
 
     class TIDAllocator {
     public:

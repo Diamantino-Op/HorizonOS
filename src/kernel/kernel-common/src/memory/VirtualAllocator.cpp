@@ -63,7 +63,7 @@ namespace kernel::common::memory {
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags , false, false);
 
-		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx);
+		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx); // , not ctx->isUserspace
 
 		shareKernelPages(ctx);
 
@@ -270,7 +270,7 @@ namespace kernel::common::memory {
 
 			ctx->pageMap.unMapPage(reinterpret_cast<u64>(virtAddress));
 
-			CommonMain::getInstance()->getPMM()->freePages(virtAddress, 1);
+			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, virtAddress, 1);
 		}
 
 		if (prev) {

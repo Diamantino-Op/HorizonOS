@@ -1,8 +1,9 @@
 #ifndef KERNEL_COMMON_SCHEDULER_HPP
 #define KERNEL_COMMON_SCHEDULER_HPP
 
-#include "Types.hpp"
+#include "IDAllocator.hpp"
 #include "LinkedList.hpp"
+#include "Types.hpp"
 #include "memory/VirtualAllocator.hpp"
 
 namespace kernel::common::threading {
@@ -121,6 +122,9 @@ namespace kernel::common::threading {
     	AllocContext *processContextKernel {};
 
         ProcessPriority priority {};
+
+    public:
+    	PRIDAllocator pridAllocator {};
     };
 
     class ExecutionNode {

@@ -35,6 +35,11 @@ namespace kernel::x86_64::threading {
         bool ownsKernelStack {};
 
         Process *process {};
+
+    public:
+    	u8 prid {};
+
+    	u64 userStackPointer {};
     };
 
     extern "C" u64 checkDisabled();

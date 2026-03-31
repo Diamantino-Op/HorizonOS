@@ -14,11 +14,7 @@ namespace kernel::common::memory {
 		for (u64 i = 0; i < ctx->heapSize; i += pageSize) {
 			const auto virtAddress = reinterpret_cast<u64>(ctx->heapStart) + i;
 
-			memset(reinterpret_cast<u64 *>(virtAddress), 0, pageSize);
-
-			ctx->pageMap.unMapPage(virtAddress);
-
-			CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(virtAddress), 1);
+			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
 		for (u16 page5Level = 0; page5Level < 256; page5Level++) {
@@ -63,8 +59,8 @@ namespace kernel::common::memory {
 			}
 		}
 
-		CommonMain::getInstance()->getPMM()->freePages(ctx->pageMap.getPageTable(), 1);
-		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(ctx), 1);
+		CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, ctx->pageMap.getPageTable(), 1);
+		CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(ctx), 1);
 	}
 
 	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {

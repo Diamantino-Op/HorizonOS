@@ -191,6 +191,8 @@ namespace kernel::common::threading {
 
 		u64 newRsp = rsp;
 
+		const u8 prid = process->pridAllocator.allocPRID();
+
 		if (rsp == 0) {
 			newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
 		}
@@ -199,16 +201,35 @@ namespace kernel::common::threading {
 
 		context->init(process, newRsp, isUser, rsp == 0);
 
+		context->prid = prid;
+
 		thread->setStackPointer(newRsp);
 		thread->setKStackPointer(newRsp);
 
 		if (isUser) {
-			const u64 userStack = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+			const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadCtxStackSize + pageSize) * (prid + 1));
+
+			const u64 startPage = alignDown<u64>(startAddr, pageSize);
+			const u64 endPage = alignUp<u64>(startAddr + threadCtxStackSize, pageSize);
+
+			for (u64 addr = startPage; addr < endPage; addr += pageSize) {
+				u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+
+				if (physPage != nullptr) {
+					process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
+				} else {
+					CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
+				}
+			}
+
+			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx, %lu", "Scheduler", startAddr + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
+
+			context->userStackPointer = startAddr;
 
 			if (thread->is32Bit()) {
-				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline32), rip, userStack);
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline32), rip, startAddr + threadCtxStackSize);
 			} else {
-				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline64), rip, userStack);
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline64), rip, startAddr + threadCtxStackSize);
 			}
 		} else {
 			setStackAsm(thread->getStackPointer(), rip);
@@ -229,10 +250,23 @@ namespace kernel::x86_64::threading {
 
 	ThreadContext::~ThreadContext() {
 		if (this->process != nullptr) {
+			this->process->pridAllocator.freePRID(this->prid);
+
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
 
 			if (this->ownsKernelStack) {
 				VirtualAllocator::free(process->getProcessContext(), reinterpret_cast<u64 *>(this->originalStackPointer));
+			}
+
+			if (this->isUser) {
+				const u64 startPage = alignDown<u64>(this->userStackPointer, pageSize);
+				const u64 endPage = alignUp<u64>(this->userStackPointer + threadCtxStackSize, pageSize);
+
+				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
+					process->getProcessContext()->pageMap.unMapPage(addr);
+
+					CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(addr), 1);
+				}
 			}
 		}
 	}

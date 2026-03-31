@@ -20,7 +20,7 @@ namespace kernel::common::memory {
     public:
 		virtual ~PageMap() = default;
 
-		void init(u64 *newPageTable, u64 newPhysPageTable, AllocContext *ctx, bool isKernel = false);
+		void init(u64 *newPageTable, u64 newPhysPageTable, AllocContext *ctx, bool newIsKernel = false);
 
         void load() const;
 
