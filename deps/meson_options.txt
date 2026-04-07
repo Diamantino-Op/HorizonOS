@@ -1,6 +1,8 @@
 # Dependencies
 
 option('build_llvm', type : 'boolean', value : false, yield: true)
+option('build_libc', type : 'boolean', value : false, yield: true)
+option('debug_build', type: 'boolean', value: false, yield: true)
 
 option('globber_path', type : 'string', value : '')
 

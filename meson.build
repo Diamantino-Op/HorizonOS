@@ -70,6 +70,8 @@ deps_proj = subproject('horizon_deps',
     default_options: [
         'globber_path=@0@'.format(globber),
         'build_llvm=@0@'.format(get_option('build_llvm') ? 'true' : 'false'),
+        'build_libc=@0@'.format(get_option('build_libc') ? 'true' : 'false'),
+        'debug_build=@0@'.format(get_option('debug_build') ? 'true' : 'false'),
 
         'chdrs_branch=@0@'.format(get_option('chdrs_branch')),
         'cxxhdrs_branch=@0@'.format(get_option('cxxhdrs_branch')),

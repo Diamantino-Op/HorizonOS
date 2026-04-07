@@ -6,6 +6,7 @@ option('qemu_targets', type: 'boolean', value: true)
 # Dependencies
 
 option('build_llvm', type: 'boolean', value: false, description: 'Build LLVM from source')
+option('build_libc', type: 'boolean', value: false, description: 'Build the c libs from source')
 
 option('chdrs_branch', type: 'string', value: 'trunk', description: 'Freestnd C Headers branch')
 option('cxxhdrs_branch', type: 'string', value: 'trunk', description: 'Freestnd C++ Headers branch')

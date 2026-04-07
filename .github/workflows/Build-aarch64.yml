@@ -15,12 +15,19 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Restore Deps Folder
-        id: cache-deps-restore
-        uses: actions/cache/restore@v4
+      - name: Restore Toolchain
+        id: cache-toolchain-restore
+        uses: actions/cache/restore@v5
         with:
-          path: ${{github.workspace}}/deps/llvm/build
-          key: ${{runner.os}}-horizonos-llvm
+          path: ${{github.workspace}}/toolchain
+          key: ${{runner.os}}-horizonos-toolchain
+
+      - name: Restore Sysroot
+        id: cache-sysroot-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{github.workspace}}/libs/sysroot
+          key: ${{runner.os}}-horizonos-aarch64-sysroot
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -28,13 +35,16 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: python -m pip install meson==1.9.1 ninja
+        run: python -m pip install meson ninja
 
       - name: Install xorriso
         run: sudo apt-get install xorriso
 
       - name: Install RSync
         run: sudo apt-get install rsync
+
+      - name: Setup Deps
+        run: cd ${{github.workspace}} && meson setup -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_deps
 
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup --cross-file res/aarch64/horizon-cross.cfg -Dqemu_targets=false build
@@ -44,7 +54,7 @@ jobs:
 
       - name: Upload ISO
         id: upload-iso
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: HorizonOS ISO - Release
           path: ${{github.workspace}}/iso/out/HorizonOS-aarch64.iso
@@ -62,12 +72,19 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Restore Deps Folder
-        id: cache-deps-restore
-        uses: actions/cache/restore@v4
+      - name: Restore Toolchain
+        id: cache-toolchain-restore
+        uses: actions/cache/restore@v5
         with:
-          path: ${{github.workspace}}/deps/llvm/build
-          key: ${{runner.os}}-horizonos-llvm
+          path: ${{github.workspace}}/toolchain
+          key: ${{runner.os}}-horizonos-toolchain
+
+      - name: Restore Sysroot
+        id: cache-sysroot-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{github.workspace}}/libs/sysroot
+          key: ${{runner.os}}-horizonos-aarch64-sysroot
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -75,10 +92,13 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: python -m pip install meson==1.9.1 ninja
+        run: python -m pip install meson ninja
 
       - name: Install xorriso
         run: sudo apt-get install xorriso
+
+      - name: Setup Deps
+        run: cd ${{github.workspace}} && meson setup -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_deps
 
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup --cross-file res/aarch64/horizon-cross.cfg -Ddebug_build=true -Dqemu_targets=false build
@@ -88,7 +108,7 @@ jobs:
 
       - name: Upload ISO
         id: upload-iso
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: HorizonOS ISO - Debug
           path: ${{github.workspace}}/iso/out/HorizonOS-aarch64.iso
@@ -100,7 +120,7 @@ jobs:
 
       - name: Upload Kernel
         id: upload-kernel
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: HorizonOS Kernel - Debug
           path: ${{github.workspace}}/iso/aarch64/boot/HorizonOS/HorizonOS_Kernel

@@ -144,32 +144,30 @@ endif
 # LLVM
 
 llvm_path = join_paths(deps_dir, 'llvm')
+compiler_rt_path = join_paths(llvm_path, 'compiler-rt')
+runtimes_path = join_paths(llvm_path, 'runtimes')
+
+llvm_build_path = join_paths(llvm_path, 'build')
+compiler_rt_build_path = join_paths(compiler_rt_path, 'build-rt-builtins')
+cxx_build_path = join_paths(compiler_rt_path, 'build-cxx')
+
+toolchain_path = join_paths(meson.global_source_root(), 'toolchain')
+
+sysroot_path = join_paths(meson.global_source_root(), 'libs', 'sysroot', 'usr')
+
+bin_path = join_paths(toolchain_path, 'bin')
+
+mlibc_path = join_paths(meson.global_source_root(), 'libs', 'mlibc')
+
+res_file_path = join_paths(meson.global_source_root(), 'res', arch, 'horizon-mlibc-cross.cfg')
+
+if get_option('debug_build')
+    mlibc_buildtype = 'debugoptimized'
+else
+    mlibc_buildtype = 'release'
+endif
 
 if get_option('build_llvm')
-    compiler_rt_path = join_paths(llvm_path, 'compiler-rt')
-    runtimes_path = join_paths(llvm_path, 'runtimes')
-
-    llvm_build_path = join_paths(llvm_path, 'build')
-    compiler_rt_build_path = join_paths(compiler_rt_path, 'build-rt-builtins')
-    cxx_build_path = join_paths(compiler_rt_path, 'build-cxx')
-
-    toolchain_path = join_paths(meson.global_source_root(), 'toolchain')
-
-    sysroot_path = join_paths(meson.global_source_root(), 'libs', 'sysroot', 'usr')
-
-    bin_path = join_paths(toolchain_path, 'bin')
-
-    mlibc_path = join_paths(meson.global_source_root(), 'libs', 'mlibc')
-
-    res_file_path = join_paths(meson.global_source_root(), 'res', arch, 'horizon-mlibc-cross.cfg')
-
-    if get_option('debug_build')
-        mlibc_buildtype = 'debugoptimized'
-    else
-        mlibc_buildtype = 'release'
-    endif
-
-
     # LLVM
 
     message(run_command(sh, '-c', 'cmake -S @0@ -B @1@ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_{C,CXX,ASM}_FLAGS="-pipe" -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld" -DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64" -DCMAKE_INSTALL_PREFIX=@2@ -DDEFAULT_SYSROOT=@3@ -DLLVM_DEFAULT_TARGET_TRIPLE=@4@-horizonos-elf -DENABLE_LINKER_BUILD_ID=ON -DLLVM_CCACHE_BUILD=ON -DLLVM_LINK_LLVM_DYLIB=ON -DLLVM_PARALLEL_COMPILE_JOBS=20 -DLLVM_PARALLEL_LINK_JOBS=20'.format(
@@ -184,7 +182,10 @@ if get_option('build_llvm')
 
     message(run_command(sh, '-c', 'cmake --install @0@'.format(llvm_build_path), capture: true, check: true).stderr())
 
+    message(run_command(sh, '-c', 'rm @0@'.format(llvm_build_path), capture: true, check: true).stderr())
+endif
 
+if get_option('build_libc')
     # MLibC Headers
 
     message(run_command(sh, '-c', 'cd @0@ && meson setup --reconfigure build --cross-file @1@ --prefix @2@ --libdir @2@ --includedir @3@ -Ddefault_library=both --buildtype @4@ -Dlinux_kernel_headers=@5@ -Dheaders_only=true && cd build && meson compile && meson install && cd .. && rm build'.format(
@@ -277,8 +278,6 @@ if get_option('build_llvm')
 
     message(run_command(sh, '-c', 'cmake --build @0@ --target install-unwind install-cxxabi install-cxx'.format(cxx_build_path), capture: true, check: true).stderr())
 
-
-    message(run_command(sh, '-c', 'rm @0@'.format(llvm_build_path), capture: true, check: true).stderr())
     message(run_command(sh, '-c', 'rm @0@'.format(compiler_rt_build_path), capture: true, check: true).stderr())
     message(run_command(sh, '-c', 'rm @0@'.format(cxx_build_path), capture: true, check: true).stderr())
 endif
