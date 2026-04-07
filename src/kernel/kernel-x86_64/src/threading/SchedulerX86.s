@@ -51,8 +51,28 @@ setStackAsm:
     push 0
     push 0
     push 0
+    # SysV args: rdx=usermode entry RIP, rcx=user stack.
+    # switchContextAsm pops r15 then r14, and trampoline uses r15 as RIP, r14 as user RSP.
     push rcx
     push rdx
+
+    mov [rdi], rsp
+
+    mov rsp, rax
+
+    ret
+
+.global setUserStackAsm
+setUserStackAsm:
+    mov rax, rsp
+
+    mov rsp, [rdi]
+
+    # Main Fun Args
+    push 0
+    push 0
+    push 0
+    push 0
 
     mov [rdi], rsp
 

@@ -75,14 +75,14 @@ namespace kernel::x86_64::hal {
 
     class Interrupts {
     public:
-        static void handleInterrupt(const Frame &frame);
+        static void handleInterrupt(Frame *frame);
 
         static void sendEOI(usize intNo);
 
-        static void handlePageFault(const Frame &frame);
+        static void handlePageFault(Frame *frame);
 
-        static void kernelPanic(const Frame &frame);
-        static void userPanic(const Frame &frame);
+        static void kernelPanic(Frame *frame);
+        static void userPanic(Frame *frame);
 
         static void backtrace(usize rbp);
 

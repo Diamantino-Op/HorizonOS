@@ -5,8 +5,13 @@
 
 #include "Types.hpp"
 
+namespace kernel::common::threading {
+	class Process;
+}
+
 namespace kernel::common::programs {
     using namespace memory;
+	using namespace threading;
 
     # define ELF32_ST_BIND(INFO)	((INFO) >> 4)
     # define ELF32_ST_TYPE(INFO)	((INFO) & 0x0F)
@@ -279,16 +284,16 @@ namespace kernel::common::programs {
 
     class Elf {
     public:
-        static u64 *loadElf(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
+        static u64 *loadElf(const u64 *elfFile, Process *elfProc, AllocContext *ctx, u64 baseAddr = 0);
 
         static bool isElf(const ElfCommonHeader *elfHeader);
 
     private:
-        static u64 *loadRel(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
+        static u64 *loadRel(const u64 *elfFile, Process *elfProc, AllocContext *ctx, u64 baseAddr = 0);
 
-        static u64 *loadExeDyn(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
+        static u64 *loadExeDyn(const u64 *elfFile, Process *elfProc, AllocContext *ctx, u64 baseAddr = 0);
 
-        static u64 *loadExe(const u64 *elfFile, AllocContext *ctx, u64 baseAddr = 0);
+        static u64 *loadExe(const u64 *elfFile, Process *elfProc, AllocContext *ctx, u64 baseAddr = 0);
 
         static bool isSupported(const ElfCommonHeader *elfHeader);
 

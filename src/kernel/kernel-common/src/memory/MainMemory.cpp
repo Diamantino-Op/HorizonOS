@@ -43,8 +43,8 @@ namespace kernel::common::memory {
 	}*/
 
 	int memcmp(const void *addr1, const void *addr2, const usize size) {
-		const auto p1 = static_cast<const u8 *>(addr1);
-		const auto p2 = static_cast<const u8 *>(addr2);
+		const auto *p1 = static_cast<const u8 *>(addr1);
+		const auto *p2 = static_cast<const u8 *>(addr2);
 
 		for (usize i = 0; i < size; i++) {
 			if (p1[i] != p2[i]) {

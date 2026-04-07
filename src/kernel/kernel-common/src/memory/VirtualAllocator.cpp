@@ -63,7 +63,7 @@ namespace kernel::common::memory {
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags , false, false);
 
-		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx); // , not ctx->isUserspace
+		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx, true); // , not ctx->isUserspace
 
 		shareKernelPages(ctx);
 
@@ -82,11 +82,14 @@ namespace kernel::common::memory {
 
 	//TODO: Check why no work without adding the &
 	u64 VirtualAllocator::getProcessAllocStart() {
+		static u64 offset = 0;
+		offset += 0x1000000; // Offset by 16MB for each new process to avoid overlapping in the kernel page map
+
 		if (pagingModeRequest.response != nullptr and pagingModeRequest.response->mode == 1) {
-			return (CommonMain::getCurrentHhdm() - 0x1000000000000) & ~0xfe00000000000000;
+			return ((CommonMain::getCurrentHhdm() - 0x1000000000000) & ~0xfe00000000000000) - offset;
 		}
 
-		return (CommonMain::getCurrentHhdm() - 0x8000000000) & ~0xffff000000000000;
+		return ((CommonMain::getCurrentHhdm() - 0x8000000000) & ~0xffff000000000000) - offset;
 	}
 
 	void VirtualAllocator::initContext(AllocContext *ctx) {

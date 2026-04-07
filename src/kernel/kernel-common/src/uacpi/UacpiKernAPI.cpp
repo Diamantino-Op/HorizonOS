@@ -20,10 +20,17 @@ using namespace kernel::common::uacpi;
 // Kernel API
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
-	if (rsdpRequest.response != nullptr) {
-		*outRsdpAddress = reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address);
+	if (outRsdpAddress == nullptr) {
+		return UACPI_STATUS_INTERNAL_ERROR;
 	}
 
+	if (rsdpRequest.response == nullptr) {
+		*outRsdpAddress = 0;
+
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	*outRsdpAddress = reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address) - CommonMain::getCurrentHhdm();
 	return UACPI_STATUS_OK;
 }
 

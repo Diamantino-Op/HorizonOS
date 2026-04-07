@@ -23,7 +23,7 @@ namespace kernel::x86_64::hal {
     	u64 r15 = {};
 	};
 
-	void intSyscallEntry(const Frame &frame);
+	void intSyscallEntry(Frame *frame);
 
     extern "C" void callSyscall(SyscallRegs *regs);
 }

@@ -18,4 +18,6 @@ Token.txt
 /deps/llvm
 /deps/uacpi
 
-libsmarter.wrap
+/libs/mlibc
+/libs/sysroot
+/toolchain

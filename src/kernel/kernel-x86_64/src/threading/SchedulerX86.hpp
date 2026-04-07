@@ -20,7 +20,7 @@ namespace kernel::x86_64::threading {
         u64 *getSimdSave() const;
 
         void save();
-        void load();
+        void load() const;
 
         bool isUserspace() const;
 
@@ -30,6 +30,7 @@ namespace kernel::x86_64::threading {
 
         bool isUser {};
         u64 userGsBase {};
+    	u64 userFsBase {};
 
         u64 originalStackPointer {};
         bool ownsKernelStack {};
@@ -48,6 +49,7 @@ namespace kernel::x86_64::threading {
     extern "C" void finishScheduleSwitch();
     extern "C" void destroyThreadContext(u64 *context, Process *process);
     extern "C" void setStackAsm(u64 *stackPointer, u64 rip, u64 usermodeFun = 0, u64 userStack = 0);
+	extern "C" void setUserStackAsm(u64 *stackPointer);
     extern "C" void threadTrampoline32();
     extern "C" void threadTrampoline64();
 }

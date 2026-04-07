@@ -1,5 +1,7 @@
 #include "Interrupts.hpp"
 
+#include <bit>
+
 #include "GDT.hpp"
 #include "Main.hpp"
 
@@ -9,33 +11,35 @@
 namespace kernel::x86_64::hal {
 	using namespace utils;
 
+	constexpr usize maxBacktraceFrames = 64;
+
 	IsrHandler Interrupts::handlers[224];
 
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
-		const Frame &frame = *reinterpret_cast<Frame *>(stackFrame);
+		auto *frame = reinterpret_cast<Frame *>(stackFrame);
 
 		Interrupts::handleInterrupt(frame);
 	}
 
-	void Interrupts::handleInterrupt(const Frame &frame) {
-		if (frame.intNo == 14) {
+	void Interrupts::handleInterrupt(Frame *frame) {
+		if (frame->intNo == 14) {
 			handlePageFault(frame);
-		} else if (frame.intNo == 2) {
+		} else if (frame->intNo == 2) {
 			Terminal *terminal = CommonMain::getTerminal();
 
 			terminal->debug("NMI Received!", "Interrupts");
-		} else if (frame.intNo < 32) {
-			if (frame.cs == (Selector::USER_CODE64 * 8 | 3) or frame.cs == (Selector::USER_CODE32 * 8 | 3)) {
+		} else if (frame->intNo < 32) {
+			if (frame->cs == (Selector::USER_CODE64 * 8 | 3) or frame->cs == (Selector::USER_CODE32 * 8 | 3)) {
 				userPanic(frame);
 			} else {
 				kernelPanic(frame);
 			}
-		} else if (frame.intNo == 0x80) {
+		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
-		} else if (const IsrHandler *handler = &handlers[frame.intNo - 32]; handler->fun) {
+		} else if (const IsrHandler *handler = &handlers[frame->intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
 
-			sendEOI(frame.intNo);
+			sendEOI(frame->intNo);
 		}
 	}
 
@@ -48,7 +52,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	// TODO: Fix
-	void Interrupts::handlePageFault(const Frame &frame) {
+	void Interrupts::handlePageFault(Frame *frame) {
 		kernelPanic(frame); // Remove after fix
 
 		Terminal *terminal = CommonMain::getTerminal();
@@ -57,11 +61,11 @@ namespace kernel::x86_64::hal {
 
 		u8 flags = 0b00000011;
 
-		if (frame.errNo & 0x4) { // User
+		if (frame->errNo & 0x4) { // User
 			flags |= 0b00000100;
 		}
 
-		if (not (frame.errNo & 0x1)) { // Present
+		if (not (frame->errNo & 0x1)) { // Present
 			const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
 			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false, false);
@@ -106,7 +110,7 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Interrupts::kernelPanic(const Frame &frame) {
+	void Interrupts::kernelPanic(Frame *frame) {
 		Asm::cli();
 
 		Terminal *terminal = CommonMain::getTerminal();
@@ -115,21 +119,21 @@ namespace kernel::x86_64::hal {
 
 		terminal->printfBoth(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
 		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame.intNo]);
+		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame->intNo]);
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m-   At: %s:%llu (%s)", __FILE__, __LINE__, __func__); // TODO: Fix this
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m-   Registers:");
-		terminal->printfBoth(true, "\033[0;31m-   int: %u", frame.intNo);
-		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame.errNo);
-		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
-		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
-		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame.rsp);
+		terminal->printfBoth(true, "\033[0;31m-   int: %u", frame->intNo);
+		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame->errNo);
+		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame->rip);
+		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame->rbp);
+		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame->rsp);
 		terminal->printfBoth(true, "\033[0;31m-   cr2: 0x%.16lx", Asm::readCr2());
 		terminal->printfBoth(true, "\033[0;31m-   cr3: 0x%.16lx", Asm::readCr3());
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m-   Backtrace:");
-		backtrace(frame.rbp);
+		backtrace(frame->rbp);
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
 
@@ -138,21 +142,21 @@ namespace kernel::x86_64::hal {
 		Asm::lhlt();
 	}
 
-	void Interrupts::userPanic(const Frame &frame) {
+	void Interrupts::userPanic(Frame *frame) {
 		Terminal *terminal = CommonMain::getTerminal();
 
 		const bool prevIF = terminal->lock();
 
 		terminal->printfBoth(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
 		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame.intNo]);
+		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame->intNo]);
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m-   Registers:");
-		terminal->printfBoth(true, "\033[0;31m-   int: 0x%.16lx", frame.intNo);
-		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame.errNo);
-		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame.rip);
-		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame.rbp);
-		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame.rsp);
+		terminal->printfBoth(true, "\033[0;31m-   int: 0x%.16lx", frame->intNo);
+		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame->errNo);
+		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame->rip);
+		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame->rbp);
+		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame->rsp);
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
 
@@ -161,16 +165,43 @@ namespace kernel::x86_64::hal {
 
 	void Interrupts::backtrace(const usize rbp) {
 		Terminal *terminal = CommonMain::getTerminal();
+		const auto *main = CommonMain::getInstance();
+		const usize stackTop = main != nullptr ? main->getStackTop() : 0;
+		const usize stackBottom = stackTop > kernelStackSize ? stackTop - kernelStackSize : 0;
+		const auto isValidBacktraceFrame = [main, stackBottom, stackTop](const usize frameRbp) -> bool {
+			if (frameRbp == 0 || (frameRbp & (alignof(usize) - 1)) != 0) {
+				return false;
+			}
 
-		const auto *frame = reinterpret_cast<usize *>(rbp);
+			if (main == nullptr || main->getKernelAllocContext() == nullptr) {
+				return true;
+			}
 
-		while (frame) {
-			const usize ip = frame[1];
-			const usize sp = frame[0];
+			if (stackTop != 0 && (frameRbp < stackBottom || frameRbp + (sizeof(usize) * 2) > stackTop)) {
+				return false;
+			}
 
-			terminal->printfBoth(true, "\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx", ip, sp);
+			const auto &pageMap = main->getKernelAllocContext()->pageMap;
+			return pageMap.getPhysAddress(frameRbp) != 0 && pageMap.getPhysAddress(frameRbp + sizeof(usize)) != 0;
+		};
 
-			frame = reinterpret_cast<usize*>(sp);
+		usize currentRbp = rbp;
+		usize framesPrinted = 0;
+
+		while (framesPrinted < maxBacktraceFrames && isValidBacktraceFrame(currentRbp)) {
+
+			const auto *frame = std::bit_cast<const usize *>(currentRbp);
+			const usize nextRbp = frame[0];
+			const usize returnIp = frame[1];
+
+			terminal->printfBoth(true, "\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx", returnIp, nextRbp);
+
+			if (nextRbp == 0 || nextRbp <= currentRbp) {
+				return;
+			}
+
+			currentRbp = nextRbp;
+			framesPrinted++;
 		}
 	}
 }

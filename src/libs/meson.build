@@ -109,26 +109,3 @@ hos_base_dep = hos_base_proj.get_variable('hos_base_dep')
 hos_lib_proj = subproject('hos_lib', default_options: [ 'lib_c_flags=@0@'.format(','.join(library_c_flags)), 'lib_cpp_flags=@0@'.format(','.join(library_cpp_flags)), 'globber_path=@0@'.format(globber) ])
 
 hos_lib_dep = hos_lib_proj.get_variable('hos_lib_dep')
-
-
-
-# MLibC
-
-common_libs_path = join_paths(meson.global_source_root(), 'build', 'libs')
-
-if get_option('debug_build')
-    mlibc_buildtype = 'debugoptimized'
-else
-    mlibc_buildtype = 'release'
-endif
-
-default_library_paths = []
-
-linux_headers_path_mlibc = join_paths(linux_headers_path.replace(meson.global_source_root(), '../../..'), 'include')
-
-mlibc_proj = subproject('mlibc', default_options: [ 'prefix=@0@'.format(common_libs_path), 'libdir=@0@'.format(common_libs_path), 'default_library=both', 'buildtype=@0@'.format(mlibc_buildtype), 'linux_kernel_headers=@0@'.format(linux_headers_path_mlibc) ])
-
-static_mlibc = mlibc_proj.get_variable('libc_static')
-mlibc_include_dirs = mlibc_proj.get_variable('libc_include_dirs')
-
-mlibc_static_dep = declare_dependency(include_directories: mlibc_include_dirs, link_with: static_mlibc)

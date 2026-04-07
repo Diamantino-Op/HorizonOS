@@ -25,7 +25,8 @@ namespace kernel::common::threading {
 
 	void Thread::deleteThreadArch() const {
 		const ThreadContext *threadContext = reinterpret_cast<ThreadContext *>(this->context);
-		threadContext->~ThreadContext();
+
+		delete threadContext;
 	}
 
 	void Scheduler::initArch() {
@@ -61,7 +62,7 @@ namespace kernel::common::threading {
 	}
 
 	Thread *Scheduler::getCurrentThread() {
-		return reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
+		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
 	}
 
 	u32 Scheduler::intReSchedule(u64 *) {
@@ -75,7 +76,29 @@ namespace kernel::common::threading {
 	}
 
 	extern "C" u64 checkDisabled() {
-		return CpuManager::getCurrentCore()->executionNode.isDisabled() ? 1 : 0;
+		if (CpuManager::getCurrentCore()->executionNode.isDisabled()) {
+			return 1;
+		}
+
+		if (Scheduler::getCurrentThread() == CpuManager::getCurrentCore()->executionNode.getIdleThread()->value) {
+			return 0;
+		}
+
+		bool hasMoreThreads = false;
+
+		for (const LinkedList<Thread>& currQueue : CommonMain::getInstance()->getScheduler()->queues) {
+			if (currQueue.getSize() > 0) {
+				hasMoreThreads = true;
+
+				break;
+			}
+		}
+
+		if (!hasMoreThreads && Scheduler::getCurrentThread()->getState() == ThreadState::RUNNING) {
+			return 1;
+		}
+
+		return 0;
 	}
 
 	extern "C" void loadNewThread() {
@@ -151,11 +174,9 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		if (oldEntry != this->currentThread) {
+		if (oldEntry != this->currentThread && oldEntry != nullptr) {
 			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
-
-		Asm::wrmsr(Msrs::FSBAS, reinterpret_cast<u64>(this->currentThread->value));
 
 		//CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
 
@@ -213,7 +234,7 @@ namespace kernel::common::threading {
 			const u64 endPage = alignUp<u64>(startAddr + threadCtxStackSize, pageSize);
 
 			for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-				u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+				const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 				if (physPage != nullptr) {
 					process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
@@ -226,10 +247,14 @@ namespace kernel::common::threading {
 
 			context->userStackPointer = startAddr;
 
+			u64 userStack = startAddr + threadCtxStackSize;
+
+			setUserStackAsm(&userStack);
+
 			if (thread->is32Bit()) {
-				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline32), rip, startAddr + threadCtxStackSize);
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(&threadTrampoline32), rip, userStack);
 			} else {
-				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(threadTrampoline64), rip, startAddr + threadCtxStackSize);
+				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(&threadTrampoline64), rip, userStack);
 			}
 		} else {
 			setStackAsm(thread->getStackPointer(), rip);
@@ -274,6 +299,7 @@ namespace kernel::x86_64::threading {
 	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
+		this->userFsBase = 0;
 		this->process = process;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
 		this->ownsKernelStack = ownsKernelStack;
@@ -292,13 +318,17 @@ namespace kernel::x86_64::threading {
 	void ThreadContext::save() {
 		CpuManager::saveSimdContext(this->simdSave);
 
+		this->userFsBase = Asm::rdmsr(Msrs::FSBAS);
+
 		if (this->isUser) {
 			this->userGsBase = Asm::rdmsr(Msrs::UGSBAS);
 		}
 	}
 
-	void ThreadContext::load() {
+	void ThreadContext::load() const {
 		CpuManager::loadSimdContext(this->simdSave);
+
+		Asm::wrmsr(Msrs::FSBAS, this->userFsBase);
 
 		if (this->isUser) {
 			Asm::wrmsr(Msrs::UGSBAS, this->userGsBase);
@@ -309,3 +339,4 @@ namespace kernel::x86_64::threading {
 		return this->isUser;
 	}
 }
+

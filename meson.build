@@ -60,6 +60,8 @@ iso_programs_path = join_paths(horizonos_boot_path, 'programs')
 iso_services_path = join_paths(horizonos_boot_path, 'services')
 iso_libs_path = join_paths(horizonos_boot_path, 'libs')
 
+sysroot_path = join_paths(meson.global_source_root(), 'libs', 'sysroot')
+
 
 
 # Subdirs
@@ -100,6 +102,8 @@ subdir(join_paths('src', 'programs'))
 # subdir(join_paths('src', 'services'))
 
 subdir(join_paths('src', 'kernel'))
+
+subdir('libs')
 
 
 
@@ -169,15 +173,20 @@ create_sym_file = custom_target('create_sym_file',
 
 install_apps = custom_target('install_apps',
     input: [
-        hello_world_exe
+        hello_world_exe,
+        join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
+        join_paths(sysroot_path, 'usr', 'lib', 'libc++abi.so'),
+        join_paths(sysroot_path, 'usr', 'lib', 'libc.so'),
+        join_paths(sysroot_path, 'usr', 'lib', 'libpthread.so'),
+        join_paths(sysroot_path, 'usr', 'lib', 'ld.so')
     ],
     output: 'InstalledApps.txt',
     command: [
-        cp, '@INPUT@', iso_programs_path,
+        cp, '@INPUT0@', iso_programs_path,
         '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',
-        sh, '-c', 'for f in @INPUT@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
+        sh, '-c', 'for f in @INPUT0@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
     ],
     depends: [
         hello_world_exe

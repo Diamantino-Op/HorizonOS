@@ -105,14 +105,14 @@ namespace kernel::common::threading {
 	Process::~Process() {
 		PIDAllocator::freePID(this->id);
 
-		const LinkedListEntry<Thread> *tmpEntry = this->threadList.getFirst();
+		/*const LinkedListEntry<Thread> *tmpEntry = this->threadList.getFirst();
 
 		while (tmpEntry != nullptr) {
 			const LinkedListEntry<Thread> *newTmpEntry = tmpEntry;
 			tmpEntry = tmpEntry->next;
 
 			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
-		}
+		}*/
 
 		VirtualAllocator::destroyContext(this->processContext);
 	}
@@ -172,6 +172,10 @@ namespace kernel::common::threading {
 		return this->currentThread;
 	}
 
+	LinkedListEntry<Thread> *ExecutionNode::getIdleThread() const {
+		return this->idleThread;
+	}
+
 	bool ExecutionNode::isDisabled() const {
 		return this->isDisabledFlag;
 	}
@@ -202,11 +206,28 @@ namespace kernel::common::threading {
 
 		for (;;) {
 			auto *currThread = Scheduler::getCurrentThread();
+			const bool prevIF = scheduler->getSchedLock()->lock();
 
 			while (const auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry()) {
+				entry->value->getParent()->removeThread(entry->value);
+
 				delete entry->value;
 				delete entry;
 			}
+
+			const LinkedListEntry<Process> *currProcessEntry = scheduler->processList.getFirst();
+
+			while (currProcessEntry != nullptr) {
+				const LinkedListEntry<Process> *tmpEntry = currProcessEntry->next;
+
+				if (currProcessEntry->value->threadList.getSize() == 0) {
+					scheduler->processList.remove(currProcessEntry->value, true);
+				}
+
+				currProcessEntry = tmpEntry;
+			}
+
+			scheduler->getSchedLock()->unlock(prevIF);
 
 			scheduler->sleepThread(currThread, 500ull * 1'000'000ull); // TODO: ms to ns and vice versa function
 		}
@@ -291,14 +312,18 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::killProcess(Process *process) {
-		const bool prevIF = this->schedLock.lock();
+		if (process == nullptr) {
+			return;
+		}
 
-		const bool removed = this->processList.remove(process, false);
+		const LinkedListEntry<Thread> *tmpEntry = process->threadList.getFirst();
 
-		this->schedLock.unlock(prevIF);
+		while (tmpEntry != nullptr) {
+			const LinkedListEntry<Thread> *nextEntry = tmpEntry->next;
 
-		if (removed) {
-			delete process;
+			this->killThread(tmpEntry->value);
+
+			tmpEntry = nextEntry;
 		}
 	}
 
@@ -339,7 +364,7 @@ namespace kernel::common::threading {
 
 		auto *newProc = new Process(priority, isUserspace);
 
-		u64 *loadedAddr = Elf::loadElf(elfFile, newProc->getProcessContext(), pageSize);
+		u64 *loadedAddr = Elf::loadElf(elfFile, newProc, newProc->getProcessContext(), pageSize);
 
 		if (loadedAddr == nullptr) {
 			delete newProc;
@@ -359,12 +384,17 @@ namespace kernel::common::threading {
 		const bool prevIF = this->schedLock.lock();
 
 		thread->setState(ThreadState::TERMINATED);
-		thread->getParent()->removeThread(thread);
+
+		if (thread->getParent() != nullptr) {
+			thread->getParent()->removeThread(thread);
+		}
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
 		if (!shouldReschedule) {
-			this->removeThread(thread);
+			if (this->removeThread(thread)) {
+				this->awaitingKillThreadList.addEnd(thread);
+			}
 		}
 
 		this->schedLock.unlock(prevIF);
@@ -378,14 +408,20 @@ namespace kernel::common::threading {
 		this->killThread(thread->value);
 	}
 
-	void Scheduler::removeThread(Thread *thread) {
-		if (!this->queues[thread->getParent()->getPriority()].remove(thread)) {
-			if (!this->sleepingThreadList.remove(thread)) {
-				if (!this->blockedThreadList.remove(thread)) {
-					this->readyThreadList.remove(thread);
-				}
-			}
+	bool Scheduler::removeThread(Thread *thread) {
+		if (this->queues[thread->getParent()->getPriority()].remove(thread, false)) {
+			return true;
 		}
+
+		if (this->sleepingThreadList.remove(thread, false)) {
+			return true;
+		}
+
+		if (this->blockedThreadList.remove(thread, false)) {
+			return true;
+		}
+
+		return this->readyThreadList.remove(thread, false);
 	}
 
 	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
@@ -521,6 +557,8 @@ namespace kernel::common::threading {
 
 			if (currEntry.getSleepNs() > 0) {
 				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
+					CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
+
 					currEntry.setState(ThreadState::RUNNING);
 
 					currEntry.setSleepNs(0);

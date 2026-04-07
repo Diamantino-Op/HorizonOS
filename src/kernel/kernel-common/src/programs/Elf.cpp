@@ -5,24 +5,28 @@
 
 namespace kernel::common::programs {
 	// Helper function to map a range of memory for ELF loading
-	void mapMemoryRange(AllocContext *ctx, const u64 baseAddr, const u64 size) {
+	void mapMemoryRange(Process *elfProc, AllocContext *ctx, const u64 baseAddr, const u64 size) {
 		const u64 startPage = alignDown<u64>(baseAddr, pageSize);
 		const u64 endPage = alignUp<u64>(baseAddr + size, pageSize);
 
 		for (u64 addr = startPage; addr < endPage; addr += pageSize) {
 			// Allocate a physical page
-			u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 			if (physPage != nullptr) {
 				// Map it to the virtual address
 				ctx->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), ctx->pageFlags | 0b100, false, false);
+
+				if (addr > elfProc->topmostMappedPage) {
+					elfProc->topmostMappedPage = addr;
+				}
 			} else {
 				CommonMain::getTerminal()->error("Failed to allocate physical memory for ELF!", "Elf Loader");
 			}
 		}
 	}
 
-	u64 *Elf::loadElf(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+	u64 *Elf::loadElf(const u64 *elfFile, Process *elfProc, AllocContext *ctx, const u64 baseAddr) {
 		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (not isSupported(elfHeader)) {
@@ -33,13 +37,13 @@ namespace kernel::common::programs {
 
 		switch (elfHeader->elfType) {
 			case ElfType::ET_REL:
-				return loadRel(elfFile, ctx, baseAddr);
+				return loadRel(elfFile, elfProc, ctx, baseAddr);
 
 			case ElfType::ET_EXEC:
-				return loadExe(elfFile, ctx, 0); // TODO: Maybe baseAddr works
+				return loadExe(elfFile, elfProc, ctx, 0); // TODO: Maybe baseAddr works
 
 			case ElfType::ET_DYN:
-				return loadExeDyn(elfFile, ctx, baseAddr);
+				return loadExeDyn(elfFile, elfProc, ctx, baseAddr);
 
 			default:
 				CommonMain::getTerminal()->error("ELF type is not supported!", "Elf Loader");
@@ -48,7 +52,7 @@ namespace kernel::common::programs {
 		}
 	}
 
-	u64 *Elf::loadRel(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+	u64 *Elf::loadRel(const u64 *elfFile, Process *elfProc, AllocContext *ctx, const u64 baseAddr) {
 		auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (baseAddr == 0) {
@@ -83,7 +87,7 @@ namespace kernel::common::programs {
 
 			// Map the entire memory range needed
 			if (maxAddr > minAddr) {
-				mapMemoryRange(ctx, minAddr, maxAddr - minAddr);
+				mapMemoryRange(elfProc, ctx, minAddr, maxAddr - minAddr);
 			}
 
 			// Allocate sections
@@ -216,7 +220,7 @@ namespace kernel::common::programs {
 
 			// Map the entire memory range needed
 			if (maxAddr > minAddr) {
-				mapMemoryRange(ctx, minAddr, maxAddr - minAddr);
+				mapMemoryRange(elfProc, ctx, minAddr, maxAddr - minAddr);
 			}
 
 			// Allocate sections
@@ -314,7 +318,7 @@ namespace kernel::common::programs {
 		return nullptr;
 	}
 
-	u64 *Elf::loadExeDyn(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+	u64 *Elf::loadExeDyn(const u64 *elfFile, Process *elfProc, AllocContext *ctx, const u64 baseAddr) {
 		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (is64Bit(elfHeader)) {
@@ -347,7 +351,7 @@ namespace kernel::common::programs {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
 
-					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+					mapMemoryRange(elfProc, ctx, segmentStart, phdr[i].memsz);
 				}
 			}
 
@@ -435,7 +439,7 @@ namespace kernel::common::programs {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
 
-					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+					mapMemoryRange(elfProc, ctx, segmentStart, phdr[i].memsz);
 				}
 			}
 
@@ -513,7 +517,7 @@ namespace kernel::common::programs {
 		return nullptr;
 	}
 
-	u64 *Elf::loadExe(const u64 *elfFile, AllocContext *ctx, const u64 baseAddr) {
+	u64 *Elf::loadExe(const u64 *elfFile, Process *elfProc, AllocContext *ctx, const u64 baseAddr) {
 		const auto *elfHeader = reinterpret_cast<const ElfCommonHeader *>(elfFile);
 
 		if (is64Bit(elfHeader)) {
@@ -531,7 +535,7 @@ namespace kernel::common::programs {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
 
-					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+					mapMemoryRange(elfProc, ctx, segmentStart, phdr[i].memsz);
 				}
 			}
 
@@ -571,7 +575,7 @@ namespace kernel::common::programs {
 				if (phdr[i].type == PT_LOAD) {
 					const u64 segmentStart = phdr[i].vaddr + offset;
 
-					mapMemoryRange(ctx, segmentStart, phdr[i].memsz);
+					mapMemoryRange(elfProc, ctx, segmentStart, phdr[i].memsz);
 				}
 			}
 

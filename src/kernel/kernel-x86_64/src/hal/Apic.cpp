@@ -380,26 +380,40 @@ namespace kernel::x86_64::hal {
 
 	// TODO: Gsi might normally be 0
 	void IOApicManager::mask(const u8 vector) {
-		if (vector < 0x20) {
+		if (vector < 0x22) {
 			return;
 		}
 
-		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi < 1'000'000) {
+		u8 irq = vector - 0x22;
+
+		// init() skips vector 0x80 by adding an extra offset past that point.
+		if (vector > 0x80) {
+			irq--;
+		}
+
+		if (const u32 gsi = this->irqToIso(irq); gsi < 1'000'000) {
 			this->maskGsi(gsi);
 		} else {
-			this->maskGsi(vector - 0x20);
+			this->maskGsi(irq);
 		}
 	}
 
 	void IOApicManager::unmask(const u8 vector) {
-		if (vector < 0x20) {
+		if (vector < 0x22) {
 			return;
 		}
 
-		if (const u32 gsi = this->irqToIso(vector - 0x20); gsi < 1'000'000) {
+		u8 irq = vector - 0x22;
+
+		// init() skips vector 0x80 by adding an extra offset past that point.
+		if (vector > 0x80) {
+			irq--;
+		}
+
+		if (const u32 gsi = this->irqToIso(irq); gsi < 1'000'000) {
 			this->unmaskGsi(gsi);
 		} else {
-			this->unmaskGsi(vector - 0x20);
+			this->unmaskGsi(irq);
 		}
 	}
 

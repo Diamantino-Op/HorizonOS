@@ -116,15 +116,17 @@ namespace kernel::common::threading {
 
     	bool isUserspace {};
 
-		LinkedList<Thread> threadList {};
-
         AllocContext *processContext {};
     	AllocContext *processContextKernel {};
 
         ProcessPriority priority {};
 
     public:
+    	LinkedList<Thread> threadList {};
+
     	PRIDAllocator pridAllocator {};
+
+    	u64 topmostMappedPage {};
     };
 
     class ExecutionNode {
@@ -140,6 +142,7 @@ namespace kernel::common::threading {
 
     	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
+    	LinkedListEntry<Thread> *getIdleThread() const;
 
 		u128 saveOldThread(u64 oldRsp);
 
@@ -252,7 +255,7 @@ namespace kernel::common::threading {
 		 *
 		 * @param thread A pointer to the thread entry to be removed.
 		 **/
-    	void removeThread(Thread *thread);
+        bool removeThread(Thread *thread);
 
 		/**
 		 *  Puts the specified thread to sleep for a given number of ticks.
@@ -308,7 +311,6 @@ namespace kernel::common::threading {
     	static ExecutionNode *getCurrentExecutionNode();
 
     private:
-
     	TicketSpinLock schedLock {};
 
     public:

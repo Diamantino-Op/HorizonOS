@@ -16,7 +16,7 @@ __attribute__((used, section(".limine_requests_end")))
 static volatile u64 limineRequestsStartMarker[] = LIMINE_REQUESTS_END_MARKER;
 
 __attribute__((used, section(".limine_requests")))
-static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(3);
+static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(6);
 
 extern limine_framebuffer_request framebufferRequest;
 extern limine_module_request moduleRequest;
@@ -217,7 +217,7 @@ namespace kernel::x86_64 {
 
 				moduleProcess->getProcessContextKernel()->pageMap.load();
 
-				auto *elfLocation = Elf::loadElf(static_cast<const u64 *>(moduleFile->address), moduleProcess->getProcessContext(), pageSize);
+				auto *elfLocation = Elf::loadElf(static_cast<const u64 *>(moduleFile->address), moduleProcess, moduleProcess->getProcessContext(), pageSize);
 
 				Asm::writeCr3(currPageMap);
 
@@ -420,7 +420,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		//this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

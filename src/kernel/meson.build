@@ -3,7 +3,7 @@
 kernel_linker_script = join_paths(res_path, arch, 'Linker.ld')
 
 kernel_c_flags = [
-    '-DLIMINE_API_REVISION=4',
+    '-DLIMINE_API_REVISION=6',
     '-pipe',
     '-nostdinc',
     '-static',
