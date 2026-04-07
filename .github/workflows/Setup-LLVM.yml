@@ -43,11 +43,8 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
-      - name: Setup LLVM
-        run: cd ${{github.workspace}} && meson setup -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_llvm
-
-      - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup -Dbuild_llvm=true -Dqemu_targets=false build
+      - name: Build LLVM
+        run: sh deps/build_llvm_libc.sh build-llvm x86_64 horizonos_llvm
 
       - name: Upload Toolchain
         id: upload-toolchain
@@ -120,11 +117,8 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
-      - name: Setup MLibc
-        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_mlibc && meson compile setup_llvm
-
-      - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Dbuild_libc=true -Dqemu_targets=false build
+      - name: Build MLibc
+        run: sh deps/build_llvm_libc.sh build-libc x86_64 horizonos_llvm release
 
       - name: Upload Sysroot
         id: upload-sysroot
@@ -199,11 +193,8 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
-      - name: Setup MLibc
-        run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_mlibc && meson compile setup_llvm
-
-      - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup --cross-file res/riscv64/horizon-cross.cfg -Dbuild_libc=true -Dqemu_targets=false build
+      - name: Build MLibc
+        run: sh deps/build_llvm_libc.sh build-libc riscv64 horizonos_llvm release
 
       - name: Upload Sysroot
         id: upload-sysroot
@@ -278,11 +269,8 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
-      - name: Setup MLibc
-        run: cd ${{github.workspace}} && meson setup --cross-file res/aarch64/horizon-cross.cfg -Dqemu_targets=false build-deps && cd build-deps && meson compile setup_mlibc && meson compile setup_llvm
-
-      - name: Setup Meson
-        run: cd ${{github.workspace}} && meson setup --cross-file res/aarch64/horizon-cross.cfg -Dbuild_libc=true -Dqemu_targets=false build
+      - name: Build MLibc
+        run: sh deps/build_llvm_libc.sh build-libc aarch64 horizonos_llvm release
 
       - name: Upload Sysroot
         id: upload-sysroot
