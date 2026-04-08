@@ -23,7 +23,7 @@ ensure_repo() {
     git -C "$path" fetch --depth 1 origin "$branch"
     git -C "$path" checkout -B "$branch" "origin/$branch"
     git -C "$path" reset --hard "origin/$branch"
-    git -C "$path" clean -fdx
+    rm -rf "$path/build" "$path/build-cxx" "$path/build-rt-builtins"
   else
     rm -rf "$path"
     git clone --single-branch --depth 1 -b "$branch" "$url" "$path"
