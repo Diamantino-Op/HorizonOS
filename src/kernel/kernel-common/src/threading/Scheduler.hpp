@@ -310,6 +310,9 @@ namespace kernel::common::threading {
 
     	static ExecutionNode *getCurrentExecutionNode();
 
+    	void reaperThreadArch(const LinkedListEntry<Thread> *thread);
+    	void reaperProcessArch(Process *process);
+
     private:
     	TicketSpinLock schedLock {};
 

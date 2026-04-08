@@ -34,10 +34,10 @@ limine_branch=$4
 limine_protocol_branch=$5
 uacpi_branch=$6
 
-ensure_repo https://codeberg.org/OSDev/freestnd-c-hdrs.git "$chdrs_branch" "$repo_root/deps/chdrs"
-ensure_repo https://codeberg.org/OSDev/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$repo_root/deps/cxxhdrs"
-ensure_repo https://codeberg.org/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_root/deps/flanterm"
-ensure_repo https://codeberg.org/Limine/Limine.git "$limine_branch" "$repo_root/deps/limine"
-ensure_repo https://codeberg.org/Limine/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
+ensure_repo https://github.com/osdev0/freestnd-c-hdrs.git "$chdrs_branch" "$repo_root/deps/chdrs"
+ensure_repo https://github.com/osdev0/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$repo_root/deps/cxxhdrs"
+ensure_repo https://github.com/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_root/deps/flanterm"
+ensure_repo https://github.com/Limine-Bootloader/Limine.git "$limine_branch" "$repo_root/deps/limine"
+ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
 

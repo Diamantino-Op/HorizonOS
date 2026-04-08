@@ -2,76 +2,90 @@
 
 #include "CommonMain.hpp"
 #include "X86VirtualMemory.hpp"
-#include "memory/MainMemory.hpp"
 #include "utils/Asm.hpp"
 
 namespace kernel::common::memory {
 	using namespace x86_64::memory;
 	using namespace x86_64::utils;
 
-	// TODO: Optimize this shit
-	void VirtualAllocator::destroyContext(AllocContext *ctx) {
-		for (u64 i = 0; i < ctx->heapSize; i += pageSize) {
-			const auto virtAddress = reinterpret_cast<u64>(ctx->heapStart) + i;
+	void VirtualAllocator::freePageTableChildren(AllocContext *ctx, const u64 *tableAddr, const bool level5Paging, const u8 depth) {
+		const auto *table = reinterpret_cast<const PageTable *>(tableAddr);
+		const u8 leafTableDepth = level5Paging ? 4 : 3;
 
+		if (depth >= leafTableDepth) {
+			return;
+		}
+
+		const u16 entryCount = depth == 0 ? rootUserEntryCount : tableEntryCount;
+
+		for (u16 index = 0; index < entryCount; index++) {
+			const auto &entry = table->entries[index];
+
+			if (!entry.present) {
+				continue;
+			}
+
+			const u64 entryPhysAddress = entry.address << pageShift;
+
+			if (entry.size) {
+				usize pageCount = 0;
+
+				if (depth == leafTableDepth - 2) {
+					pageCount = hugePage1GCount;
+				} else if (depth == leafTableDepth - 1) {
+					pageCount = hugePage2MCount;
+				}
+
+				if (pageCount == 0) {
+					continue;
+				}
+
+							CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), pageCount);
+				continue;
+			}
+
+						freePageTableChildren(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
+						CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), 1);
+		}
+	}
+
+	void VirtualAllocator::destroyContext(AllocContext *ctx) {
+		if (ctx == nullptr) {
+			return;
+		}
+
+		const u64 heapStart = reinterpret_cast<u64>(ctx->heapStart);
+		const u64 heapEnd = heapStart + ctx->heapSize;
+		const u64 heapFirstPage = heapStart & ~(pageSize - 1);
+		const u64 pageTablePhys = ctx->pageMap.getAddr();
+		const u64 ctxPhys = ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(ctx));
+
+		CommonMain::getTerminal()->debug("C", "Scheduler");
+
+		for (u64 virtAddress = heapFirstPage + pageSize; virtAddress < heapEnd; virtAddress += pageSize) {
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
-		for (u16 page5Level = 0; page5Level < 256; page5Level++) {
-			auto *level5Table = reinterpret_cast<PageTable *>(ctx->pageMap.getPageTable());
+		CommonMain::getTerminal()->debug("D", "Scheduler");
 
-			if (auto *level5Entry = &level5Table->entries[page5Level]; level5Entry != nullptr) {
-				for (u16 page4Level = 0; page4Level < 512; page4Level++) {
-					auto *level4Table = reinterpret_cast<PageTable *>((level5Entry->address << 12) + CommonMain::getCurrentHhdm());
+		freePageTableChildren(ctx, ctx->pageMap.getPageTable(), ctx->pageMap.level5Paging(), 0);
 
-					if (auto *level4Entry = &level4Table->entries[page4Level]; level4Entry != nullptr) {
-						for (u16 page3Level = 0; page3Level < 512; page3Level++) {
-							auto *level3Table = reinterpret_cast<PageTable *>((level4Entry->address << 12) + CommonMain::getCurrentHhdm());
+		CommonMain::getTerminal()->debug("E", "Scheduler");
 
-							if (auto *level3Entry = &level3Table->entries[page3Level]; level3Entry != nullptr) {
-								for (u16 page2Level = 0; page2Level < 512; page2Level++) {
-									auto *level2Table = reinterpret_cast<PageTable *>((level3Entry->address << 12) + CommonMain::getCurrentHhdm());
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
-									if (auto *level2Entry = &level2Table->entries[page2Level]; level2Entry != nullptr) {
-										if (ctx->pageMap.level5Paging()) {
-											for (u16 page1Level = 0; page1Level < 512; page1Level++) {
-												auto *level1Table = reinterpret_cast<PageTable *>((level2Entry->address << 12) + CommonMain::getCurrentHhdm());
-
-												if (auto *level1Entry = &level1Table->entries[page1Level]; level1Entry != nullptr) {
-													CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(level1Entry), 1);
-												}
-											}
-										}
-
-										CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(level2Entry), 1);
-									}
-								}
-
-								CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(level3Entry), 1);
-							}
-						}
-
-						CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(level4Entry), 1);
-					}
-				}
-
-				CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(level5Entry), 1);
-			}
-		}
-
-		CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, ctx->pageMap.getPageTable(), 1);
-		CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(ctx), 1);
+		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(pageTablePhys + CommonMain::getCurrentHhdm()), 1);
+		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(ctxPhys + CommonMain::getCurrentHhdm()), 1);
 	}
 
 	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {
 		// TODO: Update pages if kernel pages are updated
 
-		const auto *kernelTable = reinterpret_cast<PageTable *>(CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPageTable());
+		const auto *kernelTable = reinterpret_cast<const PageTable *>(CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPageTable());
+		auto *table = reinterpret_cast<PageTable *>(ctx->pageMap.getPageTable());
 
-		for (u64 i = 0; i < 256; i++) {
-			auto *table = reinterpret_cast<PageTable *>(ctx->pageMap.getPageTable());
-
-			table->entries[256 + i] = kernelTable->entries[256 + i];
+		for (u64 i = 0; i < rootUserEntryCount; i++) {
+			table->entries[rootUserEntryCount + i] = kernelTable->entries[rootUserEntryCount + i];
 		}
 	}
 

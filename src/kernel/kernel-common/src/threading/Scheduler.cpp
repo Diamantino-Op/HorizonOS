@@ -114,7 +114,11 @@ namespace kernel::common::threading {
 			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
 		}*/
 
+		CommonMain::getTerminal()->debug("A", "Scheduler");
+
 		VirtualAllocator::destroyContext(this->processContext);
+
+		CommonMain::getTerminal()->debug("B", "Scheduler");
 	}
 
 	void Process::setPriority(const ProcessPriority newPriority) {
@@ -209,10 +213,11 @@ namespace kernel::common::threading {
 			const bool prevIF = scheduler->getSchedLock()->lock();
 
 			while (const auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry()) {
-				entry->value->getParent()->removeThread(entry->value);
+				Scheduler::getCurrentExecutionNode()->setDisabled(true);
 
-				delete entry->value;
-				delete entry;
+				scheduler->reaperThreadArch(entry);
+
+				Scheduler::getCurrentExecutionNode()->setDisabled(false);
 			}
 
 			const LinkedListEntry<Process> *currProcessEntry = scheduler->processList.getFirst();
@@ -221,7 +226,11 @@ namespace kernel::common::threading {
 				const LinkedListEntry<Process> *tmpEntry = currProcessEntry->next;
 
 				if (currProcessEntry->value->threadList.getSize() == 0) {
-					scheduler->processList.remove(currProcessEntry->value, true);
+					Scheduler::getCurrentExecutionNode()->setDisabled(true);
+
+					scheduler->reaperProcessArch(currProcessEntry->value);
+
+					Scheduler::getCurrentExecutionNode()->setDisabled(false);
 				}
 
 				currProcessEntry = tmpEntry;
@@ -238,7 +247,7 @@ namespace kernel::common::threading {
 	Scheduler::Scheduler() {
 		this->addProcess(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext()));
 
-		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext());
+		auto *reaperProcess = new Process(ProcessPriority::HIGH, CommonMain::getInstance()->getKernelAllocContext());
 
 		this->addProcess(reaperProcess);
 

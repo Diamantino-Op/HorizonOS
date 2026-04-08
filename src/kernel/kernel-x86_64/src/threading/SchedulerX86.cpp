@@ -166,6 +166,8 @@ namespace kernel::common::threading {
 
 			if (selectedEntry == nullptr) {
 				selectedEntry = this->idleThread;
+
+				CommonMain::getTerminal()->debug("Idle", "Scheduler");
 			}
 
 			this->currentThread = selectedEntry;
@@ -231,7 +233,7 @@ namespace kernel::common::threading {
 			const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadCtxStackSize + pageSize) * (prid + 1));
 
 			const u64 startPage = alignDown<u64>(startAddr, pageSize);
-			const u64 endPage = alignUp<u64>(startAddr + threadCtxStackSize, pageSize);
+			const u64 endPage = alignUp<u64>(startPage + threadCtxStackSize, pageSize);
 
 			for (u64 addr = startPage; addr < endPage; addr += pageSize) {
 				const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
@@ -243,9 +245,9 @@ namespace kernel::common::threading {
 				}
 			}
 
-			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx, %lu", "Scheduler", startAddr + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
+			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx, %lu", "Scheduler", startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
 
-			context->userStackPointer = startAddr;
+			context->userStackPointer = startPage;
 
 			u64 userStack = startAddr + threadCtxStackSize;
 
@@ -268,6 +270,29 @@ namespace kernel::common::threading {
 	ExecutionNode *Scheduler::getCurrentExecutionNode() {
 		return &CpuManager::getCurrentCore()->executionNode;
 	}
+
+	void Scheduler::reaperThreadArch(const LinkedListEntry<Thread> *thread) {
+		const u64 currPageMap = Asm::readCr3();
+
+		thread->value->getParent()->getProcessContextKernel()->pageMap.load();
+
+		thread->value->getParent()->removeThread(thread->value);
+
+		delete thread->value;
+		delete thread;
+
+		Asm::writeCr3(currPageMap);
+	}
+
+	void Scheduler::reaperProcessArch(Process *process) {
+		const u64 currPageMap = Asm::readCr3();
+
+		process->getProcessContextKernel()->pageMap.load();
+
+		this->processList.remove(process, true);
+
+		Asm::writeCr3(currPageMap);
+	}
 }
 
 namespace kernel::x86_64::threading {
@@ -288,9 +313,9 @@ namespace kernel::x86_64::threading {
 				const u64 endPage = alignUp<u64>(this->userStackPointer + threadCtxStackSize, pageSize);
 
 				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-					process->getProcessContext()->pageMap.unMapPage(addr);
-
 					CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(addr), 1);
+
+					process->getProcessContext()->pageMap.unMapPage(addr);
 				}
 			}
 		}

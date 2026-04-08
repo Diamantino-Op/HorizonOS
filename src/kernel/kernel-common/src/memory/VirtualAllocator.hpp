@@ -7,6 +7,12 @@
 namespace kernel::common::memory {
     constexpr u8 minBlockSize = 64;
 
+	constexpr u16 tableEntryCount = 512;
+	constexpr u16 rootUserEntryCount = 256;
+	constexpr u64 pageShift = 12;
+	constexpr usize hugePage1GCount = 512ULL * 512ULL;
+	constexpr usize hugePage2MCount = 512ULL;
+
     struct __attribute__((aligned(64))) MemoryBlock {
         usize size {};
         bool free {};
@@ -61,6 +67,7 @@ namespace kernel::common::memory {
     private:
         static u64 startCreateArch();
         static void endCreateArch(u64 value);
+        static void freePageTableChildren(AllocContext *ctx, const u64 *tableAddr, bool level5Paging, u8 depth);
 
         static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);
