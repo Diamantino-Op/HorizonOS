@@ -139,6 +139,15 @@ build_libc() {
   mkdir -p "$clang_resource_dir/lib/$arch-unknown-horizonos-elf"
   ln -sr "$sysroot_path/lib/linux/libclang_rt.builtins-$arch.a" "$clang_resource_dir/lib/$arch-unknown-horizonos-elf/libclang_rt.builtins.a"
 
+  cd "$mlibc_path"
+  rm -rf build
+  meson setup build --cross-file "$res_file_path" --prefix "$sysroot_path/lib" --libdir "$sysroot_path/lib" --includedir "$sysroot_path/include" -Ddefault_library=both --buildtype "$mlibc_buildtype" -Dlinux_kernel_headers="$linux_headers_path" -Dno_headers=true
+  cd build
+  meson compile
+  meson install
+  cd ..
+  rm -rf build
+
   cmake --build "$compiler_rt_build_path" --target crt --parallel
   cmake --build "$compiler_rt_build_path" --target install-crt
   ln -sr "$sysroot_path/lib/linux/clang_rt.crtbegin-$arch.o" "$sysroot_path/lib/crtbegin.o"
@@ -151,15 +160,6 @@ build_libc() {
   cmake --build "$compiler_rt_build_path" --target "clang_rt.atomic-dynamic-$arch" --parallel
   cmake --build "$compiler_rt_build_path" --target "install-clang_rt.atomic-dynamic-$arch"
   ln -sr "$sysroot_path/lib/linux/libclang_rt.atomic-$arch.so" "$sysroot_path/lib/libatomic.so"
-
-  cd "$mlibc_path"
-  rm -rf build
-  meson setup build --cross-file "$res_file_path" --prefix "$sysroot_path/lib" --libdir "$sysroot_path/lib" --includedir "$sysroot_path/include" -Ddefault_library=both --buildtype "$mlibc_buildtype" -Dlinux_kernel_headers="$linux_headers_path" -Dno_headers=true
-  cd build
-  meson compile
-  meson install
-  cd ..
-  rm -rf build
 
   cmake -S "$runtimes_path" -B "$cxx_build_path" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
