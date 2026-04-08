@@ -56,7 +56,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-general
 
   build-libc-x86_64:
     runs-on: ubuntu-latest
@@ -114,7 +114,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: HorizonOS Sysroot x86_64
-          path: ${{github.workspace}}/sysroot
+          path: ${{github.workspace}}/libs/sysroot
           if-no-files-found: 'warn'
           retention-days: 1
           compression-level: '9'
@@ -142,7 +142,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-x86_64
 
   build-x86_64:
     needs: build-libc-x86_64
@@ -204,7 +204,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: HorizonOS Sysroot RiscV64
-          path: ${{github.workspace}}/sysroot
+          path: ${{github.workspace}}/libs/sysroot
           if-no-files-found: 'warn'
           retention-days: 1
           compression-level: '9'
@@ -232,7 +232,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-riscv64
 
   build-riscv64:
     needs: build-libc-riscv64
@@ -322,7 +322,7 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-aarch64
 
   build-aarch64:
     needs: build-libc-aarch64

@@ -18,7 +18,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-x86_64
 
       - name: Restore Sysroot
         id: cache-sysroot-restore
@@ -75,7 +75,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ${{github.workspace}}/toolchain
-          key: ${{runner.os}}-horizonos-toolchain
+          key: ${{runner.os}}-horizonos-toolchain-x86_64
 
       - name: Restore Sysroot
         id: cache-sysroot-restore
