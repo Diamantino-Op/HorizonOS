@@ -66,7 +66,7 @@ build_llvm() {
 
   cmake --build "$llvm_build_path" --parallel
   cmake --install "$llvm_build_path"
-  rm -rf "$llvm_build_path"
+  #rm -rf "$llvm_build_path"
 }
 
 build_libc() {
@@ -202,8 +202,8 @@ build_libc() {
 
   cmake --build "$cxx_build_path" --target unwind cxxabi cxx --parallel
   cmake --build "$cxx_build_path" --target install-unwind install-cxxabi install-cxx
-  rm -rf "$compiler_rt_build_path"
-  rm -rf "$cxx_build_path"
+  #rm -rf "$compiler_rt_build_path"
+  #rm -rf "$cxx_build_path"
 }
 
 case ${1:-} in
