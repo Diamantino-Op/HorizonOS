@@ -117,6 +117,9 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
+      - name: Setup Linux Headers
+        run: sh deps/setup_linux_headers.sh x86_64
+
       - name: Build MLibc
         run: sh deps/build_llvm_libc.sh build-libc x86_64 horizonos_llvm release
 
@@ -193,6 +196,9 @@ jobs:
       - name: Install RSync
         run: sudo apt-get install rsync
 
+      - name: Setup Linux Headers
+        run: sh deps/setup_linux_headers.sh riscv64
+
       - name: Build MLibc
         run: sh deps/build_llvm_libc.sh build-libc riscv64 horizonos_llvm release
 
@@ -268,6 +274,9 @@ jobs:
 
       - name: Install RSync
         run: sudo apt-get install rsync
+
+      - name: Setup Linux Headers
+        run: sh deps/setup_linux_headers.sh aarch64
 
       - name: Build MLibc
         run: sh deps/build_llvm_libc.sh build-libc aarch64 horizonos_llvm release

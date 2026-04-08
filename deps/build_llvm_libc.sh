@@ -2,8 +2,8 @@
 
 set -eu
 
-script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd)
-repo_root=$(CDPATH= cd "$script_dir/.." && pwd)
+script_dir=$(cd "$(dirname "$0")" && pwd)
+repo_root=$(cd "$script_dir/.." && pwd)
 
 mlibc_branch=${MLIBC_BRANCH:-horizonos-mlibc}
 default_llvm_branch=${LLVM_BRANCH:-horizonos_llvm}
@@ -86,8 +86,10 @@ build_libc() {
   sysroot_path=$sysroot_root/usr
   bin_path=$toolchain_path/bin
   mlibc_path=$repo_root/libs/mlibc
+  linux_headers_script=$repo_root/deps/setup_linux_headers.sh
   res_file_path=$repo_root/res/$arch/horizon-mlibc-cross.cfg
-  linux_headers_path=$repo_root/deps/linux-headers-x86_64/include
+  sh "$linux_headers_script" "$arch"
+  linux_headers_path=$repo_root/deps/linux-headers-$arch/include
 
   cd "$mlibc_path"
   rm -rf build

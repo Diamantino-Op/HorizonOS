@@ -123,20 +123,11 @@ npf_dep = declare_dependency(include_directories: npf_inc)
 # Linux Headers
 
 linux_headers_path = join_paths(meson.global_source_root(), 'deps', 'linux-headers-@0@'.format(arch))
+linux_headers_script = join_paths(meson.global_source_root(), 'deps', 'setup_linux_headers.sh')
 
 if not fs.is_dir(linux_headers_path)
     message('Downloading Linux kernel headers...')
-
-    message(run_command(sh, '-c', 'wget -O @0@ https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.17.9.tar.xz'.format(join_paths(deps_dir, 'linux-6.17.9.tar.xz')), check: true, capture: true).stdout())
-
-    run_command(sh, '-c', 'mkdir -p @0@'.format(join_paths(deps_dir, 'linux_kernel')), check: true)
-
-    message(run_command(sh, '-c', 'tar xf @0@ -C @1@'.format(join_paths(deps_dir, 'linux-6.17.9.tar.xz'), join_paths(deps_dir, 'linux_kernel')), check: true, capture: true).stdout())
-
-    message(run_command(sh, '-c', 'cd @0@ && make ARCH=@1@ headers_install INSTALL_HDR_PATH=@2@'.format(join_paths(deps_dir, 'linux_kernel', 'linux-6.17.9'), arch, linux_headers_path), check: true, capture: true).stdout())
-
-    message(run_command(sh, '-c', 'rm -rf @0@'.format(join_paths(deps_dir, 'linux-6.17.9.tar.xz')), check: true, capture: true).stdout())
-    message(run_command(sh, '-c', 'rm -rf @0@'.format(join_paths(deps_dir, 'linux_kernel')), check: true, capture: true).stdout())
+    run_command(sh, '-c', 'sh @0@ @1@'.format(linux_headers_script, arch), check: true)
 endif
 
 
