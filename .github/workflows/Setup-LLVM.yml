@@ -137,6 +137,13 @@ jobs:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-x86_64-sysroot
 
+      - name: Save Toolchain
+        id: cache-toolchain-save
+        uses: actions/cache/save@v5
+        with:
+          path: ${{github.workspace}}/toolchain
+          key: ${{runner.os}}-horizonos-toolchain
+
   build-x86_64:
     needs: build-libc-x86_64
     uses: ./.github/workflows/Build-x86_64.yml
@@ -220,6 +227,13 @@ jobs:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-riscv64-sysroot
 
+      - name: Save Toolchain
+        id: cache-toolchain-save
+        uses: actions/cache/save@v5
+        with:
+          path: ${{github.workspace}}/toolchain
+          key: ${{runner.os}}-horizonos-toolchain
+
   build-riscv64:
     needs: build-libc-riscv64
     uses: ./.github/workflows/Build-riscv64.yml
@@ -302,6 +316,13 @@ jobs:
         with:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-aarch64-sysroot
+
+      - name: Save Toolchain
+        id: cache-toolchain-save
+        uses: actions/cache/save@v5
+        with:
+          path: ${{github.workspace}}/toolchain
+          key: ${{runner.os}}-horizonos-toolchain
 
   build-aarch64:
     needs: build-libc-aarch64

@@ -102,7 +102,7 @@ jobs:
         run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Ddebug_build=true -Dqemu_targets=false build
 
       - name: Build
-        run: cd ${{github.workspace}}/build && meson compile HorizonOS_ISO -Ddebug_build=true
+        run: cd ${{github.workspace}}/build && meson compile HorizonOS_ISO
 
       - name: Upload ISO
         id: upload-iso
