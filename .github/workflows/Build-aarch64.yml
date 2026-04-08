@@ -1,10 +1,8 @@
 name: Build Aarch64
 
 on:
-  workflow_run:
-    workflows: [ "Setup LLVM" ]
-    types:
-      - completed
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   build-aarch64-release:

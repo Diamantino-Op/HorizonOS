@@ -1,10 +1,8 @@
 name: Build Riscv64
 
 on:
-  workflow_run:
-    workflows: [ "Setup LLVM" ]
-    types:
-      - completed
+  workflow_call:
+  workflow_dispatch:
 
 jobs:
   build-riscv64-release:

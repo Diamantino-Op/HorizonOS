@@ -137,6 +137,10 @@ jobs:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-x86_64-sysroot
 
+  build-x86_64:
+    needs: build-libc-x86_64
+    uses: ./.github/workflows/Build-x86_64.yml
+
   build-libc-riscv64:
     runs-on: ubuntu-latest
     needs: build-llvm
@@ -216,6 +220,10 @@ jobs:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-riscv64-sysroot
 
+  build-riscv64:
+    needs: build-libc-riscv64
+    uses: ./.github/workflows/Build-riscv64.yml
+
   build-libc-aarch64:
     runs-on: ubuntu-latest
     needs: build-llvm
@@ -294,3 +302,7 @@ jobs:
         with:
           path: ${{github.workspace}}/libs/sysroot
           key: ${{runner.os}}-horizonos-aarch64-sysroot
+
+  build-aarch64:
+    needs: build-libc-aarch64
+    uses: ./.github/workflows/Build-aarch64.yml
