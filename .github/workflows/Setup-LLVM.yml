@@ -19,13 +19,6 @@ jobs:
 
       - uses: hendrikmuhs/ccache-action@v1.2
 
-      - name: Restore Toolchain Build
-        id: cache-toolchain-build-restore
-        uses: actions/cache/restore@v5
-        with:
-          path: ${{github.workspace}}/deps/llvm/build
-          key: ${{runner.os}}-horizonos-toolchain-build
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -57,13 +50,6 @@ jobs:
           compression-level: '9'
           overwrite: 'false'
           include-hidden-files: 'false'
-
-      - name: Save Toolchain Build
-        id: cache-toolchain-build-save
-        uses: actions/cache/save@v5
-        with:
-          path: ${{github.workspace}}/deps/llvm/build
-          key: ${{runner.os}}-horizonos-toolchain-build
 
       - name: Save Toolchain
         id: cache-toolchain-save
