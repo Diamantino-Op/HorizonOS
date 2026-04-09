@@ -156,7 +156,7 @@ namespace kernel::common::threading {
 
 		Process *idleProcess = schedulerPtr->getProcess(0);
 
-		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(idleThread), false, this->getENThreadRsp());
+		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(&idleThreadFun), false, this->getENThreadRsp());
 
 		newThread->setState(ThreadState::RUNNING);
 

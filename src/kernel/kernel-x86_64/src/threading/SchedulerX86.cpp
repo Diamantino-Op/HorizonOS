@@ -15,7 +15,7 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
-	void idleThread() {
+	void idleThreadFun() {
 		for (;;) {
 			CommonMain::getTerminal()->debug("Idle Tick", "Idle");
 
