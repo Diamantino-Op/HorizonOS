@@ -251,7 +251,7 @@ namespace kernel::common::threading {
 
 		this->addProcess(reaperProcess);
 
-		this->addThread(false, reinterpret_cast<u64>(reaperFunction), reaperProcess);
+		this->addThread(false, reinterpret_cast<u64>(&reaperFunction), reaperProcess);
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) {

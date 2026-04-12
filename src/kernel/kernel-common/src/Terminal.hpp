@@ -30,6 +30,7 @@ namespace kernel::common {
         __attribute__((no_instrument_function)) void printfE9(bool autoSN, const char* format, ...);
         __attribute__((no_instrument_function)) void printfBoth(bool autoSN, const char* format, ...);
         __attribute__((no_instrument_function)) void printfUAcpi(bool autoSN, const char* format, ...);
+        __attribute__((no_instrument_function)) void printInterruptFrame(u64 *framePtr);
 
         __attribute__((no_instrument_function)) void info(const char *format, const char *id, ...);
         __attribute__((no_instrument_function)) void debug(const char *format, const char *id, ...);

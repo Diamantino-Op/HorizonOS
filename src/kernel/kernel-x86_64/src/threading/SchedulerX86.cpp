@@ -17,8 +17,6 @@ namespace kernel::common::threading {
 
 	void idleThreadFun() {
 		for (;;) {
-			CommonMain::getTerminal()->debug("Idle Tick", "Idle");
-
 			asm volatile ("pause" ::: "memory");
 		}
 	}
@@ -177,6 +175,10 @@ namespace kernel::common::threading {
 		}
 
 		if (oldEntry != this->currentThread && oldEntry != nullptr) {
+			/*if (this->framePtr != nullptr) {
+				CommonMain::getTerminal()->printInterruptFrame(this->framePtr);
+			}*/
+
 			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
 
@@ -274,22 +276,25 @@ namespace kernel::common::threading {
 	void Scheduler::reaperThreadArch(const LinkedListEntry<Thread> *thread) {
 		const u64 currPageMap = Asm::readCr3();
 
-		thread->value->getParent()->getProcessContextKernel()->pageMap.load();
-
 		thread->value->getParent()->removeThread(thread->value);
 
+		thread->value->getParent()->getProcessContextKernel()->pageMap.load();
+
 		delete thread->value;
-		delete thread;
 
 		Asm::writeCr3(currPageMap);
+
+		delete thread;
 	}
 
 	void Scheduler::reaperProcessArch(Process *process) {
 		const u64 currPageMap = Asm::readCr3();
 
+		this->processList.remove(process, false);
+
 		process->getProcessContextKernel()->pageMap.load();
 
-		this->processList.remove(process, true);
+		delete process;
 
 		Asm::writeCr3(currPageMap);
 	}

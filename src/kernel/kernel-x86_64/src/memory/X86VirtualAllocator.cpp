@@ -44,8 +44,8 @@ namespace kernel::common::memory {
 				continue;
 			}
 
-						freePageTableChildren(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
-						CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), 1);
+			freePageTableChildren(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
+			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), 1);
 		}
 	}
 
