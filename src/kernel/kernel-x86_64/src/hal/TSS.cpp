@@ -17,7 +17,7 @@ namespace kernel::x86_64::hal {
 		this->tssInstance.ist[0] = reinterpret_cast<u64>(this->generalIntStack + sizeof(this->generalIntStack)); // 2 Kb Stack
 		this->tssInstance.ist[1] = reinterpret_cast<u64>(this->nmiIntStack + sizeof(this->nmiIntStack)); // 2 Kb Stack
 		this->tssInstance.ist[2] = reinterpret_cast<u64>(this->exceptionIntStack + sizeof(this->exceptionIntStack)); // 2 Kb Stack
-		this->tssInstance.ist[3] = reinterpret_cast<u64>(this->syscallStack + sizeof(this->syscallStack)); // Force the use of RSP (Used for syscalls)
+		this->tssInstance.ist[3] = reinterpret_cast<u64>(this->syscallStack + sizeof(this->syscallStack)); // 2 Kb Stack
 	}
 
     void TssManager::updateTss() {

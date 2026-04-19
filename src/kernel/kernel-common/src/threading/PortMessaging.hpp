@@ -1,0 +1,45 @@
+#ifndef KERNEL_COMMON_PORTMESSAGING_HPP
+#define KERNEL_COMMON_PORTMESSAGING_HPP
+
+#include "hal/Syscall.hpp"
+#include "Scheduler.hpp"
+
+namespace kernel::common::threading {
+    using namespace hal;
+
+	struct PortMessage {
+		u64 sourcePort {};
+		usize length {};
+		u8 *buffer {};
+
+		~PortMessage();
+	};
+
+	struct PortEntry {
+		u64 port {};
+		LinkedList<PortMessage> messages {};
+		LinkedList<Thread> waiters {};
+		TicketSpinLock lock {};
+
+		~PortEntry();
+	};
+
+    class PortMessaging {
+    public:
+        static u64 registerPort(u64 port);
+        static u64 sendMessage(u64 port, MessageHeader *hdr);
+        static u64 recvMessage(u64 port, MessageHeader *hdr);
+
+        static void removeThread(Thread *thread);
+
+    private:
+        static PortEntry *findPortUnlocked(u64 port);
+        static PortEntry *createPortUnlocked(u64 port);
+
+        static TicketSpinLock portLock;
+    };
+}
+
+#endif
+
+

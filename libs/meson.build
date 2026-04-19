@@ -14,6 +14,6 @@ run_target('setup_mlibc',
 
 run_target('build_mlibc',
     command: [sh, '-c',
-        'sh @0@ build-libc @1@ @2@ @3@'.format(llvm_libc_script, arch, get_option('llvm_branch'), mlibc_buildtype)
+        'sh @0@ --skip-repo-check build-libc @1@ @2@ @3@'.format(llvm_libc_script, arch, get_option('llvm_branch'), mlibc_buildtype)
     ]
 )

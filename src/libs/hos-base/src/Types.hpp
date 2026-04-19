@@ -49,6 +49,7 @@ extern "C" {
     typedef __UINT_FAST64_TYPE__ uFast64;
 
     typedef __SIZE_TYPE__ usize;
+	typedef long ssize;
 
     typedef __PTRDIFF_TYPE__ isize;
 }

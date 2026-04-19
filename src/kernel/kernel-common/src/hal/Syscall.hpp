@@ -34,13 +34,28 @@
 #define PROT_WRITE 0x02
 #define PROT_EXEC  0x04
 
+#define FUTEX_WAIT 0
+#define FUTEX_WAKE 1
+
 namespace kernel::common::hal {
 	using namespace memory;
 
 	using SyscallFun = u64(*)(long *ret, u64 p1, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6);
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 13;
+	constexpr u64 horizonSyscallAmount = 18;
+
+	struct MessageHeader {
+		u64 port;               /* target port (for send) or port that received the message */
+		u64 *buffer;            /* pointer to message buffer in user space */
+		usize length;           /* buffer length */
+		int flags;              /* message flags (e.g. MSG_DONTWAIT) */
+		ssize retLength;        /* kernel-filled: number of bytes sent/received (or negative error) */
+		u64 srcPort;            /* set by kernel on receive: source port */
+		void *control;          /* optional ancillary/control data pointer */
+		usize controlLen;       /* ancillary data length */
+		u64 timeoutNs;		    /* optional timeout in nanoseconds (0 = wait indefinitely) */
+	};
 
     class SyscallManager {
     public:
@@ -61,6 +76,11 @@ namespace kernel::common::hal {
     	static u64 syscallPause(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallThreadExit(long *, u64, u64, u64, u64, u64, u64);
     	static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64);
+    	static u64 syscallSendMsg(long *ret, u64 port, u64 msgHdr, u64, u64, u64, u64);
+    	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64, u64, u64, u64);
+    	static u64 syscallRegisterPort(long *ret, u64 port, u64, u64, u64, u64, u64);
+    	static u64 syscallIsThreadAlive(long *ret, u64 tid, u64, u64, u64, u64, u64);
+    	static u64 syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

@@ -18,6 +18,6 @@ hello_world_exe = executable('hello_world',
                              c_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
                              cpp_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
                              link_args: [ '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                             pie: true,
+                             pie: false,
                              native: false
 )

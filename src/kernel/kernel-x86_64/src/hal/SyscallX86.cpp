@@ -1,10 +1,13 @@
 #include "SyscallX86.hpp"
 
 #include "CommonMain.hpp"
+#include "ErrNo.hpp"
 #include "GDT.hpp"
+#include "Main.hpp"
 #include "utils/Asm.hpp"
 
 namespace kernel::common::hal {
+	using namespace x86_64;
 	using namespace x86_64::hal;
 	using namespace x86_64::utils;
 
@@ -12,7 +15,7 @@ namespace kernel::common::hal {
 		constexpr u64 star = static_cast<u64>(Selector::USER_CODE32) << 48 | static_cast<u64>(Selector::KERNEL_CODE) << 32;
 
 		Asm::wrmsr(Msrs::STAR, star);
-		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(syscallHandler));
+		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(&syscallHandler));
 		Asm::wrmsr(Msrs::FMASK, 0x200 | 0x400);
 
 		u64 efer = Asm::rdmsr(Msrs::EFER);
@@ -42,6 +45,94 @@ namespace kernel::common::hal {
 
 	u64 SyscallManager::syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64) {
 		*ret = Scheduler::getCurrentThread()->getId();
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallIsThreadAlive(long *ret, const u64 tid, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (tid == 0 or tid > maxThreads) {
+			return EINVAL;
+		}
+
+		Scheduler *sched = CommonMain::getInstance()->getScheduler();
+
+		const bool prevIF = sched->getSchedLock()->lock();
+
+		for (const auto &thread : sched->sleepingThreadList) {
+			if (thread.getId() == tid) {
+				sched->getSchedLock()->unlock(prevIF);
+
+				if (ret != nullptr) {
+					*ret = 1;
+				}
+
+				return 0;
+			}
+		}
+
+		for (const auto &thread : sched->blockedThreadList) {
+			if (thread.getId() == tid) {
+				sched->getSchedLock()->unlock(prevIF);
+
+				if (ret != nullptr) {
+					*ret = 1;
+				}
+
+				return 0;
+			}
+		}
+
+		for (auto &queue : sched->queues) {
+			for (const auto &thread : queue) {
+				if (thread.getId() == tid) {
+					sched->getSchedLock()->unlock(prevIF);
+
+					if (ret != nullptr) {
+						*ret = 1;
+					}
+
+					return 0;
+				}
+			}
+		}
+
+		sched->getSchedLock()->unlock(prevIF);
+
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		const CpuManager *cpuManager = kernel->getCpuManager();
+		const CpuCore *bspCore = cpuManager->getBootstrapCpu();
+
+		const LinkedListEntry<Thread> *bspEntry = bspCore->executionNode.getCurrentThread();
+
+		if (bspEntry != nullptr and bspEntry->value != nullptr and bspEntry->value->getId() == tid) {
+			if (ret != nullptr) {
+				*ret = 1;
+			}
+
+			return 0;
+		}
+
+		const CoreKernel *coreList = cpuManager->getCoreList();
+		const u64 cores = cpuManager->getCoreAmount();
+
+		if (coreList != nullptr and cores > 1) {
+			for (u64 i = 0; i < cores - 1; i++) {
+				const CpuCore *core = &coreList[i].cpuCore;
+				const LinkedListEntry<Thread> *entry = core->executionNode.getCurrentThread();
+
+				if (entry != nullptr and entry->value != nullptr and entry->value->getId() == tid) {
+					if (ret != nullptr) {
+						*ret = 1;
+					}
+
+					return 0;
+				}
+			}
+		}
 
 		return 0;
 	}

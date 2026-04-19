@@ -50,6 +50,9 @@ namespace kernel::common::threading {
         void setSleepNs(u64 ns);
         u64 getSleepNs() const;
 
+        void setWaitingPort(u64 port);
+        u64 getWaitingPort() const;
+
     	void setStackPointer(u64 newStackPointer);
     	u64 *getStackPointer();
 
@@ -72,6 +75,7 @@ namespace kernel::common::threading {
         u16 id {};
 
         u64 sleepNs {};
+        u64 waitingPort {};
 
         u64 *context {};
 
@@ -173,7 +177,7 @@ namespace kernel::common::threading {
 
 	extern "C" void switchContextAsm();
 
-	constexpr u64 threadCtxStackSize = pageSize * 4;
+  constexpr u64 threadCtxStackSize = pageSize * 4;
 
 	// TODO: Maybe do sleep queues and block queues
     class Scheduler {

@@ -69,19 +69,19 @@ namespace kernel::x86_64 {
 
 		// Exceptions
 		for (u16 i = 0; i <= 31; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 2, GateDPL::KERNEL_DPL | GateType::TRAP_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 3, GateDPL::KERNEL_DPL | GateType::TRAP_GATE);
 		}
 
 		// NMI
-		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 1, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(2, interruptTable[2], Selector::KERNEL_CODE, 2, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		// Interrupts
 		for (u16 i = 32; i <= 255; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 1, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		}
 
-		this->idtManager.addEntry(0x21, interruptTable[0x21], Selector::KERNEL_CODE, 3, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
-		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 3, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(0x21, interruptTable[0x21], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 4, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
 
 		this->idtManager.loadIdt();
 

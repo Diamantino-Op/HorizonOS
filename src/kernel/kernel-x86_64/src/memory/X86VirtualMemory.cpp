@@ -166,9 +166,17 @@ namespace kernel::common::memory {
 			return 0;
 		}
 
+		if (lvl3Table->entries[lvl3].size) {
+			return (lvl3Table->entries[lvl3].address << 12) + (vAddr & 0x3FFFFFFF);
+		}
+
 		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
 		if (!lvl2Table->entries[lvl2].present) {
 			return 0;
+		}
+
+		if (lvl2Table->entries[lvl2].size) {
+			return (lvl2Table->entries[lvl2].address << 12) + (vAddr & 0x1FFFFF);
 		}
 
 		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
@@ -176,7 +184,7 @@ namespace kernel::common::memory {
 			return 0;
 		}
 
-		return lvl1Table->entries[lvl1].address << 12;
+		return (lvl1Table->entries[lvl1].address << 12) + (vAddr & 0xFFF);
 	}
 
 	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
@@ -219,3 +227,4 @@ namespace kernel::common::memory {
 		return this->physPageTable;
 	}
 }
+

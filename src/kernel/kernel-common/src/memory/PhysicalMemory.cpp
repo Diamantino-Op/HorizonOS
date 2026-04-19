@@ -17,6 +17,9 @@ namespace kernel::common::memory {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
 				if (const limine_memmap_entry *entry = memMapRequest.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE) {
 					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + CommonMain::getCurrentHhdm());
+
+					terminal->debug("Found Usable entry: 0x%.16lx, limine: 0x%.16lx", "PMM", currEntry, entry);
+
 					currEntry->count = entry->length / pageSize;
 
 					terminal->debug("New Usable entry found: Base: 0x%.16lx, Size: %llu", "PMM", currEntry, currEntry->count * pageSize);

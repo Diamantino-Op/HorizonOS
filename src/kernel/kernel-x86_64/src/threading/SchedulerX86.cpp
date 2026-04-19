@@ -164,8 +164,6 @@ namespace kernel::common::threading {
 
 			if (selectedEntry == nullptr) {
 				selectedEntry = this->idleThread;
-
-				CommonMain::getTerminal()->debug("Idle", "Scheduler");
 			}
 
 			this->currentThread = selectedEntry;
@@ -175,14 +173,8 @@ namespace kernel::common::threading {
 		}
 
 		if (oldEntry != this->currentThread && oldEntry != nullptr) {
-			/*if (this->framePtr != nullptr) {
-				CommonMain::getTerminal()->printInterruptFrame(this->framePtr);
-			}*/
-
 			CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}
-
-		//CommonMain::getTerminal()->debug("Switch Old RSP: 0x%.16lx, New RSP: 0x%.16lx", "Scheduler", oldRsp, *this->currentThread->value->getStackPointer());
 
 		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
@@ -247,11 +239,11 @@ namespace kernel::common::threading {
 				}
 			}
 
-			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx, %lu", "Scheduler", startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
+			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
 
 			context->userStackPointer = startPage;
 
-			u64 userStack = startAddr + threadCtxStackSize;
+			u64 userStack = startPage + threadCtxStackSize;
 
 			setUserStackAsm(&userStack);
 

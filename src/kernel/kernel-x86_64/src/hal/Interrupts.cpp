@@ -133,7 +133,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m-   cr3: 0x%.16lx", Asm::readCr3());
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m-   Backtrace:");
-		backtrace(frame->rbp);
+		backtrace(frame->rbp, (frame->cs & 0x3) == 3);
 		terminal->printfBoth(true, "\033[0;31m-");
 		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
 
@@ -163,25 +163,29 @@ namespace kernel::x86_64::hal {
 		terminal->unlock(prevIF);
 	}
 
-	void Interrupts::backtrace(const usize rbp) {
+	void Interrupts::backtrace(const usize rbp, bool userMode) {
 		Terminal *terminal = CommonMain::getTerminal();
 		const auto *main = CommonMain::getInstance();
+		const auto *scheduler = main != nullptr ? main->getScheduler() : nullptr;
+		const auto *currentThread = scheduler != nullptr ? Scheduler::getCurrentThread() : nullptr;
+		const auto *process = currentThread != nullptr ? currentThread->getParent() : nullptr;
+		const auto *pageMapContext = process != nullptr ? process->getProcessContext() : (main != nullptr ? main->getKernelAllocContext() : nullptr);
 		const usize stackTop = main != nullptr ? main->getStackTop() : 0;
 		const usize stackBottom = stackTop > kernelStackSize ? stackTop - kernelStackSize : 0;
-		const auto isValidBacktraceFrame = [main, stackBottom, stackTop](const usize frameRbp) -> bool {
+		const auto isValidBacktraceFrame = [pageMapContext, userMode, stackBottom, stackTop](const usize frameRbp) -> bool {
 			if (frameRbp == 0 || (frameRbp & (alignof(usize) - 1)) != 0) {
 				return false;
 			}
 
-			if (main == nullptr || main->getKernelAllocContext() == nullptr) {
+			if (pageMapContext == nullptr) {
 				return true;
 			}
 
-			if (stackTop != 0 && (frameRbp < stackBottom || frameRbp + (sizeof(usize) * 2) > stackTop)) {
+			if (!userMode && stackTop != 0 && (frameRbp < stackBottom || frameRbp + (sizeof(usize) * 2) > stackTop)) {
 				return false;
 			}
 
-			const auto &pageMap = main->getKernelAllocContext()->pageMap;
+			const auto &pageMap = pageMapContext->pageMap;
 			return pageMap.getPhysAddress(frameRbp) != 0 && pageMap.getPhysAddress(frameRbp + sizeof(usize)) != 0;
 		};
 

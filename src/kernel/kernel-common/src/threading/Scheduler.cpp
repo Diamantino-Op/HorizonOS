@@ -2,6 +2,8 @@
 
 #include "CommonMain.hpp"
 #include "IDAllocator.hpp"
+#include "Futex.hpp"
+#include "PortMessaging.hpp"
 #include "programs/Elf.hpp"
 
 namespace kernel::common::threading {
@@ -45,6 +47,14 @@ namespace kernel::common::threading {
 
 	u64 Thread::getSleepNs() const {
 		return this->sleepNs;
+	}
+
+	void Thread::setWaitingPort(const u64 port) {
+		this->waitingPort = port;
+	}
+
+	u64 Thread::getWaitingPort() const {
+		return this->waitingPort;
 	}
 
 	void Thread::setStackPointer(const u64 newStackPointer) {
@@ -114,11 +124,7 @@ namespace kernel::common::threading {
 			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
 		}*/
 
-		CommonMain::getTerminal()->debug("A", "Scheduler");
-
 		VirtualAllocator::destroyContext(this->processContext);
-
-		CommonMain::getTerminal()->debug("B", "Scheduler");
 	}
 
 	void Process::setPriority(const ProcessPriority newPriority) {
@@ -393,6 +399,8 @@ namespace kernel::common::threading {
 		const bool prevIF = this->schedLock.lock();
 
 		thread->setState(ThreadState::TERMINATED);
+		PortMessaging::removeThread(thread);
+		Futex::removeThread(thread->getId());
 
 		if (thread->getParent() != nullptr) {
 			thread->getParent()->removeThread(thread);
@@ -500,6 +508,12 @@ namespace kernel::common::threading {
 			return;
 		}
 
+		if (thread->getWaitingPort() == 0) {
+			this->schedLock.unlock(prevIF);
+
+			return;
+		}
+
 		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
@@ -531,6 +545,7 @@ namespace kernel::common::threading {
 		}
 
 		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
+		thread->setWaitingPort(0);
 
 		//const bool prevIF = this->schedLock.lock();
 

@@ -15,10 +15,6 @@ if not supported_archs.contains(arch)
     error('Unknown Architecture: @0@'.format(arch))
 endif
 
-# Ad to cross config
-# [properties]
-# c_stdlib = 'mlibc'
-
 
 
 # Programs
@@ -101,7 +97,7 @@ subdir(join_paths('src', 'libs'))
 
 subdir(join_paths('src', 'programs'))
 
-# subdir(join_paths('src', 'services'))
+subdir(join_paths('src', 'services'))
 
 subdir(join_paths('src', 'kernel'))
 
@@ -175,7 +171,13 @@ create_sym_file = custom_target('create_sym_file',
 
 install_apps = custom_target('install_apps',
     input: [
+        # Apps
         hello_world_exe,
+
+        # Services
+        name_registry_exe,
+
+        # Libs
         join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
         join_paths(sysroot_path, 'usr', 'lib', 'libc++abi.so'),
         join_paths(sysroot_path, 'usr', 'lib', 'libc.so'),
@@ -185,6 +187,18 @@ install_apps = custom_target('install_apps',
     output: 'InstalledApps.txt',
     command: [
         cp, '@INPUT0@', iso_programs_path,
+        '&&',
+        cp, '@INPUT1@', iso_services_path,
+        '&&',
+        cp, '@INPUT2@', iso_libs_path,
+        '&&',
+        cp, '@INPUT3@', iso_libs_path,
+        '&&',
+        cp, '@INPUT4@', iso_libs_path,
+        '&&',
+        cp, '@INPUT5@', iso_libs_path,
+        '&&',
+        cp, '@INPUT6@', iso_libs_path,
         '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',

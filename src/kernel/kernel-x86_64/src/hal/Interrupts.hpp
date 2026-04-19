@@ -85,6 +85,7 @@ namespace kernel::x86_64::hal {
         static void userPanic(Frame *frame);
 
         static void backtrace(usize rbp);
+        static void backtrace(usize rbp, bool userMode = false);
 
         static void setHandler(u8 id, u64 *handler, u64 *ctx);
         static void setHandler(u8 id, HandlerFun handler, u64 *ctx);

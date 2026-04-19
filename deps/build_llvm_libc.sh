@@ -9,7 +9,7 @@ mlibc_branch=${MLIBC_BRANCH:-horizonos-mlibc}
 default_llvm_branch=${LLVM_BRANCH:-horizonos_llvm}
 
 usage() {
-  echo "Usage: $0 {setup-repos|build-llvm|build-libc} [arch] [llvm-branch] [mlibc-buildtype]" >&2
+  echo "Usage: $0 [--skip-repo-check|-s] {setup-repos|build-llvm|build-libc} [arch] [llvm-branch] [mlibc-buildtype]" >&2
   exit 1
 }
 
@@ -20,10 +20,42 @@ ensure_repo() {
 
   if git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git -C "$path" remote set-url origin "$url"
-    git -C "$path" fetch --depth 1 origin "$branch"
-    git -C "$path" checkout -B "$branch" "origin/$branch"
-    git -C "$path" reset --hard "origin/$branch"
-    rm -rf "$path/build" "$path/build-cxx" "$path/build-rt-builtins"
+    # Try to fetch the requested branch, but don't fail the script if fetch has issues
+    git -C "$path" fetch --depth 1 origin "$branch" || true
+
+    # Only perform destructive updates (reset --hard, removing build dirs) when it's
+    # safe to do so: the working tree must be clean and the local branch must be
+    # behind (fast-forwardable) the remote branch. If there are uncommitted
+    # changes, local commits, or the branch has diverged, skip the reset to
+    # preserve the user's local edits.
+    if git -C "$path" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+      if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+        echo "Repository $path has uncommitted changes; skipping destructive update to preserve local edits."
+      else
+        head=$(git -C "$path" rev-parse --verify HEAD 2>/dev/null || true)
+        remote_head=$(git -C "$path" rev-parse --verify "origin/$branch" 2>/dev/null || true)
+        base=$(git -C "$path" merge-base HEAD "origin/$branch" 2>/dev/null || true)
+
+        if [ "$head" = "$remote_head" ]; then
+          # Already up-to-date with remote
+          git -C "$path" checkout -B "$branch" "origin/$branch"
+        elif [ "$base" = "$remote_head" ]; then
+          # Remote is ancestor of local -> local has commits that would be lost by a reset
+          echo "Repository $path has local commits not present on origin/$branch; skipping destructive update to preserve local commits."
+        elif [ "$base" = "$head" ]; then
+          # Local is ancestor of remote -> safe to fast-forward
+          echo "Repository $path is behind origin/$branch; fast-forwarding to update."
+          git -C "$path" checkout -B "$branch" "origin/$branch"
+          git -C "$path" reset --hard "origin/$branch"
+          rm -rf "$path/build" "$path/build-cxx" "$path/build-rt-builtins"
+        else
+          # Diverged
+          echo "Repository $path has diverged from origin/$branch; skipping update to preserve local changes."
+        fi
+      fi
+    else
+      echo "Remote branch origin/$branch not found for $path; leaving repository unchanged."
+    fi
   else
     rm -rf "$path"
     git clone --single-branch --depth 1 -b "$branch" "$url" "$path"
@@ -41,7 +73,11 @@ build_llvm() {
   arch=$1
   llvm_branch=$2
 
-  ensure_repos "$llvm_branch"
+  if [ -z "${SKIP_REPO_CHECK:-}" ]; then
+    ensure_repos "$llvm_branch"
+  else
+    echo "Skipping repository setup (ensure_repos) because SKIP_REPO_CHECK is set."
+  fi
 
   llvm_path=$repo_root/deps/llvm
   toolchain_path=$repo_root/toolchain
@@ -74,7 +110,11 @@ build_libc() {
   llvm_branch=$2
   mlibc_buildtype=$3
 
-  ensure_repos "$llvm_branch"
+  if [ -z "${SKIP_REPO_CHECK:-}" ]; then
+    ensure_repos "$llvm_branch"
+  else
+    echo "Skipping repository setup (ensure_repos) because SKIP_REPO_CHECK is set."
+  fi
 
   llvm_path=$repo_root/deps/llvm
   compiler_rt_path=$llvm_path/compiler-rt
@@ -205,6 +245,13 @@ build_libc() {
   #rm -rf "$compiler_rt_build_path"
   #rm -rf "$cxx_build_path"
 }
+
+# Parse global flags (must come before the subcommand).
+# Supports: --skip-repo-check, -s
+while [ "${1:-}" = "--skip-repo-check" ] || [ "${1:-}" = "-s" ]; do
+  SKIP_REPO_CHECK=1
+  shift
+done
 
 case ${1:-} in
   setup-repos)

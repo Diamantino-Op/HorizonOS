@@ -40,11 +40,12 @@ namespace kernel::common::memory {
 					continue;
 				}
 
-							CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), pageCount);
+				CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), pageCount);
 				continue;
 			}
 
 			freePageTableChildren(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
+
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), 1);
 		}
 	}
@@ -60,17 +61,11 @@ namespace kernel::common::memory {
 		const u64 pageTablePhys = ctx->pageMap.getAddr();
 		const u64 ctxPhys = ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(ctx));
 
-		CommonMain::getTerminal()->debug("C", "Scheduler");
-
 		for (u64 virtAddress = heapFirstPage + pageSize; virtAddress < heapEnd; virtAddress += pageSize) {
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
-		CommonMain::getTerminal()->debug("D", "Scheduler");
-
 		freePageTableChildren(ctx, ctx->pageMap.getPageTable(), ctx->pageMap.level5Paging(), 0);
-
-		CommonMain::getTerminal()->debug("E", "Scheduler");
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
