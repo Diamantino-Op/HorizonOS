@@ -46,8 +46,8 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
-		CommonMain::getTerminal()->info(reinterpret_cast<char *>(message), "User");
-		CommonMain::getTerminal()->printf(true, "");
+		CommonMain::getTerminal()->debug(reinterpret_cast<char *>(message), "User");
+		CommonMain::getTerminal()->printfE9(true, "");
 
 		return 0;
 	}
