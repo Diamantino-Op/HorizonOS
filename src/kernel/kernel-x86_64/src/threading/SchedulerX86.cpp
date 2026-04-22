@@ -138,9 +138,13 @@ namespace kernel::common::threading {
 			// TODO: This might create nullptr if the reaper thread kills this while it is being used here
 			schedulerPtr->awaitingKillThreadList.addEnd(this->currentThread);
 		} else if (this->currentThread->value->getSleepNs() > 0) {
-			schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
+			if (!schedulerPtr->sleepingThreadList.contains(this->currentThread->value)) {
+				schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
+			}
 		} else if (this->currentThread->value->getState() == ThreadState::BLOCKED) {
-			schedulerPtr->blockedThreadList.addEnd(this->currentThread);
+			if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
+				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
+			}
 		} else if (this->currentThread != this->idleThread) {
 			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 		}

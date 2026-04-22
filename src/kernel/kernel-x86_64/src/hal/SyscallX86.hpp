@@ -6,6 +6,8 @@
 #include "hal/Syscall.hpp"
 
 namespace kernel::x86_64::hal {
+    constexpr u64 signalSigreturnSyscall = 19;
+
     struct SyscallRegs {
     	u64 rax = {};
     	u64 rbx = {};
@@ -24,6 +26,8 @@ namespace kernel::x86_64::hal {
 	};
 
 	void intSyscallEntry(Frame *frame);
+	void deliverPendingSignal(Frame *frame);
+	void deliverPendingSignal(SyscallRegs *regs);
 
     extern "C" void callSyscall(SyscallRegs *regs);
 }

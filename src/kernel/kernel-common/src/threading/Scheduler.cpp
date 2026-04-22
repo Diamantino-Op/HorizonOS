@@ -57,6 +57,47 @@ namespace kernel::common::threading {
 		return this->waitingPort;
 	}
 
+	void Thread::queueSignal(const u64 signal) {
+		this->pendingSignal = signal;
+		this->signalPending = true;
+	}
+
+	bool Thread::hasPendingSignal() const {
+		return this->signalPending;
+	}
+
+	u64 Thread::getPendingSignal() const {
+		return this->pendingSignal;
+	}
+
+	bool Thread::hasSignalFrame() const {
+		return this->signalFrameValid;
+	}
+
+	void Thread::setSignalFrame(const SignalContext &frame) {
+		this->signalFrame = frame;
+		this->signalFrameValid = true;
+	}
+
+	const SignalContext &Thread::getSignalFrame() const {
+		return this->signalFrame;
+	}
+
+	void Thread::clearPendingSignal() {
+		this->signalPending = false;
+		this->pendingSignal = 0;
+	}
+
+	void Thread::clearSignalFrame() {
+		this->signalFrameValid = false;
+		this->signalFrame = {};
+	}
+
+	void Thread::clearSignalState() {
+		this->clearPendingSignal();
+		this->clearSignalFrame();
+	}
+
 	void Thread::setStackPointer(const u64 newStackPointer) {
 		this->stackPointer = newStackPointer;
 	}
@@ -460,10 +501,8 @@ namespace kernel::common::threading {
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
-		if (!shouldReschedule) {
-			if (!this->blockedThreadList.contains(thread)) {
-				this->sleepingThreadList.addStart(thread);
-			}
+		if (!this->sleepingThreadList.contains(thread)) {
+			this->sleepingThreadList.addStart(thread);
 		}
 
 		this->schedLock.unlock(prevIF);
@@ -486,10 +525,8 @@ namespace kernel::common::threading {
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
-		if (!shouldReschedule) {
-			if (!this->blockedThreadList.contains(thread)) {
-				this->sleepingThreadList.addStart(thread);
-			}
+		if (!this->sleepingThreadList.contains(thread)) {
+			this->sleepingThreadList.addStart(thread);
 		}
 
 		this->schedLock.unlock(prevIF);
@@ -560,7 +597,9 @@ namespace kernel::common::threading {
 				this->queues[thread->getParent()->getPriority()].addEnd(thread);
 			}
 		} else {
-			this->sleepingThreadList.addStart(thread);
+			if (!this->sleepingThreadList.contains(thread)) {
+				this->sleepingThreadList.addStart(thread);
+			}
 		}
 
 		this->schedLock.unlock(prevIF);

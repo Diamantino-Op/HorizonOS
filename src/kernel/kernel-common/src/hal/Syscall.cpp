@@ -10,12 +10,80 @@ namespace kernel::common::hal {
 	using namespace threading;
 
 	namespace {
+		struct SleepTimespec {
+			long tv_sec;
+			long tv_nsec;
+		};
+
 		auto isMappedAddress(const AllocContext *ctx, const u64 addr) -> bool {
 			return ctx != nullptr && ctx->pageMap.getPhysAddress(addr) != 0;
 		}
 
+		auto findThreadById(Scheduler *scheduler, const u64 pid, const u64 tid) -> Thread * {
+			if (scheduler == nullptr || pid == 0 || tid == 0) {
+				return nullptr;
+			}
+
+			for (auto &process : scheduler->processList) {
+				if (process.getId() != pid) {
+					continue;
+				}
+
+				for (auto &thread : process.threadList) {
+					if (thread.getId() == tid) {
+						return &thread;
+					}
+				}
+
+				break;
+			}
+
+			return nullptr;
+		}
+
+		auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size) -> bool {
+			if (ctx == nullptr || pointer == 0 || size == 0) {
+				return false;
+			}
+
+			const u64 end = pointer + size - 1;
+
+			if (end < pointer) {
+				return false;
+			}
+
+			return isMappedAddress(ctx, pointer) && isMappedAddress(ctx, end);
+		}
+
 		auto isValidFutexPointer(const AllocContext *ctx, const u64 pointer) -> bool {
-			return pointer != 0 && isMappedAddress(ctx, pointer) && isMappedAddress(ctx, pointer + sizeof(u32) - 1);
+			return isValidUserRange(ctx, pointer, sizeof(u32));
+		}
+
+		auto timespecToNs(const SleepTimespec *ts, u64 *ns) -> int {
+			if (ts == nullptr || ns == nullptr) {
+				return EFAULT;
+			}
+
+			CommonMain::getTerminal()->debug("AA", "User");
+
+			if (ts->tv_sec < 0 || ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L) {
+				return EINVAL;
+			}
+
+			CommonMain::getTerminal()->debug("AB", "User");
+
+			const u64 sec = static_cast<u64>(ts->tv_sec);
+			const u64 nsec = static_cast<u64>(ts->tv_nsec);
+			const u64 maxValue = ~0ULL;
+
+			if (sec > (maxValue - nsec) / 1000000000ULL) {
+				return EINVAL;
+			}
+
+			CommonMain::getTerminal()->debug("AC", "User");
+
+			*ns = sec * 1000000000ULL + nsec;
+			return 0;
 		}
 	}
 
@@ -41,13 +109,18 @@ namespace kernel::common::hal {
 		horizonSyscalls[15] = &syscallRegisterPort;
 		horizonSyscalls[16] = &syscallIsThreadAlive;
 		horizonSyscalls[17] = &syscallFutex;
+		horizonSyscalls[18] = &syscallSigaction;
+		horizonSyscalls[19] = &syscallSigreturn;
+		horizonSyscalls[20] = &syscallMProtect;
+		horizonSyscalls[21] = &syscallNanoSleep;
 
 		initArch();
 	}
 
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
 		CommonMain::getTerminal()->info(reinterpret_cast<char *>(message), "User");
-		CommonMain::getTerminal()->printf(true, "");
+		CommonMain::getTerminal()->debug(reinterpret_cast<char *>(message), "User");
+		CommonMain::getTerminal()->printfBoth(true, "");
 
 		return 0;
 	}
@@ -168,6 +241,44 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallKillThread(long *ret, u64 pid, u64 tid, u64 sig, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (sig == 0 || sig > signalActionCount || pid == 0 || tid == 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+
+		if (scheduler == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		Thread *target = findThreadById(scheduler, pid, tid);
+
+		if (target == nullptr) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return ESRCH;
+		}
+
+		target->queueSignal(sig);
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
 		return 0;
 	}
 
@@ -285,7 +396,9 @@ namespace kernel::common::hal {
 
 		const AllocContext *ctx = thread->getParent()->getProcessContext();
 
-		switch (type) {
+		const u64 futexOp = type & FUTEX_CMD_MASK;
+
+		switch (futexOp) {
 			case FUTEX_WAIT: {
 				if (time != 0) {
 					if (ret != nullptr) {
@@ -351,9 +464,79 @@ namespace kernel::common::hal {
 				const LinkedListEntry<Thread> *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
 				const bool shouldReschedule = currentEntry != nullptr && currentEntry->value == thread;
 
-				if (!shouldReschedule) {
-					scheduler->blockedThreadList.addStart(thread);
+				scheduler->blockedThreadList.addStart(thread);
+
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				if (shouldReschedule) {
+					ExecutionNode::reSchedule();
 				}
+
+				if (ret != nullptr) {
+					*ret = 0;
+				}
+
+				return 0;
+			}
+
+			case FUTEX_WAIT_BITSET: {
+				if (!isValidFutexPointer(ctx, pointer)) {
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return EFAULT;
+				}
+
+				const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
+
+				if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return EAGAIN;
+				}
+
+				const bool schedPrevIF = scheduler->getSchedLock()->lock();
+
+				if (!isValidFutexPointer(ctx, pointer)) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return EFAULT;
+				}
+
+				if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return EAGAIN;
+				}
+
+				if (!Futex::addWaiter(pointer, thread->getId())) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return ENOMEM;
+				}
+
+				thread->setState(ThreadState::BLOCKED);
+				scheduler->removeThread(thread);
+
+				const LinkedListEntry<Thread> *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
+				const bool shouldReschedule = currentEntry != nullptr && currentEntry->value == thread;
+
+				scheduler->blockedThreadList.addStart(thread);
 
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 
@@ -411,6 +594,49 @@ namespace kernel::common::hal {
 				return 0;
 			}
 
+			case FUTEX_WAKE_BITSET: {
+				if (time != 0) {
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return EINVAL;
+				}
+
+				if (expected == 0) {
+					if (ret != nullptr) {
+						*ret = 0;
+					}
+
+					return 0;
+				}
+
+				const bool schedPrevIF = scheduler->getSchedLock()->lock();
+
+				u64 woken = 0;
+				u16 threadId = 0;
+
+				while (woken < expected && Futex::popWaiter(pointer, &threadId)) {
+					Thread *waitThread = scheduler->getThread(threadId);
+
+					if (waitThread != nullptr && waitThread->getState() == ThreadState::BLOCKED) {
+						scheduler->blockedThreadList.remove(waitThread, false);
+						waitThread->setState(ThreadState::RUNNING);
+						waitThread->setSleepNs(0);
+						scheduler->queues[waitThread->getParent()->getPriority()].addEnd(waitThread);
+						woken++;
+					}
+				}
+
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				if (ret != nullptr) {
+					*ret = static_cast<long>(woken);
+				}
+
+				return 0;
+			}
+
 			default:
 				if (ret != nullptr) {
 					*ret = -1;
@@ -418,5 +644,259 @@ namespace kernel::common::hal {
 
 				return EINVAL;
 		}
+	}
+
+	u64 SyscallManager::syscallSigaction(long *ret, u64 sig, u64 action, u64 oldAction, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (sig == 0 || sig > signalActionCount) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		constexpr u64 sigKill = 9;
+		constexpr u64 sigStop = 19;
+
+		if (action != 0 && (sig == sigKill || sig == sigStop)) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		const AllocContext *ctx = thread->getParent()->getProcessContext();
+
+		if (!isValidUserRange(ctx, action, action != 0 ? sizeof(SignalAction) : 0)) {
+			if (action != 0) {
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return EFAULT;
+			}
+		}
+
+		if (!isValidUserRange(ctx, oldAction, oldAction != 0 ? sizeof(SignalAction) : 0)) {
+			if (oldAction != 0) {
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return EFAULT;
+			}
+		}
+
+		SignalAction newActionCopy {};
+
+		if (action != 0) {
+			newActionCopy = *reinterpret_cast<const SignalAction *>(action);
+		}
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		const auto currentAction = thread->getParent()->signalActions[sig - 1];
+
+		if (oldAction != 0) {
+			*reinterpret_cast<SignalAction *>(oldAction) = currentAction;
+		}
+
+		if (action != 0) {
+			thread->getParent()->signalActions[sig - 1] = newActionCopy;
+		}
+
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (!thread->hasSignalFrame()) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		thread->clearSignalState();
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (pointer == 0 || size == 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		constexpr u64 supportedProt = PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC;
+		if ((prot & ~supportedProt) != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		const u64 end = pointer + size - 1;
+		if (end < pointer) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		AllocContext *ctx = thread->getParent()->getProcessContext();
+		const u64 bottomAddr = alignDown<u64>(pointer, pageSize);
+		const u64 topAddr = alignUp<u64>(pointer + size, pageSize);
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+
+		for (u64 addr = bottomAddr; addr < topAddr; addr += pageSize) {
+			if (ctx->pageMap.getPhysAddress(addr) == 0) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return EFAULT;
+			}
+		}
+
+		for (u64 addr = bottomAddr; addr < topAddr; addr += pageSize) {
+			if (!ctx->pageMap.protectPage(addr, static_cast<u8>(prot))) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return EFAULT;
+			}
+		}
+
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallNanoSleep(long *ret, u64 ts, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		Thread *thread = Scheduler::getCurrentThread();
+
+		CommonMain::getTerminal()->debug("A", "User");
+
+		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		CommonMain::getTerminal()->debug("B", "User");
+
+		const AllocContext *ctx = thread->getParent()->getProcessContext();
+		if (!isValidUserRange(ctx, ts, sizeof(SleepTimespec))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		CommonMain::getTerminal()->debug("C", "User");
+
+		u64 sleepNs = 0;
+		const int err = timespecToNs(reinterpret_cast<const SleepTimespec *>(ts), &sleepNs);
+		if (err != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return err;
+		}
+
+		CommonMain::getTerminal()->debug("D", "User");
+
+		if (sleepNs == 0) {
+			if (ret != nullptr) {
+				*ret = 0;
+			}
+
+			return 0;
+		}
+
+		CommonMain::getTerminal()->debug("E", "User");
+
+		scheduler->sleepThread(thread, sleepNs);
+
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		return 0;
 	}
 }

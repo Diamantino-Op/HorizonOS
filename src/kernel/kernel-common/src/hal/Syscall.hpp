@@ -36,6 +36,14 @@
 
 #define FUTEX_WAIT 0
 #define FUTEX_WAKE 1
+#define FUTEX_PRIVATE_FLAG 0x80
+#define FUTEX_CMD_MASK 0x7f
+#define FUTEX_WAIT_BITSET 9
+#define FUTEX_WAKE_BITSET 10
+#define FUTEX_WAIT_PRIVATE (FUTEX_WAIT | FUTEX_PRIVATE_FLAG)
+#define FUTEX_WAKE_PRIVATE (FUTEX_WAKE | FUTEX_PRIVATE_FLAG)
+#define FUTEX_WAIT_BITSET_PRIVATE (FUTEX_WAIT_BITSET | FUTEX_PRIVATE_FLAG)
+#define FUTEX_WAKE_BITSET_PRIVATE (FUTEX_WAKE_BITSET | FUTEX_PRIVATE_FLAG)
 
 namespace kernel::common::hal {
 	using namespace memory;
@@ -43,7 +51,7 @@ namespace kernel::common::hal {
 	using SyscallFun = u64(*)(long *ret, u64 p1, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6);
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 18;
+	constexpr u64 horizonSyscallAmount = 22;
 
 	struct MessageHeader {
 		u64 port;               /* target port (for send) or port that received the message */
@@ -81,6 +89,10 @@ namespace kernel::common::hal {
     	static u64 syscallRegisterPort(long *ret, u64 port, u64, u64, u64, u64, u64);
     	static u64 syscallIsThreadAlive(long *ret, u64 tid, u64, u64, u64, u64, u64);
     	static u64 syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64);
+        static u64 syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64);
+    	static u64 syscallSigaction(long *ret, u64 sig, u64 action, u64 oldAction, u64, u64, u64);
+    	static u64 syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64);
+    	static u64 syscallNanoSleep(long *ret, u64 ts, u64, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

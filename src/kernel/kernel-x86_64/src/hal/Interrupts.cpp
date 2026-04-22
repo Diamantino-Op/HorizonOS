@@ -1,7 +1,5 @@
 #include "Interrupts.hpp"
 
-#include <bit>
-
 #include "GDT.hpp"
 #include "Main.hpp"
 
@@ -38,6 +36,10 @@ namespace kernel::x86_64::hal {
 			intSyscallEntry(frame);
 		} else if (const IsrHandler *handler = &handlers[frame->intNo - 32]; handler->fun) {
 			handler->fun(handler->ctx);
+
+			if ((frame->cs & 0x3) == 3) {
+				deliverPendingSignal(frame);
+			}
 
 			sendEOI(frame->intNo);
 		}
@@ -194,7 +196,7 @@ namespace kernel::x86_64::hal {
 
 		while (framesPrinted < maxBacktraceFrames && isValidBacktraceFrame(currentRbp)) {
 
-			const auto *frame = std::bit_cast<const usize *>(currentRbp);
+			const auto *frame = reinterpret_cast<const usize *>(currentRbp);
 			const usize nextRbp = frame[0];
 			const usize returnIp = frame[1];
 
