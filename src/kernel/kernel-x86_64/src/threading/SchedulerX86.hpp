@@ -41,6 +41,7 @@ namespace kernel::x86_64::threading {
     	u8 prid {};
 
     	u64 userStackPointer {};
+        u64 userStackSize {};
     };
 
     extern "C" u64 checkDisabled();
