@@ -21,15 +21,12 @@ void unregisterService(string name);
 vector<Service *> *services;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	services = new vector<Service *>();
 	const thread messageHandler(messageHandlerMain);
 
 	//int handlerTid = messageHandler.get_id();
 
 	while (true) {
-		if (services == nullptr) {
-			continue;
-		}
-
 		for (const auto *service : *services) {
 			bool ret = false;
 
@@ -59,7 +56,6 @@ void messageHandlerMain() {
 		return;
 	}
 
-	services = new vector<Service *>();
 
 	while (true) {
 		array<char, 1024> receiveBuffer{};

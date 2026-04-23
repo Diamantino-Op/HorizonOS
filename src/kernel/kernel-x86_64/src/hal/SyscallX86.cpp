@@ -7,9 +7,203 @@
 #include "utils/Asm.hpp"
 
 namespace kernel::common::hal {
+	using namespace kernel::common::threading;
 	using namespace x86_64;
 	using namespace x86_64::hal;
 	using namespace x86_64::utils;
+
+	namespace {
+		auto isSignalIgnored(const u64 handler) -> bool {
+			return handler == 1;
+		}
+
+		auto isSignalDefault(const u64 handler) -> bool {
+			return handler == 0;
+		}
+
+		auto saveFrame(Thread *thread, const Frame *frame) -> void {
+			SignalContext signalFrame {};
+
+			signalFrame.rax = frame->rax;
+			signalFrame.rbx = frame->rbx;
+			signalFrame.rcx = frame->rcx;
+			signalFrame.rdx = frame->rdx;
+			signalFrame.rsi = frame->rsi;
+			signalFrame.rdi = frame->rdi;
+			signalFrame.r8 = frame->r8;
+			signalFrame.r9 = frame->r9;
+			signalFrame.r10 = frame->r10;
+			signalFrame.r11 = frame->r11;
+			signalFrame.r12 = frame->r12;
+			signalFrame.r13 = frame->r13;
+			signalFrame.r14 = frame->r14;
+			signalFrame.r15 = frame->r15;
+			signalFrame.rip = frame->rip;
+			signalFrame.rFlags = frame->rFlags;
+			signalFrame.rsp = frame->rsp;
+			signalFrame.cs = frame->cs;
+			signalFrame.ss = frame->ss;
+
+			thread->setSignalFrame(signalFrame);
+		}
+
+		auto saveRegs(Thread *thread, const SyscallRegs *regs) -> void {
+			SignalContext signalFrame {};
+
+			signalFrame.rax = regs->rax;
+			signalFrame.rbx = regs->rbx;
+			signalFrame.rcx = regs->rcx;
+			signalFrame.rdx = regs->rdx;
+			signalFrame.rsi = regs->rsi;
+			signalFrame.rdi = regs->rdi;
+			signalFrame.r8 = regs->r8;
+			signalFrame.r9 = regs->r9;
+			signalFrame.r10 = regs->r10;
+			signalFrame.r11 = regs->r11;
+			signalFrame.r12 = regs->r12;
+			signalFrame.r13 = regs->r13;
+			signalFrame.r14 = regs->r14;
+			signalFrame.r15 = regs->r15;
+			signalFrame.rip = regs->rcx;
+			signalFrame.rFlags = regs->r11;
+			signalFrame.rsp = reinterpret_cast<u64>(regs) + sizeof(SyscallRegs);
+
+			thread->setSignalFrame(signalFrame);
+		}
+
+		auto restoreFrame(const SignalContext &signalFrame, Frame *frame) -> void {
+			frame->rax = signalFrame.rax;
+			frame->rbx = signalFrame.rbx;
+			frame->rcx = signalFrame.rcx;
+			frame->rdx = signalFrame.rdx;
+			frame->rsi = signalFrame.rsi;
+			frame->rdi = signalFrame.rdi;
+			frame->r8 = signalFrame.r8;
+			frame->r9 = signalFrame.r9;
+			frame->r10 = signalFrame.r10;
+			frame->r11 = signalFrame.r11;
+			frame->r12 = signalFrame.r12;
+			frame->r13 = signalFrame.r13;
+			frame->r14 = signalFrame.r14;
+			frame->r15 = signalFrame.r15;
+			frame->rip = signalFrame.rip;
+			frame->rFlags = signalFrame.rFlags;
+			frame->rsp = signalFrame.rsp;
+			frame->cs = signalFrame.cs;
+			frame->ss = signalFrame.ss;
+		}
+
+		auto restoreRegs(const SignalContext &signalFrame, SyscallRegs *regs) -> void {
+			regs->rax = signalFrame.rax;
+			regs->rbx = signalFrame.rbx;
+			regs->rcx = signalFrame.rip;
+			regs->rdx = signalFrame.rdx;
+			regs->rsi = signalFrame.rsi;
+			regs->rdi = signalFrame.rdi;
+			regs->r8 = signalFrame.r8;
+			regs->r9 = signalFrame.r9;
+			regs->r10 = signalFrame.r10;
+			regs->r11 = signalFrame.rFlags;
+			regs->r12 = signalFrame.r12;
+			regs->r13 = signalFrame.r13;
+			regs->r14 = signalFrame.r14;
+			regs->r15 = signalFrame.r15;
+		}
+
+		auto setRestorerOnUserStack(u64 *stackPointer, const u64 restorer) -> void {
+			if (stackPointer == nullptr) {
+				return;
+			}
+
+			*stackPointer = restorer;
+		}
+
+		auto deliverSignal(Thread *thread, Frame *frame) -> bool {
+			if (thread == nullptr || frame == nullptr || !thread->hasPendingSignal() || thread->hasSignalFrame()) {
+				return false;
+			}
+
+			auto *process = thread->getParent();
+
+			if (process == nullptr) {
+				return false;
+			}
+
+			const u64 sig = thread->getPendingSignal();
+
+			if (sig == 0 || sig > signalActionCount) {
+				thread->clearSignalState();
+				return false;
+			}
+
+			const SignalAction action = process->signalActions[sig - 1];
+
+			if (isSignalIgnored(action.handler)) {
+				thread->clearSignalState();
+				return false;
+			}
+
+			if (isSignalDefault(action.handler)) {
+				thread->clearSignalState();
+				CommonMain::getInstance()->getScheduler()->killProcess(process);
+				return true;
+			}
+
+			saveFrame(thread, frame);
+			thread->clearPendingSignal();
+
+			setRestorerOnUserStack(reinterpret_cast<u64 *>(frame->rsp), action.restorer);
+			frame->rip = action.handler;
+			frame->rdi = sig;
+			frame->rsi = 0;
+			frame->rdx = 0;
+
+			return true;
+		}
+
+		auto deliverSignal(Thread *thread, SyscallRegs *regs) -> bool {
+			if (thread == nullptr || regs == nullptr || !thread->hasPendingSignal() || thread->hasSignalFrame()) {
+				return false;
+			}
+
+			auto *process = thread->getParent();
+
+			if (process == nullptr) {
+				return false;
+			}
+
+			const u64 sig = thread->getPendingSignal();
+
+			if (sig == 0 || sig > signalActionCount) {
+				thread->clearSignalState();
+				return false;
+			}
+
+			const SignalAction action = process->signalActions[sig - 1];
+
+			if (isSignalIgnored(action.handler)) {
+				thread->clearSignalState();
+				return false;
+			}
+
+			if (isSignalDefault(action.handler)) {
+				thread->clearSignalState();
+				CommonMain::getInstance()->getScheduler()->killProcess(process);
+				return true;
+			}
+
+			saveRegs(thread, regs);
+			thread->clearPendingSignal();
+
+			setRestorerOnUserStack(reinterpret_cast<u64 *>(reinterpret_cast<u64>(regs) + sizeof(SyscallRegs)), action.restorer);
+			regs->rcx = action.handler;
+			regs->rdi = sig;
+			regs->rsi = 0;
+			regs->rdx = 0;
+
+			return true;
+		}
+	}
 
 	void SyscallManager::initArch() {
 		constexpr u64 star = static_cast<u64>(Selector::USER_CODE32) << 48 | static_cast<u64>(Selector::KERNEL_CODE) << 32;
@@ -150,10 +344,25 @@ namespace kernel::x86_64::hal {
 		frame->rdx = SyscallManager::horizonSyscalls[frame->rax](&ret, frame->rdi, frame->rsi, frame->rdx, frame->r10, frame->r8, frame->r9);
 
 		frame->rax = ret;
+
+		deliverPendingSignal(frame);
 	}
 
 	void callSyscall(SyscallRegs *regs) {
 		CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
+
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (regs->rax == signalSigreturnSyscall) {
+			if (thread != nullptr && thread->hasSignalFrame()) {
+				restoreRegs(thread->getSignalFrame(), regs);
+				thread->clearSignalState();
+			} else {
+				regs->rax = EINVAL;
+			}
+
+			return;
+		}
 
 		long ret = 0;
 
@@ -161,5 +370,15 @@ namespace kernel::x86_64::hal {
 		regs->rdx = SyscallManager::horizonSyscalls[regs->rax](&ret, regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9);
 
 		regs->rax = ret;
+
+		deliverPendingSignal(regs);
+	}
+
+	void deliverPendingSignal(Frame *frame) {
+		deliverSignal(Scheduler::getCurrentThread(), frame);
+	}
+
+	void deliverPendingSignal(SyscallRegs *regs) {
+		deliverSignal(Scheduler::getCurrentThread(), regs);
 	}
 }

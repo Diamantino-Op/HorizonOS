@@ -1,6 +1,7 @@
 #include "X86VirtualMemory.hpp"
 
 #include "Main.hpp"
+#include "hal/Syscall.hpp"
 #include "memory/MainMemory.hpp"
 #include "utils/Asm.hpp"
 
@@ -135,6 +136,65 @@ namespace kernel::common::memory {
 		if (not isKernel) {
 			this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 		}
+	}
+
+	bool PageMap::protectPage(const u64 vAddr, const u8 prot) {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
+		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
+		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
+		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
+		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
+
+		PageTable *lvl4Table = nullptr;
+
+		if (this->isLevel5Paging) {
+			auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
+			if (!lvl5Table->entries[lvl5].present) {
+				return false;
+			}
+
+			lvl4Table = reinterpret_cast<PageTable *>((lvl5Table->entries[lvl5].address << 12) + CommonMain::getCurrentHhdm());
+		} else {
+			lvl4Table = reinterpret_cast<PageTable *>(this->pageTable);
+		}
+
+		if (!lvl4Table->entries[lvl4].present) {
+			return false;
+		}
+
+		auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + CommonMain::getCurrentHhdm());
+		if (!lvl3Table->entries[lvl3].present) {
+			return false;
+		}
+
+		PageEntry *targetEntry = nullptr;
+
+		if (lvl3Table->entries[lvl3].size) {
+			targetEntry = &lvl3Table->entries[lvl3];
+		} else {
+			auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
+			if (!lvl2Table->entries[lvl2].present) {
+				return false;
+			}
+
+			if (lvl2Table->entries[lvl2].size) {
+				targetEntry = &lvl2Table->entries[lvl2];
+			} else {
+				auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
+				if (!lvl1Table->entries[lvl1].present) {
+					return false;
+				}
+
+				targetEntry = &lvl1Table->entries[lvl1];
+			}
+		}
+
+		targetEntry->present = prot != PROT_NONE;
+		targetEntry->writeable = (prot & PROT_WRITE) != 0;
+		targetEntry->userAccess = 1;
+		targetEntry->executeDisable = (prot & PROT_EXEC) == 0;
+
+		return true;
 	}
 
 	u64 PageMap::getPhysAddress(const u64 vAddr) const {

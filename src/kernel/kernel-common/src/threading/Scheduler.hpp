@@ -10,6 +10,8 @@ namespace kernel::common::threading {
     using namespace memory;
 
     constexpr u8 maxTicks = 50; // 50ms with PIT at 1kHz
+	constexpr usize signalActionCount = 64;
+	constexpr usize signalMaskWordCount = 16;
 
     enum ThreadState {
         READY,
@@ -33,6 +35,35 @@ namespace kernel::common::threading {
 		MACOS = 3
 	};
 
+    struct SignalAction {
+        u64 handler {};
+        u64 flags {};
+        u64 restorer {};
+        u64 mask[signalMaskWordCount] {};
+    };
+
+	struct SignalContext {
+	    u64 rax {};
+	    u64 rbx {};
+	    u64 rcx {};
+	    u64 rdx {};
+	    u64 rsi {};
+	    u64 rdi {};
+	    u64 r8 {};
+	    u64 r9 {};
+	    u64 r10 {};
+	    u64 r11 {};
+	    u64 r12 {};
+	    u64 r13 {};
+	    u64 r14 {};
+	    u64 r15 {};
+	    u64 rip {};
+	    u64 rFlags {};
+	    u64 rsp {};
+	    u64 cs {};
+	    u64 ss {};
+    };
+
     class Process;
 	class Scheduler;
 
@@ -52,6 +83,16 @@ namespace kernel::common::threading {
 
         void setWaitingPort(u64 port);
         u64 getWaitingPort() const;
+
+            void queueSignal(u64 signal);
+            bool hasPendingSignal() const;
+            u64 getPendingSignal() const;
+            bool hasSignalFrame() const;
+            void setSignalFrame(const SignalContext &frame);
+            const SignalContext &getSignalFrame() const;
+                    void clearPendingSignal();
+                    void clearSignalFrame();
+            void clearSignalState();
 
     	void setStackPointer(u64 newStackPointer);
     	u64 *getStackPointer();
@@ -76,6 +117,11 @@ namespace kernel::common::threading {
 
         u64 sleepNs {};
         u64 waitingPort {};
+
+            bool signalPending {};
+            u64 pendingSignal {};
+            bool signalFrameValid {};
+            SignalContext signalFrame {};
 
         u64 *context {};
 
@@ -131,6 +177,7 @@ namespace kernel::common::threading {
     	PRIDAllocator pridAllocator {};
 
     	u64 topmostMappedPage {};
+        SignalAction signalActions[signalActionCount] {};
     };
 
     class ExecutionNode {
