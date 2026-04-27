@@ -70,7 +70,7 @@ namespace kernel::common::hal {
 				return EINVAL;
 			}
 
-			CommonMain::getTerminal()->debug("AB: %ld, %ld", "User", ts->tv_sec, ts->tv_nsec);
+			CommonMain::getTerminal()->debug("AB", "User");
 
 			const u64 sec = static_cast<u64>(ts->tv_sec);
 			const u64 nsec = static_cast<u64>(ts->tv_nsec);
@@ -290,7 +290,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, const u64 stackBase, const u64 stackSize, u64, u64) {
+	u64 SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, u64, u64, u64, u64) {
 		// TODO: Check
 
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
@@ -305,7 +305,7 @@ namespace kernel::common::hal {
 			return ESRCH;
 		}
 
-		auto *newThread = new Thread(scheduler, process, entryFun, true, stack, false, ThreadOS::HORIZONOS, stackBase, stackSize);
+		auto *newThread = new Thread(scheduler, process, entryFun, true, stack);
 		newThread->setState(ThreadState::READY);
 
 		const bool prevIF = scheduler->getSchedLock()->lock();
@@ -869,11 +869,8 @@ namespace kernel::common::hal {
 
 		CommonMain::getTerminal()->debug("C", "User");
 
-		const auto *userTs = reinterpret_cast<const SleepTimespec *>(ts);
-		const SleepTimespec tsCopy = *userTs;
-
 		u64 sleepNs = 0;
-		const int err = timespecToNs(&tsCopy, &sleepNs);
+		const int err = timespecToNs(reinterpret_cast<const SleepTimespec *>(ts), &sleepNs);
 		if (err != 0) {
 			if (ret != nullptr) {
 				*ret = -1;

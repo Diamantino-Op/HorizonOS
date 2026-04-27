@@ -70,7 +70,7 @@ namespace kernel::common::threading {
     class Thread {
     public:
 		explicit Thread(Process* parent, u64 *context);
-        explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false, ThreadOS os = ThreadOS::HORIZONOS, u64 userStackBase = 0, u64 userStackSize = 0);
+    	explicit Thread(Scheduler *scheduler, Process* parent, u64 rip, bool isUser, u64 rsp = 0, bool is32Bit = false, ThreadOS os = ThreadOS::HORIZONOS);
         ~Thread();
 
     	void deleteThreadArch() const;
@@ -347,7 +347,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The address of the created context.
 		 */
-    u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0, u64 userStackBase = 0, u64 userStackSize = 0);
+		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0);
 
     	bool hasThreads() const;
 

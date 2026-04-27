@@ -1,4 +1,0 @@
-[submodule "src/libs/mlibc"]
-	path = src/libs/mlibc
-	url = https://github.com/Diamantino-Op/mlibc.git
-	branch = horizon-mlibc

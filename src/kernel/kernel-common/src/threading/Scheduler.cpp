@@ -11,8 +11,8 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit, const ThreadOS os, const u64 userStackBase, const u64 userStackSize) : parent(parent), bit32(is32Bit), os(os) {
-		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userStackBase, userStackSize);
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os) {
+		this->context = scheduler->createContext(this, parent, isUser, rip, rsp);
 
 		this->id = TIDAllocator::allocTID();
 	}
@@ -505,13 +505,11 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.addStart(thread);
 		}
 
-		if (shouldReschedule) {
-			this->getCurrentExecutionNode()->setPendingSchedUnlock(prevIF);
-			ExecutionNode::reSchedule();
-			return;
-		}
-
 		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
+		}
 	}
 
 	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
@@ -531,13 +529,11 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.addStart(thread);
 		}
 
-		if (shouldReschedule) {
-			this->getCurrentExecutionNode()->setPendingSchedUnlock(prevIF);
-			ExecutionNode::reSchedule();
-			return;
-		}
-
 		this->schedLock.unlock(prevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
+		}
 	}
 
 	void Scheduler::blockThread(const u16 threadId) {

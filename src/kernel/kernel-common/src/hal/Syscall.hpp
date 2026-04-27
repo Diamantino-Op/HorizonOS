@@ -83,7 +83,7 @@ namespace kernel::common::hal {
     	static u64 syscallKillThread(long *ret, u64 pid, u64 tid, u64 sig, u64, u64, u64);
     	static u64 syscallPause(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallThreadExit(long *, u64, u64, u64, u64, u64, u64);
-        static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64 stackBase, u64 stackSize, u64, u64);
+    	static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64);
     	static u64 syscallSendMsg(long *ret, u64 port, u64 msgHdr, u64, u64, u64, u64);
     	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64, u64, u64, u64);
     	static u64 syscallRegisterPort(long *ret, u64 port, u64, u64, u64, u64, u64);
