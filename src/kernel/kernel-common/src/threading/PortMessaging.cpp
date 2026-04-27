@@ -3,10 +3,12 @@
 #include "CommonMain.hpp"
 #include "ErrNo.hpp"
 #include "memory/MainMemory.hpp"
+#include "utils/Asm.hpp" // Added for Asm::sti() and Asm::cli()
 
 namespace kernel::common::threading {
     using namespace kernel::common::hal;
     using namespace kernel::common::memory;
+    using namespace kernel::x86_64::utils; // Added for Asm::sti() and Asm::cli()
 
     TicketSpinLock PortMessaging::portLock {};
 
@@ -230,7 +232,15 @@ namespace kernel::common::threading {
 
             entry->lock.unlock(portPrevIF);
 
+            // Temporarily enable interrupts before blocking to allow the APIC timer to fire.
+            // This is crucial for the scheduler to unblock this thread or schedule others.
+            Asm::sti(); // Enable interrupts
+
             CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());
+
+            // Disable interrupts again after returning from blockThread,
+            // to maintain the syscall's disabled-interrupt context.
+            Asm::cli(); // Disable interrupts
         }
     }
 
@@ -255,8 +265,3 @@ namespace kernel::common::threading {
         portLock.unlock(prevIF);
     }
 }
-
-
-
-
-

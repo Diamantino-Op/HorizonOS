@@ -35,13 +35,15 @@ namespace kernel::x86_64::hal {
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
 		} else if (const IsrHandler *handler = &handlers[frame->intNo - 32]; handler->fun) {
-			handler->fun(handler->ctx);
+			const u32 ret = handler->fun(handler->ctx);
 
 			if ((frame->cs & 0x3) == 3) {
 				deliverPendingSignal(frame);
 			}
 
-			sendEOI(frame->intNo);
+			if (ret == 0) {
+				sendEOI(frame->intNo);
+			}
 		}
 	}
 
@@ -211,3 +213,4 @@ namespace kernel::x86_64::hal {
 		}
 	}
 }
+

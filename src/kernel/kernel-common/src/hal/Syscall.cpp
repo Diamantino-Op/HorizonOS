@@ -113,6 +113,7 @@ namespace kernel::common::hal {
 		horizonSyscalls[19] = &syscallSigreturn;
 		horizonSyscalls[20] = &syscallMProtect;
 		horizonSyscalls[21] = &syscallNanoSleep;
+		horizonSyscalls[22] = &syscallIsaTTY;
 
 		initArch();
 	}
@@ -293,6 +294,8 @@ namespace kernel::common::hal {
 	u64 SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, u64, u64, u64, u64) {
 		// TODO: Check
 
+		CommonMain::getTerminal()->debug("New Thread: Stack: 0x%.16lx", "Syscall Manager", stack);
+
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		const auto *currentThread = Scheduler::getCurrentThread();
 		auto *process = currentThread != nullptr ? currentThread->getParent() : nullptr;
@@ -305,7 +308,7 @@ namespace kernel::common::hal {
 			return ESRCH;
 		}
 
-		auto *newThread = new Thread(scheduler, process, entryFun, true, stack);
+		auto *newThread = new Thread(scheduler, process, entryFun, true, 0, stack);
 		newThread->setState(ThreadState::READY);
 
 		const bool prevIF = scheduler->getSchedLock()->lock();
@@ -763,6 +766,8 @@ namespace kernel::common::hal {
 			*ret = 0;
 		}
 
+		CommonMain::getTerminal()->debug("Memprotect: Prot: %lu, Size: %lu, Addr: 0x%.16lx", "Syscall Manager", prot, size, pointer);
+
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
 
@@ -897,6 +902,11 @@ namespace kernel::common::hal {
 			*ret = 0;
 		}
 
+		return 0;
+	}
+
+	u64 SyscallManager::syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64) {
+		// TODO: Unstub
 		return 0;
 	}
 }

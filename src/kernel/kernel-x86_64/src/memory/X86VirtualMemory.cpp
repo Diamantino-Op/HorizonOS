@@ -264,7 +264,11 @@ namespace kernel::common::memory {
 
 			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF;
 		} else {
-			this->setPageFlags(reinterpret_cast<u64 *>(&parentTable->entries[index]), flags);
+			// TODO: Maybe add more flags
+			auto *pageEntry = &parentTable->entries[index];
+            pageEntry->writeable |= (flags >> 1) & 1;
+            pageEntry->userAccess |= (flags >> 2) & 1;
+			parentTable->entries[index].executeDisable &= noExec;
 		}
 
 		return reinterpret_cast<u64 *>((parentTable->entries[index].address << 12) + CommonMain::getCurrentHhdm());

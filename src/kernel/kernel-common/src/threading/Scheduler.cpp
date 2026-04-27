@@ -11,8 +11,8 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os) {
-		this->context = scheduler->createContext(this, parent, isUser, rip, rsp);
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os) {
+		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userRsp);
 
 		this->id = TIDAllocator::allocTID();
 	}

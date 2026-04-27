@@ -64,9 +64,11 @@ namespace kernel::common::threading {
 	}
 
 	u32 Scheduler::intReSchedule(u64 *) {
+		Interrupts::sendEOI(0x21);
+
 		ExecutionNode::reSchedule();
 
-		return 0;
+		return 1;
 	}
 
 	void ExecutionNode::reSchedule() {
@@ -201,15 +203,13 @@ namespace kernel::common::threading {
 		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->load();
 
 		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
-
-		Interrupts::sendEOI(0x21);
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {
 		return CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0];
 	}
 
-	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp) {
+	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp, const u64 userRsp) {
 		const u64 currPageMap = Asm::readCr3();
 
 		process->getProcessContextKernel()->pageMap.load();
@@ -232,28 +232,32 @@ namespace kernel::common::threading {
 		thread->setKStackPointer(newRsp);
 
 		if (isUser) {
-			const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadCtxStackSize + pageSize) * (prid + 1));
+			u64 userStack = userRsp;
 
-			const u64 startPage = alignDown<u64>(startAddr, pageSize);
-			const u64 endPage = alignUp<u64>(startPage + threadCtxStackSize, pageSize);
+			if (userRsp == 0) {
+				const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadCtxStackSize + pageSize) * (prid + 1));
 
-			for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-				const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+				const u64 startPage = alignDown<u64>(startAddr, pageSize);
+				const u64 endPage = alignUp<u64>(startPage + threadCtxStackSize, pageSize);
 
-				if (physPage != nullptr) {
-					process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
-				} else {
-					CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
+				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
+					const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+
+					if (physPage != nullptr) {
+						process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
+					} else {
+						CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
+					}
 				}
+
+				CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
+
+				context->userStackPointer = startPage;
+
+				userStack = startPage + threadCtxStackSize;
+
+				setUserStackAsm(&userStack);
 			}
-
-			CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
-
-			context->userStackPointer = startPage;
-
-			u64 userStack = startPage + threadCtxStackSize;
-
-			setUserStackAsm(&userStack);
 
 			if (thread->is32Bit()) {
 				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(&threadTrampoline32), rip, userStack);
