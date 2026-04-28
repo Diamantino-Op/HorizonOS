@@ -210,7 +210,7 @@ namespace kernel::x86_64 {
 			if (Elf::isElf(static_cast<ElfCommonHeader *>(moduleFile->address))) {
 				terminal.info("Loading module %u as ELF...", "HorizonOS", i);
 
-				auto *moduleProcess = new Process(ProcessPriority::VERY_HIGH, true);
+				auto *moduleProcess = new Process(ProcessPriority::NORMAL, true);
 				this->scheduler->addProcess(moduleProcess);
 
 				const u64 currPageMap = Asm::readCr3();

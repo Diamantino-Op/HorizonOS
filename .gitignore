@@ -18,6 +18,5 @@ Token.txt
 /deps/llvm
 /deps/uacpi
 
-/libs/mlibc
 /libs/sysroot
 /toolchain

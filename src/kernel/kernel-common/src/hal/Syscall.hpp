@@ -92,7 +92,7 @@ namespace kernel::common::hal {
         static u64 syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallSigaction(long *ret, u64 sig, u64 action, u64 oldAction, u64, u64, u64);
     	static u64 syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64);
-    	static u64 syscallNanoSleep(long *ret, u64 ts, u64, u64, u64, u64, u64);
+    	static u64 syscallNanoSleep(long *ret, u64 secs, u64 nanos, u64, u64, u64, u64);
     	static u64 syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64);
 
     private:

@@ -294,7 +294,7 @@ namespace kernel::common::threading {
 	Scheduler::Scheduler() {
 		this->addProcess(new Process(ProcessPriority::LOW, CommonMain::getInstance()->getKernelAllocContext()));
 
-		auto *reaperProcess = new Process(ProcessPriority::HIGH, CommonMain::getInstance()->getKernelAllocContext());
+		auto *reaperProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext());
 
 		this->addProcess(reaperProcess);
 

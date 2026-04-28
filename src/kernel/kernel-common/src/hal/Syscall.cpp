@@ -64,13 +64,9 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			CommonMain::getTerminal()->debug("AA", "User");
-
 			if (ts->tv_sec < 0 || ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L) {
 				return EINVAL;
 			}
-
-			CommonMain::getTerminal()->debug("AB", "User");
 
 			const u64 sec = static_cast<u64>(ts->tv_sec);
 			const u64 nsec = static_cast<u64>(ts->tv_nsec);
@@ -79,8 +75,6 @@ namespace kernel::common::hal {
 			if (sec > (maxValue - nsec) / 1000000000ULL) {
 				return EINVAL;
 			}
-
-			CommonMain::getTerminal()->debug("AC", "User");
 
 			*ns = sec * 1000000000ULL + nsec;
 			return 0;
@@ -381,7 +375,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64) {
+	u64 SyscallManager::syscallFutex(long *ret, const u64 pointer, const u64 type, const u64 expected, const u64 time, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -649,7 +643,7 @@ namespace kernel::common::hal {
 		}
 	}
 
-	u64 SyscallManager::syscallSigaction(long *ret, u64 sig, u64 action, u64 oldAction, u64, u64, u64) {
+	u64 SyscallManager::syscallSigaction(long *ret, const u64 sig, const u64 action, const u64 oldAction, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -761,7 +755,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64) {
+	u64 SyscallManager::syscallMProtect(long *ret, const u64 pointer, const u64 size, const u64 prot, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -843,15 +837,13 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallNanoSleep(long *ret, u64 ts, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallNanoSleep(long *ret, const u64 secs, const u64 nanos, u64, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
-
-		CommonMain::getTerminal()->debug("A", "User");
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
 			if (ret != nullptr) {
@@ -861,21 +853,13 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		CommonMain::getTerminal()->debug("B", "User");
-
-		const AllocContext *ctx = thread->getParent()->getProcessContext();
-		if (!isValidUserRange(ctx, ts, sizeof(SleepTimespec))) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
-			return EFAULT;
-		}
-
-		CommonMain::getTerminal()->debug("C", "User");
+		const SleepTimespec ts = {
+			.tv_sec = static_cast<long>(secs),
+			.tv_nsec = static_cast<long>(nanos)
+		};
 
 		u64 sleepNs = 0;
-		const int err = timespecToNs(reinterpret_cast<const SleepTimespec *>(ts), &sleepNs);
+		const int err = timespecToNs(&ts, &sleepNs);
 		if (err != 0) {
 			if (ret != nullptr) {
 				*ret = -1;
@@ -884,8 +868,6 @@ namespace kernel::common::hal {
 			return err;
 		}
 
-		CommonMain::getTerminal()->debug("D", "User");
-
 		if (sleepNs == 0) {
 			if (ret != nullptr) {
 				*ret = 0;
@@ -893,8 +875,6 @@ namespace kernel::common::hal {
 
 			return 0;
 		}
-
-		CommonMain::getTerminal()->debug("E", "User");
 
 		scheduler->sleepThread(thread, sleepNs);
 
