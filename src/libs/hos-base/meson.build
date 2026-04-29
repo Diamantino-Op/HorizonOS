@@ -8,7 +8,9 @@ sh = find_program('sh', required: true)
 deps_proj = subproject('horizon_deps')
 
 freestnd_c_hdrs_dep = deps_proj.get_variable('freestnd_c_hdrs_dep')
+chdrs_inc = deps_proj.get_variable('chdrs_inc')
 freestnd_cxx_hdrs_dep = deps_proj.get_variable('freestnd_cxx_hdrs_dep')
+cxxhdrs_inc = deps_proj.get_variable('cxxhdrs_inc')
 
 hos_base_inc = include_directories('src')
 
@@ -16,7 +18,11 @@ hos_base_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(get_option('globber_
 
 hos_base_lib = static_library('hos_base',
                               hos_base_src,
-                              include_directories: hos_base_inc,
+                              include_directories: [
+                                  hos_base_inc,
+                                  chdrs_inc,
+                                  cxxhdrs_inc
+                              ],
                               dependencies: [
                                   freestnd_c_hdrs_dep,
                                   freestnd_cxx_hdrs_dep

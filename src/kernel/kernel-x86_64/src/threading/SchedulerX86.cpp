@@ -28,6 +28,8 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::initArch() {
+		Interrupts::setHandler(0x21, intReSchedule, nullptr);
+
 		const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
 
 		if (hpet->getMaxTimers() == 0) {
@@ -55,8 +57,6 @@ namespace kernel::common::threading {
 		Interrupts::setHandler(0x2c, sleepTick, nullptr);
 
 		Interrupts::unmask(0x2c);
-
-		Interrupts::setHandler(0x21, intReSchedule, nullptr);
 	}
 
 	Thread *Scheduler::getCurrentThread() {
@@ -196,7 +196,12 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
+		// TODO
+
+		// CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
+
+		this->consumePendingSchedUnlock();
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(true);
 	}
 
 	void ExecutionNode::loadNewThread() const {

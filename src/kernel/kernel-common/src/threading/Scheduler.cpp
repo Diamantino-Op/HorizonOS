@@ -299,6 +299,12 @@ namespace kernel::common::threading {
 		this->addProcess(reaperProcess);
 
 		this->addThread(false, reinterpret_cast<u64>(&reaperFunction), reaperProcess);
+
+		auto *terminalProcess = new Process(ProcessPriority::VERY_HIGH, CommonMain::getInstance()->getKernelAllocContext());
+
+		this->addProcess(terminalProcess);
+
+		this->addThread(false, reinterpret_cast<u64>(&terminalThreadFunction), terminalProcess);
 	}
 
 	Process *Scheduler::getProcess(const u16 pid) {

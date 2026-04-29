@@ -1,7 +1,7 @@
 #ifndef LIB_HOS_BASE_LINKEDLIST_HPP
 #define LIB_HOS_BASE_LINKEDLIST_HPP
 
-#import "Types.hpp"
+#include "Types.hpp"
 #include "SpinLock.hpp"
 
 template<class T>

@@ -152,50 +152,110 @@ namespace kernel::common {
 	}
 
 	void Terminal::info(const char *format, const char *id, ...) {
-		const bool prevIF = this->lock();
+		if (this->isThreaded) {
+			TermMsg message {};
 
-		this->printf(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+			message.type = MessageType::INFO;
 
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
-		va_end(val);
+			for (usize i = 0; i < maxMsgIDLength - 1 && id[i] != '\0'; ++i) {
+				message.id[i] = id[i];
+				message.id[i+1] = '\0';
+			}
 
-		this->printf(true, "\033[0m");
+			va_list args;
+			va_start(args, id);
 
-		this->unlock(prevIF);
+			npf_vsnprintf(message.msg, maxMsgLength, format, args);
+
+			va_end(args);
+
+			this->msgQueue.push(message);
+		} else {
+			const bool prevIF = this->lock();
+
+			this->printf(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+
+			va_list val;
+			va_start(val, id);
+			npf_vpprintf(putChar, nullptr, format, val);
+			va_end(val);
+
+			this->printf(true, "\033[0m");
+
+			this->unlock(prevIF);
+		}
 	}
 
 	void Terminal::debug(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
-		const bool prevIF = this->lock();
+		if (this->isThreaded) {
+			TermMsg message {};
 
-		this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+			message.type = MessageType::DEBUG;
 
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putCharE9, nullptr, format, val);
-		va_end(val);
+			for (usize i = 0; i < maxMsgIDLength - 1 && id[i] != '\0'; ++i) {
+				message.id[i] = id[i];
+				message.id[i+1] = '\0';
+			}
 
-		this->printfE9(true, "\033[0m");
+			va_list args;
+			va_start(args, id);
 
-		this->unlock(prevIF);
+			npf_vsnprintf(message.msg, maxMsgLength, format, args);
+
+			va_end(args);
+
+			this->msgQueue.push(message);
+		} else {
+			const bool prevIF = this->lock();
+
+			this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+
+			va_list val;
+			va_start(val, id);
+			npf_vpprintf(putCharE9, nullptr, format, val);
+			va_end(val);
+
+			this->printfE9(true, "\033[0m");
+
+			this->unlock(prevIF);
+		}
 #endif
 	}
 
 	void Terminal::warn(const char *format, const char *id, ...) {
-		const bool prevIF = this->lock();
+		if (this->isThreaded) {
+			TermMsg message {};
 
-		this->printf(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+			message.type = MessageType::WARN;
 
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putChar, nullptr, format, val);
-		va_end(val);
+			for (usize i = 0; i < maxMsgIDLength - 1 && id[i] != '\0'; ++i) {
+				message.id[i] = id[i];
+				message.id[i+1] = '\0';
+			}
 
-		this->printf(true, "\033[0m");
+			va_list args;
+			va_start(args, id);
 
-		this->unlock(prevIF);
+			npf_vsnprintf(message.msg, maxMsgLength, format, args);
+
+			va_end(args);
+
+			this->msgQueue.push(message);
+		} else {
+			const bool prevIF = this->lock();
+
+			this->printf(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+
+			va_list val;
+			va_start(val, id);
+			npf_vpprintf(putChar, nullptr, format, val);
+			va_end(val);
+
+			this->printf(true, "\033[0m");
+
+			this->unlock(prevIF);
+		}
 	}
 
 	void Terminal::warnNoLock(const char *format, const char *id, ...) {
@@ -210,18 +270,74 @@ namespace kernel::common {
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
-		const bool prevIF = this->lock();
+		if (this->isThreaded) {
+			TermMsg message {};
 
-		this->printfBoth(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+			message.type = MessageType::ERROR;
 
-		va_list val;
-		va_start(val, id);
-		npf_vpprintf(putCharBoth, nullptr, format, val);
-		va_end(val);
+			for (usize i = 0; i < maxMsgIDLength - 1 && id[i] != '\0'; ++i) {
+				message.id[i] = id[i];
+				message.id[i+1] = '\0';
+			}
 
-		this->printfBoth(true, "\033[0m");
+			va_list args;
+			va_start(args, id);
 
-		this->unlock(prevIF);
+			npf_vsnprintf(message.msg, maxMsgLength, format, args);
+
+			va_end(args);
+
+			this->msgQueue.push(message);
+		} else {
+			const bool prevIF = this->lock();
+
+			this->printfBoth(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+
+			va_list val;
+			va_start(val, id);
+			npf_vpprintf(putCharBoth, nullptr, format, val);
+			va_end(val);
+
+			this->printfBoth(true, "\033[0m");
+
+			this->unlock(prevIF);
+		}
+	}
+
+	void terminalThreadFunction() {
+		Terminal *terminal = CommonMain::getTerminal();
+
+		terminal->isThreaded = true;
+
+		terminal->msgQueue.init();
+
+		for (;;) {
+			TermMsg message {};
+
+			if (terminal->msgQueue.pop(message)) {
+				switch (message.type) {
+					case MessageType::DEBUG:
+						terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+
+						break;
+
+					case MessageType::INFO:
+						terminal->printf(true, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+
+						break;
+
+					case MessageType::WARN:
+						terminal->printf(true, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+
+						break;
+
+					case MessageType::ERROR:
+						terminal->printfBoth(true, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+
+						break;
+				}
+			}
+		}
 	}
 
 	/*char* Terminal::getFormat(const char* mainFormat, ...) {

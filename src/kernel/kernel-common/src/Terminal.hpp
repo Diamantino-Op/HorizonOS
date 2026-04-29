@@ -7,11 +7,28 @@
 #include "flanterm.h"
 
 #include "SpinLock.hpp"
-
+#include "LFQueue.hpp"
 #include "threading/Scheduler.hpp"
 
 namespace kernel::common {
     using namespace threading;
+
+	constexpr u64 maxMsgLength = 256;
+	constexpr u64 maxMsgIDLength = 64;
+	constexpr u64 maxMessages = 1024;
+
+	enum MessageType {
+		DEBUG,
+		INFO,
+		WARN,
+		ERROR
+	};
+
+	struct TermMsg {
+		MessageType type;
+		char id[maxMsgIDLength];
+		char msg[maxMsgLength];
+	};
 
     class Terminal {
     public:
@@ -43,9 +60,15 @@ namespace kernel::common {
     private:
         static flanterm_context *flantermCtx;
 
-
         TicketSpinLock spinLock;
+
+    public:
+    	LFQueue<TermMsg, maxMessages> msgQueue;
+
+    	bool isThreaded = false;
     };
+
+	__attribute__((no_instrument_function, noreturn)) void terminalThreadFunction();
 }
 
 #endif

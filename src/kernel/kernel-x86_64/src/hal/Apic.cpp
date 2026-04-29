@@ -9,6 +9,10 @@
 #include "utils/CpuId.hpp"
 
 namespace kernel::x86_64::hal {
+	namespace {
+		u64 sharedLapicMmio {};
+	}
+
 	using namespace common;
 	using namespace common::utils;
 	using namespace utils;
@@ -43,12 +47,19 @@ namespace kernel::x86_64::hal {
 		if (not this->isX2Apic) {
 			if (isBsp) {
 				this->mmio = reinterpret_cast<u64>(CommonMain::getInstance()->getVPA()->allocVPages(1));
+				sharedLapicMmio = this->mmio;
 
 				terminal->debug("Mapping Apic at address:", "Apic");
 				terminal->debug("	Phys: 0x%.16lx", "Apic", this->physMmio);
 				terminal->debug("	Virt: 0x%.16lx", "Apic", this->mmio);
 
 				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, this->physMmio, 0b00000011, true, false); // TODO: Maybe use MMIO flags
+			} else {
+				this->mmio = sharedLapicMmio;
+
+				if (this->mmio == 0) {
+					terminal->error("Bootstrap LAPIC MMIO mapping not initialized yet", "Apic");
+				}
 			}
 		}
 
@@ -70,11 +81,7 @@ namespace kernel::x86_64::hal {
 
 	void Apic::calibrateTimer() {
 		if (this->tscDeadline) {
-			CommonMain::getTerminal()->debug("Using TSC deadline!", "Apic");
-
-			this->calibrated = true;
-
-			return;
+			CommonMain::getTerminal()->debug("TSC deadline supported; calibrating LAPIC periodic timer too", "Apic");
 		}
 
 		u64 freq = 0;
@@ -158,9 +165,9 @@ namespace kernel::x86_64::hal {
 		if (this->tscDeadline and not periodic) {
 			const u64 tscVal = CpuManager::getCurrentCore()->tsc.read();
 
-			auto [p, n] = CpuManager::getCurrentCore()->tsc.getPN();
+			auto [periodP, periodN] = CpuManager::getCurrentCore()->tsc.getPN();
 
-			u64 tscTicks = ns2Ticks(ns, p, n);
+			const u64 tscTicks = ns2Ticks(ns, periodP, periodN);
 
 			this->write(ApicMsrs::LAPIC_LVT, (0b10 << 17) | vector);
 
@@ -212,8 +219,8 @@ namespace kernel::x86_64::hal {
 		}
 	}
 
-	void Apic::setId(const u32 apicId) {
-		this->apicId = apicId;
+	void Apic::setId(const u32 newApicId) {
+		this->apicId = newApicId;
 	}
 
 	u32 Apic::getId() const {
