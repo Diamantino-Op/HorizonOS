@@ -15,6 +15,10 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
+	namespace {
+		constexpr u8 priorityWeights[ProcessPriority::COUNT] = {8, 4, 2, 1};
+	}
+
 	void idleThreadFun() {
 		for (;;) {
 			asm volatile ("pause" ::: "memory");
@@ -163,17 +167,55 @@ namespace kernel::common::threading {
 			this->currentThread->value->setState(ThreadState::RUNNING);
 		} else {
 			LinkedListEntry<Thread> *selectedEntry = nullptr;
+			bool hasRunnableQueue = false;
+			bool hasQueueWithCredit = false;
 
-			for (LinkedList<Thread>& currQueue : schedulerPtr->queues) {
-				if (currQueue.getSize() > 0) {
+			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+				if (schedulerPtr->queues[priority].getSize() > 0) {
+					hasRunnableQueue = true;
+
+					if (this->priorityCredits[priority] > 0) {
+						hasQueueWithCredit = true;
+					}
+				} else {
+					this->priorityCredits[priority] = 0;
+				}
+			}
+
+			if (hasRunnableQueue && !hasQueueWithCredit) {
+				for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+					if (schedulerPtr->queues[priority].getSize() > 0) {
+						this->priorityCredits[priority] = priorityWeights[priority];
+					} else {
+						this->priorityCredits[priority] = 0;
+					}
+				}
+			}
+
+			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+				LinkedList<Thread> &currQueue = schedulerPtr->queues[priority];
+
+				if (currQueue.getSize() > 0 && this->priorityCredits[priority] > 0) {
 					selectedEntry = currQueue.removeFirstEntry();
+					this->priorityCredits[priority]--;
 
 					break;
 				}
 			}
 
 			if (selectedEntry == nullptr) {
-				selectedEntry = this->idleThread;
+				if (hasRunnableQueue) {
+					for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+						if (schedulerPtr->queues[priority].getSize() > 0) {
+							selectedEntry = schedulerPtr->queues[priority].removeFirstEntry();
+							this->priorityCredits[priority] = priorityWeights[priority] - 1;
+
+							break;
+						}
+					}
+				} else {
+					selectedEntry = this->idleThread;
+				}
 			}
 
 			this->currentThread = selectedEntry;

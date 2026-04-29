@@ -213,6 +213,7 @@ namespace kernel::common::threading {
 		bool isDisabledFlag {};
         bool pendingSchedUnlock {};
         bool pendingSchedUnlockIF {};
+		u8 priorityCredits[ProcessPriority::COUNT] {};
 
         LinkedListEntry<Thread> *idleThread {};
         LinkedListEntry<Thread> *currentThread {};
