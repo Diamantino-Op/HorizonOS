@@ -14,7 +14,6 @@ namespace kernel::common::memory {
 		AllocContext *ctx = nullptr;
 
 		const u64 kernelEnd = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
-
 		const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
 
 		ctx = reinterpret_cast<AllocContext *>(ctxPage);
@@ -24,7 +23,6 @@ namespace kernel::common::memory {
 		ctx->pageFlags = 0b00000011;
 
 		ctx->heapStart = reinterpret_cast<u64 *>(kernelEnd + sizeof(AllocContext));
-
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
 
 		u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
@@ -38,7 +36,6 @@ namespace kernel::common::memory {
 
 	CreatedContext VirtualAllocator::createProcessContext() {
 		const u64 tmpValue = startCreateArch();
-
 		const u64 processAddr = getProcessAllocStart();
 
 		AllocContext *ctx = nullptr;
@@ -56,7 +53,6 @@ namespace kernel::common::memory {
 		ctx->pageFlags = 0b00000011;
 
 		ctx->heapStart = reinterpret_cast<u64 *>(processAddr + pageSize + sizeof(AllocContext));
-
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
 
 		const u64 pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
@@ -66,7 +62,6 @@ namespace kernel::common::memory {
 		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx, true); // , not ctx->isUserspace
 
 		shareKernelPages(ctx);
-
 		initContext(ctx);
 
 		ctx->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags, false, false);
@@ -95,6 +90,10 @@ namespace kernel::common::memory {
 	void VirtualAllocator::initContext(AllocContext *ctx) {
 		memset(ctx->heapStart, 0, ctx->heapSize);
 
+		for (usize i = 0; i < SIZE_CLASS_COUNT; i++) {
+			ctx->freeLists[i] = nullptr;
+		}
+
 		CommonMain::getTerminal()->debug("MemoryBlock size: %lu", "VirtualAllocator", sizeof(MemoryBlock));
 		CommonMain::getTerminal()->debug("Heap start: 0x%.16lx", "VirtualAllocator", ctx->heapStart);
 
@@ -103,7 +102,11 @@ namespace kernel::common::memory {
 		ctx->blocks->free = true;
 		ctx->blocks->next = nullptr;
 		ctx->blocks->prev = nullptr;
+		ctx->blocks->freeNext = nullptr;
+		ctx->blocks->freePrev = nullptr;
 		ctx->lastBlock = ctx->blocks;
+
+		insertFreeList(ctx, ctx->blocks);
 	}
 
 	u64 VirtualAllocator::getPhysicalAddress(const u64 virtualAddress) {
@@ -126,38 +129,56 @@ namespace kernel::common::memory {
 			growHeap(ctx, alignedSize + (sizeof(MemoryBlock) * 2), isUserAlloc);
 		}
 
-		MemoryBlock* current = ctx->blocks;
+		const usize startClass = getSizeClassIndex(alignedSize);
 
-		while (current != nullptr) {
-			if (current->free and current->size >= alignedSize) {
-				if (current->size >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
-					auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
+		for (usize classIdx = startClass; classIdx < SIZE_CLASS_COUNT; classIdx++) {
+			MemoryBlock* current = ctx->freeLists[classIdx];
 
-					newBlock->size = current->size - alignedSize - sizeof(MemoryBlock);
-					newBlock->free = true;
-					newBlock->next = current->next;
-					newBlock->prev = current;
-					if (newBlock->next != nullptr) {
-						newBlock->next->prev = newBlock;
+			while (current != nullptr) {
+				if (current->size >= alignedSize) {
+					const usize originalSize = current->size;
+
+					removeFreeList(ctx, current);
+
+					if (originalSize >= alignedSize + sizeof(MemoryBlock) + minBlockSize) {
+						auto* newBlock = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock) + alignedSize);
+
+						newBlock->size = originalSize - alignedSize - sizeof(MemoryBlock);
+						newBlock->free = true;
+						newBlock->next = current->next;
+						newBlock->prev = current;
+						newBlock->freeNext = nullptr;
+						newBlock->freePrev = nullptr;
+
+						if (newBlock->next != nullptr) {
+							newBlock->next->prev = newBlock;
+						} else {
+							ctx->lastBlock = newBlock;
+						}
+
+						current->next = newBlock;
+						current->size = alignedSize;
+
+						ctx->freeSpace -= sizeof(MemoryBlock);
+						ctx->freeSpace -= alignedSize;
+
+						insertFreeList(ctx, newBlock);
 					} else {
-						ctx->lastBlock = newBlock;
+						ctx->freeSpace -= originalSize;
 					}
-					current->next = newBlock;
 
-					ctx->freeSpace -= sizeof(MemoryBlock);
+					current->free = false;
+					//current->size = alignedSize;
+
+					//ctx->freeSpace -= alignedSize;
+
+					ctx->lock.unlock(prevIF);
+
+					return reinterpret_cast<u64 *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock));
 				}
 
-				current->free = false;
-				current->size = alignedSize;
-
-				ctx->freeSpace -= alignedSize;
-
-				ctx->lock.unlock(prevIF);
-
-				return reinterpret_cast<u64 *>(reinterpret_cast<u64>(current) + sizeof(MemoryBlock));
+				current = current->freeNext;
 			}
-
-			current = current->next;
 		}
 
 		if (CommonMain::getInstance()->getPMM()->getFreeMemory() < alignedSize + sizeof(MemoryBlock)) {
@@ -197,7 +218,13 @@ namespace kernel::common::memory {
 	}
 
 	void VirtualAllocator::defrag(AllocContext *ctx, MemoryBlock *block) {
-		if (block->prev != nullptr and block->prev->free) {
+		if (block == nullptr) {
+			return;
+		}
+
+		if (block->prev != nullptr and block->prev->free and areAdjacent(block->prev, block)) {
+			removeFreeList(ctx, block->prev);
+
 			block->prev->size += block->size + sizeof(MemoryBlock);
 			block->prev->next = block->next;
 
@@ -212,34 +239,39 @@ namespace kernel::common::memory {
 			ctx->freeSpace += sizeof(MemoryBlock);
 		}
 
-		if (block->next != nullptr and block->next->free) {
-			block->size += block->next->size + sizeof(MemoryBlock);
+		if (block->next != nullptr and block->next->free and areAdjacent(block, block->next)) {
+			removeFreeList(ctx, block->next);
 
-			const MemoryBlock *tmpBlock = block->next;
-			MemoryBlock *newNext = tmpBlock->next;
+			const MemoryBlock *next = block->next;
+			
+			block->size += next->size + sizeof(MemoryBlock);
+			block->next = next->next;
 
-			if (newNext != nullptr) {
-				newNext->prev = block;
+			if (block->next != nullptr) {
+				block->next->prev = block;
 			} else {
 				ctx->lastBlock = block;
 			}
 
-			block->next = newNext;
-
 			ctx->freeSpace += sizeof(MemoryBlock);
 		}
+
+		block->freeNext = nullptr;
+		block->freePrev = nullptr;
+
+		insertFreeList(ctx, block);
 	}
 
 	void VirtualAllocator::growHeap(AllocContext *ctx, const u64 minSize, const bool isUserAlloc) {
 		const usize totalSize = minSize + sizeof(MemoryBlock);
 		const auto allocSize = alignUp<usize>(totalSize, pageSize);
 
-		auto baseAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize);
+		auto *baseAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize);
 
 		for (usize offset = 0; offset < allocSize; offset += pageSize) {
-			u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+			const u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
-			if (!newPage) {
+			if (newPage == nullptr) {
 				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
 
 				return;
@@ -254,12 +286,20 @@ namespace kernel::common::memory {
 		newBlock->size = allocSize - sizeof(MemoryBlock);
 		newBlock->free = true;
 		newBlock->next = nullptr;
+		newBlock->freeNext = nullptr;
+		newBlock->freePrev = nullptr;
 
 		MemoryBlock* last = ctx->lastBlock;
 
-		newBlock->prev = last;
-		last->next = newBlock;
-		ctx->lastBlock = newBlock;
+		if (last != nullptr) {
+			newBlock->prev = last;
+			last->next     = newBlock;
+			ctx->lastBlock = newBlock;
+		} else {
+			newBlock->prev = nullptr;
+			ctx->blocks    = newBlock;
+			ctx->lastBlock = newBlock;
+		}
 
 		ctx->heapSize += allocSize;
 		ctx->freeSpace += newBlock->size;
@@ -269,10 +309,14 @@ namespace kernel::common::memory {
 
 	void VirtualAllocator::shrinkHeap(AllocContext *ctx) {
 		MemoryBlock* current = ctx->lastBlock;
-		if (!current) return;
+
+		if (current == nullptr) {
+			return;
+		}
+
 		MemoryBlock* prev = current->prev;
 
-		if (not current or not current->free or current->size < pageSize) {
+		if (not current->free or current->size < pageSize) {
 			return;
 		}
 
@@ -285,15 +329,17 @@ namespace kernel::common::memory {
 			return;
 		}
 
+		removeFreeList(ctx, current);
+
 		for (usize i = 0; i < pagesToFree * pageSize; i += pageSize) {
-			const auto virtAddress = reinterpret_cast<u64 *>(blockStart + i);
+			auto *virtAddress = reinterpret_cast<u64 *>(blockStart + i);
 
 			ctx->pageMap.unMapPage(reinterpret_cast<u64>(virtAddress));
 
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, virtAddress, 1);
 		}
 
-		if (prev) {
+		if (prev != nullptr) {
 			prev->next = nullptr;
 			ctx->lastBlock = prev;
 		} else {
@@ -303,6 +349,57 @@ namespace kernel::common::memory {
 
 		ctx->heapSize -= pagesToFree * pageSize;
 		ctx->freeSpace -= pagesToFree * pageSize;
+	}
+
+	usize VirtualAllocator::getSizeClassIndex(const usize size) {
+		for (usize i = 0; i < SIZE_CLASS_COUNT; i++) {
+			if (size <= sizeClasses[i]) {
+				return i;
+			}
+		}
+
+		return SIZE_CLASS_COUNT - 1;
+	}
+
+	void VirtualAllocator::insertFreeList(AllocContext *ctx, MemoryBlock *block) {
+		const usize idx = getSizeClassIndex(block->size);
+
+		block->freeNext = ctx->freeLists[idx];
+		block->freePrev = nullptr;
+
+		if (ctx->freeLists[idx] != nullptr) {
+			ctx->freeLists[idx]->freePrev = block;
+		}
+
+		ctx->freeLists[idx] = block;
+	}
+
+	void VirtualAllocator::removeFreeList(AllocContext *ctx, MemoryBlock *block) {
+		const usize idx = getSizeClassIndex(block->size);
+
+		if (block->freePrev != nullptr) {
+			block->freePrev->freeNext = block->freeNext;
+		} else {
+			// block is the head of its class list
+			ctx->freeLists[idx] = block->freeNext;
+		}
+
+		if (block->freeNext != nullptr) {
+			block->freeNext->freePrev = block->freePrev;
+		}
+
+		block->freeNext = nullptr;
+		block->freePrev = nullptr;
+	}
+
+	bool VirtualAllocator::areAdjacent(const MemoryBlock *left, const MemoryBlock *right) {
+		if (left == nullptr || right == nullptr) {
+			return false;
+		}
+
+		const u64 expectedRight = reinterpret_cast<u64>(left) + sizeof(MemoryBlock) + left->size;
+
+		return expectedRight == reinterpret_cast<u64>(right);
 	}
 
 	void VirtualPageAllocator::init(const u64 kernAddr) {

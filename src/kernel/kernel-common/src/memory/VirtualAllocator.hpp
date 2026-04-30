@@ -1,8 +1,9 @@
 #ifndef KERNEL_COMMON_VIRTUALALLOCATOR_HPP
 #define KERNEL_COMMON_VIRTUALALLOCATOR_HPP
 
-#include "VirtualMemory.hpp"
 #include "SpinLock.hpp"
+#include "VirtualMemory.hpp"
+#include "cstdint"
 
 namespace kernel::common::memory {
     constexpr u8 minBlockSize = 64;
@@ -13,14 +14,19 @@ namespace kernel::common::memory {
 	constexpr usize hugePage1GCount = 512ULL * 512ULL;
 	constexpr usize hugePage2MCount = 512ULL;
 
-    struct __attribute__((aligned(16))) MemoryBlock {
+	constexpr usize SIZE_CLASS_COUNT = 9;
+	constexpr usize sizeClasses[SIZE_CLASS_COUNT] = {64, 128, 256, 512, 1024, 2048, 4096, 16384, SIZE_MAX};
+
+    struct __attribute__((aligned(64))) MemoryBlock {
+    	MemoryBlock *freePrev {};
     	MemoryBlock *prev {};
         usize size {};
         bool free {};
         MemoryBlock *next {};
+    	MemoryBlock *freeNext {};
     };
 
-    struct AllocContext {
+    struct __attribute__((aligned(64))) AllocContext {
         PageMap pageMap;
         u8 pageFlags {};
         u64 *heapStart {};
@@ -28,6 +34,7 @@ namespace kernel::common::memory {
         u64 freeSpace {};
         MemoryBlock *blocks {};
         MemoryBlock *lastBlock {};
+    	MemoryBlock *freeLists[SIZE_CLASS_COUNT] {};
         SimpleSpinLock lock {};
 
         bool isUserspace {};
@@ -73,6 +80,13 @@ namespace kernel::common::memory {
 
         static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);
+
+    	static usize getSizeClassIndex(usize size);
+
+    	static void insertFreeList(AllocContext *ctx, MemoryBlock *block);
+    	static void removeFreeList(AllocContext *ctx, MemoryBlock *block);
+
+    	static bool areAdjacent(const MemoryBlock *left, const MemoryBlock *right);
     };
 
     class VirtualPageAllocator {
