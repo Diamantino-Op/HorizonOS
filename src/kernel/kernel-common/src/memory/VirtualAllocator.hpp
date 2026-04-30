@@ -13,7 +13,8 @@ namespace kernel::common::memory {
 	constexpr usize hugePage1GCount = 512ULL * 512ULL;
 	constexpr usize hugePage2MCount = 512ULL;
 
-    struct __attribute__((aligned(64))) MemoryBlock {
+    struct __attribute__((aligned(16))) MemoryBlock {
+    	MemoryBlock *prev {};
         usize size {};
         bool free {};
         MemoryBlock *next {};
@@ -26,6 +27,7 @@ namespace kernel::common::memory {
         usize heapSize {};
         u64 freeSpace {};
         MemoryBlock *blocks {};
+        MemoryBlock *lastBlock {};
         SimpleSpinLock lock {};
 
         bool isUserspace {};
@@ -60,7 +62,7 @@ namespace kernel::common::memory {
         static u64 *alloc(AllocContext *ctx, u64 size, bool isUserAlloc = false);
         static void free(AllocContext *ctx, u64 *ptr);
 
-        static void defrag(AllocContext *ctx);
+        static void defrag(AllocContext *ctx, MemoryBlock *block);
 
     	static u64 getProcessAllocStart();
 

@@ -102,6 +102,8 @@ namespace kernel::common::memory {
 		ctx->freeSpace = ctx->blocks->size;
 		ctx->blocks->free = true;
 		ctx->blocks->next = nullptr;
+		ctx->blocks->prev = nullptr;
+		ctx->lastBlock = ctx->blocks;
 	}
 
 	u64 VirtualAllocator::getPhysicalAddress(const u64 virtualAddress) {
@@ -116,13 +118,13 @@ namespace kernel::common::memory {
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size, const bool isUserAlloc) {
 		const u64 alignedSize = alignUp<u64>(size, sizeof(MemoryBlock));
 
+		const bool prevIF = ctx->lock.lock();
+
+		allocStart:
+
 		if (ctx->freeSpace < alignedSize + sizeof(MemoryBlock)) {
 			growHeap(ctx, alignedSize + (sizeof(MemoryBlock) * 2), isUserAlloc);
 		}
-
-		const bool prevIF = ctx->lock.lock();
-
-		//const u64 alignedSize = alignUp<u64>(size, sizeof(MemoryBlock));
 
 		MemoryBlock* current = ctx->blocks;
 
@@ -134,6 +136,12 @@ namespace kernel::common::memory {
 					newBlock->size = current->size - alignedSize - sizeof(MemoryBlock);
 					newBlock->free = true;
 					newBlock->next = current->next;
+					newBlock->prev = current;
+					if (newBlock->next != nullptr) {
+						newBlock->next->prev = newBlock;
+					} else {
+						ctx->lastBlock = newBlock;
+					}
 					current->next = newBlock;
 
 					ctx->freeSpace -= sizeof(MemoryBlock);
@@ -160,9 +168,7 @@ namespace kernel::common::memory {
 
 		growHeap(ctx, alignedSize, isUserAlloc);
 
-		ctx->lock.unlock(prevIF);
-
-		return alloc(ctx, alignedSize);
+		goto allocStart;
 	}
 
 	// TODO: Maybe improve speed by defragging only the current block
@@ -176,11 +182,12 @@ namespace kernel::common::memory {
 		auto* block = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(ptr) - sizeof(MemoryBlock));
 		block->free = true;
 
-		memset(ptr, 0, block->size);
+		// TODO: Only do when freeing from user mem
+		//memset(ptr, 0, block->size);
 
 		ctx->freeSpace += block->size;
 
-		//defrag(ctx);
+		defrag(ctx, block);
 
 		/*if (ctx->heapSize > pageSize) {
 			shrinkHeap(ctx);
@@ -189,19 +196,37 @@ namespace kernel::common::memory {
 		ctx->lock.unlock(prevIF);
 	}
 
-	// Todo: Fix infinite loop
-	void VirtualAllocator::defrag(AllocContext *ctx) {
-		MemoryBlock* current = ctx->blocks;
+	void VirtualAllocator::defrag(AllocContext *ctx, MemoryBlock *block) {
+		if (block->prev != nullptr and block->prev->free) {
+			block->prev->size += block->size + sizeof(MemoryBlock);
+			block->prev->next = block->next;
 
-		while (current != nullptr and current->next != nullptr) {
-			if (current->free and current->next->free) {
-				current->size += sizeof(MemoryBlock) + current->next->size;
-				current->next = current->next->next;
-
-				ctx->freeSpace += sizeof(MemoryBlock);
+			if (block->next != nullptr) {
+				block->next->prev = block->prev;
 			} else {
-				current = current->next;
+				ctx->lastBlock = block->prev;
 			}
+
+			block = block->prev;
+
+			ctx->freeSpace += sizeof(MemoryBlock);
+		}
+
+		if (block->next != nullptr and block->next->free) {
+			block->size += block->next->size + sizeof(MemoryBlock);
+
+			const MemoryBlock *tmpBlock = block->next;
+			MemoryBlock *newNext = tmpBlock->next;
+
+			if (newNext != nullptr) {
+				newNext->prev = block;
+			} else {
+				ctx->lastBlock = block;
+			}
+
+			block->next = newNext;
+
+			ctx->freeSpace += sizeof(MemoryBlock);
 		}
 	}
 
@@ -230,36 +255,28 @@ namespace kernel::common::memory {
 		newBlock->free = true;
 		newBlock->next = nullptr;
 
-		MemoryBlock* last = ctx->blocks;
+		MemoryBlock* last = ctx->lastBlock;
 
-		while (last->next) {
-			last = last->next;
-		}
-
+		newBlock->prev = last;
 		last->next = newBlock;
+		ctx->lastBlock = newBlock;
 
 		ctx->heapSize += allocSize;
 		ctx->freeSpace += newBlock->size;
 
-		defrag(ctx);
+		defrag(ctx, newBlock);
 	}
 
-	// TODO: Fix
 	void VirtualAllocator::shrinkHeap(AllocContext *ctx) {
-		MemoryBlock* current = ctx->blocks;
-		MemoryBlock* prev = nullptr;
-
-		while (current and current->next) {
-			prev = current;
-			current = current->next;
-		}
+		MemoryBlock* current = ctx->lastBlock;
+		if (!current) return;
+		MemoryBlock* prev = current->prev;
 
 		if (not current or not current->free or current->size < pageSize) {
 			return;
 		}
 
 		const u64 blockStart = reinterpret_cast<u64>(current);
-		const u64 heapEnd = reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize;
 
 		const usize totalSize = sizeof(MemoryBlock) + current->size;
 		const usize pagesToFree = totalSize / pageSize;
@@ -278,12 +295,13 @@ namespace kernel::common::memory {
 
 		if (prev) {
 			prev->next = nullptr;
+			ctx->lastBlock = prev;
 		} else {
 			ctx->blocks = nullptr;
+			ctx->lastBlock = nullptr;
 		}
 
 		ctx->heapSize -= pagesToFree * pageSize;
-
 		ctx->freeSpace -= pagesToFree * pageSize;
 	}
 
