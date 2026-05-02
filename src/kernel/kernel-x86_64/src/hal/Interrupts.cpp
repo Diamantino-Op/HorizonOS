@@ -121,25 +121,25 @@ namespace kernel::x86_64::hal {
 
 		const bool prevIF = terminal->lock();
 
-		terminal->printfBoth(true, "\033[0;31m------------------------------ Kernel Panic ------------------------------");
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame->intNo]);
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   At: %s:%llu (%s)", __FILE__, __LINE__, __func__); // TODO: Fix this
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Registers:");
-		terminal->printfBoth(true, "\033[0;31m-   int: %u", frame->intNo);
-		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame->errNo);
-		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame->rip);
-		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame->rbp);
-		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame->rsp);
-		terminal->printfBoth(true, "\033[0;31m-   cr2: 0x%.16lx", Asm::readCr2());
-		terminal->printfBoth(true, "\033[0;31m-   cr3: 0x%.16lx", Asm::readCr3());
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Backtrace:");
+		u64 offset = 0;
+
+		terminal->printfBoth(true, "\033[0;31m┌──────────────────────────[ Kernel Panic ]───────────────────────────");
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m│   Registers:");
+		terminal->printfBoth(true, "\033[0;31m│   int: %u", frame->intNo);
+		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
+		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
+		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);
+		terminal->printfBoth(true, "\033[0;31m│   rsp: 0x%.16lx", frame->rsp);
+		terminal->printfBoth(true, "\033[0;31m│   cr2: 0x%.16lx", Asm::readCr2());
+		terminal->printfBoth(true, "\033[0;31m│   cr3: 0x%.16lx", Asm::readCr3());
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m│   Backtrace:");
 		backtrace(frame->rbp, (frame->cs & 0x3) == 3);
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m└──────────────────────────────────────────────────────────────────────");
 
 		terminal->unlock(prevIF);
 
@@ -151,18 +151,20 @@ namespace kernel::x86_64::hal {
 
 		const bool prevIF = terminal->lock();
 
-		terminal->printfBoth(true, "\033[0;31m------------------------------ Userland Panic ------------------------------");
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Cause: %s", faultMessages[frame->intNo]);
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m-   Registers:");
-		terminal->printfBoth(true, "\033[0;31m-   int: 0x%.16lx", frame->intNo);
-		terminal->printfBoth(true, "\033[0;31m-   err: 0x%.16lx", frame->errNo);
-		terminal->printfBoth(true, "\033[0;31m-   rip: 0x%.16lx", frame->rip);
-		terminal->printfBoth(true, "\033[0;31m-   rbp: 0x%.16lx", frame->rbp);
-		terminal->printfBoth(true, "\033[0;31m-   rsp: 0x%.16lx", frame->rsp);
-		terminal->printfBoth(true, "\033[0;31m-");
-		terminal->printfBoth(true, "\033[0;31m--------------------------------------------------------------------------");
+		u64 offset = 0;
+
+		terminal->printfBoth(true, "\033[0;31m┌──────────────────────────[ Userland Panic ]───────────────────────────");
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m│   Registers:");
+		terminal->printfBoth(true, "\033[0;31m│   int: 0x%.16lx", frame->intNo);
+		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
+		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
+		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);
+		terminal->printfBoth(true, "\033[0;31m│   rsp: 0x%.16lx", frame->rsp);
+		terminal->printfBoth(true, "\033[0;31m│");
+		terminal->printfBoth(true, "\033[0;31m└──────────────────────────────────────────────────────────────────────");
 
 		terminal->unlock(prevIF);
 	}
@@ -197,12 +199,13 @@ namespace kernel::x86_64::hal {
 		usize framesPrinted = 0;
 
 		while (framesPrinted < maxBacktraceFrames && isValidBacktraceFrame(currentRbp)) {
+			u64 offset = 0;
 
 			const auto *frame = reinterpret_cast<const usize *>(currentRbp);
 			const usize nextRbp = frame[0];
 			const usize returnIp = frame[1];
 
-			terminal->printfBoth(true, "\033[0;31m-   ip: 0x%.16lx, sp: 0x%.16lx", returnIp, nextRbp);
+			terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s), rsp: 0x%.16lx", returnIp, Profiler::findSymbol(returnIp, &offset), nextRbp);
 
 			if (nextRbp == 0 || nextRbp <= currentRbp) {
 				return;

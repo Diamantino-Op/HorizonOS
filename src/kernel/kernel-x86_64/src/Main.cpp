@@ -276,7 +276,7 @@ namespace kernel::x86_64 {
 
 		//Profiler::stop();
 
-		//Profiler::show("Main Profiler");
+		//Profiler::show("Main");
 
 		Asm::lhlt();
 	}

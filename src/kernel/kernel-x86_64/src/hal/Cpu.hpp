@@ -33,8 +33,6 @@ namespace kernel::x86_64::hal {
 
         i64 offset {};
 
-    	CallFrame frames[maxFrames] {};
-
     	u64 currFrame {};
     };
 

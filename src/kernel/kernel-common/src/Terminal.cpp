@@ -61,12 +61,20 @@ namespace kernel::common {
 			this->getCurrentCore()->setDisabled(true);
 		}*/
 
+		if (this->isThreaded) {
+			return false;
+		}
+
 		return this->spinLock.lock();
 
 		return false;
 	}
 
 	void Terminal::unlock(const bool prevIF) {
+		if (this->isThreaded) {
+			return;
+		}
+
 		this->spinLock.unlock(prevIF);
 
 		/*if (CommonMain::getInstance()->isInit()) {
@@ -101,6 +109,13 @@ namespace kernel::common {
 
 		// TODO: Only x86_64
 		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
+	}
+
+	void Terminal::putCharCOM2(int c, void *ctx) {
+		constexpr u16 com2Port = 0x2F8;
+
+		// TODO: Only x86_64
+		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(com2Port));
 	}
 
 	void Terminal::printf(const bool autoSN, const char *format, ...) {
@@ -146,6 +161,21 @@ namespace kernel::common {
 
 		if (autoSN) {
 			npf_pprintf(putChar, nullptr, "\r\n");
+		}
+
+		this->unlock(prevIF);
+	}
+
+	void Terminal::printfCOM2(bool autoSN, const char* format, ...) {
+		const bool prevIF = this->lock();
+
+		va_list val;
+		va_start(val, format);
+		npf_vpprintf(putCharCOM2, nullptr, format, val);
+		va_end(val);
+
+		if (autoSN) {
+			npf_pprintf(putCharCOM2, nullptr, "\r\n");
 		}
 
 		this->unlock(prevIF);

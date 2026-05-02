@@ -18,18 +18,19 @@ struct LFQueue {
 	}
 
 	bool push(const T& v) {
-		usize h = __atomic_load_n(&head, __ATOMIC_RELAXED);
-		usize next = (h + 1) & (N - 1);
-		usize t = __atomic_load_n(&tail, __ATOMIC_ACQUIRE);
+		usize h, next;
+		do {
+			h = __atomic_load_n(&head, __ATOMIC_RELAXED);
+			next = (h + 1) & (N - 1);
+			usize t = __atomic_load_n(&tail, __ATOMIC_ACQUIRE);
 
-		if (next == t) {
-			return false;
-		}
+			if (next == t) {
+				return false;
+			}
 
-		buf[h] = v;
+			buf[h] = v;
+		} while (!__atomic_compare_exchange_n(&head, &h, next, false, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
 
-		__atomic_store_n(&head, next, __ATOMIC_RELEASE);
-		
 		return true;
 	}
 

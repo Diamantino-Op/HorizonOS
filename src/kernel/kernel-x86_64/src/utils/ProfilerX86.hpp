@@ -5,20 +5,31 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::utils {
-	constexpr u64 maxProfRecords = 0x10000;
-	constexpr u64 maxFrames = 1024;
+	constexpr int maxCallStack = 256;
 
-	struct ProfRecord {
+	constexpr u64 maxProfFunctions = 8192;
+	constexpr u64 maxProfEdges = 32768;
+
+	constexpr u64 profFuncHashSize = maxProfFunctions * 2;
+	constexpr u64 profEdgeHashSize = maxProfEdges * 2;
+
+	struct ProfEntry {
 		void *fn;
-		u64 total;
+		u64 totalCycles;
 		usize calls;
 	};
 
+	struct ProfEdge {
+		void *parent;
+		void *child;
+		u64 calls;
+		u64 totalCycles;
+	};
+
 	struct CallFrame {
-		void *fn; // function
-		void *site; // call site
-		u64 start; // tsc value when the function was called
-		u64 ptime; // total time spent in profiler code across the entire call stack below this function, subtracted from runtime when adding to records
+		void *fn;
+		u64 enterTime;
+		ProfEdge *parentEdge;
 	};
 
 	class Profiler {
@@ -26,18 +37,35 @@ namespace kernel::x86_64::utils {
 		__attribute__((no_instrument_function)) static void start();
 		__attribute__((no_instrument_function)) static void stop();
 		__attribute__((no_instrument_function)) static void reset();
-		__attribute__((no_instrument_function)) static void show(const char *name);
+		__attribute__((no_instrument_function)) static void show(const char *profName);
 
 		__attribute__((no_instrument_function)) static u64 lock();
 		__attribute__((no_instrument_function)) static void unlock(u64 hadInts);
 
+		__attribute__((no_instrument_function)) static u64 readTsc();
+
+		__attribute__((no_instrument_function)) static ProfEntry *profileFindOrAdd(void *fn);
+		__attribute__((no_instrument_function)) static ProfEdge *edgeFindOrAdd(void *parent, void *child);
+
 	private:
-		__attribute__((no_instrument_function)) static bool pred(const ProfRecord *a, const ProfRecord *b);
+		__attribute__((no_instrument_function)) static usize profileHashFn(void *fn);
+		__attribute__((no_instrument_function)) static usize edgeHashFn(void *parent, void *child);
 
 	public:
-		static ProfRecord records[maxProfRecords];
+		__attribute__((no_instrument_function)) static const char* findSymbol(u64 address, u64* offset);
 
-		static u64 numRecords;
+		static ProfEntry profTable[maxProfFunctions];
+		static ProfEntry *profTableHash[profFuncHashSize];
+
+		static ProfEdge edgeTable[maxProfEdges];
+		static ProfEdge *edgeTableHash[profEdgeHashSize];
+
+		static CallFrame callStack[maxCallStack];
+
+		static u64 profEntryCount;
+		static u64 edgeEntryCount;
+
+		static int callSp;
 
 		static bool locked;
 
