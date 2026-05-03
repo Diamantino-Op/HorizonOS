@@ -38,7 +38,7 @@ namespace kernel::x86_64 {
 	void Kernel::init() {
 		this->rootInit();
 
-		if (LIMINE_BASE_REVISION_SUPPORTED(limineBaseRevision) == false) {
+		if (not LIMINE_BASE_REVISION_SUPPORTED(limineBaseRevision)) {
 			Asm::lhlt();
 		}
 
@@ -46,7 +46,7 @@ namespace kernel::x86_64 {
 			Asm::lhlt();
 		}
 
-		limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
+		const limine_framebuffer *framebuffer = framebufferRequest.response->framebuffers[0];
 
 		// Terminal
 		terminal = Terminal(framebuffer);
@@ -54,7 +54,7 @@ namespace kernel::x86_64 {
 		terminal.info("Initializing HorizonOS...", "HorizonOS");
 
 		// GDT
-		this->gdtManager = GdtManager(this->tssManager.getTss());
+		this->gdtManager = GdtManager(this->tssManager.getTssTemp());
 
 		terminal.info("GDT Created... OK", "HorizonOS");
 
@@ -251,6 +251,8 @@ namespace kernel::x86_64 {
 
 		this->isInitFlag = true;
 
+		terminal.debug("Init... OK", "HorizonOS");
+
 		Asm::sti();
 
 		// Init uAcpi
@@ -279,72 +281,6 @@ namespace kernel::x86_64 {
 		//Profiler::show("Main");
 
 		Asm::lhlt();
-	}
-
-	void testUserThread() {
-		for (;;) {
-			Asm::cli();
-		}
-	}
-
-	void thread1() {
-		 for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-
-			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 1", ns);
-
-			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 100ull * 1'000'000ull); // 10 ms
-		}
-	}
-
-	void thread2() {
-		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-
-			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 2", ns);
-
-			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 200ull * 1'000'000ull); // 20 ms
-		}
-	}
-
-	void thread3() {
-		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-
-			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 3", ns);
-
-			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 300ull * 1'000'000ull); // 30 ms
-		}
-	}
-
-	void thread4() {
-		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-
-			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 4", ns);
-
-			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 400ull * 1'000'000ull); // 40 ms
-		}
-	}
-
-	void thread5() {
-		for (;;) {
-			const u64 ns = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-
-			CommonMain::getTerminal()->warn("Call NS: %llu", "Thread 5", ns);
-
-			auto *currThread = reinterpret_cast<Thread *>(Asm::rdmsr(Msrs::FSBAS));
-
-			CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 50ull * 1'000'000ull); // 50 ms
-		}
 	}
 
 	void Kernel::shutdown() {
@@ -395,7 +331,7 @@ namespace kernel::x86_64 {
 		auto *commonKernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		Terminal* terminal = CommonMain::getTerminal();
 
-		this->coreGdtManager = GdtManager(this->coreTssManager.getTss());
+		this->coreGdtManager = GdtManager(this->coreTssManager.getTssTemp());
 
 		this->coreGdtManager.loadGdt();
 		this->coreGdtManager.reloadRegisters();
@@ -429,5 +365,9 @@ namespace kernel::x86_64 {
 
 	TssManager *CoreKernel::getTssManager() {
 		return &this->coreTssManager;
+	}
+
+	GdtManager *CoreKernel::getGdtManager() {
+		return &this->coreGdtManager;
 	}
 }

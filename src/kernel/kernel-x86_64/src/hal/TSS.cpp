@@ -7,24 +7,31 @@ namespace kernel::x86_64::hal {
 	using namespace common::memory;
 	using namespace common::threading;
 
-	TssManager::TssManager() {
-    	this->tssInstance = Tss();
-    }
-
 	void TssManager::allocStack() {
-		this->tssInstance.rsp[0] = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // 16 Kb Stack
+		this->tssPtrs.rsp[0] = reinterpret_cast<u64>(malloc(threadCtxStackSize)) + threadCtxStackSize; // 16 Kb Stack
 
-		this->tssInstance.ist[0] = reinterpret_cast<u64>(this->generalIntStack + sizeof(this->generalIntStack)); // 2 Kb Stack
-		this->tssInstance.ist[1] = reinterpret_cast<u64>(this->nmiIntStack + sizeof(this->nmiIntStack)); // 2 Kb Stack
-		this->tssInstance.ist[2] = reinterpret_cast<u64>(this->exceptionIntStack + sizeof(this->exceptionIntStack)); // 2 Kb Stack
-		this->tssInstance.ist[3] = reinterpret_cast<u64>(this->syscallStack + sizeof(this->syscallStack)); // 2 Kb Stack
+		this->tssPtrs.ist[0] = reinterpret_cast<u64>(this->generalIntStack + sizeof(this->generalIntStack)); // 2 Kb Stack
+		this->tssPtrs.ist[1] = reinterpret_cast<u64>(this->nmiIntStack + sizeof(this->nmiIntStack)); // 2 Kb Stack
+		this->tssPtrs.ist[2] = reinterpret_cast<u64>(this->exceptionIntStack + sizeof(this->exceptionIntStack)); // 2 Kb Stack
+		this->tssPtrs.ist[3] = reinterpret_cast<u64>(this->syscallStack + sizeof(this->syscallStack)); // 2 Kb Stack
+
+		this->tssTemp.rsp[0] = this->tssPtrs.rsp[0];
+
+		this->tssTemp.ist[0] = this->tssPtrs.ist[0];
+		this->tssTemp.ist[1] = this->tssPtrs.ist[1];
+		this->tssTemp.ist[2] = this->tssPtrs.ist[2];
+		this->tssTemp.ist[3] = this->tssPtrs.ist[3];
 	}
 
     void TssManager::updateTss() {
         updateTssAsm();
     }
 
-    Tss *TssManager::getTss() {
-        return &this->tssInstance;
-    }
+	TssTemp *TssManager::getTssTemp() {
+		return &this->tssTemp;
+	}
+
+	TssPtrs *TssManager::getTssPtrs() {
+		return &this->tssPtrs;
+	}
 }

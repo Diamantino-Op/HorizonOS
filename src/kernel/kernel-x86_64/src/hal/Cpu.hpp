@@ -4,10 +4,11 @@
 #include "Types.hpp"
 
 #include "Apic.hpp"
+#include "GDT.hpp"
 #include "TSS.hpp"
 #include "Tsc.hpp"
-#include "utils/ProfilerX86.hpp"
 #include "threading/Scheduler.hpp"
+#include "utils/ProfilerX86.hpp"
 
 #include "limine.h"
 
@@ -28,6 +29,7 @@ namespace kernel::x86_64::hal {
         ExecutionNode executionNode {};
 
         TssManager *tssManager {};
+    	GdtManager *gdtManager {};
 
         u32 cpuId {};
 

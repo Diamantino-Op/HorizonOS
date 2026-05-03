@@ -1,4 +1,5 @@
 #define UACPI_NATIVE_ALLOC_ZEROED
+//#UACPI_BAREBONES_MODE
 
 #include "UacpiKernAPI.hpp"
 

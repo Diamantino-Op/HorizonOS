@@ -1,10 +1,9 @@
 #ifndef KERNEL_X86_64_SCHEDULERX86_HPP
 #define KERNEL_X86_64_SCHEDULERX86_HPP
 
-#include "hal/Interrupts.hpp"
-
 #include "memory/VirtualAllocator.hpp"
 #include "threading/Scheduler.hpp"
+#include "hal/TSS.hpp"
 
 namespace kernel::x86_64::threading {
     using namespace common::memory;
@@ -24,6 +23,8 @@ namespace kernel::x86_64::threading {
 
         bool isUserspace() const;
 
+    	void updateTssPtrs(u64 rsp0);
+
     private:
         u64 *originalSimdSave {};
         u64 *simdSave {};
@@ -41,6 +42,8 @@ namespace kernel::x86_64::threading {
     	u8 prid {};
 
     	u64 userStackPointer {};
+
+    	Tss threadTss;
     };
 
     extern "C" u64 checkDisabled();

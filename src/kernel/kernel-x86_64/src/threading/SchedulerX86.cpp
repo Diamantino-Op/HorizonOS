@@ -3,7 +3,7 @@
 #include "Main.hpp"
 #include "CommonMain.hpp"
 #include "Math.hpp"
-#include "memory/MainMemory.hpp"
+#include "hal/Interrupts.hpp"
 
 #include "hal/Cpu.hpp"
 #include "hal/Hpet.hpp"
@@ -247,13 +247,21 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::loadNewThread() const {
-		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->load();
+		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext());
 
-		CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+		ctx->load();
+
+		ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
+
+		CpuManager::getCurrentCore()->gdtManager->getGdt().tssEntry = GdtTssEntry(&ctx->threadTss);
+
+		CpuManager::getCurrentCore()->tssManager->updateTss();
+
+		//CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {
-		return CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0];
+		return CpuManager::getCurrentCore()->tssManager->getTssPtrs()->rsp[0];
 	}
 
 	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp, const u64 userRsp) {
@@ -390,6 +398,8 @@ namespace kernel::x86_64::threading {
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
+
+		this->threadTss = Tss();
 	}
 
 	u64 *ThreadContext::getSimdSave() const {
@@ -418,6 +428,16 @@ namespace kernel::x86_64::threading {
 
 	bool ThreadContext::isUserspace() const {
 		return this->isUser;
+	}
+
+	void ThreadContext::updateTssPtrs(const u64 rsp0) {
+		const TssPtrs *tssPtrs = CpuManager::getCurrentCore()->tssManager->getTssPtrs();
+
+		this->threadTss.rsp[0] = rsp0;
+
+		for (u8 i = 0; i < 7; i++) {
+			this->threadTss.ist[i] = tssPtrs->ist[i];
+		}
 	}
 }
 

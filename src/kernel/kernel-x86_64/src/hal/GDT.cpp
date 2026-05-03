@@ -3,7 +3,7 @@
 #include "Main.hpp"
 
 namespace kernel::x86_64::hal {
-    GdtManager::GdtManager(Tss *tss) {
+    GdtManager::GdtManager(TssTemp *tss) {
         this->gdtInstance = Gdt();
 
         // Null Segment
