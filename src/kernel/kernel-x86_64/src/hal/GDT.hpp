@@ -122,7 +122,7 @@ namespace kernel::x86_64::hal {
 		void loadGdt();
 		void reloadRegisters();
 
-		Gdt getGdt() const;
+		Gdt &getGdt();
 
 	private:
 		Gdt gdtInstance{};

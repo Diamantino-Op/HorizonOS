@@ -208,7 +208,11 @@ namespace kernel::x86_64 {
 			terminal.info("Module %u: %s Size: %u", "HorizonOS", i, moduleFile->path, moduleFile->size);
 
 			if (Elf::isElf(static_cast<ElfCommonHeader *>(moduleFile->address))) {
+				SimpleSpinLock lock = {};
+
 				terminal.info("Loading module %u as ELF...", "HorizonOS", i);
+
+				const bool hadInts = lock.lock();
 
 				auto *moduleProcess = new Process(ProcessPriority::NORMAL, true);
 				this->scheduler->addProcess(moduleProcess);
@@ -220,6 +224,8 @@ namespace kernel::x86_64 {
 				auto *elfLocation = Elf::loadElf(static_cast<const u64 *>(moduleFile->address), moduleProcess, moduleProcess->getProcessContext(), pageSize);
 
 				Asm::writeCr3(currPageMap);
+
+				lock.unlock(hadInts);
 
 				if (elfLocation != nullptr) {
 					this->scheduler->addThread(true, reinterpret_cast<u64>(elfLocation), moduleProcess);

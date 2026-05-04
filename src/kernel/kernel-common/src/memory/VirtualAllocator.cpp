@@ -38,34 +38,35 @@ namespace kernel::common::memory {
 		const u64 tmpValue = startCreateArch();
 		const u64 processAddr = getProcessAllocStart();
 
-		AllocContext *ctx = nullptr;
-
 		CommonMain::getTerminal()->debug("Process Address: 0x%.16lx", "VirtualAllocator", processAddr + pageSize);
 
 		const u64 ctxAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr + pageSize, ctxAddr, 0b00000011, false, false);
 
-		ctx = reinterpret_cast<AllocContext *>(processAddr + pageSize);
+		auto *ctxKern = reinterpret_cast<AllocContext *>(ctxAddr + CommonMain::getCurrentHhdm());
+		auto *ctx = reinterpret_cast<AllocContext *>(processAddr + pageSize);
 
-		ctx->isUserspace = false;
-		ctx->heapSize = pageSize - sizeof(AllocContext);
-		ctx->pageFlags = 0b00000011;
+		ctxKern->isUserspace = false;
+		ctxKern->heapSize = pageSize - sizeof(AllocContext);
+		ctxKern->pageFlags = 0b00000011;
 
-		ctx->heapStart = reinterpret_cast<u64 *>(processAddr + pageSize + sizeof(AllocContext));
-		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+		ctxKern->heapStart = reinterpret_cast<u64 *>(processAddr + pageSize + sizeof(AllocContext));
+		ctxKern->blocks = reinterpret_cast<MemoryBlock *>(ctxKern->heapStart);
 
 		const u64 pageMapAddr = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
 
+		CommonMain::getTerminal()->debug("PageMap Address: 0x%.16lx", "VirtualAllocator", pageMapAddr);
+
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags , false, false);
 
-		ctx->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctx, true); // , not ctx->isUserspace
+		ctxKern->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctxKern, true); // , not ctx->isUserspace
 
-		shareKernelPages(ctx);
-		initContext(ctx);
+		shareKernelPages(ctxKern);
+		initContext(ctxKern);
 
-		ctx->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags, false, false);
-		ctx->pageMap.mapPage(processAddr + pageSize, ctxAddr, ctx->pageFlags, false, false);
+		ctxKern->pageMap.mapPage(processAddr, pageMapAddr, ctxKern->pageFlags, false, false);
+		ctxKern->pageMap.mapPage(processAddr + pageSize, ctxAddr, ctxKern->pageFlags, false, false);
 
 		endCreateArch(tmpValue);
 
@@ -87,8 +88,8 @@ namespace kernel::common::memory {
 	void VirtualAllocator::initContext(AllocContext *ctx) {
 		memset(ctx->heapStart, 0, ctx->heapSize);
 
-		for (usize i = 0; i < SIZE_CLASS_COUNT; i++) {
-			ctx->freeLists[i] = nullptr;
+		for (auto &freeList : ctx->freeLists) {
+			freeList = nullptr;
 		}
 
 		CommonMain::getTerminal()->debug("MemoryBlock size: %lu", "VirtualAllocator", sizeof(MemoryBlock));
