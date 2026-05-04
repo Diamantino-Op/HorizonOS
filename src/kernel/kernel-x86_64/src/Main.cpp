@@ -54,7 +54,7 @@ namespace kernel::x86_64 {
 		terminal.info("Initializing HorizonOS...", "HorizonOS");
 
 		// GDT
-		this->gdtManager = GdtManager(this->tssManager.getTssTemp());
+		this->gdtManager = GdtManager(this->tssManager.getTss());
 
 		terminal.info("GDT Created... OK", "HorizonOS");
 
@@ -121,7 +121,7 @@ namespace kernel::x86_64 {
 
 		terminal.info("Virtual Page Allocator initialized...", "HorizonOS");
 
-		// Tss Stack
+		// TssIopb Stack
 
 		this->tssManager.allocStack();
 
@@ -337,14 +337,14 @@ namespace kernel::x86_64 {
 		auto *commonKernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		Terminal* terminal = CommonMain::getTerminal();
 
-		this->coreGdtManager = GdtManager(this->coreTssManager.getTssTemp());
+		this->coreGdtManager = GdtManager(this->coreTssManager.getTss());
 
 		this->coreGdtManager.loadGdt();
 		this->coreGdtManager.reloadRegisters();
 
 		this->coreTssManager.allocStack();
 
-		this->coreTssManager.updateTss();
+		TssManager::updateTss();
 
 		SyscallManager::init();
 

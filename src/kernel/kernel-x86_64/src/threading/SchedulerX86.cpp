@@ -159,6 +159,10 @@ namespace kernel::common::threading {
 			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 		}
 
+		if (oldEntry != nullptr and reinterpret_cast<ThreadContext *>(oldEntry->value->getContext())->threadTssIopb != nullptr) {
+			this->oldThreadWasIopb = true;
+		}
+
 		// Get new thread
 
 		if (schedulerPtr->readyThreadList.getSize() > 0) {
@@ -246,22 +250,32 @@ namespace kernel::common::threading {
 		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(true);
 	}
 
-	void ExecutionNode::loadNewThread() const {
+	void ExecutionNode::loadNewThread() {
 		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext());
 
 		ctx->load();
 
-		ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
+		if (ctx->threadTssIopb != nullptr) {
+			ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
 
-		CpuManager::getCurrentCore()->gdtManager->getGdt().tssEntry = GdtTssEntry(&ctx->threadTss);
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 
-		CpuManager::getCurrentCore()->tssManager->updateTss();
+			TssManager::updateTss();
+		} else {
+			if (this->oldThreadWasIopb) {
+				CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(CpuManager::getCurrentCore()->tssManager->getTss());
 
-		//CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+				this->oldThreadWasIopb = false;
+
+				TssManager::updateTss();
+			}
+
+			CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+		}
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {
-		return CpuManager::getCurrentCore()->tssManager->getTssPtrs()->rsp[0];
+		return CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0];
 	}
 
 	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp, const u64 userRsp) {
@@ -278,6 +292,8 @@ namespace kernel::common::threading {
 		}
 
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
+
+		*context = ThreadContext();
 
 		context->init(process, newRsp, isUser, rsp == 0);
 
@@ -364,6 +380,11 @@ namespace kernel::x86_64::threading {
 
 	ThreadContext::~ThreadContext() {
 		if (this->process != nullptr) {
+			if (this->threadTssIopb != nullptr) {
+				VirtualAllocator::free(this->process->getProcessContext(), reinterpret_cast<u64 *>(this->threadTssIopb));
+				this->threadTssIopb = nullptr;
+			}
+
 			this->process->pridAllocator.freePRID(this->prid);
 
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
@@ -385,21 +406,20 @@ namespace kernel::x86_64::threading {
 		}
 	}
 
-	void ThreadContext::init(Process *process, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
+	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
 		this->userFsBase = 0;
-		this->process = process;
+		this->process = proc;
+		this->threadTssIopb = nullptr;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
 		this->ownsKernelStack = ownsKernelStack;
-		this->process = process;
+		this->process = proc;
 
-		this->originalSimdSave = VirtualAllocator::alloc(process->getProcessContext(), CpuId::getXSaveSize() + 64);
+		this->originalSimdSave = VirtualAllocator::alloc(proc->getProcessContext(), CpuId::getXSaveSize() + 64);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
-
-		this->threadTss = Tss();
 	}
 
 	u64 *ThreadContext::getSimdSave() const {
@@ -431,12 +451,12 @@ namespace kernel::x86_64::threading {
 	}
 
 	void ThreadContext::updateTssPtrs(const u64 rsp0) {
-		const TssPtrs *tssPtrs = CpuManager::getCurrentCore()->tssManager->getTssPtrs();
+		const Tss *tssPtrs = CpuManager::getCurrentCore()->tssManager->getTss();
 
-		this->threadTss.rsp[0] = rsp0;
+		this->threadTssIopb->rsp[0] = rsp0;
 
 		for (u8 i = 0; i < 7; i++) {
-			this->threadTss.ist[i] = tssPtrs->ist[i];
+			this->threadTssIopb->ist[i] = tssPtrs->ist[i];
 		}
 	}
 }

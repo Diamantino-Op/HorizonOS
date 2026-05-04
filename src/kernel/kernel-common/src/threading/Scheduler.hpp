@@ -197,7 +197,7 @@ namespace kernel::common::threading {
 
 		u128 saveOldThread(u64 oldRsp);
 
-    	void loadNewThread() const;
+    	void loadNewThread();
 
     	bool isDisabled() const;
     	void setDisabled(bool val);
@@ -217,6 +217,8 @@ namespace kernel::common::threading {
 
         LinkedListEntry<Thread> *idleThread {};
         LinkedListEntry<Thread> *currentThread {};
+
+    	bool oldThreadWasIopb {};
     };
 
 	[[noreturn]] void idleThreadFun();

@@ -5,12 +5,12 @@
 
 #include "hal/Cpu.hpp"
 #include "hal/GDT.hpp"
+#include "hal/Hpet.hpp"
 #include "hal/IDT.hpp"
 #include "hal/KvmClock.hpp"
 #include "hal/PIC.hpp"
 #include "hal/PIT.hpp"
 #include "hal/TSS.hpp"
-#include "hal/Hpet.hpp"
 #include "memory/X86VirtualMemory.hpp"
 
 namespace kernel::x86_64 {

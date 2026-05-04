@@ -4,6 +4,7 @@
 #include "ErrNo.hpp"
 #include "GDT.hpp"
 #include "Main.hpp"
+#include "threading/SchedulerX86.hpp"
 #include "utils/Asm.hpp"
 
 namespace kernel::common::hal {
@@ -11,6 +12,7 @@ namespace kernel::common::hal {
 	using namespace x86_64;
 	using namespace x86_64::hal;
 	using namespace x86_64::utils;
+	using namespace x86_64::threading;
 
 	namespace {
 		auto isSignalIgnored(const u64 handler) -> bool {
@@ -237,12 +239,6 @@ namespace kernel::common::hal {
 		return Asm::rdmsr(Msrs::FSBAS);
 	}
 
-	u64 SyscallManager::syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64) {
-		*ret = Scheduler::getCurrentThread()->getId();
-
-		return 0;
-	}
-
 	u64 SyscallManager::syscallIsThreadAlive(long *ret, const u64 tid, u64, u64, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
@@ -327,6 +323,111 @@ namespace kernel::common::hal {
 				}
 			}
 		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallIoPerm(long *ret, const u64 from, const u64 num, const u64 state, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (from > 0xFFFF or num == 0 or from + num > 0x10000) {
+			return EINVAL;
+		}
+
+		const Thread *thread = Scheduler::getCurrentThread();
+
+		if (thread == nullptr) {
+			return EINVAL;
+		}
+
+		// TODO
+		/*Process *proc = thread->getParent();
+		if (proc == nullptr || !proc->isPrivileged()) {
+			return EPERM;
+		}*/
+
+		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+		TssIopb *threadTss = ctx->threadTssIopb;
+
+		if (threadTss == nullptr) {
+			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+
+			*threadTss = TssIopb();
+
+			ctx->threadTssIopb = threadTss;
+
+			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+		}
+
+		for (u64 i = 0; i < num; i++) {
+			const u32 port = from + i;
+
+			if (port > 0xFFFF) {
+				break;
+			}
+
+			const u32 byteIdx = port / 8;
+			const u8 bitIdx  = port % 8;
+
+			if (state != 0) {
+				threadTss->iopb[byteIdx] &= ~(1u << bitIdx);
+			} else {
+				threadTss->iopb[byteIdx] |=  (1u << bitIdx);
+			}
+		}
+
+		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearFlags();
+
+		TssManager::updateTss();
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallIoPl(long *ret, const u64 level, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (level > 3) {
+			return EINVAL;
+		}
+
+		const Thread *thread = Scheduler::getCurrentThread();
+
+		if (thread == nullptr) {
+			return EINVAL;
+		}
+
+		// TODO
+		/*Process *proc = thread->getParent();
+		if (proc == nullptr || !proc->isPrivileged()) {
+			return EPERM;
+		}*/
+
+		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+		TssIopb *threadTss = ctx->threadTssIopb;
+
+		if (threadTss == nullptr) {
+			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+
+			*threadTss = TssIopb();
+
+			ctx->threadTssIopb = threadTss;
+
+			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+		}
+
+		memset(threadTss->iopb, level == 3 ? 0 : 0xFF, sizeof(threadTss->iopb));
+
+		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearFlags();
+
+		TssManager::updateTss();
 
 		return 0;
 	}

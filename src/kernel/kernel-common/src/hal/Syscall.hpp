@@ -51,7 +51,7 @@ namespace kernel::common::hal {
 	using SyscallFun = u64(*)(long *ret, u64 p1, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6);
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 23;
+	constexpr u64 horizonSyscallAmount = 27;
 
 	struct MessageHeader {
 		u64 port;               /* target port (for send) or port that received the message */
@@ -94,6 +94,10 @@ namespace kernel::common::hal {
     	static u64 syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64);
     	static u64 syscallNanoSleep(long *ret, u64 secs, u64 nanos, u64, u64, u64, u64);
     	static u64 syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64);
+    	static u64 syscallIoPerm(long *ret, u64 from, u64 num, u64 state, u64, u64, u64);
+    	static u64 syscallIoPl(long *ret, u64 level, u64, u64, u64, u64, u64);
+    	static u64 syscallKill(long *ret, u64 pid, u64 signal, u64, u64, u64, u64);
+    	static u64 syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

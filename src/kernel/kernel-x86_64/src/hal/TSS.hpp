@@ -10,12 +10,7 @@ namespace kernel::x86_64::hal {
 
 	constexpr u16 iopbSize = 8192; // 65536 ports / 8 bits
 
-	struct TssPtrs {
-		u64 rsp[3];
-		u64 ist[7];
-	};
-
-	struct __attribute__((packed, aligned(4))) TssTemp {
+	struct __attribute__((packed, aligned(4))) Tss {
 		u32 _reserved{};
 		u64 rsp[3];
 		u64 _reserved1{};
@@ -24,10 +19,10 @@ namespace kernel::x86_64::hal {
 		u16 _reserved3{};
 		u16 iopbOffset{};
 
-		constexpr TssTemp() {}
+		constexpr Tss() {}
 	};
 
-    struct __attribute__((packed, aligned(4))) Tss {
+    struct __attribute__((packed, aligned(4))) TssIopb {
         u32 _reserved{};
         u64 rsp[3];
         u64 _reserved1{};
@@ -39,10 +34,10 @@ namespace kernel::x86_64::hal {
     	u8 iopb[iopbSize];
     	u8 iopbTerminator{0xFF};
 
-    	constexpr Tss() {
+    	constexpr TssIopb() {
     		memset(iopb, 0xFF, sizeof(iopb));
 
-    		iopbOffset = offsetof(Tss, iopb);
+    		iopbOffset = offsetof(TssIopb, iopb);
     	}
     };
 
@@ -50,16 +45,12 @@ namespace kernel::x86_64::hal {
     public:
         void allocStack();
 
-        void updateTss();
+        static void updateTss();
 
-    	TssTemp *getTssTemp();
-
-    	TssPtrs *getTssPtrs();
+    	Tss *getTss();
 
     private:
-    	TssTemp tssTemp {};
-
-    	TssPtrs tssPtrs {};
+    	Tss tss {};
 
         const u8 generalIntStack[2048] = {};
         const u8 nmiIntStack[2048] = {};

@@ -108,6 +108,10 @@ namespace kernel::common::hal {
 		horizonSyscalls[20] = &syscallMProtect;
 		horizonSyscalls[21] = &syscallNanoSleep;
 		horizonSyscalls[22] = &syscallIsaTTY;
+		horizonSyscalls[23] = &syscallIoPerm;
+		horizonSyscalls[24] = &syscallIoPl;
+		horizonSyscalls[25] = &syscallKill;
+		horizonSyscalls[26] = &syscallGetPID;
 
 		initArch();
 	}
@@ -188,7 +192,11 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	// Get TID is arch specific
+	u64 SyscallManager::syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64) {
+		*ret = Scheduler::getCurrentThread()->getId();
+
+		return 0;
+	}
 
 	u64 SyscallManager::syscallArchCtl(long *ret, const u64 operation, const u64 pointer, u64, u64, u64, u64) {
 		CommonMain::getTerminal()->debug("Arch specific syscall called with params: %lu 0x%.16lx", "Syscall Manager", operation, pointer);
@@ -887,6 +895,20 @@ namespace kernel::common::hal {
 
 	u64 SyscallManager::syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64) {
 		// TODO: Unstub
+		return 0;
+	}
+
+	u64 SyscallManager::syscallKill(long *ret, const u64 pid, u64 signal, u64, u64, u64, u64) {
+		Scheduler *sched = CommonMain::getInstance()->getScheduler();
+
+		sched->killProcess(sched->getProcess(pid));
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64) {
+		*ret = Scheduler::getCurrentThread()->getParent()->getId();
+
 		return 0;
 	}
 }

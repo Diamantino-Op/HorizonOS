@@ -1,8 +1,8 @@
 #ifndef KERNEL_X86_64_GDT_HPP
 #define KERNEL_X86_64_GDT_HPP
 
-#include "Types.hpp"
 #include "TSS.hpp"
+#include "Types.hpp"
 
 namespace kernel::x86_64::hal {
 	enum Selector : u8 {
@@ -64,35 +64,39 @@ namespace kernel::x86_64::hal {
 
 		constexpr GdtTssEntry() = default;
 
-		/*explicit GdtTssEntry(Tss *tss):
-			limitLow(sizeof(Tss)),
-			baseLow(reinterpret_cast<usize>(tss) & 0xffff),
-			baseMid((reinterpret_cast<usize>(tss) >> 16) & 0xff),
-			accessByte(0b10001001),
-			baseHigh((reinterpret_cast<usize>(tss) >> 24) & 0xff),
-			baseUpper32(reinterpret_cast<usize>(tss) >> 32) {}*/
+		explicit GdtTssEntry(TssIopb *tss) {
+			const auto base  = reinterpret_cast<usize>(tss);
 
-		explicit GdtTssEntry(Tss *tss) {
-			const usize base  = reinterpret_cast<usize>(tss);
-			const u32   limit = sizeof(Tss) - 1;
+			constexpr u32 limit = sizeof(TssIopb) - 1;
 
-			limitLow    = limit & 0xFFFF;
-			limitHigh   = (limit >> 16) & 0xF;
-			baseLow     = base & 0xFFFF;
-			baseMid     = (base >> 16) & 0xFF;
-			baseHigh    = (base >> 24) & 0xFF;
-			baseUpper32 = base >> 32;
-			accessByte  = 0b10001001;
-			flags       = 0;
+			this->limitLow = limit & 0xFFFF;
+			this->limitHigh = (limit >> 16) & 0xF;
+			this->baseLow = base & 0xFFFF;
+			this->baseMid = (base >> 16) & 0xFF;
+			this->baseHigh = (base >> 24) & 0xFF;
+			this->baseUpper32 = base >> 32;
+			this->accessByte = 0b10001001;
+			this->flags = 0;
 		}
 
-		explicit GdtTssEntry(TssTemp *tss):
-			limitLow(sizeof(TssTemp)),
-			baseLow(reinterpret_cast<usize>(tss) & 0xffff),
-			baseMid((reinterpret_cast<usize>(tss) >> 16) & 0xff),
-			accessByte(0b10001001),
-			baseHigh((reinterpret_cast<usize>(tss) >> 24) & 0xff),
-			baseUpper32(reinterpret_cast<usize>(tss) >> 32) {}
+		explicit GdtTssEntry(Tss *tss) {
+			const auto base  = reinterpret_cast<usize>(tss);
+
+			constexpr u32 limit = sizeof(Tss) - 1;
+
+			this->limitLow = limit & 0xFFFF;
+			this->limitHigh = (limit >> 16) & 0xF;
+			this->baseLow = base & 0xFFFF;
+			this->baseMid = (base >> 16) & 0xFF;
+			this->baseHigh = (base >> 24) & 0xFF;
+			this->baseUpper32 = base >> 32;
+			this->accessByte = 0b10001001;
+			this->flags = 0;
+		}
+
+		void clearFlags() {
+			this->flags = 0;
+		}
 	};
 
 	struct __attribute__((packed)) Gdt {
@@ -117,12 +121,12 @@ namespace kernel::x86_64::hal {
 	class GdtManager {
 	public:
 		GdtManager() = default;
-		explicit GdtManager(TssTemp *tss);
+		explicit GdtManager(Tss *tss);
 
 		void loadGdt();
 		void reloadRegisters();
 
-		Gdt &getGdt();
+		Gdt *getGdt();
 
 	private:
 		Gdt gdtInstance{};
