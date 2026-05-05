@@ -273,7 +273,7 @@ uacpi_status uacpi_kernel_wait_for_work_completion() {
 
 // Interrupts
 
-uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *request) {
+uacpi_status uacpi_kernel_handle_firmware_request(const uacpi_firmware_request *request) {
 	return UACPI_STATUS_OK;
 }
 

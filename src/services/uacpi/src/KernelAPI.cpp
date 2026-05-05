@@ -1,60 +1,122 @@
 #define UACPI_NATIVE_ALLOC_ZEROED
 
+#include <cstdio>
+#include <cstdlib>
+#include <pthread.h>
+#include <semaphore.h>
+#include <unistd.h>
+#include <time.h>
+#include <errno.h>
+#include <horizonos/generic.h>
+#include <sys/mman.h>
+#include <sys/io.h>
+
 #include "uacpi/kernel_api.h"
 
+struct UacpiIoRange {
+	uacpi_io_addr base;
+	uacpi_size len;
+};
+
+static bool ioRangeCheck(const uacpi_handle handle, const uacpi_size offset, const uacpi_size accessSize) {
+	const auto *range = static_cast<UacpiIoRange *>(handle);
+	return range && (offset + accessSize) <= range->len;
+}
+
+struct WorkItem {
+	uacpi_work_handler handler;
+	uacpi_handle ctx;
+};
+
+static pthread_mutex_t workMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t workCond = PTHREAD_COND_INITIALIZER;
+static int pendingWork = 0;
+
+static void *workThreadFunc(void *arg) {
+	auto *item = static_cast<WorkItem *>(arg);
+	item->handler(item->ctx);
+	free(item);
+
+	pthread_mutex_lock(&workMutex);
+	pendingWork--;
+
+	if (pendingWork == 0) {
+		pthread_cond_broadcast(&workCond);
+	}
+
+	pthread_mutex_unlock(&workMutex);
+
+	return nullptr;
+}
+
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
+	const int err = get_rsdp(outRsdpAddress);
 
+	return err == 0 ? UACPI_STATUS_OK : UACPI_STATUS_INTERNAL_ERROR;
 }
 
-void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
+void *uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) {
+	uint64_t ret;
 
+	mmap_phys(addr, len, &ret);
+
+	return reinterpret_cast<void *>(ret);
 }
 
-void uacpi_kernel_unmap(void *addr, uacpi_size len) {
-
+void uacpi_kernel_unmap(void *addr, const uacpi_size len) {
+	munmap(addr, len);
 }
 
-void *uacpi_kernel_alloc(uacpi_size size) {
-
+void *uacpi_kernel_alloc(const uacpi_size size) {
+	return malloc(size);
 }
 
-void *uacpi_kernel_alloc_zeroed(uacpi_size size) {
-
+void *uacpi_kernel_alloc_zeroed(const uacpi_size size) {
+	return calloc(1, size);
 }
 
 void uacpi_kernel_free(void *mem) {
-
+	free(mem);
 }
 
-void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
-
-
+void uacpi_kernel_log(const uacpi_log_level level, const uacpi_char* str) {
 	switch (level) {
 		case UACPI_LOG_ERROR:
-			//terminal->printfUAcpi(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
+			printf("\o{33}[0;31muACPI: \o{33}[0;37m%s\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_WARN:
-			//terminal->printfUAcpi(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
+			printf("\o{33}[0;33muACPI: \o{33}[0;37m%s\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_INFO:
-			//terminal->printfUAcpi(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
+			printf("\o{33}[0;34muACPI: \o{33}[0;37m%s\o{33}[0m", str);
 			break;
 
 		case UACPI_LOG_TRACE:
 		case UACPI_LOG_DEBUG:
-			//terminal->printfUAcpi(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30muACPI: \o{33}[0;37m%s\r\o{33}[0m", str);
+			printf("\o{33}[0;32muACPI: \o{33}[0;37m%s\o{33}[0m", str);
 			break;
 	}
 }
 
 uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot() {
+	struct timespec ts {};
 
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+		return 0;
+	}
+
+	return static_cast<uacpi_u64>(ts.tv_sec) * 1000000000ULL + static_cast<uacpi_u64>(ts.tv_nsec);
 }
 
 void uacpi_kernel_stall(uacpi_u8 uSec) {
+	const uacpi_u64 start  = uacpi_kernel_get_nanoseconds_since_boot();
+	const uacpi_u64 delta  = static_cast<uacpi_u64>(uSec) * 1000ULL;
 
+	while ((uacpi_kernel_get_nanoseconds_since_boot() - start) < delta) {
+		asm volatile("pause");
+	}
 }
 
 // PCI
@@ -93,96 +155,317 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 // IO
 
-uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle *out_handle) {
+uacpi_status uacpi_kernel_io_map(const uacpi_io_addr base, const uacpi_size len, uacpi_handle *outHandle) {
+	if (!outHandle) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	if (ioperm(base, len, 1) != 0) {
+		return UACPI_STATUS_DENIED;
+	}
+
+	auto *range = new UacpiIoRange;
+
+	range->base = base;
+	range->len = len;
+
+	*outHandle = static_cast<uacpi_handle>(range);
+
+	return UACPI_STATUS_OK;
 }
 
-void uacpi_kernel_io_unmap(uacpi_handle handle) {
+void uacpi_kernel_io_unmap(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	auto *range = static_cast<UacpiIoRange *>(handle);
+
+	ioperm(range->base, range->len, 0);
+
+	free(range);
 }
 
-uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8 *out_value) {
+uacpi_status uacpi_kernel_io_read8(const uacpi_handle handle, const uacpi_size offset, uacpi_u8 *outValue) {
+	if (!ioRangeCheck(handle, offset, 1)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	*outValue = inb(static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_io_read16(uacpi_handle handle, uacpi_size offset, uacpi_u16 *out_value) {
+uacpi_status uacpi_kernel_io_read16(const uacpi_handle handle, const uacpi_size offset, uacpi_u16 *outValue) {
+	if (!ioRangeCheck(handle, offset, 2)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	*outValue = inw(static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_io_read32(uacpi_handle handle, uacpi_size offset, uacpi_u32 *out_value) {
+uacpi_status uacpi_kernel_io_read32(const uacpi_handle handle, const uacpi_size offset, uacpi_u32 *outValue) {
+	if (!ioRangeCheck(handle, offset, 4)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	*outValue = inl(static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_io_write8(uacpi_handle handle, uacpi_size offset, uacpi_u8 in_value) {
+uacpi_status uacpi_kernel_io_write8(const uacpi_handle handle, const uacpi_size offset, uacpi_u8 inValue) {
+	if (!ioRangeCheck(handle, offset, 1)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	outb(inValue, static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_io_write16(uacpi_handle handle, uacpi_size offset, uacpi_u16 in_value) {
+uacpi_status uacpi_kernel_io_write16(const uacpi_handle handle, const uacpi_size offset, uacpi_u16 inValue) {
+	if (!ioRangeCheck(handle, offset, 2)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	outw(inValue, static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
-uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uacpi_u32 in_value) {
+uacpi_status uacpi_kernel_io_write32(const uacpi_handle handle, const uacpi_size offset, uacpi_u32 inValue) {
+	if (!ioRangeCheck(handle, offset, 4)) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	outl(inValue, static_cast<UacpiIoRange *>(handle)->base + offset);
+
+	return UACPI_STATUS_OK;
 }
 
 // Threads
 
 void uacpi_kernel_sleep(uacpi_u64 mSec) {
+	struct timespec ts {
+		.tv_sec  = static_cast<time_t>(mSec / 1000),
+		.tv_nsec = static_cast<long>((mSec % 1000) * 1000000LL)
+	};
 
+	while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
 }
 
 uacpi_thread_id uacpi_kernel_get_thread_id() {
-
+	return reinterpret_cast<uacpi_thread_id>(static_cast<uintptr_t>(pthread_self()));
 }
 
 uacpi_handle uacpi_kernel_create_mutex() {
+	auto *mutex = new pthread_mutex_t;
 
+	pthread_mutexattr_t attr;
+
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+
+	if (pthread_mutex_init(mutex, &attr) != 0) {
+		pthread_mutexattr_destroy(&attr);
+		free(mutex);
+
+		return nullptr;
+	}
+
+	pthread_mutexattr_destroy(&attr);
+
+	return mutex;
 }
 
-void uacpi_kernel_free_mutex(uacpi_handle handle) {
+void uacpi_kernel_free_mutex(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	auto *mutex = static_cast<pthread_mutex_t *>(handle);
+
+	pthread_mutex_destroy(mutex);
+	free(mutex);
 }
 
-uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle handle, uacpi_u16 timeout) {
+uacpi_status uacpi_kernel_acquire_mutex(const uacpi_handle handle, const uacpi_u16 timeout) {
+	if (!handle) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
+	auto *mutex = static_cast<pthread_mutex_t *>(handle);
+
+	if (timeout == 0xFFFF) {
+		return pthread_mutex_lock(mutex) == 0 ? UACPI_STATUS_OK : UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	if (timeout == 0) {
+		return pthread_mutex_trylock(mutex) == 0 ? UACPI_STATUS_OK : UACPI_STATUS_TIMEOUT;
+	}
+
+	struct timespec ts{};
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+
+	ts.tv_sec  += timeout / 1000;
+	ts.tv_nsec += static_cast<long>((timeout % 1000) * 1000000LL);
+
+	if (ts.tv_nsec >= 1000000000L) {
+		ts.tv_sec++;
+		ts.tv_nsec -= 1000000000L;
+	}
+
+	const int ret = pthread_mutex_timedlock(mutex, &ts);
+
+	if (ret == 0) {
+		return UACPI_STATUS_OK;
+	}
+
+	if (ret == ETIMEDOUT) {
+		return UACPI_STATUS_TIMEOUT;
+	}
+
+	return UACPI_STATUS_INTERNAL_ERROR;
 }
 
-void uacpi_kernel_release_mutex(uacpi_handle handle) {
+void uacpi_kernel_release_mutex(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	pthread_mutex_unlock(static_cast<pthread_mutex_t *>(handle));
 }
 
-uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
+uacpi_bool uacpi_kernel_wait_for_event(const uacpi_handle handle, const uacpi_u16 timeout) {
+	if (!handle) {
+		return UACPI_FALSE;
+	}
 
+	auto *sem = static_cast<sem_t *>(handle);
+
+	if (timeout == 0xFFFF) {
+		return sem_wait(sem) == 0;
+	}
+
+	if (timeout == 0) {
+		return sem_trywait(sem) == 0;
+	}
+
+	struct timespec ts{};
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec  += timeout / 1000;
+	ts.tv_nsec += static_cast<long>((timeout % 1000) * 1000000LL);
+
+	if (ts.tv_nsec >= 1000000000L) {
+		ts.tv_sec++;
+		ts.tv_nsec -= 1000000000L;
+	}
+
+	return sem_timedwait(sem, &ts) == 0;
 }
 
 uacpi_handle uacpi_kernel_create_event() {
+	auto *sem = new sem_t;
 
+	if (sem_init(sem, 0, 0) != 0) {
+		free(sem);
+
+		return nullptr;
+	}
+
+	return sem;
 }
 
-void uacpi_kernel_free_event(uacpi_handle handle) {
+void uacpi_kernel_free_event(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	sem_destroy(static_cast<sem_t *>(handle));
+	free(handle);
 }
 
-void uacpi_kernel_signal_event(uacpi_handle handle) {
+void uacpi_kernel_signal_event(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	sem_post(static_cast<sem_t *>(handle));
 }
 
-void uacpi_kernel_reset_event(uacpi_handle handle) {
+void uacpi_kernel_reset_event(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	auto *sem = static_cast<sem_t *>(handle);
+
+	while (sem_trywait(sem) == 0) {}
 }
 
 uacpi_status uacpi_kernel_schedule_work(uacpi_work_type workType, uacpi_work_handler workHandler, uacpi_handle ctx) {
+	(void) workType; // HorizonOS has one thread pool for now
 
+	auto *item = new WorkItem;
+
+	item->handler = workHandler;
+	item->ctx = ctx;
+
+	pthread_mutex_lock(&workMutex);
+	pendingWork++;
+	pthread_mutex_unlock(&workMutex);
+
+	pthread_t thread;
+
+	if (pthread_create(&thread, nullptr, workThreadFunc, item) != 0) {
+		pthread_mutex_lock(&workMutex);
+		pendingWork--;
+		pthread_mutex_unlock(&workMutex);
+		free(item);
+
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	pthread_detach(thread);
+
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_wait_for_work_completion() {
+	pthread_mutex_lock(&workMutex);
 
+	while (pendingWork > 0) {
+		pthread_cond_wait(&workCond, &workMutex);
+	}
+
+	pthread_mutex_unlock(&workMutex);
+	return UACPI_STATUS_OK;
 }
 
 // Interrupts
 
-uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *request) {
+uacpi_status uacpi_kernel_handle_firmware_request(const uacpi_firmware_request *request) {
+	switch (request->type) {
+		case UACPI_FIRMWARE_REQUEST_TYPE_BREAKPOINT:
+			return UACPI_STATUS_OK;
 
+		case UACPI_FIRMWARE_REQUEST_TYPE_FATAL:
+			fprintf(stderr, "\o{33}[0;31muACPI: \o{33}[0;37mFirmware fatal: type=0x%X code=0x%X arg=0x%llX",
+					request->fatal.type,
+					request->fatal.code,
+					static_cast<unsigned long long>(request->fatal.arg));
+
+			abort();
+
+			return UACPI_STATUS_OK;
+
+		default:
+			return UACPI_STATUS_UNIMPLEMENTED;
+	}
 }
 
 uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interrupt_handler intHandler, uacpi_handle ctx, uacpi_handle *out_irq_handle) {
@@ -194,25 +477,50 @@ uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler in
 }
 
 uacpi_handle uacpi_kernel_create_spinlock() {
+	auto *lock = new pthread_spinlock_t;
 
+	if (pthread_spin_init(lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+		free(lock);
+
+		return nullptr;
+	}
+
+	return lock;
 }
 
-void uacpi_kernel_free_spinlock(uacpi_handle handle) {
+void uacpi_kernel_free_spinlock(const uacpi_handle handle) {
+	if (!handle) {
+		return;
+	}
 
+	pthread_spin_destroy(static_cast<pthread_spinlock_t *>(handle));
+	free(handle);
 }
 
-uacpi_cpu_flags uacpi_kernel_lock_spinlock(uacpi_handle handle) {
+uacpi_cpu_flags uacpi_kernel_lock_spinlock(const uacpi_handle handle) {
+	if (!handle) {
+		return 0;
+	}
 
+	pthread_spin_lock(static_cast<pthread_spinlock_t *>(handle));
+
+	return 1;
 }
 
-void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags prevIF) {
+void uacpi_kernel_unlock_spinlock(const uacpi_handle handle, const uacpi_cpu_flags prevIF) {
+	(void)prevIF;
 
+	if (!handle) {
+		return;
+	}
+
+	pthread_spin_unlock(static_cast<pthread_spinlock_t *>(handle));
 }
 
 uacpi_interrupt_state uacpi_kernel_disable_interrupts() {
-
+	return 1;
 }
 
 void uacpi_kernel_restore_interrupts(const uacpi_interrupt_state state) {
-
+	(void) state;
 }

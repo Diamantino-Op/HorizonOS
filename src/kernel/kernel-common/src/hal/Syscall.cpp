@@ -6,6 +6,8 @@
 #include "Futex.hpp"
 #include "threading/PortMessaging.hpp"
 
+extern limine_rsdp_request rsdpRequest;
+
 namespace kernel::common::hal {
 	using namespace threading;
 
@@ -112,6 +114,8 @@ namespace kernel::common::hal {
 		horizonSyscalls[24] = &syscallIoPl;
 		horizonSyscalls[25] = &syscallKill;
 		horizonSyscalls[26] = &syscallGetPID;
+		horizonSyscalls[27] = &syscallMMapPhys;
+		horizonSyscalls[28] = &syscallGetRsdp;
 
 		initArch();
 	}
@@ -908,6 +912,44 @@ namespace kernel::common::hal {
 
 	u64 SyscallManager::syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64) {
 		*ret = Scheduler::getCurrentThread()->getParent()->getId();
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		if (physAddr == 0 || len == 0) {
+			return EINVAL;
+		}
+
+		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);
+		const u64 offset = physAddr - alignedAddr;
+		const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
+
+		for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
+			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i + CommonMain::getCurrentHhdm(), i, 0b00000111, false, false);
+		}
+
+		*ret = static_cast<long>(physAddr + CommonMain::getCurrentHhdm());
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		if (rsdpRequest.response == nullptr) {
+			*ret = 0;
+
+			return EFAULT;
+		}
+
+		*ret = static_cast<long>(reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address) - CommonMain::getCurrentHhdm());
 
 		return 0;
 	}
