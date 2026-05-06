@@ -1,13 +1,13 @@
 #include <cstdio>
 #include <cstdlib>
-#include <pthread.h>
-#include <semaphore.h>
-#include <time.h>
 #include <errno.h>
 #include <horizonos/generic.h>
 #include <horizonos/syscall.h>
-#include <sys/mman.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <sys/io.h>
+#include <sys/mman.h>
+#include <time.h>
 
 #include "uacpi/log.h"
 #include "uacpi/kernel_api.h"
@@ -30,15 +30,6 @@ struct WorkItem {
 static pthread_mutex_t workMutex;
 static pthread_cond_t workCond;
 static int pendingWork = 0;
-
-static bool getMonotonicTime(struct timespec *ts) {
-	if (ts == nullptr) {
-		return false;
-	}
-
-	long ret = 0;
-	return syscall(SYSCALL_CLOCKGET, &ret, CLOCK_MONOTONIC, reinterpret_cast<uint64_t>(ts)) == 0;
-}
 
 __attribute__((constructor)) static void initWorkQueue() {
 	pthread_mutex_init(&workMutex, nullptr);
@@ -122,7 +113,7 @@ void uacpi_kernel_log(const uacpi_log_level level, const uacpi_char* str) {
 uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot() {
 	struct timespec ts {};
 
-	if (!getMonotonicTime(&ts)) {
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
 		return 0;
 	}
 
@@ -584,9 +575,11 @@ void uacpi_kernel_unlock_spinlock(const uacpi_handle handle, const uacpi_cpu_fla
 }
 
 uacpi_interrupt_state uacpi_kernel_disable_interrupts() {
+	set_int_status(false);
+
 	return 1;
 }
 
 void uacpi_kernel_restore_interrupts(const uacpi_interrupt_state state) {
-	(void) state;
+	set_int_status(true);
 }

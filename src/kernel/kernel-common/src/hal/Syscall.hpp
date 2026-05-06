@@ -50,8 +50,30 @@ namespace kernel::common::hal {
 
 	using SyscallFun = u64(*)(long *ret, u64 p1, u64 p2, u64 p3, u64 p4, u64 p5, u64 p6);
 
+	constexpr u64 nanosecondsPerSecond = 1'000'000'000ULL;
+
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 32;
+	constexpr u64 horizonSyscallAmount = 33;
+
+	struct KernelSysInfo {
+		long uptime;
+		unsigned long loads[3];
+		unsigned long totalram;
+		unsigned long freeram;
+		unsigned long sharedram;
+		unsigned long bufferram;
+		unsigned long totalswap;
+		unsigned long freeswap;
+		unsigned short procs;
+		unsigned long totalhigh;
+		unsigned long freehigh;
+		unsigned int mem_unit;
+	};
+
+	struct Timespec {
+		long tv_sec;
+		long tv_nsec;
+	};
 
 	struct MessageHeader {
 		u64 port;               /* target port (for send) or port that received the message */
@@ -77,7 +99,7 @@ namespace kernel::common::hal {
     	static u64 syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallArchCtl(long *ret, u64 operation, u64 pointer, u64, u64, u64, u64);
     	static u64 syscallExit(long *, u64 staus, u64, u64, u64, u64, u64);
-    	static u64 syscallClockGet(long *ret, u64 clock, u64 ts, u64, u64, u64, u64);
+    	static u64 syscallClockGet(long *ret, u64 clock, u64 secs, u64 nanos, u64, u64, u64);
     	static u64 syscallSysInfo(long *ret, u64 info, u64, u64, u64, u64, u64);
     	static u64 syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallKillThread(long *ret, u64 pid, u64 tid, u64 sig, u64, u64, u64);
@@ -103,6 +125,7 @@ namespace kernel::common::hal {
     	static u64 syscallInstallIRQHandler(long *ret, u64 irq, u64 handler, u64 ctx, u64, u64, u64);
     	static u64 syscallUninstallIRQHandler(long *ret, u64 handler, u64 handle, u64, u64, u64, u64);
     	static u64 syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64);
+    	static u64 syscallSetIntStatus(long *ret, u64 status, u64, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

@@ -465,6 +465,20 @@ namespace kernel::common::hal {
 
 		return 0;
 	}
+
+	u64 SyscallManager::syscallSetIntStatus(long *ret, const u64 status, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (static_cast<bool>(status)) {
+			Asm::sti();
+		} else {
+			Asm::cli();
+		}
+
+		return 0;
+	}
 }
 
 namespace kernel::x86_64::hal {

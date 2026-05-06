@@ -14,39 +14,12 @@ namespace kernel::common::hal {
 	using namespace threading;
 
 	namespace {
-		constexpr u64 nanosecondsPerSecond = 1'000'000'000ULL;
-
-		struct ClockTimespec {
-			long tv_sec;
-			long tv_nsec;
-		};
-
-		struct KernelSysInfo {
-			long uptime;
-			unsigned long loads[3];
-			unsigned long totalram;
-			unsigned long freeram;
-			unsigned long sharedram;
-			unsigned long bufferram;
-			unsigned long totalswap;
-			unsigned long freeswap;
-			unsigned short procs;
-			unsigned long totalhigh;
-			unsigned long freehigh;
-			unsigned int mem_unit;
-		};
-
-		struct SleepTimespec {
-			long tv_sec;
-			long tv_nsec;
-		};
-
 		auto isMappedAddress(const AllocContext *ctx, const u64 addr) -> bool {
-			return ctx != nullptr && ctx->pageMap.getPhysAddress(addr) != 0;
+			return ctx != nullptr and ctx->pageMap.getPhysAddress(addr) != 0;
 		}
 
 		auto findThreadById(Scheduler *scheduler, const u64 pid, const u64 tid) -> Thread * {
-			if (scheduler == nullptr || pid == 0 || tid == 0) {
+			if (scheduler == nullptr or pid == 0 or tid == 0) {
 				return nullptr;
 			}
 
@@ -68,7 +41,7 @@ namespace kernel::common::hal {
 		}
 
 		auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size) -> bool {
-			if (ctx == nullptr || pointer == 0 || size == 0) {
+			if (ctx == nullptr or pointer == 0 or size == 0) {
 				return false;
 			}
 
@@ -85,7 +58,7 @@ namespace kernel::common::hal {
 			return isValidUserRange(ctx, pointer, sizeof(u32));
 		}
 
-		auto timespecToNs(const SleepTimespec *ts, u64 *ns) -> int {
+		auto timespecToNs(const Timespec *ts, u64 *ns) -> int {
 			if (ts == nullptr || ns == nullptr) {
 				return EFAULT;
 			}
@@ -107,12 +80,8 @@ namespace kernel::common::hal {
 		}
 
 		auto getCurrentClockNs(u64 *ns) -> int {
-			if (ns == nullptr) {
-				return EFAULT;
-			}
-
 			auto *commonMain = CommonMain::getInstance();
-			auto *clocks = commonMain != nullptr ? commonMain->getClocks() : nullptr;
+			const auto *clocks = commonMain != nullptr ? commonMain->getClocks() : nullptr;
 			const Clock *mainClock = clocks != nullptr ? clocks->getMainClock() : nullptr;
 
 			if (mainClock == nullptr || mainClock->getNs == nullptr) {
@@ -120,6 +89,7 @@ namespace kernel::common::hal {
 			}
 
 			*ns = mainClock->getNs();
+
 			return 0;
 		}
 
@@ -175,7 +145,7 @@ namespace kernel::common::hal {
 		}
 
 		auto copyToUser(const AllocContext *ctx, const u64 userPtr, const void *sourcePtr, const usize size) -> int {
-			if (ctx == nullptr || sourcePtr == nullptr || userPtr == 0 || size == 0) {
+			if (ctx == nullptr or sourcePtr == nullptr or userPtr == 0 or size == 0) {
 				return EFAULT;
 			}
 
@@ -235,6 +205,7 @@ namespace kernel::common::hal {
 		horizonSyscalls[29] = &syscallInstallIRQHandler;
 		horizonSyscalls[30] = &syscallUninstallIRQHandler;
 		horizonSyscalls[31] = &syscallGetIRQMode;
+		horizonSyscalls[32] = &syscallSetIntStatus;
 
 		initArch();
 	}
@@ -247,7 +218,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMMap(long *ret, u64 hint, u64 size, u64 prot, u64 flags, u64 fd, u64 offset) {
+	u64 SyscallManager::syscallMMap(long *ret, const u64 hint, const u64 size, const u64 prot, const u64 flags, u64 fd, const u64 offset) {
 		// TODO: implement fd and offset
 
 		if (size == 0) {
@@ -298,7 +269,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMUnmap(long *, u64 addr, u64 size, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallMUnmap(long *, const u64 addr, const u64 size, u64, u64, u64, u64) {
 		if (size == 0 || addr == 0) {
 			return EINVAL;
 		}
@@ -322,7 +293,7 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallArchCtl(long *ret, const u64 operation, const u64 pointer, u64, u64, u64, u64) {
-		CommonMain::getTerminal()->debug("Arch specific syscall called with params: %lu 0x%.16lx", "Syscall Manager", operation, pointer);
+		//CommonMain::getTerminal()->debug("Arch specific syscall called with params: %lu 0x%.16lx", "Syscall Manager", operation, pointer);
 
 		switch (operation) {
 			case ARCH_CTL_SET_GSBASE:
@@ -354,7 +325,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallClockGet(long *ret, u64 clock, u64 ts, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallClockGet(long *ret, const u64 clock, const u64 secs, const u64 nanos, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -367,18 +338,9 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		Thread *thread = Scheduler::getCurrentThread();
-		auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
-		if (!isValidUserRange(ctx, ts, sizeof(ClockTimespec))) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
-			return EFAULT;
-		}
-
 		u64 clockNs = 0;
 		const int err = getCurrentClockNs(&clockNs);
+
 		if (err != 0) {
 			if (ret != nullptr) {
 				*ret = -1;
@@ -387,19 +349,8 @@ namespace kernel::common::hal {
 			return err;
 		}
 
-		const ClockTimespec clockTs {
-			.tv_sec = static_cast<long>(clockNs / nanosecondsPerSecond),
-			.tv_nsec = static_cast<long>(clockNs % nanosecondsPerSecond)
-		};
-
-		const int copyErr = copyToUser(ctx, ts, &clockTs, sizeof(clockTs));
-		if (copyErr != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
-			return copyErr;
-		}
+		*reinterpret_cast<long *>(secs) = static_cast<long>(clockNs / nanosecondsPerSecond);
+		*reinterpret_cast<long *>(nanos) = static_cast<long>(clockNs % nanosecondsPerSecond);
 
 		if (ret != nullptr) {
 			*ret = 0;
@@ -408,7 +359,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSysInfo(long *ret, u64 info, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallSysInfo(long *ret, const u64 info, u64, u64, u64, u64, u64) {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -1099,7 +1050,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const SleepTimespec ts = {
+		const Timespec ts = {
 			.tv_sec = static_cast<long>(secs),
 			.tv_nsec = static_cast<long>(nanos)
 		};
