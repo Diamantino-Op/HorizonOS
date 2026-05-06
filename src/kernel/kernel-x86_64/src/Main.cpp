@@ -263,9 +263,9 @@ namespace kernel::x86_64 {
 
 		// Init uAcpi
 
-		this->uAcpi.init();
+		//this->uAcpi.init();
 
-		terminal.info("uACPI Initialised... OK", "HorizonOS");
+		//terminal.info("uACPI Initialised... OK", "HorizonOS");
 
 		SyscallManager::init();
 

@@ -94,8 +94,8 @@ namespace kernel::x86_64::hal {
 			this->flags = 0;
 		}
 
-		void clearFlags() {
-			this->flags = 0;
+		void clearBusy() {
+			this->accessByte = 0b10001001;
 		}
 	};
 

@@ -290,5 +290,9 @@ namespace kernel::common::memory {
 	u64 PageMap::getAddr() const {
 		return this->physPageTable;
 	}
+
+	void PageMap::invPg(const u64 page) {
+		Asm::invalidatePage(page);
+	}
 }
 

@@ -1,5 +1,5 @@
 #define UACPI_NATIVE_ALLOC_ZEROED
-//#UACPI_BAREBONES_MODE
+//#define UACPI_BAREBONES_MODE
 
 #include "UacpiKernAPI.hpp"
 
@@ -7,6 +7,7 @@
 #include "memory/MainMemory.hpp"
 #include "Math.hpp"
 #include "Event.hpp"
+#include "utils/Asm.hpp"
 
 #include "limine.h"
 
@@ -37,14 +38,22 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 
 void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
 	const u64 alignedAddr = alignDown<u64>(addr, pageSize);
-	const u64 offset = addr - alignedAddr;
-	const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
-
-	for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i + CommonMain::getCurrentHhdm(), i, 0b00000011, false, false);
+	if (len == 0 || len > ~0ULL - addr) {
+		return nullptr;
 	}
 
-	return reinterpret_cast<u64 *>(addr + CommonMain::getCurrentHhdm());
+	const u64 endAddr = addr + len;
+	const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
+	const u64 hhdmBase = CommonMain::getCurrentHhdm();
+
+	for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
+		const u64 virtAddr = i + hhdmBase;
+
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(virtAddr, i, 0b00000011, false, false);
+		kernel::x86_64::utils::Asm::invalidatePage(virtAddr);
+	}
+
+	return reinterpret_cast<u64 *>(addr + hhdmBase);
 }
 
 void uacpi_kernel_unmap(void *addr, uacpi_size len) {
@@ -273,7 +282,7 @@ uacpi_status uacpi_kernel_wait_for_work_completion() {
 
 // Interrupts
 
-uacpi_status uacpi_kernel_handle_firmware_request(const uacpi_firmware_request *request) {
+uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *request) {
 	return UACPI_STATUS_OK;
 }
 

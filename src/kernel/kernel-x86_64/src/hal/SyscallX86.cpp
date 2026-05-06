@@ -5,6 +5,7 @@
 #include "GDT.hpp"
 #include "Main.hpp"
 #include "threading/SchedulerX86.hpp"
+#include "uacpi/utilities.h"
 #include "utils/Asm.hpp"
 
 namespace kernel::common::hal {
@@ -380,7 +381,7 @@ namespace kernel::common::hal {
 			}
 		}
 
-		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearFlags();
+		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearBusy();
 
 		TssManager::updateTss();
 
@@ -425,9 +426,42 @@ namespace kernel::common::hal {
 
 		memset(threadTss->iopb, level == 3 ? 0 : 0xFF, sizeof(threadTss->iopb));
 
-		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearFlags();
+		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearBusy();
 
 		TssManager::updateTss();
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallInstallIRQHandler(long *ret, const u64 irq, const u64 handler, const u64 ctx, u64, u64, u64) {
+		if (Interrupts::getHandler(irq + 0x20)->fun != nullptr) {
+			return UACPI_STATUS_ALREADY_EXISTS;
+		}
+
+		Interrupts::setHandler(irq + 0x20, reinterpret_cast<HandlerFun>(handler), reinterpret_cast<u64 *>(ctx));
+
+		*ret = reinterpret_cast<long>(Interrupts::getHandler(irq + 0x20));
+
+		Interrupts::unmask(irq + 0x20);
+
+		return UACPI_STATUS_OK;
+	}
+
+	u64 SyscallManager::syscallUninstallIRQHandler(long *ret, const u64 handler, const u64 handle, u64, u64, u64, u64) {
+		if (auto *irqHandler = reinterpret_cast<IsrHandler *>(handle); irqHandler->fun != nullptr && irqHandler->fun == reinterpret_cast<HandlerFun>(handler)) {
+			irqHandler->fun = nullptr;
+			irqHandler->ctx = nullptr;
+
+			return UACPI_STATUS_OK;
+		}
+
+		// TODO: Mask Interrupt
+
+		return UACPI_STATUS_NOT_FOUND;
+	}
+
+	u64 SyscallManager::syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64) {
+		*ret = CpuManager::getCurrentCore()->apic.isInitialized() ?  UACPI_INTERRUPT_MODEL_IOAPIC : UACPI_INTERRUPT_MODEL_PIC;
 
 		return 0;
 	}
@@ -437,7 +471,7 @@ namespace kernel::x86_64::hal {
 	using namespace common;
 
 	void intSyscallEntry(Frame *frame) {
-		CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", frame->rax);
+		//CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", frame->rax);
 
 		long ret = 0;
 
@@ -450,7 +484,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void callSyscall(SyscallRegs *regs) {
-		CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
+		//CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
 
 		Thread *thread = Scheduler::getCurrentThread();
 

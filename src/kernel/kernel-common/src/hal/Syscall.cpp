@@ -4,14 +4,38 @@
 #include "ErrNo.hpp"
 #include "Math.hpp"
 #include "Futex.hpp"
+#include "hal/Cpu.hpp"
 #include "threading/PortMessaging.hpp"
 
 extern limine_rsdp_request rsdpRequest;
+extern volatile limine_memmap_request memMapRequest;
 
 namespace kernel::common::hal {
 	using namespace threading;
 
 	namespace {
+		constexpr u64 nanosecondsPerSecond = 1'000'000'000ULL;
+
+		struct ClockTimespec {
+			long tv_sec;
+			long tv_nsec;
+		};
+
+		struct KernelSysInfo {
+			long uptime;
+			unsigned long loads[3];
+			unsigned long totalram;
+			unsigned long freeram;
+			unsigned long sharedram;
+			unsigned long bufferram;
+			unsigned long totalswap;
+			unsigned long freeswap;
+			unsigned short procs;
+			unsigned long totalhigh;
+			unsigned long freehigh;
+			unsigned int mem_unit;
+		};
+
 		struct SleepTimespec {
 			long tv_sec;
 			long tv_nsec;
@@ -81,6 +105,98 @@ namespace kernel::common::hal {
 			*ns = sec * 1000000000ULL + nsec;
 			return 0;
 		}
+
+		auto getCurrentClockNs(u64 *ns) -> int {
+			if (ns == nullptr) {
+				return EFAULT;
+			}
+
+			auto *commonMain = CommonMain::getInstance();
+			auto *clocks = commonMain != nullptr ? commonMain->getClocks() : nullptr;
+			const Clock *mainClock = clocks != nullptr ? clocks->getMainClock() : nullptr;
+
+			if (mainClock == nullptr || mainClock->getNs == nullptr) {
+				return EFAULT;
+			}
+
+			*ns = mainClock->getNs();
+			return 0;
+		}
+
+		auto clockIdSupported(const u64 clockId) -> bool {
+			switch (clockId) {
+				case 0: // CLOCK_REALTIME
+				case 1: // CLOCK_MONOTONIC
+				case 4: // CLOCK_MONOTONIC_RAW
+				case 5: // CLOCK_REALTIME_COARSE
+				case 6: // CLOCK_MONOTONIC_COARSE
+				case 7: // CLOCK_BOOTTIME
+					return true;
+
+				default:
+					return false;
+			}
+		}
+
+		auto countProcesses(Scheduler *scheduler) -> unsigned short {
+			if (scheduler == nullptr) {
+				return 0;
+			}
+
+			unsigned short count = 0;
+			const bool schedPrevIF = scheduler->getSchedLock()->lock();
+
+			for (const auto &process : scheduler->processList) {
+				(void)process;
+				if (count != 0xffff) {
+					count++;
+				}
+			}
+
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+			return count;
+		}
+
+		auto getUsableMemoryBytes() -> u64 {
+			if (memMapRequest.response == nullptr) {
+				return 0;
+			}
+
+			u64 total = 0;
+
+			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
+				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
+				if (entry != nullptr && entry->type == LIMINE_MEMMAP_USABLE) {
+					total += entry->length;
+				}
+			}
+
+			return total;
+		}
+
+		auto copyToUser(const AllocContext *ctx, const u64 userPtr, const void *sourcePtr, const usize size) -> int {
+			if (ctx == nullptr || sourcePtr == nullptr || userPtr == 0 || size == 0) {
+				return EFAULT;
+			}
+
+			if (!isValidUserRange(ctx, userPtr, size)) {
+				return EFAULT;
+			}
+
+			const auto *sourceBytes = reinterpret_cast<const u8 *>(sourcePtr);
+			auto *hhdmBytes = reinterpret_cast<u8 *>(CommonMain::getCurrentHhdm());
+
+			for (usize offset = 0; offset < size; offset++) {
+				const u64 physAddr = ctx->pageMap.getPhysAddress(userPtr + offset);
+				if (physAddr == 0) {
+					return EFAULT;
+				}
+
+				hhdmBytes[physAddr] = sourceBytes[offset];
+			}
+
+			return 0;
+		}
 	}
 
 	SyscallFun SyscallManager::horizonSyscalls[horizonSyscallAmount]{};
@@ -116,6 +232,9 @@ namespace kernel::common::hal {
 		horizonSyscalls[26] = &syscallGetPID;
 		horizonSyscalls[27] = &syscallMMapPhys;
 		horizonSyscalls[28] = &syscallGetRsdp;
+		horizonSyscalls[29] = &syscallInstallIRQHandler;
+		horizonSyscalls[30] = &syscallUninstallIRQHandler;
+		horizonSyscalls[31] = &syscallGetIRQMode;
 
 		initArch();
 	}
@@ -123,7 +242,7 @@ namespace kernel::common::hal {
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
 		CommonMain::getTerminal()->info(reinterpret_cast<char *>(message), "User");
 		CommonMain::getTerminal()->debug(reinterpret_cast<char *>(message), "User");
-		CommonMain::getTerminal()->printfBoth(true, "");
+		//CommonMain::getTerminal()->printfBoth(true, "");
 
 		return 0;
 	}
@@ -236,14 +355,129 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallClockGet(long *ret, u64 clock, u64 ts, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		if (!clockIdSupported(clock)) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EINVAL;
+		}
+
+		Thread *thread = Scheduler::getCurrentThread();
+		auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		if (!isValidUserRange(ctx, ts, sizeof(ClockTimespec))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		u64 clockNs = 0;
+		const int err = getCurrentClockNs(&clockNs);
+		if (err != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return err;
+		}
+
+		const ClockTimespec clockTs {
+			.tv_sec = static_cast<long>(clockNs / nanosecondsPerSecond),
+			.tv_nsec = static_cast<long>(clockNs % nanosecondsPerSecond)
+		};
+
+		const int copyErr = copyToUser(ctx, ts, &clockTs, sizeof(clockTs));
+		if (copyErr != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return copyErr;
+		}
+
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
 		return 0;
 	}
 
 	u64 SyscallManager::syscallSysInfo(long *ret, u64 info, u64, u64, u64, u64, u64) {
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
+		auto *commonMain = CommonMain::getInstance();
+		auto *scheduler = commonMain != nullptr ? commonMain->getScheduler() : nullptr;
+		Thread *thread = Scheduler::getCurrentThread();
+		auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+
+		if (!isValidUserRange(ctx, info, sizeof(KernelSysInfo))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		u64 uptimeNs = 0;
+		const int clockErr = getCurrentClockNs(&uptimeNs);
+		if (clockErr != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return clockErr;
+		}
+
+		// TODO
+		KernelSysInfo kernelInfo {};
+		kernelInfo.uptime = static_cast<long>(uptimeNs / nanosecondsPerSecond);
+		kernelInfo.loads[0] = 0;
+		kernelInfo.loads[1] = 0;
+		kernelInfo.loads[2] = 0;
+		kernelInfo.totalram = getUsableMemoryBytes();
+		kernelInfo.freeram = commonMain != nullptr && commonMain->getPMM() != nullptr ? commonMain->getPMM()->getFreeMemory() : 0;
+		kernelInfo.sharedram = 0;
+		kernelInfo.bufferram = 0;
+		kernelInfo.totalswap = 0;
+		kernelInfo.freeswap = 0;
+		kernelInfo.procs = countProcesses(scheduler);
+		kernelInfo.totalhigh = 0;
+		kernelInfo.freehigh = 0;
+		kernelInfo.mem_unit = 1;
+
+		const int copyErr = copyToUser(ctx, info, &kernelInfo, sizeof(kernelInfo));
+		if (copyErr != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return copyErr;
+		}
+
+		if (ret != nullptr) {
+			*ret = 0;
+		}
+
 		return 0;
 	}
 
 	u64 SyscallManager::syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		// TODO
+		const auto *core = kernel::x86_64::hal::CpuManager::getCurrentCore();
+		*ret = core != nullptr ? static_cast<long>(core->cpuId) : 0;
+
 		return 0;
 	}
 
@@ -925,15 +1159,35 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);
-		const u64 offset = physAddr - alignedAddr;
-		const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
+		const auto *thread = Scheduler::getCurrentThread();
+		const auto *process = thread != nullptr ? thread->getParent() : nullptr;
+		auto *kernelCtx = CommonMain::getInstance()->getKernelAllocContext();
+		auto *processCtx = process != nullptr ? process->getProcessContext() : nullptr;
 
-		for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(i + CommonMain::getCurrentHhdm(), i, 0b00000111, false, false);
+		if (thread == nullptr || process == nullptr || kernelCtx == nullptr || processCtx == nullptr) {
+			return EFAULT;
 		}
 
-		*ret = static_cast<long>(physAddr + CommonMain::getCurrentHhdm());
+		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);
+
+		if (len > ~0ULL - physAddr) {
+			return EINVAL;
+		}
+
+		const u64 endAddr = physAddr + len;
+		const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
+		const u64 hhdmBase = CommonMain::getCurrentHhdm();
+
+		for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
+			const u64 virtAddr = i + hhdmBase;
+
+			kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+			processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+
+			PageMap::invPg(virtAddr);
+		}
+
+		*ret = static_cast<long>(physAddr + hhdmBase);
 
 		return 0;
 	}

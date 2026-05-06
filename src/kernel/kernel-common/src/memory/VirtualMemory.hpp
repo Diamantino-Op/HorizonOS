@@ -40,6 +40,8 @@ namespace kernel::common::memory {
 
         bool getIsKernel() const;
 
+    	static void invPg(u64 page);
+
     private:
         void setPageFlags(u64 * pageAddr, u8 flags);
 
