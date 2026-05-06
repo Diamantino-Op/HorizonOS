@@ -33,7 +33,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			int err = is_thread_alive(service->tid, &ret);
 
 			if (err == 0 and !ret) {
-				printf("Service: %s dead, unregistering it!", service->name.c_str());
+				printf("Service: %s dead, unregistering it!\r\n", service->name.c_str());
 
 				unregisterService(service->name);
 			}
@@ -46,12 +46,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 void messageHandlerMain() {
+	printf("Starting Name/Registry Messaging Service!\r\n");
+
 	const int registerResult = register_horizonos_port(1);
 
 	if (registerResult == 0) {
-		printf("Name/Registry Service: Successfully registered port!");
+		printf("Name/Registry Service: Successfully registered port!\r\n");
 	} else {
-		printf("Name/Registry Service: Failed to register port: %d", registerResult);
+		printf("Name/Registry Service: Failed to register port: %d\r\n", registerResult);
 
 		return;
 	}
@@ -71,7 +73,7 @@ void messageHandlerMain() {
 		}
 
 		if (msg.ret_length < 0 || static_cast<size_t>(msg.ret_length) > receiveBuffer.size()) {
-			printf("Name/Registry Service: Dropped oversized message (%ld bytes)\n", msg.ret_length);
+			printf("Name/Registry Service: Dropped oversized message (%ld bytes)\r\n", msg.ret_length);
 
 			continue;
 		}
@@ -188,11 +190,11 @@ void messageHandlerMain() {
 void registerService(const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
 	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
 
-	printf("Service %s registered!", name.c_str());
+	printf("Service %s registered!\r\n", name.c_str());
 }
 
 void unregisterService(string name) {
 	erase_if(*services, [name](const Service *service) { return service->name == name; });
 
-	printf("Service %s unregistered!", name.c_str());
+	printf("Service %s unregistered!\r\n", name.c_str());
 }

@@ -30,14 +30,27 @@ ensure_repo() {
 chdrs_branch=$1
 cxxhdrs_branch=$2
 flanterm_branch=$3
-limine_branch=$4
-limine_protocol_branch=$5
-uacpi_branch=$6
+limine_protocol_branch=$4
+uacpi_branch=$5
 
 ensure_repo https://github.com/osdev0/freestnd-c-hdrs.git "$chdrs_branch" "$repo_root/deps/chdrs"
 ensure_repo https://github.com/osdev0/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$repo_root/deps/cxxhdrs"
 ensure_repo https://github.com/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_root/deps/flanterm"
-ensure_repo https://github.com/Limine-Bootloader/Limine.git "$limine_branch" "$repo_root/deps/limine"
 ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
 
+tag=$(curl -fsSL "https://api.github.com/repos/Limine-Bootloader/Limine/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
+
+echo "Latest release: ${tag}"
+
+curl -fsSL -o "$repo_root"/deps/limine-binary.tar.xz "https://github.com/Limine-Bootloader/Limine/releases/download/${tag}/limine-binary.tar.xz"
+
+tar -xf "$repo_root"/deps/limine-binary.tar.xz -C "$repo_root"/deps
+
+extracted_dir=$(tar -tf "$repo_root"/deps/limine-binary.tar.xz | head -1 | cut -d/ -f1)
+
+mv "$repo_root"/deps/"${extracted_dir}" "$repo_root"/deps/limine
+
+rm "$repo_root"/deps/limine-binary.tar.xz
+
+cd "$repo_root"/deps/limine && make

@@ -1,4 +1,5 @@
 #include "horizonos/generic.h"
+#include "abi-bits/hos_msg.h"
 #include "uacpi/event.h"
 #include "uacpi/sleep.h"
 #include "uacpi/status.h"
@@ -8,7 +9,17 @@
 
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx);
 
-[[noreturn]] int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	const int registerResult = register_horizonos_port(2);
+
+	if (registerResult == 0) {
+		printf("uACPI: Successfully registered port!\r\n");
+	} else {
+		printf("uACPI: Failed to register port: %d\r\n", registerResult);
+
+		return 1;
+	}
+
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
 	}

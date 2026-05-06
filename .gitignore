@@ -2,6 +2,7 @@
 /out/
 /.idea/
 /build/
+/deps/llvm/
 /deps/ovmf/
 /deps/nanoprintf/
 /deps/linux_kernel/
