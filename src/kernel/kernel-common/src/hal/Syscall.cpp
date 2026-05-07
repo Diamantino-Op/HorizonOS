@@ -516,22 +516,46 @@ namespace kernel::common::hal {
 
 	u64 SyscallManager::syscallSendMsg(long *ret, const u64 port, const u64 msgHdr, u64, u64, u64, u64) {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+		auto *thread = Scheduler::getCurrentThread();
 
-		const u64 result = PortMessaging::sendMessage(port, hdr);
-
-		if (result != 0) {
+		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
 
-			return result;
+			return EFAULT;
 		}
 
-		if (ret != nullptr) {
-			*ret = hdr->retLength;
-		}
+		for (u64 retryAttempt = 0;; ++retryAttempt) {
+			const u64 result = PortMessaging::sendMessage(port, hdr);
 
-		return 0;
+			if (result == 0) {
+				if (ret != nullptr) {
+					*ret = hdr->retLength;
+				}
+
+				return 0;
+			}
+
+			if (result != ENOENT) {
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return result;
+			}
+
+			if (retryAttempt >= sendMessageRetryCount) {
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return result;
+			}
+
+			scheduler->sleepThread(thread, sendMessageRetrySleepMs * 1000000ULL);
+		}
 	}
 
 	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, u64, u64, u64, u64) {

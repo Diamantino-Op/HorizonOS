@@ -1,13 +1,18 @@
-#include "horizonos/generic.h"
 #include "abi-bits/hos_msg.h"
+#include "horizonos/generic.h"
+#include "thread"
 #include "uacpi/event.h"
 #include "uacpi/sleep.h"
 #include "uacpi/status.h"
 #include "uacpi/utilities.h"
+#include "unistd.h"
 
 #include <cstdio>
+#include <string>
 
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx);
+
+using namespace std;
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(2);
@@ -16,6 +21,32 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		printf("uACPI: Successfully registered port!\r\n");
 	} else {
 		printf("uACPI: Failed to register port: %d\r\n", registerResult);
+
+		return 1;
+	}
+
+	auto newMsg = hos_msg();
+
+	std::string msgStr = "register;" + to_string(getpid()) + ";" + to_string(hash<thread::id>{}(this_thread::get_id())) + ";uACPI;1;0;0";
+
+	newMsg.port = 1;
+	newMsg.buffer = static_cast<void *>(msgStr.data());
+	newMsg.length = msgStr.size();
+
+	send_horizonos_message(1, &newMsg);
+
+	array<char, 1024> receiveBuffer{};
+	hos_msg recvMsg{};
+
+	recvMsg.buffer = receiveBuffer.data();
+	recvMsg.length = receiveBuffer.size();
+
+	const int srvRegisterResult = receive_horizonos_message(1, &recvMsg);
+
+	if (srvRegisterResult == 0) {
+		printf("uACPI: Successfully registered service!\r\n");
+	} else {
+		printf("uACPI: Failed to register service: %d\r\n", srvRegisterResult);
 
 		return 1;
 	}

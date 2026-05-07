@@ -132,6 +132,7 @@ namespace kernel::common::threading {
         }
 
         message->length = hdr->length;
+    	message->sourcePort = port;
 
         entry->messages.addEnd(message);
 

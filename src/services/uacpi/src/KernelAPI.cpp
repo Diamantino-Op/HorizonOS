@@ -1,3 +1,4 @@
+#include <thread>
 #include <cstdio>
 #include <cstdlib>
 #include <errno.h>
@@ -11,6 +12,8 @@
 
 #include "uacpi/log.h"
 #include "uacpi/kernel_api.h"
+
+using namespace std;
 
 struct UacpiIoRange {
 	uacpi_io_addr base;
@@ -295,7 +298,7 @@ void uacpi_kernel_sleep(uacpi_u64 mSec) {
 }
 
 uacpi_thread_id uacpi_kernel_get_thread_id() {
-	return pthread_self();
+	return reinterpret_cast<uacpi_thread_id>(hash<thread::id>{}(this_thread::get_id()));
 }
 
 uacpi_handle uacpi_kernel_create_mutex() {

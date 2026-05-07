@@ -111,6 +111,8 @@ void messageHandlerMain() {
 
 			if (!hasService) {
 				registerService(msg.src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
+			} else {
+				printf("Service already registered!");
 			}
 
 			auto newMsg = hos_msg();
@@ -190,7 +192,7 @@ void messageHandlerMain() {
 void registerService(const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
 	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
 
-	printf("Service %s registered!\r\n", name.c_str());
+	printf("Service %s registered on port %lu!\r\n", name.c_str(), port);
 }
 
 void unregisterService(string name) {
