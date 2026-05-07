@@ -25,23 +25,27 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	auto newMsg = hos_msg();
+	auto *newMsg = new hos_msg();
 
 	std::string msgStr = "register;" + to_string(getpid()) + ";" + to_string(hash<thread::id>{}(this_thread::get_id())) + ";uACPI;1;0;0";
 
-	newMsg.port = 1;
-	newMsg.buffer = static_cast<void *>(msgStr.data());
-	newMsg.length = msgStr.size();
+	newMsg->port = 1;
+	newMsg->buffer = static_cast<void *>(msgStr.data());
+	newMsg->length = msgStr.size();
 
-	send_horizonos_message(1, &newMsg);
+	send_horizonos_message(1, newMsg);
+
+	delete newMsg;
 
 	array<char, 1024> receiveBuffer{};
-	hos_msg recvMsg{};
+	auto *recvMsg = new hos_msg();
 
-	recvMsg.buffer = receiveBuffer.data();
-	recvMsg.length = receiveBuffer.size();
+	recvMsg->buffer = receiveBuffer.data();
+	recvMsg->length = receiveBuffer.size();
 
-	const int srvRegisterResult = receive_horizonos_message(1, &recvMsg);
+	const int srvRegisterResult = receive_horizonos_message(2, recvMsg);
+
+	delete recvMsg;
 
 	if (srvRegisterResult == 0) {
 		printf("uACPI: Successfully registered service!\r\n");

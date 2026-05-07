@@ -58,27 +58,26 @@ void messageHandlerMain() {
 		return;
 	}
 
-
 	while (true) {
 		array<char, 1024> receiveBuffer{};
-		hos_msg msg{};
+		auto *msg = new hos_msg();
 
-		msg.buffer = receiveBuffer.data();
-		msg.length = receiveBuffer.size();
+		msg->buffer = receiveBuffer.data();
+		msg->length = receiveBuffer.size();
 
-		const int err = receive_horizonos_message(1, &msg);
+		const int err = receive_horizonos_message(1, msg);
 
 		if (err != 0) {
 			continue;
 		}
 
-		if (msg.ret_length < 0 || static_cast<size_t>(msg.ret_length) > receiveBuffer.size()) {
-			printf("Name/Registry Service: Dropped oversized message (%ld bytes)\r\n", msg.ret_length);
+		if (msg->ret_length < 0 || static_cast<size_t>(msg->ret_length) > receiveBuffer.size()) {
+			printf("Name/Registry Service: Dropped oversized message (%ld bytes)\r\n", msg->ret_length);
 
 			continue;
 		}
 
-		const string message(receiveBuffer.data(), static_cast<size_t>(msg.ret_length));
+		const string message(receiveBuffer.data(), static_cast<size_t>(msg->ret_length));
 
 		vector<string> parts;
 		size_t start = 0;
@@ -109,21 +108,26 @@ void messageHandlerMain() {
 					return s && s->name == parts[3];
 				});
 
+			printf("A!\r\n");
+
 			if (!hasService) {
-				registerService(msg.src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
+				printf("B!\r\n");
+				registerService(msg->src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
 			} else {
-				printf("Service already registered!");
+				printf("Service already registered!\r\n");
 			}
 
-			auto newMsg = hos_msg();
+			auto *newMsg = new hos_msg();
 
 			string ret = to_string(hasService ? 0 : 1);
 
-			newMsg.port = msg.src_port;
-			newMsg.buffer = static_cast<void *>(ret.data());
-			newMsg.length = ret.size();
+			newMsg->port = msg->src_port;
+			newMsg->buffer = static_cast<void *>(ret.data());
+			newMsg->length = ret.size();
 
-			send_horizonos_message(msg.src_port, &newMsg);
+			send_horizonos_message(msg->src_port, newMsg);
+
+			delete newMsg;
 		}
 
 		if (parts[0] == "unregister") {
@@ -153,15 +157,17 @@ void messageHandlerMain() {
 				port = srv->port;
 			}
 
-			auto newMsg = hos_msg();
+			auto *newMsg = new hos_msg();
 
 			string ret = to_string(port);
 
-			newMsg.port = msg.src_port;
-			newMsg.buffer = static_cast<void *>(ret.data());
-			newMsg.length = ret.size();
+			newMsg->port = msg->src_port;
+			newMsg->buffer = static_cast<void *>(ret.data());
+			newMsg->length = ret.size();
 
-			send_horizonos_message(msg.src_port, &newMsg);
+			send_horizonos_message(msg->src_port, newMsg);
+
+			delete newMsg;
 		}
 
 		if (parts[0] == "check") {
@@ -174,16 +180,20 @@ void messageHandlerMain() {
 					return s && s->name == parts[1] && s->tid == stoull(parts[2]);
 				});
 
-			auto newMsg = hos_msg();
+			auto *newMsg = new hos_msg();
 
 			string ret = to_string(exists ? 1 : 0);
 
-			newMsg.port = msg.src_port;
-			newMsg.buffer = static_cast<void *>(ret.data());
-			newMsg.length = ret.size();
+			newMsg->port = msg->src_port;
+			newMsg->buffer = static_cast<void *>(ret.data());
+			newMsg->length = ret.size();
 
-			send_horizonos_message(msg.src_port, &newMsg);
+			send_horizonos_message(msg->src_port, newMsg);
+
+			delete newMsg;
 		}
+
+		delete msg;
 
 		break;
 	}
