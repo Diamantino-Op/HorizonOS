@@ -14,17 +14,22 @@
 using namespace std;
 using namespace std::ranges;
 
-void messageHandlerMain();
-void registerService(uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
-void unregisterService(string name);
-
-vector<Service *> *services;
+void *messageHandlerMain(void *srvsPtr);
+void registerService(vector<Service *> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
+void unregisterService(vector<Service *> *services, string name);
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
-	services = new vector<Service *>();
-	const thread messageHandler(messageHandlerMain);
+	auto *services = new vector<Service *>();
+	
+	pthread_t thread;
 
-	//int handlerTid = messageHandler.get_id();
+	if (pthread_create(&thread, nullptr, messageHandlerMain, services) != 0) {
+		delete services;
+
+		return 1;
+	}
+
+	pthread_detach(thread);
 
 	while (true) {
 		for (const auto *service : *services) {
@@ -35,17 +40,21 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			if (err == 0 and !ret) {
 				printf("Service: %s dead, unregistering it!\r\n", service->name.c_str());
 
-				unregisterService(service->name);
+				unregisterService(services, service->name);
 			}
 		}
 
 		usleep(100000);
 	}
 
+	delete services;
+
 	return 0;
 }
 
-void messageHandlerMain() {
+void *messageHandlerMain(void *srvsPtr) {
+	auto *services = static_cast<vector<Service *> *>(srvsPtr);
+
 	printf("Starting Name/Registry Messaging Service!\r\n");
 
 	const int registerResult = register_horizonos_port(1);
@@ -55,7 +64,7 @@ void messageHandlerMain() {
 	} else {
 		printf("Name/Registry Service: Failed to register port: %d\r\n", registerResult);
 
-		return;
+		return nullptr;
 	}
 
 	while (true) {
@@ -112,7 +121,7 @@ void messageHandlerMain() {
 
 			if (!hasService) {
 				printf("B!\r\n");
-				registerService(msg->src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
+				registerService(services, msg->src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
 			} else {
 				printf("Service already registered!\r\n");
 			}
@@ -136,7 +145,7 @@ void messageHandlerMain() {
 			}
 
 			// TODO: Implement security
-			unregisterService(parts[1]);
+			unregisterService(services, parts[1]);
 		}
 
 		if (parts[0] == "get") {
@@ -197,15 +206,17 @@ void messageHandlerMain() {
 
 		break;
 	}
+
+	return nullptr;
 }
 
-void registerService(const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
+void registerService(vector<Service *> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
 	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
 
 	printf("Service %s registered on port %lu!\r\n", name.c_str(), port);
 }
 
-void unregisterService(string name) {
+void unregisterService(vector<Service *> *services, string name) {
 	erase_if(*services, [name](const Service *service) { return service->name == name; });
 
 	printf("Service %s unregistered!\r\n", name.c_str());
