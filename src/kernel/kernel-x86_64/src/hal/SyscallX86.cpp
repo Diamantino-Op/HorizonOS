@@ -498,7 +498,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	void callSyscall(SyscallRegs *regs) {
-		if (regs->rax == 15) {
+		if (regs->rax == 12) {
 			CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
 		}
 
