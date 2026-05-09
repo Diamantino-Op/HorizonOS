@@ -27,7 +27,7 @@ namespace kernel::common::threading {
     class PortMessaging {
     public:
         static u64 registerPort(u64 port);
-        static u64 sendMessage(u64 port, MessageHeader *hdr);
+        static u64 sendMessage(u64 sendPort, u64 port, MessageHeader *hdr);
         static u64 recvMessage(u64 port, MessageHeader *hdr);
 
         static void removeThread(Thread *thread);

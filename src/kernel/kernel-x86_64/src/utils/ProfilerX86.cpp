@@ -204,97 +204,117 @@ namespace kernel::x86_64::utils {
 		return ((p >> 4) ^ (c >> 4)) % profEdgeHashSize;
 	}
 
+	bool Profiler::isSymbol(char *str) {
+		constexpr auto strComp = "Symbol";
+
+		u64 i = 0;
+
+		for (const char *p = str; *p != '\0'; p++) {
+			if (*p != strComp[i++]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	const char* Profiler::findSymbol(u64 address, u64* offset) {
 	    if (moduleRequest.response != nullptr && moduleRequest.response->module_count > 0) {
-	        const auto *symFileAddr = static_cast<char *>(moduleRequest.response->modules[0]->address);
-	        const u64 symFileSize = moduleRequest.response->modules[0]->size;
-
-	        u64 bestAddr = 0;
-	        const char *bestName = nullptr;
-	        usize bestLen = 0;
-
-	        const char *cur = symFileAddr;
-	        const char *end = symFileAddr + symFileSize;
-
-	        while (cur < end) {
-	            // Find end of line
-	            const char *lineEnd = cur;
-
-	            while (lineEnd < end && *lineEnd != '\n') {
-	            	lineEnd++;
-	            }
-
-	            const char *p = cur;
-
-	            u64 symAddr = 0;
-	            bool hasAddr = false;
-
-	            while (p < lineEnd && ((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F'))) {
-	                u8 digit;
-
-	                if (*p >= '0' && *p <= '9') {
-	                	digit = *p - '0';
-	                } else if (*p >= 'a' && *p <= 'f') {
-	                	digit = *p - 'a' + 10;
-	                } else {
-	                	digit = *p - 'A' + 10;
-	                }
-
-	                symAddr = (symAddr << 4) | digit;
-	                hasAddr = true;
-
-	                p++;
-	            }
-
-	            if (hasAddr && p < lineEnd && *p == ' ') {
-	                p++;
-
-	                const char symType = *p;
-
-	                p++;
-
-	                if (p < lineEnd && *p == ' ') {
-	                    p++;
-
-	                    const auto nameLen = static_cast<usize>(lineEnd - p);
-
-	                    const bool isCode = (symType == 'T' || symType == 't' || symType == 'W' || symType == 'w');
-
-	                    if (isCode && symAddr <= address && symAddr >= bestAddr && nameLen > 0) {
-	                        bestAddr = symAddr;
-	                        bestName = p;
-	                        bestLen  = nameLen;
-	                    }
-	                }
-	            }
-
-	            cur = lineEnd;
-
-	            if (cur < end && *cur == '\n') {
-	            	cur++;
-	            }
-	        }
-
-	        if (bestName != nullptr) {
-	            if (offset != nullptr) {
-	            	*offset = address - bestAddr;
-	            }
-
-	            static char nameBuf[512];
-
-	            usize copyLen = bestLen < sizeof(nameBuf) - 1 ? bestLen : sizeof(nameBuf) - 1;
-
-	            while (copyLen > 0 && (bestName[copyLen - 1] == '\r' || bestName[copyLen - 1] == ' ')) {
-	            	copyLen--;
-	            }
-
-	        	for (usize i = 0; i < copyLen; i++) {
-	        		nameBuf[i] = bestName[i];
+	        for (u64 i = 0; i < moduleRequest.response->module_count; i++) {
+	        	if (moduleRequest.response->modules[0]->string == nullptr and not isSymbol(moduleRequest.response->modules[i]->string)) {
+	        		continue;
 	        	}
 
-	            nameBuf[copyLen] = '\0';
+		        const auto *symFileAddr = static_cast<char *>(moduleRequest.response->modules[i]->address);
+		        const u64 symFileSize = moduleRequest.response->modules[i]->size;
 
-	            return nameBuf;
+		        u64 bestAddr = 0;
+		        const char *bestName = nullptr;
+		        usize bestLen = 0;
+
+		        const char *cur = symFileAddr;
+		        const char *end = symFileAddr + symFileSize;
+
+		        while (cur < end) {
+		            // Find end of line
+		            const char *lineEnd = cur;
+
+		            while (lineEnd < end && *lineEnd != '\n') {
+	            		lineEnd++;
+		            }
+
+		            const char *p = cur;
+
+		            u64 symAddr = 0;
+		            bool hasAddr = false;
+
+		            while (p < lineEnd && ((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'f') || (*p >= 'A' && *p <= 'F'))) {
+		                u8 digit;
+
+		                if (*p >= '0' && *p <= '9') {
+	                		digit = *p - '0';
+		                } else if (*p >= 'a' && *p <= 'f') {
+	                		digit = *p - 'a' + 10;
+		                } else {
+	                		digit = *p - 'A' + 10;
+		                }
+
+		                symAddr = (symAddr << 4) | digit;
+		                hasAddr = true;
+
+		                p++;
+		            }
+
+		            if (hasAddr && p < lineEnd && *p == ' ') {
+		                p++;
+
+		                const char symType = *p;
+
+		                p++;
+
+		                if (p < lineEnd && *p == ' ') {
+		                    p++;
+
+		                    const auto nameLen = static_cast<usize>(lineEnd - p);
+
+		                    const bool isCode = (symType == 'T' || symType == 't' || symType == 'W' || symType == 'w');
+
+		                    if (isCode && symAddr <= address && symAddr >= bestAddr && nameLen > 0) {
+		                        bestAddr = symAddr;
+		                        bestName = p;
+		                        bestLen  = nameLen;
+		                    }
+		                }
+		            }
+
+		            cur = lineEnd;
+
+		            if (cur < end && *cur == '\n') {
+	            		cur++;
+		            }
+		        }
+
+		        if (bestName != nullptr) {
+		            if (offset != nullptr) {
+	            		*offset = address - bestAddr;
+		            }
+
+		            static char nameBuf[512];
+
+		            usize copyLen = bestLen < sizeof(nameBuf) - 1 ? bestLen : sizeof(nameBuf) - 1;
+
+		            while (copyLen > 0 && (bestName[copyLen - 1] == '\r' || bestName[copyLen - 1] == ' ')) {
+	            		copyLen--;
+		            }
+
+	        		for (usize i = 0; i < copyLen; i++) {
+	        			nameBuf[i] = bestName[i];
+	        		}
+
+		            nameBuf[copyLen] = '\0';
+
+		            return nameBuf;
+		        }
 	        }
 	    }
 

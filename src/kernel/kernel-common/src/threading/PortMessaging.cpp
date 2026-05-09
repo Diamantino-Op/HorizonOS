@@ -83,7 +83,7 @@ namespace kernel::common::threading {
         return 0;
     }
 
-    u64 PortMessaging::sendMessage(const u64 port, MessageHeader *hdr) {
+    u64 PortMessaging::sendMessage(const u64 sendPort, const u64 port, MessageHeader *hdr) {
         if (hdr == nullptr) {
             return EINVAL;
         }
@@ -132,7 +132,7 @@ namespace kernel::common::threading {
         }
 
         message->length = hdr->length;
-    	message->sourcePort = port;
+    	message->sourcePort = sendPort;
 
         entry->messages.addEnd(message);
 

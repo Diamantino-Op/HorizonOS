@@ -50,6 +50,7 @@ namespace kernel::x86_64::utils {
 	private:
 		__attribute__((no_instrument_function)) static usize profileHashFn(void *fn);
 		__attribute__((no_instrument_function)) static usize edgeHashFn(void *parent, void *child);
+		__attribute__((no_instrument_function)) static bool isSymbol(char *str);
 
 	public:
 		__attribute__((no_instrument_function)) static const char* findSymbol(u64 address, u64* offset);

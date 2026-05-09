@@ -1,0 +1,2 @@
+option('globber_path', type : 'string', value : '')
+option('arch', type: 'string', value: 'x86_64')

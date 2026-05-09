@@ -5,6 +5,7 @@
 #include <ranges>
 #include <algorithm>
 #include <unistd.h>
+#include <mutex>
 
 #include "horizonos/generic.h"
 #include "abi-bits/hos_msg.h"
@@ -13,6 +14,8 @@
 
 using namespace std;
 using namespace std::ranges;
+
+static std::mutex services_mutex;
 
 void *messageHandlerMain(void *srvsPtr);
 void registerService(vector<Service *> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
@@ -32,14 +35,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(thread);
 
 	while (true) {
-		for (const auto *service : *services) {
+		// take a snapshot of the services while protected by the mutex
+		vector<Service *> snapshot;
+		{
+			std::scoped_lock lock(services_mutex);
+			snapshot = *services;
+		}
+
+		for (const auto *service : snapshot) {
 			bool ret = false;
 
 			int err = is_thread_alive(service->tid, &ret);
 
 			if (err == 0 and !ret) {
-				printf("Service: %s dead, unregistering it!\r\n", service->name.c_str());
+				printf("Service: %s dead, unregistering it!", service->name.c_str());
 
+				// unregister modifies the services vector, so lock while calling it
+				std::scoped_lock lock(services_mutex);
 				unregisterService(services, service->name);
 			}
 		}
@@ -55,14 +67,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 void *messageHandlerMain(void *srvsPtr) {
 	auto *services = static_cast<vector<Service *> *>(srvsPtr);
 
-	printf("Starting Name/Registry Messaging Service!\r\n");
+	printf("Starting Name/Registry Messaging Service!\n");
 
 	const int registerResult = register_horizonos_port(1);
 
 	if (registerResult == 0) {
-		printf("Name/Registry Service: Successfully registered port!\r\n");
+		printf("Name/Registry Service: Successfully registered port!\n");
 	} else {
-		printf("Name/Registry Service: Failed to register port: %d\r\n", registerResult);
+		printf("Name/Registry Service: Failed to register port: %d\n", registerResult);
 
 		return nullptr;
 	}
@@ -81,7 +93,7 @@ void *messageHandlerMain(void *srvsPtr) {
 		}
 
 		if (msg->ret_length < 0 || static_cast<size_t>(msg->ret_length) > receiveBuffer.size()) {
-			printf("Name/Registry Service: Dropped oversized message (%ld bytes)\r\n", msg->ret_length);
+			printf("Name/Registry Service: Dropped oversized message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}
@@ -112,18 +124,19 @@ void *messageHandlerMain(void *srvsPtr) {
 				continue;
 			}
 
-			const bool hasService = ranges::any_of(*services,
-				[&](const Service* s) {
-					return s && s->name == parts[3];
-				});
-
-			printf("A!\r\n");
+			bool hasService = false;
+			{
+				std::scoped_lock lock(services_mutex);
+				hasService = ranges::any_of(*services,
+					[&](const Service* s) {
+						return s && s->name == parts[3];
+					});
+			}
 
 			if (!hasService) {
-				printf("B!\r\n");
 				registerService(services, msg->src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
 			} else {
-				printf("Service already registered!\r\n");
+				printf("Service already registered!");
 			}
 
 			auto *newMsg = new hos_msg();
@@ -134,7 +147,7 @@ void *messageHandlerMain(void *srvsPtr) {
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(msg->src_port, newMsg);
+			send_horizonos_message(1, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
@@ -145,7 +158,10 @@ void *messageHandlerMain(void *srvsPtr) {
 			}
 
 			// TODO: Implement security
-			unregisterService(services, parts[1]);
+			{
+				std::scoped_lock lock(services_mutex);
+				unregisterService(services, parts[1]);
+			}
 		}
 
 		if (parts[0] == "get") {
@@ -153,17 +169,19 @@ void *messageHandlerMain(void *srvsPtr) {
 				continue;
 			}
 
-			const auto res = ranges::find_if(*services,
-				[&](const Service* s) {
-					return s && s->name == parts[1];
-				});
-
 			uint64_t port = 0;
+			{
+				std::scoped_lock lock(services_mutex);
+				const auto res = ranges::find_if(*services,
+					[&](const Service* s) {
+						return s && s->name == parts[1];
+					});
 
-			if (res != services->end()) {
-				const Service *srv = *res;
+				if (res != services->end()) {
+					const Service *srv = *res;
 
-				port = srv->port;
+					port = srv->port;
+				}
 			}
 
 			auto *newMsg = new hos_msg();
@@ -174,7 +192,7 @@ void *messageHandlerMain(void *srvsPtr) {
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(msg->src_port, newMsg);
+			send_horizonos_message(1, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
@@ -184,10 +202,14 @@ void *messageHandlerMain(void *srvsPtr) {
 				continue;
 			}
 
-			const bool exists = ranges::any_of(*services,
-				[&](const Service* s) {
-					return s && s->name == parts[1] && s->tid == stoull(parts[2]);
-				});
+			bool exists = false;
+			{
+				std::scoped_lock lock(services_mutex);
+				exists = ranges::any_of(*services,
+					[&](const Service* s) {
+						return s && s->name == parts[1] && s->tid == stoull(parts[2]);
+					});
+			}
 
 			auto *newMsg = new hos_msg();
 
@@ -197,27 +219,27 @@ void *messageHandlerMain(void *srvsPtr) {
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(msg->src_port, newMsg);
+			send_horizonos_message(1, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
 
 		delete msg;
-
-		break;
 	}
 
 	return nullptr;
 }
 
 void registerService(vector<Service *> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
+	std::scoped_lock lock(services_mutex);
 	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
 
-	printf("Service %s registered on port %lu!\r\n", name.c_str(), port);
+	printf("Service %s registered on port %lu!\n", name.c_str(), port);
 }
 
 void unregisterService(vector<Service *> *services, string name) {
+	std::scoped_lock lock(services_mutex);
 	erase_if(*services, [name](const Service *service) { return service->name == name; });
 
-	printf("Service %s unregistered!\r\n", name.c_str());
+	printf("Service %s unregistered!\n", name.c_str());
 }

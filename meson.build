@@ -1,4 +1,4 @@
-project('HorizonOS', 'c', 'cpp', default_options: ['warning_level=2', 'c_std=gnu2x', 'cpp_std=c++23'], version: '1.0.0')
+project('HorizonOS', 'c', 'cpp', default_options: ['warning_level=2', 'c_std=gnu2x', 'cpp_std=c++23'], version: '1.0.0', meson_version: '>=1.11.0')
 
 add_languages('c', 'cpp', native: true, required: true)
 add_languages('c', 'cpp', native: false, required: true)
@@ -169,6 +169,36 @@ create_sym_file = custom_target('create_sym_file',
     depends: kernel
 )
 
+# Services Sym files
+
+name_registry_sym_out_file = join_paths(iso_services_path, 'name_registry.sym')
+uacpi_sym_out_file = join_paths(iso_services_path, 'uacpi.sym')
+pci_sym_out_file = join_paths(iso_services_path, 'pci.sym')
+
+create_services_sym_file = custom_target('create_services_sym_file',
+                                output: [
+                                    'name_registry.sym',
+                                    'uacpi.sym',
+                                    'pci.sym'
+                                ],
+                                input: [
+                                    name_registry_exe,
+                                    uacpi_exe,
+                                    pci_exe
+                                ],
+                                command: [
+                                    sh, '-c', 'nm -C @INPUT0@ > @0@'.format(name_registry_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT1@ >> @0@'.format(uacpi_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT2@ >> @0@'.format(pci_sym_out_file),
+                                ],
+                                depends: [
+                                    name_registry_exe,
+                                    uacpi_exe
+                                ]
+)
+
 install_apps = custom_target('install_apps',
     input: [
         # Apps
@@ -177,6 +207,7 @@ install_apps = custom_target('install_apps',
         # Services
         name_registry_exe,
         uacpi_exe,
+        pci_exe,
 
         # Libs
         join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
@@ -193,7 +224,7 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT2@', iso_services_path,
         '&&',
-        cp, '@INPUT3@', iso_libs_path,
+        cp, '@INPUT3@', iso_services_path,
         '&&',
         cp, '@INPUT4@', iso_libs_path,
         '&&',
@@ -203,12 +234,17 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT7@', iso_libs_path,
         '&&',
+        cp, '@INPUT8@', iso_libs_path,
+        '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',
         sh, '-c', 'for f in @INPUT0@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
     ],
     depends: [
-        hello_world_exe
+        hello_world_exe,
+        create_services_sym_file,
+        name_registry_exe,
+        uacpi_exe
     ]
 )
 

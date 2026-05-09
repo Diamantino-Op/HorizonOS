@@ -514,7 +514,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSendMsg(long *ret, const u64 port, const u64 msgHdr, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallSendMsg(long *ret, const u64 sendPort, const u64 port, const u64 msgHdr, u64, u64, u64) {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		auto *thread = Scheduler::getCurrentThread();
@@ -528,7 +528,7 @@ namespace kernel::common::hal {
 		}
 
 		for (u64 retryAttempt = 0;; ++retryAttempt) {
-			const u64 result = PortMessaging::sendMessage(port, hdr);
+			const u64 result = PortMessaging::sendMessage(sendPort, port, hdr);
 
 			if (result == 0) {
 				if (ret != nullptr) {
@@ -870,7 +870,7 @@ namespace kernel::common::hal {
 		}
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
-		Thread *thread = Scheduler::getCurrentThread();
+		const Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
 			if (ret != nullptr) {
@@ -984,7 +984,7 @@ namespace kernel::common::hal {
 		CommonMain::getTerminal()->debug("Memprotect: Prot: %lu, Size: %lu, Addr: 0x%.16lx", "Syscall Manager", prot, size, pointer);
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
-		Thread *thread = Scheduler::getCurrentThread();
+		const Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
 			if (ret != nullptr) {
