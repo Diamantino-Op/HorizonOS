@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__clion__search_in_files_by_text",
+      "mcp__clion__read_file",
+      "mcp__clion__replace_text_in_file",
+      "mcp__clion__get_file_text_by_path",
+      "mcp__clion__search_file"
+    ]
+  }
+}
