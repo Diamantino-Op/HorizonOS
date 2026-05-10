@@ -9,6 +9,7 @@ namespace kernel::common::threading {
 
 	struct PortMessage {
 		u64 sourcePort {};
+		u64 type {};
 		usize length {};
 		u8 *buffer {};
 
@@ -26,9 +27,10 @@ namespace kernel::common::threading {
 
     class PortMessaging {
     public:
+    	static u64 getNewPort();
         static u64 registerPort(u64 port);
         static u64 sendMessage(u64 sendPort, u64 port, MessageHeader *hdr);
-        static u64 recvMessage(u64 port, MessageHeader *hdr);
+        static u64 recvMessage(u64 port, MessageHeader *hdr, const MessageFilterOptions *options);
 
         static void removeThread(Thread *thread);
 
@@ -37,6 +39,7 @@ namespace kernel::common::threading {
         static PortEntry *createPortUnlocked(u64 port);
 
         static TicketSpinLock portLock;
+    	static u64 currUsedPort;
     };
 }
 

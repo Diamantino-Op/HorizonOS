@@ -9,6 +9,7 @@
 #include <sys/io.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <array>
 
 #include "uacpi/log.h"
 #include "uacpi/kernel_api.h"
@@ -41,10 +42,13 @@ __attribute__((constructor)) static void initWorkQueue() {
 
 static void *workThreadFunc(void *arg) {
 	auto *item = static_cast<WorkItem *>(arg);
+
 	item->handler(item->ctx);
+
 	delete item;
 
 	pthread_mutex_lock(&workMutex);
+
 	pendingWork--;
 
 	if (pendingWork == 0) {
@@ -54,6 +58,45 @@ static void *workThreadFunc(void *arg) {
 	pthread_mutex_unlock(&workMutex);
 
 	return nullptr;
+}
+
+// The PCI service registers on port 3.
+// uACPI sits on port 2 and contacts port 3.
+static constexpr int UACPI_OWN_PORT = 2;
+static constexpr int PCI_SRV_PORT   = 3;
+
+struct PciHandle {
+	uacpi_pci_address address;
+};
+
+// Helper: send a message to the PCI service and receive the reply string.
+static string pciServiceCall(const string &msg) {
+	auto *sendMsg   = new hos_msg();
+
+	sendMsg->port   = PCI_SRV_PORT;
+	sendMsg->buffer = const_cast<void *>(static_cast<const void *>(msg.data()));
+	sendMsg->length = msg.size();
+
+	send_horizonos_message(UACPI_OWN_PORT, PCI_SRV_PORT, sendMsg);
+
+	delete sendMsg;
+
+	array<char, 128> buf{};
+	auto *recvMsg   = new hos_msg();
+
+	recvMsg->buffer = buf.data();
+	recvMsg->length = buf.size();
+
+	const int err = receive_horizonos_message(UACPI_OWN_PORT, recvMsg);
+
+	string result;
+
+	if (err == 0 && recvMsg->ret_length > 0) {
+		result = string(buf.data(), static_cast<size_t>(recvMsg->ret_length));
+	}
+
+	delete recvMsg;
+	return result;
 }
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
@@ -135,62 +178,122 @@ void uacpi_kernel_stall(uacpi_u8 uSec) {
 // PCI
 
 uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle) {
-	(void) address;
-	(void) out_handle;
+	if (!out_handle) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	auto *handle     = new PciHandle;
+	handle->address  = address;
+	*out_handle      = static_cast<uacpi_handle>(handle);
+
+	return UACPI_STATUS_OK;
 }
 
 void uacpi_kernel_pci_device_close(uacpi_handle handle) {
-	(void) handle;
+	delete static_cast<PciHandle *>(handle);
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8 *value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	const auto *h = static_cast<PciHandle *>(device);
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const string msg = "pci_read;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";8";
+
+	const string reply = pciServiceCall(msg);
+	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+
+	*value = static_cast<uacpi_u8>(stoul(reply));
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	const auto *h = static_cast<PciHandle *>(device);
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const string msg = "pci_read;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";16";
+
+	const string reply = pciServiceCall(msg);
+	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+
+	*value = static_cast<uacpi_u16>(stoul(reply));
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32 *value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	const auto *h = static_cast<PciHandle *>(device);
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const string msg = "pci_read;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";32";
+
+	const string reply = pciServiceCall(msg);
+	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+
+	*value = static_cast<uacpi_u32>(stoul(reply));
+
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device) return UACPI_STATUS_INVALID_ARGUMENT;
+	const auto *h = static_cast<PciHandle *>(device);
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const string msg = "pci_write;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";8;"
+					 + to_string(value);
+
+	pciServiceCall(msg); // fire-and-forget; no reply expected for writes
+
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device) return UACPI_STATUS_INVALID_ARGUMENT;
+	const auto *h = static_cast<PciHandle *>(device);
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const string msg = "pci_write;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";16;"
+					 + to_string(value);
+
+	pciServiceCall(msg);
+
+	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, uacpi_u32 value) {
-	(void) device;
-	(void) offset;
-	(void) value;
+	if (!device) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
 
-	return UACPI_STATUS_UNIMPLEMENTED;
+	const auto *h = static_cast<PciHandle *>(device);
+
+	const string msg = "pci_write;"
+					 + to_string(h->address.bus)      + ";"
+					 + to_string(h->address.device)   + ";"
+					 + to_string(h->address.function) + ";"
+					 + to_string(offset)              + ";32;"
+					 + to_string(value);
+
+	pciServiceCall(msg);
+
+	return UACPI_STATUS_OK;
 }
 
 // IO
@@ -467,16 +570,13 @@ uacpi_status uacpi_kernel_schedule_work(uacpi_work_type workType, uacpi_work_han
 	item->handler = workHandler;
 	item->ctx = ctx;
 
-	pthread_mutex_lock(&workMutex);
-	pendingWork++;
-	pthread_mutex_unlock(&workMutex);
+	__atomic_fetch_add(&pendingWork, 1, __ATOMIC_RELEASE);
 
 	pthread_t thread;
 
 	if (pthread_create(&thread, nullptr, workThreadFunc, item) != 0) {
-		pthread_mutex_lock(&workMutex);
-		pendingWork--;
-		pthread_mutex_unlock(&workMutex);
+		__atomic_fetch_sub(&pendingWork, 1, __ATOMIC_ACQUIRE);
+
 		delete item;
 
 		return UACPI_STATUS_INTERNAL_ERROR;

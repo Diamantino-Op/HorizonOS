@@ -211,8 +211,10 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
-		CommonMain::getTerminal()->info(reinterpret_cast<char *>(message), "User");
-		CommonMain::getTerminal()->debug(reinterpret_cast<char *>(message), "User");
+		const u16 tid = Scheduler::getCurrentThread()->getId();
+
+		CommonMain::getTerminal()->info("Thread %u: %s", "User", tid, reinterpret_cast<char *>(message));
+		CommonMain::getTerminal()->debug("Thread %u: %s", "User", tid, reinterpret_cast<char *>(message));
 		//CommonMain::getTerminal()->printfBoth(true, "");
 
 		return 0;
@@ -558,7 +560,7 @@ namespace kernel::common::hal {
 		}
 	}
 
-	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, u64 options, u64, u64, u64) {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 
 		const u64 result = PortMessaging::recvMessage(port, hdr);
@@ -578,22 +580,16 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallRegisterPort(long *ret, const u64 port, u64, u64, u64, u64, u64) {
-		const u64 result = PortMessaging::registerPort(port);
-
-		if (result != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
-			return result;
+	u64 SyscallManager::syscallRegisterPort(long *ret, const u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
 		}
 
-		if (ret != nullptr) {
-			*ret = static_cast<long>(port);
+		if (*ret == 0) {
+			*ret = PortMessaging::getNewPort();
 		}
 
-		return 0;
+		return PortMessaging::registerPort(*ret);
 	}
 
 	u64 SyscallManager::syscallFutex(long *ret, const u64 pointer, const u64 type, const u64 expected, const u64 time, u64, u64) {

@@ -15,6 +15,15 @@
 using namespace std;
 using namespace std::ranges;
 
+// TODO: Move to header
+constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
+constexpr uint64_t UNREGISTER_MSG_TYPE = 0x2;
+constexpr uint64_t GET_MSG_TYPE = 0x3;
+constexpr uint64_t CHECK_MSG_TYPE = 0x4;
+constexpr uint64_t REPLY_MSG_TYPE = 0x5;
+
+static uint64_t nrPort = 1;
+
 static std::mutex services_mutex;
 
 void *messageHandlerMain(void *srvsPtr);
@@ -69,7 +78,7 @@ void *messageHandlerMain(void *srvsPtr) {
 
 	printf("Starting Name/Registry Messaging Service!\n");
 
-	const int registerResult = register_horizonos_port(1);
+	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort));
 
 	if (registerResult == 0) {
 		printf("Name/Registry Service: Successfully registered port!\n");
@@ -86,7 +95,7 @@ void *messageHandlerMain(void *srvsPtr) {
 		msg->buffer = receiveBuffer.data();
 		msg->length = receiveBuffer.size();
 
-		const int err = receive_horizonos_message(1, msg);
+		const int err = receive_horizonos_message(nrPort, msg, nullptr);
 
 		if (err != 0) {
 			continue;
@@ -119,7 +128,7 @@ void *messageHandlerMain(void *srvsPtr) {
 			continue;
 		}
 
-		if (parts[0] == "register") {
+		if (msg->type == REGISTER_MSG_TYPE) {
 			if (parts.size() < 7) {
 				continue;
 			}
@@ -143,17 +152,18 @@ void *messageHandlerMain(void *srvsPtr) {
 
 			string ret = to_string(hasService ? 0 : 1);
 
+			newMsg->type = REPLY_MSG_TYPE;
 			newMsg->port = msg->src_port;
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(1, msg->src_port, newMsg);
+			send_horizonos_message(nrPort, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
 
-		if (parts[0] == "unregister") {
-			if (parts.size() < 2) {
+		if (msg->type == UNREGISTER_MSG_TYPE) {
+			if (parts.size() < 1) {
 				continue;
 			}
 
@@ -164,7 +174,7 @@ void *messageHandlerMain(void *srvsPtr) {
 			}
 		}
 
-		if (parts[0] == "get") {
+		if (msg->type == GET_MSG_TYPE) {
 			if (parts.size() < 2) {
 				continue;
 			}
@@ -188,16 +198,17 @@ void *messageHandlerMain(void *srvsPtr) {
 
 			string ret = to_string(port);
 
+			newMsg->type = REPLY_MSG_TYPE;
 			newMsg->port = msg->src_port;
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(1, msg->src_port, newMsg);
+			send_horizonos_message(nrPort, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
 
-		if (parts[0] == "check") {
+		if (msg->type == CHECK_MSG_TYPE) {
 			if (parts.size() < 3) {
 				continue;
 			}
@@ -215,19 +226,18 @@ void *messageHandlerMain(void *srvsPtr) {
 
 			string ret = to_string(exists ? 1 : 0);
 
+			newMsg->type = REPLY_MSG_TYPE;
 			newMsg->port = msg->src_port;
 			newMsg->buffer = static_cast<void *>(ret.data());
 			newMsg->length = ret.size();
 
-			send_horizonos_message(1, msg->src_port, newMsg);
+			send_horizonos_message(nrPort, msg->src_port, newMsg);
 
 			delete newMsg;
 		}
 
 		delete msg;
 	}
-
-	return nullptr;
 }
 
 void registerService(vector<Service *> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {

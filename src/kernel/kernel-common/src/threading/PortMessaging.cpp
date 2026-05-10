@@ -11,6 +11,7 @@ namespace kernel::common::threading {
     using namespace kernel::x86_64::utils; // Added for Asm::sti() and Asm::cli()
 
     TicketSpinLock PortMessaging::portLock {};
+	u64 PortMessaging::currUsedPort = 2;
 
     namespace {
         LinkedList<PortEntry> *portList {};
@@ -31,6 +32,10 @@ namespace kernel::common::threading {
     PortEntry::~PortEntry() {
 		this->waiters.clear(false);
 		this->messages.clear(true);
+    }
+
+	u64 PortMessaging::getNewPort() {
+	    return currUsedPort++;
     }
 
     PortEntry *PortMessaging::findPortUnlocked(const u64 port) {
@@ -133,6 +138,7 @@ namespace kernel::common::threading {
 
         message->length = hdr->length;
     	message->sourcePort = sendPort;
+    	message->type = hdr->type;
 
         entry->messages.addEnd(message);
 
@@ -159,90 +165,128 @@ namespace kernel::common::threading {
         return 0;
     }
 
-    u64 PortMessaging::recvMessage(const u64 port, MessageHeader *hdr) {
+    u64 PortMessaging::recvMessage(const u64 port, MessageHeader *hdr, const MessageFilterOptions *options) {
         if (hdr == nullptr) {
-            return EINVAL;
-        }
+	        return EINVAL;
+	    }
 
-        if (hdr->length > 0 && hdr->buffer == nullptr) {
-            return EINVAL;
-        }
+	    if (hdr->length > 0 && hdr->buffer == nullptr) {
+	        return EINVAL;
+	    }
 
-        for (;;) {
-            const bool prevIF = portLock.lock();
+	    for (;;) {
+		    const bool prevIF = portLock.lock();
 
-            PortEntry *entry = findPortUnlocked(port);
+    		PortEntry *entry = findPortUnlocked(port);
 
-            if (entry == nullptr) {
-                portLock.unlock(prevIF);
+    		if (entry == nullptr) {
+    			portLock.unlock(prevIF);
 
-                return ENOENT;
-            }
+    			return ENOENT;
+    		}
 
-            const bool portPrevIF = entry->lock.lock();
+    		const bool portPrevIF = entry->lock.lock();
 
-            portLock.unlock(prevIF);
+    		portLock.unlock(prevIF);
 
-        	if (const auto *messageEntry = entry->messages.getFirst(); messageEntry != nullptr) {
-				const auto *message = messageEntry->value;
-        		const usize messageLength = message->length;
+    		// Walk the message queue to find the first message that passes the filter.
+    		auto *messageEntry = entry->messages.getFirst();
 
-        		if (hdr->length < messageLength) {
-        			entry->lock.unlock(portPrevIF);
+    		while (messageEntry != nullptr) {
+    			const auto *message = messageEntry->value;
 
-        			return EMSGSIZE;
-        		}
+    			// --- Filter check ---
+    			if (options != nullptr) {
+    				bool filtered = false;
 
-        		messageEntry = entry->messages.removeFirstEntry();
+    				// Step 1: Blacklist — block if the type is in the blacklist.
+    				if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+    					for (usize i = 0; i < options->blackListCount; ++i) {
+    						if (message->type == options->blackListTypes[i]) {
+    							filtered = true;
 
-        		if (messageEntry == nullptr) {
-        			entry->lock.unlock(portPrevIF);
+    							break;
+    						}
+    					}
+    				}
 
-        			return ENOENT;
-        		}
+    				// Step 2: Whitelist — if provided, block unless the type is in the whitelist.
+    				// Applied after the blacklist, so a type blacklisted AND whitelisted is still blocked.
+    				if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+    					filtered = true; // Assume blocked unless found
+    					for (usize i = 0; i < options->whiteListCount; ++i) {
+    						if (message->type == options->whiteListTypes[i]) {
+    							filtered = false;
 
-        		message = messageEntry->value;
-        		delete messageEntry;
+    							break;
+    						}
+    					}
+    				}
 
-        		if (messageLength > 0) {
-        			memcpy(hdr->buffer, message->buffer, messageLength);
-        		}
+    				if (filtered) {
+    					messageEntry = messageEntry->next;
 
-        		hdr->port = port;
-        		hdr->srcPort = message->sourcePort;
-        		hdr->retLength = static_cast<ssize>(messageLength);
+    					continue;
+    				}
+    			}
+    			// --- End filter check ---
 
-        		entry->lock.unlock(portPrevIF);
-        		delete message;
+    			// Found a matching message.
+    			const usize messageLength = message->length;
 
-        		return 0;
-        	}
+    			if (hdr->length < messageLength) {
+    				entry->lock.unlock(portPrevIF);
 
-            Thread *currThread = Scheduler::getCurrentThread();
+    				return EMSGSIZE;
+    			}
 
-            if (currThread == nullptr) {
-                entry->lock.unlock(portPrevIF);
+    			// Remove this specific entry from the queue.
+    			if (not entry->messages.removeEntry(messageEntry)) {
+    				entry->lock.unlock(portPrevIF);
 
-                return EFAULT;
-            }
+    				return ENOENT;
+    			}
 
-            if (!entry->waiters.contains(currThread)) {
-                currThread->setWaitingPort(port);
-                entry->waiters.addEnd(currThread);
-            }
+    			message = messageEntry->value;
 
-            entry->lock.unlock(portPrevIF);
+    			delete messageEntry;
 
-            // Temporarily enable interrupts before blocking to allow the APIC timer to fire.
-            // This is crucial for the scheduler to unblock this thread or schedule others.
-            Asm::sti(); // Enable interrupts
+    			if (messageLength > 0) {
+    				memcpy(hdr->buffer, message->buffer, messageLength);
+    			}
 
-            CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());
+    			hdr->port      = port;
+    			hdr->srcPort   = message->sourcePort;
+    			hdr->type      = message->type;
+    			hdr->retLength = static_cast<ssize>(messageLength);
 
-            // Disable interrupts again after returning from blockThread,
-            // to maintain the syscall's disabled-interrupt context.
-            Asm::cli(); // Disable interrupts
-        }
+    			entry->lock.unlock(portPrevIF);
+
+    			delete message;
+
+    			return 0;
+    		}
+
+    		// No matching message found — block and wait.
+    		Thread *currThread = Scheduler::getCurrentThread();
+
+    		if (currThread == nullptr) {
+    			entry->lock.unlock(portPrevIF);
+
+    			return EFAULT;
+    		}
+
+    		if (!entry->waiters.contains(currThread)) {
+    			currThread->setWaitingPort(port);
+    			entry->waiters.addEnd(currThread);
+    		}
+
+    		entry->lock.unlock(portPrevIF);
+
+    		//Asm::sti();
+    		CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());
+    		//Asm::cli();
+	    }
     }
 
     void PortMessaging::removeThread(Thread *thread) {

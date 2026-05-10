@@ -80,6 +80,7 @@ namespace kernel::common::hal {
 
 	struct MessageHeader {
 		u64 port;               /* target port (for send) or port that received the message */
+		u64 type;				/* message type used for filtering */
 		u64 *buffer;            /* pointer to message buffer in user space */
 		usize length;           /* buffer length */
 		int flags;              /* message flags (e.g. MSG_DONTWAIT) */
@@ -88,6 +89,13 @@ namespace kernel::common::hal {
 		void *control;          /* optional ancillary/control data pointer */
 		usize controlLen;       /* ancillary data length */
 		u64 timeoutNs;		    /* optional timeout in nanoseconds (0 = wait indefinitely) */
+	};
+
+	struct MessageFilterOptions {
+		u64 *blackListTypes;    /* pointer to array of message types to block */
+		usize blackListCount;   /* number of entries in blackListTypes */
+		u64 *whiteListTypes;    /* pointer to array of message types to allow (if blackListTypes is not used) */
+		usize whiteListCount;   /* number of entries in whiteListTypes */
 	};
 
     class SyscallManager {
@@ -110,8 +118,8 @@ namespace kernel::common::hal {
     	static u64 syscallThreadExit(long *, u64, u64, u64, u64, u64, u64);
     	static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64);
     	static u64 syscallSendMsg(long *ret, u64 sendPort, u64 port, u64 msgHdr, u64, u64, u64);
-    	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64, u64, u64, u64);
-    	static u64 syscallRegisterPort(long *ret, u64 port, u64, u64, u64, u64, u64);
+    	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64 options, u64, u64, u64);
+    	static u64 syscallRegisterPort(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallIsThreadAlive(long *ret, u64 tid, u64, u64, u64, u64, u64);
     	static u64 syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64);
         static u64 syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64);
