@@ -73,7 +73,11 @@ static uint64_t nrPort = 1;
 
 static std::mutex services_mutex;
 
-void *messageHandlerMain(void *srvsPtr);
+[[noreturn]] void *registerMsgHandler(void *srvsPtr);
+[[noreturn]] void *unregisterMsgHandler(void *srvsPtr);
+[[noreturn]] void *getMsgHandler(void *srvsPtr);
+[[noreturn]] void *checkMsgHandler(void *srvsPtr);
+
 void registerService(vector<Service *> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
 void unregisterService(vector<Service *> *services, string name);
 
@@ -90,17 +94,28 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	auto *services = new vector<Service *>();
 	
-	pthread_t thread;
+	pthread_t registerThread;
+	pthread_t unregisterThread;
+	pthread_t getThread;
+	pthread_t checkThread;
 
-	if (pthread_create(&thread, nullptr, messageHandlerMain, services) != 0) {
+	const int registerThreadResult = pthread_create(&registerThread, nullptr, registerMsgHandler, services);
+	const int unregisterThreadResult = pthread_create(&unregisterThread, nullptr, unregisterMsgHandler, services);
+	const int getThreadResult = pthread_create(&getThread, nullptr, getMsgHandler, services);
+	const int checkThreadResult = pthread_create(&checkThread, nullptr, checkMsgHandler, services);
+
+	if (registerThreadResult != 0 or unregisterThreadResult != 0 or getThreadResult != 0 or checkThreadResult != 0) {
 		delete services;
 
 		return 1;
 	}
 
-	pthread_detach(thread);
+	pthread_detach(registerThread);
+	pthread_detach(unregisterThread);
+	pthread_detach(getThread);
+	pthread_detach(checkThread);
 
-	while (true) {
+	for (;;) {
 		// take a snapshot of the services while protected by the mutex
 		vector<Service *> snapshot;
 		{
@@ -130,7 +145,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	return 0;
 }
 
-void *registerMsgHandler(void *srvsPtr) {
+[[noreturn]] void *registerMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service *> *>(srvsPtr);
 
 	printf("Starting Name/Registry register message handler!\n");
@@ -197,6 +212,7 @@ void *registerMsgHandler(void *srvsPtr) {
 
 		send_horizonos_message(nrPort, msg->src_port, newMsg);
 
+		delete retData;
 		delete newMsg;
 	}
 }
@@ -292,6 +308,7 @@ void *registerMsgHandler(void *srvsPtr) {
 
 		{
 			std::scoped_lock lock(services_mutex);
+
 			const auto res = ranges::find_if(*services,
 				[&](const Service* s) {
 					return s && s->name == name;
@@ -325,6 +342,7 @@ void *registerMsgHandler(void *srvsPtr) {
 
 		send_horizonos_message(nrPort, msg->src_port, newMsg);
 
+		delete retData;
 		delete newMsg;
 	}
 }
@@ -371,9 +389,10 @@ void *registerMsgHandler(void *srvsPtr) {
 
 		{
 			std::scoped_lock lock(services_mutex);
+
 			exists = ranges::any_of(*services,
 				[&](const Service* s) {
-					return s && s->name == name and s->tid == response->tid;
+					return s and (s->name == name or s->tid == response->tid);
 				});
 		}
 
@@ -390,112 +409,8 @@ void *registerMsgHandler(void *srvsPtr) {
 
 		send_horizonos_message(nrPort, msg->src_port, newMsg);
 
+		delete retData;
 		delete newMsg;
-	}
-}
-
-void *messageHandlerMain(void *srvsPtr) {
-	auto *services = static_cast<vector<Service *> *>(srvsPtr);
-
-	printf("Starting Name/Registry Messaging Service!\n");
-
-	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort));
-
-	if (registerResult == 0) {
-		printf("Name/Registry Service: Successfully registered port!\n");
-	} else {
-		printf("Name/Registry Service: Failed to register port: %d\n", registerResult);
-
-		return nullptr;
-	}
-
-	while (true) {
-		array<char, 1024> receiveBuffer{};
-		auto *msg = new hos_msg();
-
-		msg->buffer = receiveBuffer.data();
-		msg->length = receiveBuffer.size();
-
-		const int err = receive_horizonos_message(nrPort, msg, nullptr);
-
-		if (err != 0) {
-			continue;
-		}
-
-		if (msg->ret_length < 0 || static_cast<size_t>(msg->ret_length) > receiveBuffer.size()) {
-			printf("Name/Registry Service: Dropped oversized message (%ld bytes)", msg->ret_length);
-
-			continue;
-		}
-
-		const string message(receiveBuffer.data(), static_cast<size_t>(msg->ret_length));
-
-		vector<string> parts;
-		size_t start = 0;
-
-		while (start <= message.size()) {
-			const size_t separator = message.find(';', start);
-
-			if (separator == string::npos) {
-				parts.emplace_back(message.substr(start));
-				break;
-			}
-
-			parts.emplace_back(message.substr(start, separator - start));
-			start = separator + 1;
-		}
-
-		if (parts.empty()) {
-			continue;
-		}
-
-		if (msg->type == REGISTER_MSG_TYPE) {
-			if (parts.size() < 7) {
-				continue;
-			}
-
-			bool hasService = false;
-			{
-				std::scoped_lock lock(services_mutex);
-				hasService = ranges::any_of(*services,
-					[&](const Service* s) {
-						return s && s->name == parts[3];
-					});
-			}
-
-			if (!hasService) {
-				registerService(services, msg->src_port, stoul(parts[1]), stoul(parts[2]), parts[3], stoul(parts[4]), stoul(parts[5]), stoul(parts[6]));
-			} else {
-				printf("Service already registered!");
-			}
-
-			auto *newMsg = new hos_msg();
-
-			string ret = to_string(hasService ? 0 : 1);
-
-			newMsg->type = REPLY_MSG_TYPE;
-			newMsg->port = msg->src_port;
-			newMsg->buffer = static_cast<void *>(ret.data());
-			newMsg->length = ret.size();
-
-			send_horizonos_message(nrPort, msg->src_port, newMsg);
-
-			delete newMsg;
-		}
-
-		if (msg->type == UNREGISTER_MSG_TYPE) {
-			if (parts.size() < 1) {
-				continue;
-			}
-
-			// TODO: Implement security
-			{
-				std::scoped_lock lock(services_mutex);
-				unregisterService(services, parts[1]);
-			}
-		}
-
-		delete msg;
 	}
 }
 
