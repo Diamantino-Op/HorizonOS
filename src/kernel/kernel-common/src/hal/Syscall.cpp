@@ -560,10 +560,10 @@ namespace kernel::common::hal {
 		}
 	}
 
-	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, u64 options, u64, u64, u64) {
+	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, const u64 options, u64, u64, u64) {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 
-		const u64 result = PortMessaging::recvMessage(port, hdr);
+		const u64 result = PortMessaging::recvMessage(port, hdr, reinterpret_cast<MessageFilterOptions *>(options));
 
 		if (result != 0) {
 			if (ret != nullptr) {
@@ -580,13 +580,13 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallRegisterPort(long *ret, const u64, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallRegisterPort(long *ret, u64, u64, u64, u64, u64, u64) {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
 
 		if (*ret == 0) {
-			*ret = PortMessaging::getNewPort();
+			*ret = static_cast<long>(PortMessaging::getNewPort());
 		}
 
 		return PortMessaging::registerPort(*ret);
