@@ -498,9 +498,9 @@ namespace kernel::x86_64::hal {
 	}
 
 	void callSyscall(SyscallRegs *regs) {
-		if (regs->rax == 12) {
+		/*if (regs->rax == 15) {
 			CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
-		}
+		}*/
 
 		Thread *thread = Scheduler::getCurrentThread();
 

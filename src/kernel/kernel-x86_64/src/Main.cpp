@@ -360,6 +360,8 @@ namespace kernel::x86_64 {
 
 		this->cpuCore.apic.init();
 
+		this->cpuCore.printEnabled = false;
+
 		Asm::sti();
 
 		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);

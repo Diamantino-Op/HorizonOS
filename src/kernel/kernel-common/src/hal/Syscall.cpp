@@ -580,13 +580,15 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallRegisterPort(long *ret, u64, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallRegisterPort(long *ret, const u64 preferredPort, u64, u64, u64, u64, u64) {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
 
-		if (*ret == 0) {
+		if (preferredPort == 0) {
 			*ret = static_cast<long>(PortMessaging::getNewPort());
+		} else {
+			*ret = preferredPort;
 		}
 
 		return PortMessaging::registerPort(*ret);

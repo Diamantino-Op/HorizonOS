@@ -16,10 +16,20 @@ namespace kernel::common::threading {
 		~PortMessage();
 	};
 
+	struct PortWaiter {
+		Thread *thread {};
+		u64 *blackListTypes {};
+		usize blackListCount {};
+		u64 *whiteListTypes {};
+		usize whiteListCount {};
+
+		~PortWaiter();
+	};
+
 	struct PortEntry {
 		u64 port {};
 		LinkedList<PortMessage> messages {};
-		LinkedList<Thread> waiters {};
+		LinkedList<PortWaiter> waiters {};
 		TicketSpinLock lock {};
 
 		~PortEntry();

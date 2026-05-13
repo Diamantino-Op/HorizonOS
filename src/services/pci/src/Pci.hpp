@@ -12,6 +12,147 @@ constexpr int REGISTRY_PORT = 1;
 
 extern uint64_t pciPort;
 extern uint64_t uacpiPort;
+extern uint64_t uacpiTid;
+
+// Messages
+
+constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
+constexpr uint64_t GET_MSG_TYPE = 0x3;
+constexpr uint64_t CHECK_MSG_TYPE = 0x4;
+constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
+constexpr uint64_t REPLY_GET_MSG_TYPE = 0x6;
+constexpr uint64_t REPLY_CHECK_MSG_TYPE = 0x7;
+
+constexpr uint64_t PCI_READY_MSG_TYPE = 0x10;
+constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
+constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
+constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
+constexpr uint64_t PCI_MSI_ALLOC_MSG_TYPE = 0x50;
+constexpr uint64_t PCI_MSI_ALLOC_REPLY_MSG_TYPE = 0x60;
+constexpr uint64_t PCI_MSI_FREE_MSG_TYPE = 0x70;
+constexpr uint64_t PCI_MSIX_ALLOC_MSG_TYPE = 0x80;
+constexpr uint64_t PCI_MSIX_ALLOC_REPLY_MSG_TYPE = 0x90;
+constexpr uint64_t PCI_MSIX_FREE_MSG_TYPE = 0xA0;
+constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE = 0xB0;
+constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE = 0xC0;
+
+constexpr uint64_t MCFG_DONE_MSG_TYPE = 0x100;
+constexpr uint64_t MCFG_SEGMENT_MSG_TYPE = 0x200;
+
+// Name max 16 chars
+struct RegisterMsgData {
+	uint16_t ownerPid {};
+	uint16_t tid {};
+	char name[16] {};
+	size_t nameLength {};
+	uint16_t versionMajor {};
+	uint16_t versionMinor {};
+	uint16_t versionPatch {};
+};
+
+struct GetMsgData {
+	char name[16] {};
+	size_t nameLength {};
+};
+
+struct CheckMsgData {
+	uint16_t tid {};
+	char name[16] {};
+	size_t nameLength {};
+};
+
+struct RegisterReplyMsgData {
+	bool success {};
+};
+
+struct CheckReplyMsgData {
+	bool exists {};
+};
+
+struct GetReplyMsgData {
+	uint64_t port {};
+	uint16_t tid {};
+	uint16_t versionMajor {};
+	uint16_t versionMinor {};
+	uint16_t versionPatch {};
+};
+
+struct McfgSegmentMsgData {
+	uint64_t ecamBase {};
+	uint64_t segment {};
+	uint64_t bbn {};
+	uint8_t endBus {};
+};
+
+struct PciReadMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t offset {};
+	uint8_t width {};
+};
+
+struct PciReadReplyMsgData {
+	uint32_t data {};
+};
+
+struct PciWriteMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t offset {};
+	uint8_t width {};
+	uint32_t data {};
+};
+
+struct PciMsiAllocMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint64_t port {};
+};
+
+struct PciMsiAllocReplyMsgData {
+	uint8_t vec {};
+};
+
+struct PciMsiFreeMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
+
+struct PciMsixAllocMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t idx {};
+	uint64_t port {};
+};
+
+struct PciMsixAllocReplyMsgData {
+	uint8_t vec {};
+};
+
+struct PciMsixFreeMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t idx {};
+	uint8_t vec {};
+};
+
+struct PciMsixGlobalEnableMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
+
+struct PciMsixGlobalDisableMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
 
 // ─── Legacy PCI port I/O base addresses ──────────────────────────────────────
 constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
@@ -77,6 +218,13 @@ PciBridgeType getPciBridgeType(uint8_t classCode, uint8_t subclass);
 bool isPciBridge(uint8_t classCode, uint8_t subclass);
 
 // ─── Message loop (runs on a dedicated pthread) ───────────────────────────────
-void *pciMessageLoop(void *arg);
+void *handlePciRead(void *arg);
+void *handlePciWrite(void *arg);
+void *handleMsiAlloc(void *arg);
+void *handleMsiFree(void *arg);
+void *handleMsixAlloc(void *arg);
+void *handleMsixFree(void *arg);
+void *handleMsixGlobalEnable(void *arg);
+void *handleMsixGlobalDisable(void *arg);
 
 #endif

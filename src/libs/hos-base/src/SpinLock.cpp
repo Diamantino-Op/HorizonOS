@@ -21,6 +21,14 @@ bool TicketSpinLock::lock() {
 	return flags & (1 << 9);
 }
 
+void TicketSpinLock::lockNoCli() {
+	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
+
+	while(__atomic_load_n(&currentTicket, __ATOMIC_ACQUIRE) != ticket) {
+		lockedFun();
+	}
+}
+
 void TicketSpinLock::lockedFun() {
 #if defined(__x86_64__)
 	asm volatile ("pause" ::: "memory");
@@ -39,6 +47,12 @@ void TicketSpinLock::unlock(bool prevIF) {
 	if (prevIF) {
 		asm volatile("sti" ::: "memory");
 	}
+}
+
+void TicketSpinLock::unlockNoSti() {
+	const auto current = __atomic_load_n(&currentTicket, __ATOMIC_RELAXED);
+
+	__atomic_store_n(&currentTicket, current + 1, __ATOMIC_RELEASE);
 }
 
 bool SimpleSpinLock::lock() {

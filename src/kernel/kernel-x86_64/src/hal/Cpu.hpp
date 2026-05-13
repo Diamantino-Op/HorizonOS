@@ -36,6 +36,8 @@ namespace kernel::x86_64::hal {
         i64 offset {};
 
     	u64 currFrame {};
+
+    	bool printEnabled {};
     };
 
     // TODO: Move to a common file

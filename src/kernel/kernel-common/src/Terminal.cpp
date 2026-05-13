@@ -200,7 +200,7 @@ namespace kernel::common {
 			va_end(args);
 
 			this->msgQueue.push(message);
-		} else {
+		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
 			this->printf(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
@@ -236,7 +236,7 @@ namespace kernel::common {
 			va_end(args);
 
 			this->msgQueue.push(message);
-		} else {
+		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
 			this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
@@ -272,7 +272,7 @@ namespace kernel::common {
 			va_end(args);
 
 			this->msgQueue.push(message);
-		} else {
+		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
 			this->printf(false, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
@@ -318,7 +318,7 @@ namespace kernel::common {
 			va_end(args);
 
 			this->msgQueue.push(message);
-		} else {
+		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
 			this->printfBoth(false, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);

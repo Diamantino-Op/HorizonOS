@@ -74,9 +74,9 @@ struct McfgSegmentMsgData {
 	uint8_t endBus {};
 };
 
-static uint64_t uacpiPort = 0;
-static uint64_t pciPort = 0;
-static uint64_t pciTid = 0;
+uint64_t uacpiPort = 0;
+uint64_t pciPort = 0;
+uint64_t pciTid = 0;
 
 void *messageHandler(void *);
 
@@ -91,7 +91,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
+	printf("AA\n");
+
 	{
+		printf("Message being sent!\n");
+
 		// Send
 
 		auto *newMsg = new hos_msg();
@@ -113,6 +117,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		delete newMsg;
 		delete registerData;
+
+		printf("Message sent!\n");
 
 		// Receive
 

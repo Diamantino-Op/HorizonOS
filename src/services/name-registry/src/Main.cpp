@@ -69,7 +69,7 @@ struct GetReplyMsgData {
 	uint16_t versionPatch {};
 };
 
-static uint64_t nrPort = 1;
+uint64_t nrPort = 0;
 
 static std::mutex services_mutex;
 
@@ -82,10 +82,10 @@ void registerService(vector<Service *> *services, uint64_t port, uint64_t ownerP
 void unregisterService(vector<Service *> *services, string name);
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
-	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort));
+	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort), 1);
 
 	if (registerResult == 0) {
-		printf("Name/Registry Service: Successfully registered port!\n");
+		printf("Name/Registry Service: Successfully registered port: %lu!\n", nrPort);
 	} else {
 		printf("Name/Registry Service: Failed to register port: %d\n", registerResult);
 
@@ -119,7 +119,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		// take a snapshot of the services while protected by the mutex
 		vector<Service *> snapshot;
 		{
-			std::scoped_lock lock(services_mutex);
+			const std::scoped_lock lock(services_mutex);
 			snapshot = *services;
 		}
 
@@ -152,16 +152,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	auto *response = new RegisterMsgData();
 	auto *msg = new hos_msg();
+
+	msg->buffer = response;
+	msg->length = sizeof(RegisterMsgData);
+
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ REGISTER_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
 
 	for (;;) {
-		msg->buffer = response;
-		msg->length = sizeof(RegisterMsgData);
+		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
 
-		const int err = receive_horizonos_message(nrPort, msg, nullptr);
+		printf("A");
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive register message: %d\n", err);
@@ -169,11 +172,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
+		printf("B");
+
 		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) > sizeof(RegisterMsgData)) {
 			printf("Name/Registry Service: Dropped oversized register message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}
+
+		printf("C");
 
 		if (msg->type != REGISTER_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-register message in register handler (type %lu)", msg->type);
@@ -181,12 +188,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
+		printf("D");
+
 		const string name(response->name, response->nameLength);
 
 		bool hasService = false;
 
 		{
 			std::scoped_lock lock(services_mutex);
+
 			hasService = ranges::any_of(*services,
 				[&](const Service* s) {
 					return s && s->name == name;
@@ -224,16 +234,17 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	auto *response = new UnregisterMsgData();
 	auto *msg = new hos_msg();
+
+	msg->buffer = response;
+	msg->length = sizeof(UnregisterMsgData);
+
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ UNREGISTER_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
 
 	for (;;) {
-		msg->buffer = response;
-		msg->length = sizeof(UnregisterMsgData);
-
-		const int err = receive_horizonos_message(nrPort, msg, nullptr);
+		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive unregister message: %d\n", err);
@@ -269,16 +280,17 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	auto *response = new GetMsgData();
 	auto *msg = new hos_msg();
+
+	msg->buffer = response;
+	msg->length = sizeof(GetMsgData);
+
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ GET_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
 
 	for (;;) {
-		msg->buffer = response;
-		msg->length = sizeof(GetMsgData);
-
-		const int err = receive_horizonos_message(nrPort, msg, nullptr);
+		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive get message: %d\n", err);
@@ -354,16 +366,17 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	auto *response = new CheckMsgData();
 	auto *msg = new hos_msg();
+
+	msg->buffer = response;
+	msg->length = sizeof(CheckMsgData);
+
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ CHECK_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
 
 	for (;;) {
-		msg->buffer = response;
-		msg->length = sizeof(CheckMsgData);
-
-		const int err = receive_horizonos_message(nrPort, msg, nullptr);
+		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive check message: %d\n", err);

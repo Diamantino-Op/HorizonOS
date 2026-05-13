@@ -1,13 +1,22 @@
+#include "CommonMain.hpp"
+#include "Main.hpp"
 #include "Terminal.hpp"
 
 #include "hal/Cpu.hpp"
 #include "hal/Interrupts.hpp"
 
 namespace kernel::common {
+	using namespace x86_64;
 	using namespace x86_64::hal;
 
 	ExecutionNode *Terminal::getCurrentCore() {
 		return &CpuManager::getCurrentCore()->executionNode;
+	}
+
+	bool Terminal::canPrint() {
+		const CpuCore *bspCore = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu();
+
+		return bspCore == nullptr or bspCore == CpuManager::getCurrentCore() or CpuManager::getCurrentCore()->printEnabled;
 	}
 
 	void Terminal::printInterruptFrame(u64 *framePtr) {

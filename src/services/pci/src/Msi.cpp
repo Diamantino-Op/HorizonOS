@@ -91,6 +91,7 @@ void MsiManager::freeVectors(uint8_t base, int count) {
     }
 }
 
+// TODO
 void MsiManager::dispatch(uint8_t vector) {
     // Called from kernel IRQ context — keep it short.
     scoped_lock lock(m_lock);
@@ -109,7 +110,7 @@ void MsiManager::dispatch(uint8_t vector) {
     msg->buffer = static_cast<void *>(body.data());
     msg->length = body.size();
 
-    send_horizonos_message(PCI_PORT, port, msg);
+    send_horizonos_message(pciPort, port, msg);
     delete msg;
 }
 

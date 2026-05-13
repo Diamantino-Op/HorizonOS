@@ -17,6 +17,9 @@
 
 using namespace std;
 
+extern uint64_t pciPort;
+extern uint64_t uacpiPort;
+
 // ─── Global ECAM table ───────────────────────────────────────────────────────
 vector<McfgSegment> g_ecamSegments;
 mutex               g_ecamMutex;
@@ -30,8 +33,8 @@ bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t e
 
     uint64_t virt = 0;
     if (mmap_phys(physBase, mapSize, &virt) != 0) {
-        printf("PCI: ECAM mmap_phys failed for segment %u (base=%llx)\n",
-               seg, static_cast<unsigned long long>(physBase));
+        printf("PCI: ECAM mmap_phys failed for segment %u (base=%lx)\n", seg, physBase);
+
         return false;
     }
 
@@ -45,11 +48,7 @@ bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t e
         mapSize
     });
 
-    printf("PCI: ECAM segment %u mapped: phys=%llx virt=%llx buses=%u-%u\n",
-           seg,
-           static_cast<unsigned long long>(physBase),
-           static_cast<unsigned long long>(virt),
-           startBus, endBus);
+    printf("PCI: ECAM segment %u mapped: phys=%lx virt=%lx buses=%u-%u\n", seg, physBase, virt, startBus, endBus);
 
     return true;
 }
@@ -62,6 +61,7 @@ void *ecamDeviceBase(uint8_t bus, uint8_t dev, uint8_t func) {
         if (bus < seg.startBus || bus > seg.endBus) {
             continue;
         }
+
         if (!seg.mappedBase) {
             continue;
         }
@@ -84,6 +84,7 @@ static uint32_t legacyRead32(uint8_t bus, uint8_t dev, uint8_t func, uint8_t off
                            | (static_cast<uint32_t>(dev)  << 11)
                            | (static_cast<uint32_t>(func) <<  8)
                            | (offset & 0xFCu);
+
     outl(address, PCI_CONFIG_ADDRESS);
     return inl(PCI_CONFIG_DATA);
 }
@@ -94,6 +95,7 @@ static void legacyWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset
                            | (static_cast<uint32_t>(dev)  << 11)
                            | (static_cast<uint32_t>(func) <<  8)
                            | (offset & 0xFCu);
+
     outl(address, PCI_CONFIG_ADDRESS);
     outl(value,   PCI_CONFIG_DATA);
 }
@@ -106,7 +108,9 @@ uint32_t pciConfigRead32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset
 
     if (base) {
         uint32_t val;
+
         memcpy(&val, static_cast<uint8_t *>(base) + offset, 4);
+
         return val;
     }
 
@@ -119,11 +123,14 @@ uint16_t pciConfigRead16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset
 
     if (base) {
         uint16_t val;
+
         memcpy(&val, static_cast<uint8_t *>(base) + offset, 2);
+
         return val;
     }
 
     const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+
     return static_cast<uint16_t>((dword >> ((offset & 2u) * 8u)) & 0xFFFFu);
 }
 
@@ -131,10 +138,11 @@ uint8_t pciConfigRead8(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) 
     void *base = ecamDeviceBase(bus, dev, func);
 
     if (base) {
-        return *static_cast<uint8_t *>(static_cast<uint8_t *>(base) + offset);
+        return *(static_cast<uint8_t *>(base) + offset);
     }
 
     const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+
     return static_cast<uint8_t>((dword >> ((offset & 3u) * 8u)) & 0xFFu);
 }
 
@@ -143,6 +151,7 @@ void pciConfigWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, u
 
     if (base) {
         memcpy(static_cast<uint8_t *>(base) + offset, &value, 4);
+
         return;
     }
 
@@ -154,14 +163,18 @@ void pciConfigWrite16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, u
 
     if (base) {
         memcpy(static_cast<uint8_t *>(base) + offset, &value, 2);
+
         return;
     }
 
     // Legacy: read-modify-write on the containing dword.
     uint32_t cur = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+
     const uint32_t shift = (offset & 2u) * 8u;
+
     cur &= ~(0xFFFFu << shift);
     cur |= static_cast<uint32_t>(value) << shift;
+
     legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu), cur);
 }
 
@@ -169,7 +182,7 @@ void pciConfigWrite8(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, ui
     void *base = ecamDeviceBase(bus, dev, func);
 
     if (base) {
-        *static_cast<uint8_t *>(static_cast<uint8_t *>(base) + offset) = value;
+        *(static_cast<uint8_t *>(base) + offset) = value;
         return;
     }
 
@@ -293,256 +306,305 @@ bool isPciBridge(uint8_t classCode, uint8_t subclass) {
 	return classCode == 0x06;
 }
 
-// ─── Message helpers ──────────────────────────────────────────────────────────
-
-static void sendReply(uint64_t srcPort, const string &payload) {
-    auto *reply = new hos_msg();
-
-    reply->port   = static_cast<int>(srcPort);
-    reply->buffer = const_cast<void *>(static_cast<const void *>(payload.data()));
-    reply->length = payload.size();
-
-    send_horizonos_message(PCI_PORT, static_cast<int>(srcPort), reply);
-
-    delete reply;
-}
-
 // ─── Message loop ────────────────────────────────────────────────────────────
 
-void *pciMessageLoop(void *arg) {
-    (void)arg;
+void *handlePciRead(void *arg) {
+	(void)arg;
 
-    // Keep legacy I/O mapped permanently for fallback reads/writes.
-    if (ioperm(PCI_CONFIG_ADDRESS, 8, 1) != 0) {
-        printf("PCI: Failed to acquire I/O permissions in message loop\n");
+	printf("PCI: Read message loop started!\n");
 
-        return nullptr;
-    }
+	// Send
 
-    printf("PCI: Message loop started\n");
+	auto *sendMsg = new hos_msg();
 
-    for (;;) {
-        array<char, 4096> buf{};
-        auto *msg = new hos_msg();
+	auto *sendData = new PciReadReplyMsgData();
 
-        msg->buffer = buf.data();
-        msg->length = buf.size();
+	sendMsg->type = PCI_READ_REPLY_MSG_TYPE;
+	sendMsg->buffer = sendData;
+	sendMsg->length = sizeof(PciReadReplyMsgData);
 
-        const int err = receive_horizonos_message(PCI_PORT, msg);
+	// Recv
 
-        if (err != 0) {
-            delete msg;
+	auto *recvMsg = new hos_msg();
 
-            continue;
-        }
+	auto *recvData = new PciReadMsgData();
 
-        if (msg->ret_length <= 0 || static_cast<size_t>(msg->ret_length) > buf.size()) {
-            delete msg;
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciReadMsgData);
 
-            continue;
-        }
+	auto *filterOptions = new filter_options();
 
-        const string message(buf.data(), static_cast<size_t>(msg->ret_length));
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
 
-        // Split on ';'
-        vector<string> parts;
-        size_t start = 0;
-        while (start <= message.size()) {
-            const size_t sep = message.find(';', start);
-            if (sep == string::npos) {
-                parts.emplace_back(message.substr(start));
-                break;
-            }
-            parts.emplace_back(message.substr(start, sep - start));
-            start = sep + 1;
-        }
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
 
-        if (parts.empty()) { delete msg; continue; }
+		if (result != 0) {
+			continue;
+		}
 
-        const string &cmd = parts[0];
 
-        // ── mcfg_segment ── sent by uACPI once per MCFG entry ────────────────
-        // Format: "mcfg_segment;<physBase>;<seg>;<startBus>;<endBus>"
-        if (cmd == "mcfg_segment") {
-            if (parts.size() < 5) { delete msg; continue; }
+		sendMsg->port = recvMsg->src_port;
 
-            const uint64_t physBase = stoull(parts[1]);
-            const uint16_t seg      = static_cast<uint16_t>(stoul(parts[2]));
-            const uint8_t  startBus = static_cast<uint8_t>(stoul(parts[3]));
-            const uint8_t  endBus   = static_cast<uint8_t>(stoul(parts[4]));
+		sendData->data = 0;
 
-            const bool ok = addEcamSegment(physBase, seg, startBus, endBus);
+		if (recvData->width == 8) {
+			sendData->data = pciConfigRead8(recvData->bus, recvData->dev, recvData->func, recvData->offset);
+		} else if (recvData->width == 16) {
+			sendData->data = pciConfigRead16(recvData->bus, recvData->dev, recvData->func, recvData->offset);
+		} else if (recvData->width == 32) {
+			sendData->data = pciConfigRead32(recvData->bus, recvData->dev, recvData->func, recvData->offset);
+		}
 
-            sendReply(msg->src_port, ok ? "1" : "0");
-        }
+		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+	}
+}
 
-        // ── pci_read ── uACPI or any caller wants a config read ───────────────
-        // Format: "pci_read;<bus>;<dev>;<func>;<offset>;<width>"
-        else if (cmd == "pci_read") {
-            if (parts.size() < 6) {
-	            sendReply(msg->src_port, "error"); delete msg; continue;
-            }
+void *handlePciWrite(void *arg) {
+	(void)arg;
 
-            const uint8_t  bus    = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t  dev    = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t  func   = static_cast<uint8_t>(stoul(parts[3]));
-            const uint16_t offset = static_cast<uint16_t>(stoul(parts[4]));
-            const int      width  = stoi(parts[5]);
+	printf("PCI: Write message loop started!\n");
 
-            uint32_t value = 0;
+	// Recv
 
-            if (width == 8) {
-                value = pciConfigRead8 (bus, dev, func, offset);
-            } else if (width == 16) {
-                value = pciConfigRead16(bus, dev, func, offset);
-            } else if (width == 32) {
-                value = pciConfigRead32(bus, dev, func, offset);
-            } else {
-                sendReply(msg->src_port, "error");
+	auto *recvMsg = new hos_msg();
 
-                delete msg;
+	auto *recvData = new PciWriteMsgData();
 
-                continue;
-            }
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciWriteMsgData);
 
-            sendReply(msg->src_port, to_string(value));
-        }
+	auto *filterOptions = new filter_options();
 
-        // ── pci_write ── uACPI or any caller wants a config write ─────────────
-        // Format: "pci_write;<bus>;<dev>;<func>;<offset>;<width>;<value>"
-        else if (cmd == "pci_write") {
-            if (parts.size() < 7) {
-	            delete msg;
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_WRITE_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
 
-            	continue;
-            }
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
 
-            const uint8_t  bus    = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t  dev    = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t  func   = static_cast<uint8_t>(stoul(parts[3]));
-            const uint16_t offset = static_cast<uint16_t>(stoul(parts[4]));
-            const int      width  = stoi(parts[5]);
-            const uint32_t value  = static_cast<uint32_t>(stoul(parts[6]));
+		if (result != 0) {
+			continue;
+		}
 
-            if (width == 8) {
-                pciConfigWrite8 (bus, dev, func, offset, static_cast<uint8_t>(value));
-            } else if (width == 16) {
-                pciConfigWrite16(bus, dev, func, offset, static_cast<uint16_t>(value));
-            } else if (width == 32) {
-                pciConfigWrite32(bus, dev, func, offset, value);
-            }
-            // writes are fire-and-forget; no reply needed
-        }
+		if (recvData->width == 8) {
+			pciConfigWrite8 (recvData->bus, recvData->dev, recvData->func, recvData->offset, static_cast<uint8_t>(recvData->data));
+		} else if (recvData->width == 16) {
+			pciConfigWrite16(recvData->bus, recvData->dev, recvData->func, recvData->offset, static_cast<uint16_t>(recvData->data));
+		} else if (recvData->width == 32) {
+			pciConfigWrite32(recvData->bus, recvData->dev, recvData->func, recvData->offset, recvData->data);
+		}
+	}
+}
 
-        // ── enumerate ── returns all detected devices ─────────────────────────
-        // Format: "enumerate"
-        // Reply:  "<vendor>:<device>:<bus>:<dev>:<func>:<class>:<sub>:<pcie>\n" per device
-        else if (cmd == "enumerate") {
-            vector<PciDevice> devices;
-            enumeratePci(devices);
+void *handleMsiAlloc(void *arg) {
+	(void)arg;
 
-            string response;
-            for (const auto &d : devices) {
-                response += to_string(d.vendorId)  + ":"
-                          + to_string(d.deviceId)  + ":"
-                          + to_string(d.bus)        + ":"
-                          + to_string(d.device)     + ":"
-                          + to_string(d.function)   + ":"
-                          + to_string(d.classCode)  + ":"
-                          + to_string(d.subclass)   + ":"
-                          + (d.isPcie ? "1" : "0")  + "\n";
-            }
+	printf("PCI: Msi Alloc message loop started!\n");
 
-            sendReply(msg->src_port, response.empty() ? "none" : response);
-        }
+	// Send
 
-    	// ── msi_alloc ── driver requests MSI on a device ─────────────────────
-        // Format:  "msi_alloc;<bus>;<dev>;<func>;<notify_port>"
-        // Reply:   "<vector>" or "0" on failure
-        else if (cmd == "msi_alloc") {
-            if (parts.size() < 5) { sendReply(msg->src_port, "0"); delete msg; continue; }
+	auto *sendMsg = new hos_msg();
 
-            const uint8_t bus  = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t dev  = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t func = static_cast<uint8_t>(stoul(parts[3]));
-            const int     port = stoi(parts[4]);
+	auto *sendData = new PciMsiAllocReplyMsgData();
 
-            const uint8_t vec = msiEnable(bus, dev, func, port);
-            sendReply(msg->src_port, to_string(vec));
-        }
+	sendMsg->type = PCI_MSI_ALLOC_REPLY_MSG_TYPE;
+	sendMsg->buffer = sendData;
+	sendMsg->length = sizeof(PciMsiAllocReplyMsgData);
 
-        // ── msi_free ── driver releases MSI on a device ──────────────────────
-        // Format: "msi_free;<bus>;<dev>;<func>"
-        else if (cmd == "msi_free") {
-            if (parts.size() < 4) { delete msg; continue; }
+	// Recv
 
-            const uint8_t bus  = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t dev  = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t func = static_cast<uint8_t>(stoul(parts[3]));
+	auto *recvMsg = new hos_msg();
 
-            msiDisable(bus, dev, func);
-        }
+	auto *recvData = new PciMsiAllocMsgData();
 
-        // ── msix_alloc ── driver requests one MSI-X table entry ──────────────
-        // Format:  "msix_alloc;<bus>;<dev>;<func>;<table_index>;<notify_port>"
-        // Reply:   "<vector>" or "0" on failure
-        else if (cmd == "msix_alloc") {
-            if (parts.size() < 6) { sendReply(msg->src_port, "0"); delete msg; continue; }
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsiAllocMsgData);
 
-            const uint8_t  bus   = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t  dev   = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t  func  = static_cast<uint8_t>(stoul(parts[3]));
-            const uint16_t idx   = static_cast<uint16_t>(stoul(parts[4]));
-            const int      port  = stoi(parts[5]);
+	auto *filterOptions = new filter_options();
 
-            // Ensure global MSI-X enable is set after all desired entries are
-            // programmed.  The caller should send msix_global_enable when done.
-            const uint8_t vec = msixEnableEntry(bus, dev, func, idx, port);
-            sendReply(msg->src_port, to_string(vec));
-        }
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSI_ALLOC_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
 
-        // ── msix_free ── driver releases one MSI-X entry ─────────────────────
-        // Format: "msix_free;<bus>;<dev>;<func>;<table_index>;<vector>"
-        else if (cmd == "msix_free") {
-            if (parts.size() < 6) { delete msg; continue; }
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
 
-            const uint8_t  bus    = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t  dev    = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t  func   = static_cast<uint8_t>(stoul(parts[3]));
-            const uint16_t idx    = static_cast<uint16_t>(stoul(parts[4]));
-            const uint8_t  vector = static_cast<uint8_t>(stoul(parts[5]));
+		if (result != 0) {
+			continue;
+		}
 
-            msixDisableEntry(bus, dev, func, idx, vector);
-        }
 
-        // ── msix_global_enable ── enable the MSI-X capability on a device ────
-        // Format: "msix_global_enable;<bus>;<dev>;<func>"
-        else if (cmd == "msix_global_enable") {
-            if (parts.size() < 4) { delete msg; continue; }
+		sendMsg->port = recvMsg->src_port;
 
-            const uint8_t bus  = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t dev  = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t func = static_cast<uint8_t>(stoul(parts[3]));
+		sendData->vec = msiEnable(recvData->bus, recvData->dev, recvData->func, recvData->port);
 
-            msixGlobalEnable(bus, dev, func);
-        }
+		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+	}
+}
 
-        // ── msix_global_disable ──────────────────────────────────────────────
-        // Format: "msix_global_disable;<bus>;<dev>;<func>"
-        else if (cmd == "msix_global_disable") {
-            if (parts.size() < 4) { delete msg; continue; }
+void *handleMsiFree(void *arg) {
+	(void)arg;
 
-            const uint8_t bus  = static_cast<uint8_t>(stoul(parts[1]));
-            const uint8_t dev  = static_cast<uint8_t>(stoul(parts[2]));
-            const uint8_t func = static_cast<uint8_t>(stoul(parts[3]));
+	printf("PCI: Msi Free message loop started!\n");
 
-            msixGlobalDisable(bus, dev, func);
-        } else {
-            printf("PCI: Unknown command: %s\n", cmd.c_str());
-        }
+	// Recv
 
-        delete msg;
-    }
+	auto *recvMsg = new hos_msg();
 
-    return nullptr;
+	auto *recvData = new PciMsiFreeMsgData();
+
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsiFreeMsgData);
+
+	auto *filterOptions = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSI_FREE_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+		msiDisable(recvData->bus, recvData->dev, recvData->func);
+	}
+}
+
+void *handleMsixAlloc(void *arg) {
+	(void)arg;
+
+	printf("PCI: Msix Alloc message loop started!\n");
+
+	// Send
+
+	auto *sendMsg = new hos_msg();
+
+	auto *sendData = new PciMsixAllocReplyMsgData();
+
+	sendMsg->type = PCI_MSIX_ALLOC_REPLY_MSG_TYPE;
+	sendMsg->buffer = sendData;
+	sendMsg->length = sizeof(PciMsixAllocReplyMsgData);
+
+	// Recv
+
+	auto *recvMsg = new hos_msg();
+
+	auto *recvData = new PciMsixAllocMsgData();
+
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsixAllocMsgData);
+
+	auto *filterOptions = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_ALLOC_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+
+		sendMsg->port = recvMsg->src_port;
+
+		// Ensure global MSI-X enable is set after all desired entries are
+		// programmed.  The caller should send msix_global_enable when done.
+		sendData->vec = msixEnableEntry(recvData->bus, recvData->dev, recvData->func, recvData->idx, recvData->port);
+
+		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+	}
+}
+
+void *handleMsixFree(void *arg) {
+	(void)arg;
+
+	printf("PCI: Msix Free message loop started!\n");
+
+	// Recv
+
+	auto *recvMsg = new hos_msg();
+
+	auto *recvData = new PciMsixFreeMsgData();
+
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsixFreeMsgData);
+
+	auto *filterOptions = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_FREE_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+		msixDisableEntry(recvData->bus, recvData->dev, recvData->func, recvData->idx, recvData->vec);
+	}
+}
+
+void *handleMsixGlobalEnable(void *arg) {
+	(void)arg;
+
+	printf("PCI: Msix Global Enable message loop started!\n");
+
+	// Recv
+
+	auto *recvMsg = new hos_msg();
+
+	auto *recvData = new PciMsixGlobalEnableMsgData();
+
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsixGlobalEnableMsgData);
+
+	auto *filterOptions = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+		msixGlobalEnable(recvData->bus, recvData->dev, recvData->func);
+	}
+}
+
+void *handleMsixGlobalDisable(void *arg) {
+	(void)arg;
+
+	printf("PCI: Msix Global Disable message loop started!\n");
+
+	// Recv
+
+	auto *recvMsg = new hos_msg();
+
+	auto *recvData = new PciMsixGlobalDisableMsgData();
+
+	recvMsg->buffer = recvData;
+	recvMsg->length = sizeof(PciMsixGlobalDisableMsgData);
+
+	auto *filterOptions = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+		msixGlobalDisable(recvData->bus, recvData->dev, recvData->func);
+	}
 }

@@ -13,7 +13,10 @@ public:
     ~TicketSpinLock() = default;
 
     bool lock();
+	void lockNoCli();
+
     void unlock(bool prevIF);
+	void unlockNoSti();
 
 private:
     void lockedFun();

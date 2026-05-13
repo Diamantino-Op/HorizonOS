@@ -16,6 +16,73 @@ namespace kernel::common::threading {
     namespace {
         LinkedList<PortEntry> *portList {};
 
+        bool waiterAcceptsMessage(const PortWaiter *waiter, const u64 messageType) {
+            if (waiter == nullptr) {
+                return false;
+            }
+
+            if (waiter->blackListTypes != nullptr && waiter->blackListCount > 0) {
+                for (usize i = 0; i < waiter->blackListCount; ++i) {
+                    if (messageType == waiter->blackListTypes[i]) {
+                        return false;
+                    }
+                }
+            }
+
+            if (waiter->whiteListTypes != nullptr && waiter->whiteListCount > 0) {
+                for (usize i = 0; i < waiter->whiteListCount; ++i) {
+                    if (messageType == waiter->whiteListTypes[i]) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
+        PortWaiter *createWaiter(Thread *thread, const MessageFilterOptions *options) {
+            auto *waiter = new PortWaiter();
+
+            if (waiter == nullptr) {
+                return nullptr;
+            }
+
+            waiter->thread = thread;
+
+            if (options != nullptr) {
+                waiter->blackListCount = options->blackListCount;
+                waiter->whiteListCount = options->whiteListCount;
+
+                if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+                    waiter->blackListTypes = new u64[options->blackListCount];
+
+                    if (waiter->blackListTypes == nullptr) {
+                        delete waiter;
+
+                        return nullptr;
+                    }
+
+                    memcpy(waiter->blackListTypes, options->blackListTypes, options->blackListCount * sizeof(u64));
+                }
+
+                if (options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+                    waiter->whiteListTypes = new u64[options->whiteListCount];
+
+                    if (waiter->whiteListTypes == nullptr) {
+                        delete waiter;
+
+                        return nullptr;
+                    }
+
+                    memcpy(waiter->whiteListTypes, options->whiteListTypes, options->whiteListCount * sizeof(u64));
+                }
+            }
+
+            return waiter;
+        }
+
         LinkedList<PortEntry> &getPortListUnlocked() {
             if (portList == nullptr) {
                 portList = new LinkedList<PortEntry>();
@@ -29,8 +96,13 @@ namespace kernel::common::threading {
         delete[] this->buffer;
     }
 
+    PortWaiter::~PortWaiter() {
+		delete[] this->blackListTypes;
+		delete[] this->whiteListTypes;
+    }
+
     PortEntry::~PortEntry() {
-		this->waiters.clear(false);
+		this->waiters.clear(true);
 		this->messages.clear(true);
     }
 
@@ -97,28 +169,28 @@ namespace kernel::common::threading {
             return EINVAL;
         }
 
-        if (hdr->length > 0 && hdr->buffer == nullptr) {
+        if (hdr->length > 0 and hdr->buffer == nullptr) {
             return EINVAL;
         }
 
-        const bool prevIF = portLock.lock();
+        portLock.lockNoCli();
 
         PortEntry *entry = findPortUnlocked(port);
 
         if (entry == nullptr) {
-            portLock.unlock(prevIF);
+            portLock.unlockNoSti();
 
             return ENOENT;
         }
 
-        const bool portPrevIF = entry->lock.lock();
+        entry->lock.lockNoCli();
 
-        portLock.unlock(prevIF);
+        portLock.unlockNoSti();
 
     	auto *message = new PortMessage();
 
     	if (message == nullptr) {
-    		entry->lock.unlock(portPrevIF);
+    		entry->lock.unlockNoSti();
 
     		return ENOMEM;
     	}
@@ -127,7 +199,8 @@ namespace kernel::common::threading {
             message->buffer = new u8[hdr->length];
 
             if (message->buffer == nullptr) {
-                entry->lock.unlock(portPrevIF);
+                entry->lock.unlockNoSti();
+
                 delete message;
 
                 return ENOMEM;
@@ -142,22 +215,37 @@ namespace kernel::common::threading {
 
         entry->messages.addEnd(message);
 
-        Thread *waiter = nullptr;
+        const PortWaiter *waiter = nullptr;
 
-        if (const auto *waiterEntry = entry->waiters.removeFirstEntry(); waiterEntry != nullptr) {
-            waiter = waiterEntry->value;
-            delete waiterEntry;
+        auto *waiterEntry = entry->waiters.getFirst();
+
+        while (waiterEntry != nullptr) {
+            auto *nextWaiter = waiterEntry->next;
+            auto *currWaiter = waiterEntry->value;
+
+            if (waiterAcceptsMessage(currWaiter, hdr->type)) {
+                if (entry->waiters.removeEntry(waiterEntry)) {
+                    waiter = currWaiter;
+
+                    delete waiterEntry;
+
+                    break;
+                }
+            }
+
+            waiterEntry = nextWaiter;
         }
 
-        entry->lock.unlock(portPrevIF);
+        entry->lock.unlockNoSti();
 
     	if (waiter != nullptr) {
-    		const bool shouldWake = waiter->getState() == ThreadState::BLOCKED;
-            waiter->setWaitingPort(0);
+			const bool shouldWake = waiter->thread != nullptr and waiter->thread->getState() == ThreadState::BLOCKED;
 
     		if (shouldWake) {
-                CommonMain::getInstance()->getScheduler()->unblockThread(waiter->getId(), true);
+				CommonMain::getInstance()->getScheduler()->unblockThread(waiter->thread->getId(), true);
     		}
+
+			delete waiter;
         }
 
         hdr->retLength = static_cast<ssize>(message->length);
@@ -175,19 +263,19 @@ namespace kernel::common::threading {
 	    }
 
 	    for (;;) {
-		    const bool prevIF = portLock.lock();
+		    portLock.lockNoCli();
 
     		PortEntry *entry = findPortUnlocked(port);
 
     		if (entry == nullptr) {
-    			portLock.unlock(prevIF);
+    			portLock.unlockNoSti();
 
     			return ENOENT;
     		}
 
-    		const bool portPrevIF = entry->lock.lock();
+    		entry->lock.lockNoCli();
 
-    		portLock.unlock(prevIF);
+    		portLock.unlockNoSti();
 
     		// Walk the message queue to find the first message that passes the filter.
     		auto *messageEntry = entry->messages.getFirst();
@@ -214,6 +302,7 @@ namespace kernel::common::threading {
     				// Applied after the blacklist, so a type blacklisted AND whitelisted is still blocked.
     				if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
     					filtered = true; // Assume blocked unless found
+
     					for (usize i = 0; i < options->whiteListCount; ++i) {
     						if (message->type == options->whiteListTypes[i]) {
     							filtered = false;
@@ -235,14 +324,14 @@ namespace kernel::common::threading {
     			const usize messageLength = message->length;
 
     			if (hdr->length < messageLength) {
-    				entry->lock.unlock(portPrevIF);
+    				entry->lock.unlockNoSti();
 
     				return EMSGSIZE;
     			}
 
     			// Remove this specific entry from the queue.
     			if (not entry->messages.removeEntry(messageEntry)) {
-    				entry->lock.unlock(portPrevIF);
+    				entry->lock.unlockNoSti();
 
     				return ENOENT;
     			}
@@ -260,7 +349,7 @@ namespace kernel::common::threading {
     			hdr->type      = message->type;
     			hdr->retLength = static_cast<ssize>(messageLength);
 
-    			entry->lock.unlock(portPrevIF);
+    			entry->lock.unlockNoSti();
 
     			delete message;
 
@@ -271,20 +360,42 @@ namespace kernel::common::threading {
     		Thread *currThread = Scheduler::getCurrentThread();
 
     		if (currThread == nullptr) {
-    			entry->lock.unlock(portPrevIF);
+    			entry->lock.unlockNoSti();
 
     			return EFAULT;
     		}
 
-    		if (!entry->waiters.contains(currThread)) {
-    			currThread->setWaitingPort(port);
-    			entry->waiters.addEnd(currThread);
-    		}
+            bool alreadyWaiting = false;
+            const auto *waiterEntry = entry->waiters.getFirst();
 
-    		entry->lock.unlock(portPrevIF);
+            while (waiterEntry != nullptr) {
+              if (waiterEntry->value != nullptr && waiterEntry->value->thread == currThread) {
+                alreadyWaiting = true;
+
+                break;
+              }
+
+              waiterEntry = waiterEntry->next;
+            }
+
+            if (!alreadyWaiting) {
+              auto *waiter = createWaiter(currThread, options);
+
+              if (waiter == nullptr) {
+                entry->lock.unlockNoSti();
+
+                return ENOMEM;
+              }
+
+              currThread->setWaitingPort(port);
+              entry->waiters.addEnd(waiter);
+            }
+
+    		entry->lock.unlockNoSti();
 
     		//Asm::sti();
     		CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());
+	    	//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 500ull * 1'000'000ull);
     		//Asm::cli();
 	    }
     }
@@ -302,7 +413,20 @@ namespace kernel::common::threading {
         for (auto &currPort : ports) {
             const bool portPrevIF = currPort.lock.lock();
 
-            currPort.waiters.remove(thread, false);
+            auto *waiterEntry = currPort.waiters.getFirst();
+
+            while (waiterEntry != nullptr) {
+                auto *nextWaiter = waiterEntry->next;
+
+                if (waiterEntry->value != nullptr && waiterEntry->value->thread == thread) {
+                    if (currPort.waiters.removeEntry(waiterEntry)) {
+                        delete waiterEntry->value;
+                        delete waiterEntry;
+                    }
+                }
+
+                waiterEntry = nextWaiter;
+            }
 
             currPort.lock.unlock(portPrevIF);
         }

@@ -1,73 +1,17 @@
+#include "Pci.hpp"
 #include "abi-bits/hos_msg.h"
 #include "horizonos/generic.h"
-#include "Pci.hpp"
+#include "sys/io.h"
 
-#include <cstdio>
-#include <string>
 #include <array>
-#include <vector>
-#include <thread>
+#include <cstdio>
+#include <cstring>
 #include <pthread.h>
+#include <thread>
 #include <unistd.h>
+#include <vector>
 
 using namespace std;
-
-constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
-constexpr uint64_t GET_MSG_TYPE = 0x3;
-constexpr uint64_t CHECK_MSG_TYPE = 0x4;
-constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
-constexpr uint64_t REPLY_GET_MSG_TYPE = 0x6;
-constexpr uint64_t REPLY_CHECK_MSG_TYPE = 0x7;
-
-constexpr uint64_t PCI_READY_MSG_TYPE = 0x10;
-
-constexpr uint64_t MCFG_DONE_MSG_TYPE = 0x100;
-constexpr uint64_t MCFG_SEGMENT_MSG_TYPE = 0x200;
-
-// Name max 16 chars
-struct RegisterMsgData {
-	uint16_t ownerPid {};
-	uint16_t tid {};
-	char name[16] {};
-	size_t nameLength {};
-	uint16_t versionMajor {};
-	uint16_t versionMinor {};
-	uint16_t versionPatch {};
-};
-
-struct GetMsgData {
-	char name[16] {};
-	size_t nameLength {};
-};
-
-struct CheckMsgData {
-	uint16_t tid {};
-	char name[16] {};
-	size_t nameLength {};
-};
-
-struct RegisterReplyMsgData {
-	bool success {};
-};
-
-struct CheckReplyMsgData {
-	bool exists {};
-};
-
-struct GetReplyMsgData {
-	uint64_t port {};
-	uint16_t tid {};
-	uint16_t versionMajor {};
-	uint16_t versionMinor {};
-	uint16_t versionPatch {};
-};
-
-struct McfgSegmentMsgData {
-	uint64_t ecamBase {};
-	uint64_t segment {};
-	uint64_t bbn {};
-	uint8_t endBus {};
-};
 
 uint64_t pciPort = 0;
 uint64_t uacpiPort = 0;
@@ -282,8 +226,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
         	auto *filterOptions = new filter_options();
 
-        	filterOptions->whiteListTypes = new uint64_t[1]{ MCFG_SEGMENT_MSG_TYPE };
-        	filterOptions->whiteListCount = 1;
+        	filterOptions->whiteListTypes = new uint64_t[2]{ MCFG_SEGMENT_MSG_TYPE, MCFG_DONE_MSG_TYPE };
+        	filterOptions->whiteListCount = 2;
 
             if (receive_horizonos_message(pciPort, msg, filterOptions) != 0) {
                 delete msg;
@@ -292,38 +236,18 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
                 continue;
             }
 
-            delete msg;
-        	delete mcfgData;
-
-            if (notice == "mcfg_done") {
+            if (msg->type == MCFG_DONE_MSG_TYPE) {
                 printf("PCI: All MCFG segments received (%zu segment(s))\n", g_ecamSegments.size());
 
                 break;
             }
 
-            if (notice.starts_with("mcfg_segment;")) {
-                // Parse inline without going through the message loop.
-                // Format: "mcfg_segment;<physBase>;<seg>;<startBus>;<endBus>"
-                vector<string> parts;
-                size_t start = 0;
-
-                while (start <= notice.size()) {
-                    const size_t sep = notice.find(';', start);
-
-                    if (sep == string::npos) {
-                        parts.emplace_back(notice.substr(start));
-
-                        break;
-                    }
-
-                    parts.emplace_back(notice.substr(start, sep - start));
-                    start = sep + 1;
-                }
-
-                if (parts.size() >= 5) {
-                    addEcamSegment(stoull(parts[1]), static_cast<uint16_t>(stoul(parts[2])), static_cast<uint8_t>(stoul(parts[3])), static_cast<uint8_t>(stoul(parts[4])));
-                }
+            if (msg->type == MCFG_SEGMENT_MSG_TYPE) {
+            	addEcamSegment(mcfgData->ecamBase, mcfgData->segment, mcfgData->bbn, mcfgData->endBus);
             }
+
+        	delete msg;
+        	delete mcfgData;
         }
     }
 
@@ -347,15 +271,92 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     }
 
     // ── 7. Start the message-handling thread ──────────────────────────────────
-    pthread_t msgThread;
+	// Keep legacy I/O mapped permanently for fallback reads/writes.
+	if (ioperm(PCI_CONFIG_ADDRESS, 8, 1) != 0) {
+		printf("PCI: Failed to acquire I/O permissions in message loop\n");
 
-    if (pthread_create(&msgThread, nullptr, pciMessageLoop, nullptr) != 0) {
-        printf("PCI: Failed to create message loop thread\n");
+		return 1;
+	}
+
+    pthread_t pciReadThread;
+
+    if (pthread_create(&pciReadThread, nullptr, handlePciRead, nullptr) != 0) {
+        printf("PCI: Failed to create pci read message loop thread\n");
 
         return 1;
     }
 
-    pthread_detach(msgThread);
+    pthread_detach(pciReadThread);
+
+	pthread_t pciWriteThread;
+
+	if (pthread_create(&pciWriteThread, nullptr, handlePciWrite, nullptr) != 0) {
+		printf("PCI: Failed to create pci write message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciWriteThread);
+
+	pthread_t pciMsiAllocThread;
+
+	if (pthread_create(&pciMsiAllocThread, nullptr, handleMsiAlloc, nullptr) != 0) {
+		printf("PCI: Failed to create pci msi alloc message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsiAllocThread);
+
+	pthread_t pciMsiFreeThread;
+
+	if (pthread_create(&pciMsiFreeThread, nullptr, handleMsiFree, nullptr) != 0) {
+		printf("PCI: Failed to create pci msi free message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsiFreeThread);
+
+	pthread_t pciMsixAllocThread;
+
+	if (pthread_create(&pciMsixAllocThread, nullptr, handleMsixAlloc, nullptr) != 0) {
+		printf("PCI: Failed to create pci msix alloc message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsixAllocThread);
+
+	pthread_t pciMsixFreeThread;
+
+	if (pthread_create(&pciMsixFreeThread, nullptr, handleMsixFree, nullptr) != 0) {
+		printf("PCI: Failed to create pci msix free message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsixFreeThread);
+
+	pthread_t pciMsixGlobalEnableThread;
+
+	if (pthread_create(&pciMsixGlobalEnableThread, nullptr, handleMsixGlobalEnable, nullptr) != 0) {
+		printf("PCI: Failed to create pci msix gobal enable message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsixGlobalEnableThread);
+
+	pthread_t pciMsixGlobalDisableThread;
+
+	if (pthread_create(&pciMsixGlobalDisableThread, nullptr, handleMsixGlobalDisable, nullptr) != 0) {
+		printf("PCI: Failed to create pci msix gobal disable message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciMsixGlobalDisableThread);
 
     // ── 8. Main thread idle loop ──────────────────────────────────────────────
     for (;;) {

@@ -39,6 +39,8 @@ namespace kernel::common {
         bool lock();
         void unlock(bool prevIF);
 
+    	static bool canPrint();
+
         static void putChar(int c, void *ctx);
         static void putCharE9(int c, void *ctx);
         static void putCharBoth(int c, void *ctx);

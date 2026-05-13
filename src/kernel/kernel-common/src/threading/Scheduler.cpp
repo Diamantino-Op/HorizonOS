@@ -340,6 +340,12 @@ namespace kernel::common::threading {
 	}
 
 	Thread *Scheduler::getThread(const u16 tid) {
+		Thread *currThread = this->getCurrentExecutionNode()->getCurrentThread()->value;
+
+		if (currThread->getId() == tid) {
+			return currThread;
+		}
+
 		for (LinkedList<Thread>& currQueue : this->queues) {
 			for (auto &currEntry : currQueue) {
 				if (currEntry.getId() == tid) {

@@ -119,7 +119,7 @@ namespace kernel::common::hal {
     	static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64);
     	static u64 syscallSendMsg(long *ret, u64 sendPort, u64 port, u64 msgHdr, u64, u64, u64);
     	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64 options, u64, u64, u64);
-    	static u64 syscallRegisterPort(long *ret, u64, u64, u64, u64, u64, u64);
+    	static u64 syscallRegisterPort(long *ret, u64 preferredPort, u64, u64, u64, u64, u64);
     	static u64 syscallIsThreadAlive(long *ret, u64 tid, u64, u64, u64, u64, u64);
     	static u64 syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64);
         static u64 syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64);

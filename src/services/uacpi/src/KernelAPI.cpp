@@ -16,6 +16,34 @@
 
 using namespace std;
 
+extern uint64_t uacpiPort;
+extern uint64_t pciPort;
+
+constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
+constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
+constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
+
+struct PciReadMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t offset {};
+	uint8_t width {};
+};
+
+struct PciReadReplyMsgData {
+	uint32_t data {};
+};
+
+struct PciWriteMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t offset {};
+	uint8_t width {};
+	uint32_t data {};
+};
+
 struct UacpiIoRange {
 	uacpi_io_addr base;
 	uacpi_size len;
@@ -60,44 +88,9 @@ static void *workThreadFunc(void *arg) {
 	return nullptr;
 }
 
-// The PCI service registers on port 3.
-// uACPI sits on port 2 and contacts port 3.
-static constexpr int UACPI_OWN_PORT = 2;
-static constexpr int PCI_SRV_PORT   = 3;
-
 struct PciHandle {
 	uacpi_pci_address address;
 };
-
-// Helper: send a message to the PCI service and receive the reply string.
-static string pciServiceCall(const string &msg) {
-	auto *sendMsg   = new hos_msg();
-
-	sendMsg->port   = PCI_SRV_PORT;
-	sendMsg->buffer = const_cast<void *>(static_cast<const void *>(msg.data()));
-	sendMsg->length = msg.size();
-
-	send_horizonos_message(UACPI_OWN_PORT, PCI_SRV_PORT, sendMsg);
-
-	delete sendMsg;
-
-	array<char, 128> buf{};
-	auto *recvMsg   = new hos_msg();
-
-	recvMsg->buffer = buf.data();
-	recvMsg->length = buf.size();
-
-	const int err = receive_horizonos_message(UACPI_OWN_PORT, recvMsg);
-
-	string result;
-
-	if (err == 0 && recvMsg->ret_length > 0) {
-		result = string(buf.data(), static_cast<size_t>(recvMsg->ret_length));
-	}
-
-	delete recvMsg;
-	return result;
-}
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 	if (!outRsdpAddress) {
@@ -194,85 +187,243 @@ void uacpi_kernel_pci_device_close(uacpi_handle handle) {
 }
 
 uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8 *value) {
-	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	if (!device or !value) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
+
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_read;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";8";
+	// Send
 
-	const string reply = pciServiceCall(msg);
-	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+	auto *sendMsg    = new hos_msg();
 
-	*value = static_cast<uacpi_u8>(stoul(reply));
+	auto *sendData   = new PciReadMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_READ_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciReadMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->width  = 8;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
+
+	// Recv
+
+	auto *recvMsg    = new hos_msg();
+
+	auto *recvData   = new PciReadReplyMsgData();
+
+	recvMsg->buffer  = recvData;
+	recvMsg->length  = sizeof(PciReadReplyMsgData);
+
+	auto *filterOptions           = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+
+	delete recvMsg;
+
+	if (result != 0) {
+		delete recvData;
+
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	*value = static_cast<uacpi_u8>(recvData->data);
+
+	delete recvData;
+
 	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value) {
-	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	if (!device or !value) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
+
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_read;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";16";
+	// Send
 
-	const string reply = pciServiceCall(msg);
-	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+	auto *sendMsg    = new hos_msg();
 
-	*value = static_cast<uacpi_u16>(stoul(reply));
+	auto *sendData   = new PciReadMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_READ_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciReadMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->width  = 16;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
+
+	// Recv
+
+	auto *recvMsg    = new hos_msg();
+
+	auto *recvData   = new PciReadReplyMsgData();
+
+	recvMsg->buffer  = recvData;
+	recvMsg->length  = sizeof(PciReadReplyMsgData);
+
+	auto *filterOptions           = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+
+	delete recvMsg;
+
+	if (result != 0) {
+		delete recvData;
+
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	*value = static_cast<uacpi_u16>(recvData->data);
+
+	delete recvData;
+
 	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32 *value) {
-	if (!device || !value) return UACPI_STATUS_INVALID_ARGUMENT;
+	if (!device or !value) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
+
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_read;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";32";
+	// Send
 
-	const string reply = pciServiceCall(msg);
-	if (reply == "error" || reply.empty()) return UACPI_STATUS_INTERNAL_ERROR;
+	auto *sendMsg    = new hos_msg();
 
-	*value = static_cast<uacpi_u32>(stoul(reply));
+	auto *sendData   = new PciReadMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_READ_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciReadMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->width  = 32;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
+
+	// Recv
+
+	auto *recvMsg    = new hos_msg();
+
+	auto *recvData   = new PciReadReplyMsgData();
+
+	recvMsg->buffer  = recvData;
+	recvMsg->length  = sizeof(PciReadReplyMsgData);
+
+	auto *filterOptions           = new filter_options();
+
+	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions->whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+
+	delete recvMsg;
+
+	if (result != 0) {
+		delete recvData;
+
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
+
+	*value = recvData->data;
+
+	delete recvData;
 
 	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-	if (!device) return UACPI_STATUS_INVALID_ARGUMENT;
+	if (!device) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
+
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_write;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";8;"
-					 + to_string(value);
+	auto *sendMsg = new hos_msg();
 
-	pciServiceCall(msg); // fire-and-forget; no reply expected for writes
+	auto *sendData = new PciWriteMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_WRITE_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciWriteMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->data   = value;
+	sendData->width  = 8;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
 
 	return UACPI_STATUS_OK;
 }
 
 uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-	if (!device) return UACPI_STATUS_INVALID_ARGUMENT;
+	if (!device) {
+		return UACPI_STATUS_INVALID_ARGUMENT;
+	}
+
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_write;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";16;"
-					 + to_string(value);
+	auto *sendMsg = new hos_msg();
 
-	pciServiceCall(msg);
+	auto *sendData = new PciWriteMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_WRITE_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciWriteMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->data   = value;
+	sendData->width  = 16;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
 
 	return UACPI_STATUS_OK;
 }
@@ -284,14 +435,26 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 	const auto *h = static_cast<PciHandle *>(device);
 
-	const string msg = "pci_write;"
-					 + to_string(h->address.bus)      + ";"
-					 + to_string(h->address.device)   + ";"
-					 + to_string(h->address.function) + ";"
-					 + to_string(offset)              + ";32;"
-					 + to_string(value);
+	auto *sendMsg = new hos_msg();
 
-	pciServiceCall(msg);
+	auto *sendData = new PciWriteMsgData();
+
+	sendMsg->port    = pciPort;
+	sendMsg->type    = PCI_WRITE_MSG_TYPE;
+	sendMsg->buffer  = sendData;
+	sendMsg->length  = sizeof(PciWriteMsgData);
+
+	sendData->bus    = h->address.bus;
+	sendData->dev    = h->address.device;
+	sendData->func   = h->address.function;
+	sendData->offset = offset;
+	sendData->data   = value;
+	sendData->width  = 32;
+
+	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+
+	delete sendMsg;
+	delete sendData;
 
 	return UACPI_STATUS_OK;
 }

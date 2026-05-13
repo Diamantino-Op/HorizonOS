@@ -88,6 +88,10 @@ namespace kernel::common::threading {
 			return 0;
 		}
 
+		if (Scheduler::getCurrentThread()->getState() != ThreadState::RUNNING) {
+			return 0;
+		}
+
 		bool hasMoreThreads = false;
 
 		for (const LinkedList<Thread>& currQueue : CommonMain::getInstance()->getScheduler()->queues) {
@@ -102,7 +106,7 @@ namespace kernel::common::threading {
 			hasMoreThreads = true;
 		}
 
-		if (!hasMoreThreads && Scheduler::getCurrentThread()->getState() == ThreadState::RUNNING) {
+		if (!hasMoreThreads) {
 			return 1;
 		}
 
