@@ -69,6 +69,20 @@ struct GetReplyMsgData {
 	uint16_t versionPatch {};
 };
 
+template <typename MsgT>
+bool extractServiceName(const MsgT *msg, string &name) {
+	if (msg == nullptr || msg->nameLength == 0 || msg->nameLength > sizeof(msg->name)) {
+		return false;
+	}
+
+	if (msg->name[msg->nameLength - 1] != '\0') {
+		return false;
+	}
+
+	name.assign(msg->name, msg->nameLength - 1);
+	return true;
+}
+
 uint64_t nrPort = 0;
 
 static std::mutex services_mutex;
@@ -145,21 +159,25 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	return 0;
 }
 
+// TODO: Probable culprit of receive heap corruption
 [[noreturn]] void *registerMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service *> *>(srvsPtr);
 
 	printf("Starting Name/Registry register message handler!\n");
 
-	auto *response = new RegisterMsgData();
+	//auto *response = new RegisterMsgData();
+	array<char, 1024> receiveBuffer{};
 	auto *msg = new hos_msg();
 
-	msg->buffer = response;
-	msg->length = sizeof(RegisterMsgData);
+	msg->buffer = receiveBuffer.data();
+	msg->length = receiveBuffer.size();
 
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ REGISTER_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
+
+	const auto *response = static_cast<RegisterMsgData *>(msg->buffer);
 
 	for (;;) {
 		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
@@ -182,7 +200,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		const string name(response->name, response->nameLength);
+		string name;
+
+		if (!extractServiceName(response, name)) {
+			printf("Name/Registry Service: Dropped invalid register message name length (%zu)\n", response->nameLength);
+
+			continue;
+		}
 
 		bool hasService = false;
 
@@ -224,16 +248,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry unregister message handler!\n");
 
-	auto *response = new UnregisterMsgData();
+	//auto *response = new UnregisterMsgData();
+	array<char, 1024> receiveBuffer{};
 	auto *msg = new hos_msg();
 
-	msg->buffer = response;
-	msg->length = sizeof(UnregisterMsgData);
+	msg->buffer = receiveBuffer.data();
+	msg->length = receiveBuffer.size();
 
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ UNREGISTER_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
+
+	const auto *response = static_cast<UnregisterMsgData *>(msg->buffer);
 
 	for (;;) {
 		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
@@ -257,7 +284,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		}
 
 		{
-			const string name(response->name, response->nameLength);
+			string name;
+
+			if (!extractServiceName(response, name)) {
+				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)\n", response->nameLength);
+
+				continue;
+			}
 
 			std::scoped_lock lock(services_mutex);
 			unregisterService(services, name);
@@ -270,16 +303,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry get message handler!\n");
 
-	auto *response = new GetMsgData();
+	//auto *response = new GetMsgData();
+	array<char, 1024> receiveBuffer{};
 	auto *msg = new hos_msg();
 
-	msg->buffer = response;
-	msg->length = sizeof(GetMsgData);
+	msg->buffer = receiveBuffer.data();
+	msg->length = receiveBuffer.size();
 
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ GET_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
+
+	const auto *response = static_cast<GetMsgData *>(msg->buffer);
 
 	for (;;) {
 		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
@@ -302,7 +338,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		const string name(response->name, response->nameLength);
+		string name;
+
+		if (!extractServiceName(response, name)) {
+			printf("Name/Registry Service: Dropped invalid get message name length (%zu)\n", response->nameLength);
+
+			continue;
+		}
 
 		uint64_t port = 0;
 		uint16_t tid = 0;
@@ -356,16 +398,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry check message handler!\n");
 
-	auto *response = new CheckMsgData();
+	//auto *response = new CheckMsgData();
+	array<char, 1024> receiveBuffer{};
 	auto *msg = new hos_msg();
 
-	msg->buffer = response;
-	msg->length = sizeof(CheckMsgData);
+	msg->buffer = receiveBuffer.data();
+	msg->length = receiveBuffer.size();
 
 	auto *filterOptions = new filter_options();
 
 	filterOptions->whiteListTypes = new uint64_t[1]{ CHECK_MSG_TYPE };
 	filterOptions->whiteListCount = 1;
+
+	const auto *response = static_cast<CheckMsgData *>(msg->buffer);
 
 	for (;;) {
 		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
@@ -388,7 +433,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		const string name(response->name, response->nameLength);
+		string name;
+
+		if (!extractServiceName(response, name)) {
+			printf("Name/Registry Service: Dropped invalid check message name length (%zu)\n", response->nameLength);
+
+			continue;
+		}
 
 		bool exists = false;
 

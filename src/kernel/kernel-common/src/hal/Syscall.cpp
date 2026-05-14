@@ -368,8 +368,8 @@ namespace kernel::common::hal {
 
 		auto *commonMain = CommonMain::getInstance();
 		auto *scheduler = commonMain != nullptr ? commonMain->getScheduler() : nullptr;
-		Thread *thread = Scheduler::getCurrentThread();
-		auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const Thread *thread = Scheduler::getCurrentThread();
+		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
 
 		if (!isValidUserRange(ctx, info, sizeof(KernelSysInfo))) {
 			if (ret != nullptr) {
@@ -521,7 +521,23 @@ namespace kernel::common::hal {
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		auto *thread = Scheduler::getCurrentThread();
 
-		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
+		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or hdr == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (!isValidUserRange(thread->getParent()->getProcessContext(), msgHdr, sizeof(MessageHeader))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (hdr->length > 0 && !isValidUserRange(thread->getParent()->getProcessContext(), reinterpret_cast<u64>(hdr->buffer), hdr->length)) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
@@ -562,6 +578,36 @@ namespace kernel::common::hal {
 
 	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, const u64 options, u64, u64, u64) {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+		auto *thread = Scheduler::getCurrentThread();
+
+		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or hdr == nullptr) {
+			return EFAULT;
+		}
+
+		if (!isValidUserRange(thread->getParent()->getProcessContext(), msgHdr, sizeof(MessageHeader))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (options != 0 && !isValidUserRange(thread->getParent()->getProcessContext(), options, sizeof(MessageFilterOptions))) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
+		if (hdr->length > 0 && !isValidUserRange(thread->getParent()->getProcessContext(), reinterpret_cast<u64>(hdr->buffer), hdr->length)) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
 
 		const u64 result = PortMessaging::recvMessage(port, hdr, reinterpret_cast<MessageFilterOptions *>(options));
 
