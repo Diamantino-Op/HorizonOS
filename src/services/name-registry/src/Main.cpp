@@ -164,31 +164,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	for (;;) {
 		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
 
-		printf("A");
-
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive register message: %d\n", err);
 
 			continue;
 		}
 
-		printf("B");
-
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) > sizeof(RegisterMsgData)) {
-			printf("Name/Registry Service: Dropped oversized register message (%ld bytes)", msg->ret_length);
+		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(RegisterMsgData)) {
+			printf("Name/Registry Service: Dropped wrong register message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}
-
-		printf("C");
 
 		if (msg->type != REGISTER_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-register message in register handler (type %lu)", msg->type);
 
 			continue;
 		}
-
-		printf("D");
 
 		const string name(response->name, response->nameLength);
 
@@ -252,8 +244,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) > sizeof(UnregisterMsgData)) {
-			printf("Name/Registry Service: Dropped oversized unregister message (%ld bytes)", msg->ret_length);
+		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(UnregisterMsgData)) {
+			printf("Name/Registry Service: Dropped wrong unregister message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}
@@ -298,8 +290,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) > sizeof(GetMsgData)) {
-			printf("Name/Registry Service: Dropped oversized get message (%ld bytes)", msg->ret_length);
+		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(GetMsgData)) {
+			printf("Name/Registry Service: Dropped wrong get message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}
@@ -384,8 +376,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) > sizeof(CheckMsgData)) {
-			printf("Name/Registry Service: Dropped oversized check message (%ld bytes)", msg->ret_length);
+		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(CheckMsgData)) {
+			printf("Name/Registry Service: Dropped wrong check message (%ld bytes)", msg->ret_length);
 
 			continue;
 		}

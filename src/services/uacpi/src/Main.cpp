@@ -91,11 +91,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	printf("AA\n");
-
 	{
-		printf("Message being sent!\n");
-
 		// Send
 
 		auto *newMsg = new hos_msg();
@@ -117,8 +113,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		delete newMsg;
 		delete registerData;
-
-		printf("Message sent!\n");
 
 		// Receive
 

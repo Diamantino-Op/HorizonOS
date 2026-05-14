@@ -173,24 +173,24 @@ namespace kernel::common::threading {
             return EINVAL;
         }
 
-        portLock.lockNoCli();
+        bool prevIf = portLock.lock();
 
         PortEntry *entry = findPortUnlocked(port);
 
         if (entry == nullptr) {
-            portLock.unlockNoSti();
+            portLock.unlock(prevIf);
 
             return ENOENT;
         }
 
-        entry->lock.lockNoCli();
+        bool prevEntryIf = entry->lock.lock();
 
-        portLock.unlockNoSti();
+        portLock.unlock(prevIf);
 
     	auto *message = new PortMessage();
 
     	if (message == nullptr) {
-    		entry->lock.unlockNoSti();
+    		entry->lock.unlock(prevEntryIf);
 
     		return ENOMEM;
     	}
@@ -199,7 +199,7 @@ namespace kernel::common::threading {
             message->buffer = new u8[hdr->length];
 
             if (message->buffer == nullptr) {
-                entry->lock.unlockNoSti();
+                entry->lock.unlock(prevEntryIf);
 
                 delete message;
 
@@ -212,6 +212,8 @@ namespace kernel::common::threading {
         message->length = hdr->length;
     	message->sourcePort = sendPort;
     	message->type = hdr->type;
+
+    	hdr->retLength = static_cast<ssize>(message->length);
 
         entry->messages.addEnd(message);
 
@@ -227,8 +229,6 @@ namespace kernel::common::threading {
                 if (entry->waiters.removeEntry(waiterEntry)) {
                     waiter = currWaiter;
 
-                    delete waiterEntry;
-
                     break;
                 }
             }
@@ -236,7 +236,7 @@ namespace kernel::common::threading {
             waiterEntry = nextWaiter;
         }
 
-        entry->lock.unlockNoSti();
+        entry->lock.unlock(prevEntryIf);
 
     	if (waiter != nullptr) {
 			const bool shouldWake = waiter->thread != nullptr and waiter->thread->getState() == ThreadState::BLOCKED;
@@ -246,9 +246,8 @@ namespace kernel::common::threading {
     		}
 
 			delete waiter;
+    		delete waiterEntry;
         }
-
-        hdr->retLength = static_cast<ssize>(message->length);
 
         return 0;
     }
@@ -263,25 +262,25 @@ namespace kernel::common::threading {
 	    }
 
 	    for (;;) {
-		    portLock.lockNoCli();
+		    bool prevIf = portLock.lock();
 
     		PortEntry *entry = findPortUnlocked(port);
 
     		if (entry == nullptr) {
-    			portLock.unlockNoSti();
+    			portLock.unlock(prevIf);
 
     			return ENOENT;
     		}
 
-    		entry->lock.lockNoCli();
+    		bool prevEntryIf = entry->lock.lock();
 
-    		portLock.unlockNoSti();
+    		portLock.unlock(prevIf);
 
     		// Walk the message queue to find the first message that passes the filter.
     		auto *messageEntry = entry->messages.getFirst();
 
     		while (messageEntry != nullptr) {
-    			const auto *message = messageEntry->value;
+    			auto *message = messageEntry->value;
 
     			// --- Filter check ---
     			if (options != nullptr) {
@@ -324,21 +323,19 @@ namespace kernel::common::threading {
     			const usize messageLength = message->length;
 
     			if (hdr->length < messageLength) {
-    				entry->lock.unlockNoSti();
+    				entry->lock.unlock(prevEntryIf);
 
     				return EMSGSIZE;
     			}
 
     			// Remove this specific entry from the queue.
     			if (not entry->messages.removeEntry(messageEntry)) {
-    				entry->lock.unlockNoSti();
+    				entry->lock.unlock(prevEntryIf);
 
     				return ENOENT;
     			}
 
     			message = messageEntry->value;
-
-    			delete messageEntry;
 
     			if (messageLength > 0) {
     				memcpy(hdr->buffer, message->buffer, messageLength);
@@ -349,9 +346,10 @@ namespace kernel::common::threading {
     			hdr->type      = message->type;
     			hdr->retLength = static_cast<ssize>(messageLength);
 
-    			entry->lock.unlockNoSti();
+    			entry->lock.unlock(prevEntryIf);
 
     			delete message;
+    			delete messageEntry;
 
     			return 0;
     		}
@@ -360,7 +358,7 @@ namespace kernel::common::threading {
     		Thread *currThread = Scheduler::getCurrentThread();
 
     		if (currThread == nullptr) {
-    			entry->lock.unlockNoSti();
+    			entry->lock.unlock(prevEntryIf);
 
     			return EFAULT;
     		}
@@ -382,7 +380,7 @@ namespace kernel::common::threading {
               auto *waiter = createWaiter(currThread, options);
 
               if (waiter == nullptr) {
-                entry->lock.unlockNoSti();
+                entry->lock.unlock(prevEntryIf);
 
                 return ENOMEM;
               }
@@ -391,7 +389,7 @@ namespace kernel::common::threading {
               entry->waiters.addEnd(waiter);
             }
 
-    		entry->lock.unlockNoSti();
+    		entry->lock.unlock(prevEntryIf);
 
     		//Asm::sti();
     		CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());

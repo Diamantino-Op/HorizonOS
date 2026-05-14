@@ -122,6 +122,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 			const int srvRegisterResult = receive_horizonos_message(pciPort, recvCheckMsg, filterOptions);
 
+			if (srvRegisterResult != 0 and checkMsg->type != REPLY_CHECK_MSG_TYPE) {
+				printf("PCI: Received unexpected message type while checking for uACPI: %lu\n", recvCheckMsg->type);
+			}
+
 			if (srvRegisterResult == 0 and checkResData->exists) {
 				break;
 			}
@@ -183,6 +187,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 			return 1;
 		}
+
+    	if (recvGetMsg->type != REPLY_GET_MSG_TYPE) {
+    		printf("PCI: Received unexpected message type while getting uACPI port: %lu\n", recvGetMsg->type);
+    	}
 
 		printf("PCI: uAcpi info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData->port, getResData->tid, getResData->versionMajor, getResData->versionMinor, getResData->versionPatch);
 
