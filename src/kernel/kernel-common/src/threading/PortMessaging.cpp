@@ -196,7 +196,7 @@ namespace kernel::common::threading {
     	}
 
         if (hdr->length > 0) {
-            message->buffer = new u8[hdr->length];
+            message->buffer = new u8[hdr->length + 1];
 
             if (message->buffer == nullptr) {
                 entry->lock.unlock(prevEntryIf);

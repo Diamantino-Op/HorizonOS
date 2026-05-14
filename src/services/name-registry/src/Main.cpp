@@ -165,22 +165,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry register message handler!\n");
 
-	//auto *response = new RegisterMsgData();
-	array<char, 1024> receiveBuffer{};
-	auto *msg = new hos_msg();
+	auto response = RegisterMsgData();
+	auto msg = hos_msg();
 
-	msg->buffer = receiveBuffer.data();
-	msg->length = receiveBuffer.size();
+	msg.buffer = &response;
+	msg.length = sizeof(RegisterMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ REGISTER_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
-
-	const auto *response = static_cast<RegisterMsgData *>(msg->buffer);
+	filterOptions.whiteListTypes = new uint64_t[1]{ REGISTER_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
+		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive register message: %d\n", err);
@@ -188,22 +185,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(RegisterMsgData)) {
-			printf("Name/Registry Service: Dropped wrong register message (%ld bytes)", msg->ret_length);
+		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(RegisterMsgData)) {
+			printf("Name/Registry Service: Dropped wrong register message (%ld bytes)", msg.ret_length);
 
 			continue;
 		}
 
-		if (msg->type != REGISTER_MSG_TYPE) {
-			printf("Name/Registry Service: Dropped non-register message in register handler (type %lu)", msg->type);
+		if (msg.type != REGISTER_MSG_TYPE) {
+			printf("Name/Registry Service: Dropped non-register message in register handler (type %lu)", msg.type);
 
 			continue;
 		}
 
 		string name;
 
-		if (!extractServiceName(response, name)) {
-			printf("Name/Registry Service: Dropped invalid register message name length (%zu)\n", response->nameLength);
+		if (!extractServiceName(&response, name)) {
+			printf("Name/Registry Service: Dropped invalid register message name length (%zu)\n", response.nameLength);
 
 			continue;
 		}
@@ -220,26 +217,26 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		}
 
 		if (!hasService) {
-			registerService(services, msg->src_port, response->ownerPid, response->tid, name, response->versionMajor, response->versionMinor, response->versionPatch);
+			registerService(services, msg.src_port, response.ownerPid, response.tid, name, response.versionMajor, response.versionMinor, response.versionPatch);
 		} else {
 			printf("Service already registered!");
 		}
 
-		auto *newMsg = new hos_msg();
+		auto newMsg = hos_msg();
 
-		auto *retData = new RegisterReplyMsgData();
+		auto retData = RegisterReplyMsgData();
 
-		retData->success = !hasService;
+		retData.success = !hasService;
 
-		newMsg->type = REPLY_REGISTER_MSG_TYPE;
-		newMsg->port = msg->src_port;
-		newMsg->buffer = retData;
-		newMsg->length = sizeof(RegisterReplyMsgData);
+		newMsg.type = REPLY_REGISTER_MSG_TYPE;
+		newMsg.port = msg.src_port;
+		newMsg.buffer = &retData;
+		newMsg.length = sizeof(RegisterReplyMsgData);
 
-		send_horizonos_message(nrPort, msg->src_port, newMsg);
+		send_horizonos_message(nrPort, msg.src_port, &newMsg);
 
-		delete retData;
-		delete newMsg;
+		//delete retData;
+		//delete newMsg;
 	}
 }
 
@@ -248,22 +245,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry unregister message handler!\n");
 
-	//auto *response = new UnregisterMsgData();
-	array<char, 1024> receiveBuffer{};
-	auto *msg = new hos_msg();
+	auto response = UnregisterMsgData();
+	auto msg = hos_msg();
 
-	msg->buffer = receiveBuffer.data();
-	msg->length = receiveBuffer.size();
+	msg.buffer = &response;
+	msg.length = sizeof(UnregisterMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ UNREGISTER_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
-
-	const auto *response = static_cast<UnregisterMsgData *>(msg->buffer);
+	filterOptions.whiteListTypes = new uint64_t[1]{ UNREGISTER_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
+		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive unregister message: %d\n", err);
@@ -271,14 +265,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(UnregisterMsgData)) {
-			printf("Name/Registry Service: Dropped wrong unregister message (%ld bytes)", msg->ret_length);
+		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(UnregisterMsgData)) {
+			printf("Name/Registry Service: Dropped wrong unregister message (%ld bytes)", msg.ret_length);
 
 			continue;
 		}
 
-		if (msg->type != UNREGISTER_MSG_TYPE) {
-			printf("Name/Registry Service: Dropped non-unregister message in unregister handler (type %lu)", msg->type);
+		if (msg.type != UNREGISTER_MSG_TYPE) {
+			printf("Name/Registry Service: Dropped non-unregister message in unregister handler (type %lu)", msg.type);
 
 			continue;
 		}
@@ -286,8 +280,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		{
 			string name;
 
-			if (!extractServiceName(response, name)) {
-				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)\n", response->nameLength);
+			if (!extractServiceName(&response, name)) {
+				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)\n", response.nameLength);
 
 				continue;
 			}
@@ -303,22 +297,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry get message handler!\n");
 
-	//auto *response = new GetMsgData();
-	array<char, 1024> receiveBuffer{};
-	auto *msg = new hos_msg();
+	auto response = GetMsgData();
+	auto msg = hos_msg();
 
-	msg->buffer = receiveBuffer.data();
-	msg->length = receiveBuffer.size();
+	msg.buffer = &response;
+	msg.length = sizeof(GetMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ GET_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
-
-	const auto *response = static_cast<GetMsgData *>(msg->buffer);
+	filterOptions.whiteListTypes = new uint64_t[1]{ GET_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
+		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive get message: %d\n", err);
@@ -326,22 +317,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(GetMsgData)) {
-			printf("Name/Registry Service: Dropped wrong get message (%ld bytes)", msg->ret_length);
+		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(GetMsgData)) {
+			printf("Name/Registry Service: Dropped wrong get message (%ld bytes)", msg.ret_length);
 
 			continue;
 		}
 
-		if (msg->type != GET_MSG_TYPE) {
-			printf("Name/Registry Service: Dropped non-get message in get handler (type %lu)", msg->type);
+		if (msg.type != GET_MSG_TYPE) {
+			printf("Name/Registry Service: Dropped non-get message in get handler (type %lu)", msg.type);
 
 			continue;
 		}
 
 		string name;
 
-		if (!extractServiceName(response, name)) {
-			printf("Name/Registry Service: Dropped invalid get message name length (%zu)\n", response->nameLength);
+		if (!extractServiceName(&response, name)) {
+			printf("Name/Registry Service: Dropped invalid get message name length (%zu)\n", response.nameLength);
 
 			continue;
 		}
@@ -371,25 +362,25 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			}
 		}
 
-		auto *newMsg = new hos_msg();
+		auto newMsg = hos_msg();
 
-		auto *retData = new GetReplyMsgData();
+		auto retData = GetReplyMsgData();
 
-		retData->port = port;
-		retData->tid = tid;
-		retData->versionMajor = versionMajor;
-		retData->versionMinor = versionMinor;
-		retData->versionPatch = versionPatch;
+		retData.port = port;
+		retData.tid = tid;
+		retData.versionMajor = versionMajor;
+		retData.versionMinor = versionMinor;
+		retData.versionPatch = versionPatch;
 
-		newMsg->type = REPLY_GET_MSG_TYPE;
-		newMsg->port = msg->src_port;
-		newMsg->buffer = retData;
-		newMsg->length = sizeof(GetReplyMsgData);
+		newMsg.type = REPLY_GET_MSG_TYPE;
+		newMsg.port = msg.src_port;
+		newMsg.buffer = &retData;
+		newMsg.length = sizeof(GetReplyMsgData);
 
-		send_horizonos_message(nrPort, msg->src_port, newMsg);
+		send_horizonos_message(nrPort, msg.src_port, &newMsg);
 
-		delete retData;
-		delete newMsg;
+		//delete retData;
+		//delete newMsg;
 	}
 }
 
@@ -398,22 +389,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	printf("Starting Name/Registry check message handler!\n");
 
-	//auto *response = new CheckMsgData();
-	array<char, 1024> receiveBuffer{};
-	auto *msg = new hos_msg();
+	auto response = CheckMsgData();
+	auto msg = hos_msg();
 
-	msg->buffer = receiveBuffer.data();
-	msg->length = receiveBuffer.size();
+	msg.buffer = &response;
+	msg.length = sizeof(CheckMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ CHECK_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
-
-	const auto *response = static_cast<CheckMsgData *>(msg->buffer);
+	filterOptions.whiteListTypes = new uint64_t[1]{ CHECK_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int err = receive_horizonos_message(nrPort, msg, filterOptions);
+		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
 			printf("Name/Registry Service: Failed to receive check message: %d\n", err);
@@ -421,22 +409,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			continue;
 		}
 
-		if (msg->ret_length < 0 or static_cast<size_t>(msg->ret_length) != sizeof(CheckMsgData)) {
-			printf("Name/Registry Service: Dropped wrong check message (%ld bytes)", msg->ret_length);
+		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(CheckMsgData)) {
+			printf("Name/Registry Service: Dropped wrong check message (%ld bytes)", msg.ret_length);
 
 			continue;
 		}
 
-		if (msg->type != CHECK_MSG_TYPE) {
-			printf("Name/Registry Service: Dropped non-check message in check handler (type %lu)", msg->type);
+		if (msg.type != CHECK_MSG_TYPE) {
+			printf("Name/Registry Service: Dropped non-check message in check handler (type %lu)", msg.type);
 
 			continue;
 		}
 
 		string name;
 
-		if (!extractServiceName(response, name)) {
-			printf("Name/Registry Service: Dropped invalid check message name length (%zu)\n", response->nameLength);
+		if (!extractServiceName(&response, name)) {
+			printf("Name/Registry Service: Dropped invalid check message name length (%zu)\n", response.nameLength);
 
 			continue;
 		}
@@ -448,25 +436,25 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 			exists = ranges::any_of(*services,
 				[&](const Service* s) {
-					return s and (s->name == name or s->tid == response->tid);
+					return s and (s->name == name or s->tid == response.tid);
 				});
 		}
 
-		auto *newMsg = new hos_msg();
+		auto newMsg = hos_msg();
 
-		auto *retData = new CheckReplyMsgData();
+		auto retData = CheckReplyMsgData();
 
-		retData->exists = exists;
+		retData.exists = exists;
 
-		newMsg->type = REPLY_CHECK_MSG_TYPE;
-		newMsg->port = msg->src_port;
-		newMsg->buffer = retData;
-		newMsg->length = sizeof(CheckReplyMsgData);
+		newMsg.type = REPLY_CHECK_MSG_TYPE;
+		newMsg.port = msg.src_port;
+		newMsg.buffer = &retData;
+		newMsg.length = sizeof(CheckReplyMsgData);
 
-		send_horizonos_message(nrPort, msg->src_port, newMsg);
+		send_horizonos_message(nrPort, msg.src_port, &newMsg);
 
-		delete retData;
-		delete newMsg;
+		//delete retData;
+		//delete newMsg;
 	}
 }
 

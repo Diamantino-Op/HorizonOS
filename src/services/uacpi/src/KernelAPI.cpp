@@ -195,53 +195,54 @@ uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacp
 
 	// Send
 
-	auto *sendMsg    = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData   = new PciReadMsgData();
+	auto sendData   = PciReadMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_READ_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciReadMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_READ_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciReadMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->width  = 8;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.width  = 8;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	// Recv
 
-	auto *recvMsg    = new hos_msg();
+	auto recvMsg    = hos_msg();
 
-	auto *recvData   = new PciReadReplyMsgData();
+	auto recvData   = PciReadReplyMsgData();
 
-	recvMsg->buffer  = recvData;
-	recvMsg->length  = sizeof(PciReadReplyMsgData);
+	recvMsg.buffer  = &recvData;
+	recvMsg.length  = sizeof(PciReadReplyMsgData);
 
-	auto *filterOptions           = new filter_options();
+	auto filterOptions           = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
-	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
-	delete recvMsg;
+	//delete recvMsg;
+	delete[] filterOptions.whiteListTypes;
 
 	if (result != 0) {
-		delete recvData;
+		//delete recvData;
 
 		return UACPI_STATUS_INTERNAL_ERROR;
 	}
 
-	*value = static_cast<uacpi_u8>(recvData->data);
+	*value = static_cast<uacpi_u8>(recvData.data);
 
-	delete recvData;
+	//delete recvData;
 
 	return UACPI_STATUS_OK;
 }
@@ -255,53 +256,54 @@ uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uac
 
 	// Send
 
-	auto *sendMsg    = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData   = new PciReadMsgData();
+	auto sendData   = PciReadMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_READ_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciReadMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_READ_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciReadMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->width  = 16;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.width  = 16;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	// Recv
 
-	auto *recvMsg    = new hos_msg();
+	auto recvMsg    = hos_msg();
 
-	auto *recvData   = new PciReadReplyMsgData();
+	auto recvData   = PciReadReplyMsgData();
 
-	recvMsg->buffer  = recvData;
-	recvMsg->length  = sizeof(PciReadReplyMsgData);
+	recvMsg.buffer  = &recvData;
+	recvMsg.length  = sizeof(PciReadReplyMsgData);
 
-	auto *filterOptions           = new filter_options();
+	auto filterOptions           = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
-	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
-	delete recvMsg;
+	//delete recvMsg;
+	delete[] filterOptions.whiteListTypes;
 
 	if (result != 0) {
-		delete recvData;
+		//delete recvData;
 
 		return UACPI_STATUS_INTERNAL_ERROR;
 	}
 
-	*value = static_cast<uacpi_u16>(recvData->data);
+	*value = static_cast<uacpi_u16>(recvData.data);
 
-	delete recvData;
+	//delete recvData;
 
 	return UACPI_STATUS_OK;
 }
@@ -315,53 +317,54 @@ uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uac
 
 	// Send
 
-	auto *sendMsg    = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData   = new PciReadMsgData();
+	auto sendData   = PciReadMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_READ_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciReadMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_READ_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciReadMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->width  = 32;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.width  = 32;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	// Recv
 
-	auto *recvMsg    = new hos_msg();
+	auto recvMsg    = hos_msg();
 
-	auto *recvData   = new PciReadReplyMsgData();
+	auto recvData   = PciReadReplyMsgData();
 
-	recvMsg->buffer  = recvData;
-	recvMsg->length  = sizeof(PciReadReplyMsgData);
+	recvMsg.buffer  = &recvData;
+	recvMsg.length  = sizeof(PciReadReplyMsgData);
 
-	auto *filterOptions           = new filter_options();
+	auto filterOptions           = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_READ_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
-	const int result = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
-	delete recvMsg;
+	//delete recvMsg;
+	delete[] filterOptions.whiteListTypes;
 
 	if (result != 0) {
-		delete recvData;
+		//delete recvData;
 
 		return UACPI_STATUS_INTERNAL_ERROR;
 	}
 
-	*value = recvData->data;
+	*value = recvData.data;
 
-	delete recvData;
+	//delete recvData;
 
 	return UACPI_STATUS_OK;
 }
@@ -373,26 +376,26 @@ uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uac
 
 	const auto *h = static_cast<PciHandle *>(device);
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData = new PciWriteMsgData();
+	auto sendData   = PciWriteMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_WRITE_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciWriteMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_WRITE_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciWriteMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->data   = value;
-	sendData->width  = 8;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.data   = value;
+	sendData.width  = 8;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	return UACPI_STATUS_OK;
 }
@@ -404,26 +407,26 @@ uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, ua
 
 	const auto *h = static_cast<PciHandle *>(device);
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData = new PciWriteMsgData();
+	auto sendData   = PciWriteMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_WRITE_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciWriteMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_WRITE_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciWriteMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->data   = value;
-	sendData->width  = 16;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.data   = value;
+	sendData.width  = 16;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	return UACPI_STATUS_OK;
 }
@@ -435,26 +438,26 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 	const auto *h = static_cast<PciHandle *>(device);
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg    = hos_msg();
 
-	auto *sendData = new PciWriteMsgData();
+	auto sendData   = PciWriteMsgData();
 
-	sendMsg->port    = pciPort;
-	sendMsg->type    = PCI_WRITE_MSG_TYPE;
-	sendMsg->buffer  = sendData;
-	sendMsg->length  = sizeof(PciWriteMsgData);
+	sendMsg.port    = pciPort;
+	sendMsg.type    = PCI_WRITE_MSG_TYPE;
+	sendMsg.buffer  = &sendData;
+	sendMsg.length  = sizeof(PciWriteMsgData);
 
-	sendData->bus    = h->address.bus;
-	sendData->dev    = h->address.device;
-	sendData->func   = h->address.function;
-	sendData->offset = offset;
-	sendData->data   = value;
-	sendData->width  = 32;
+	sendData.bus    = h->address.bus;
+	sendData.dev    = h->address.device;
+	sendData.func   = h->address.function;
+	sendData.offset = offset;
+	sendData.data   = value;
+	sendData.width  = 32;
 
-	send_horizonos_message(uacpiPort, pciPort, sendMsg);
+	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	delete sendMsg;
-	delete sendData;
+	//delete sendMsg;
+	//delete sendData;
 
 	return UACPI_STATUS_OK;
 }

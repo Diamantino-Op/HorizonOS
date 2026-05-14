@@ -315,49 +315,49 @@ void *handlePciRead(void *arg) {
 
 	// Send
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg = hos_msg();
 
-	auto *sendData = new PciReadReplyMsgData();
+	auto sendData = PciReadReplyMsgData();
 
-	sendMsg->type = PCI_READ_REPLY_MSG_TYPE;
-	sendMsg->buffer = sendData;
-	sendMsg->length = sizeof(PciReadReplyMsgData);
+	sendMsg.type = PCI_READ_REPLY_MSG_TYPE;
+	sendMsg.buffer = &sendData;
+	sendMsg.length = sizeof(PciReadReplyMsgData);
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciReadMsgData();
+	auto recvData = PciReadMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciReadMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciReadMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READ_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_READ_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
 
-		sendMsg->port = recvMsg->src_port;
+		sendMsg.port = recvMsg.src_port;
 
-		sendData->data = 0;
+		sendData.data = 0;
 
-		if (recvData->width == 8) {
-			sendData->data = pciConfigRead8(recvData->bus, recvData->dev, recvData->func, recvData->offset);
-		} else if (recvData->width == 16) {
-			sendData->data = pciConfigRead16(recvData->bus, recvData->dev, recvData->func, recvData->offset);
-		} else if (recvData->width == 32) {
-			sendData->data = pciConfigRead32(recvData->bus, recvData->dev, recvData->func, recvData->offset);
+		if (recvData.width == 8) {
+			sendData.data = pciConfigRead8(recvData.bus, recvData.dev, recvData.func, recvData.offset);
+		} else if (recvData.width == 16) {
+			sendData.data = pciConfigRead16(recvData.bus, recvData.dev, recvData.func, recvData.offset);
+		} else if (recvData.width == 32) {
+			sendData.data = pciConfigRead32(recvData.bus, recvData.dev, recvData.func, recvData.offset);
 		}
 
-		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
@@ -368,31 +368,31 @@ void *handlePciWrite(void *arg) {
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciWriteMsgData();
+	auto recvData = PciWriteMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciWriteMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciWriteMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_WRITE_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_WRITE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
-		if (recvData->width == 8) {
-			pciConfigWrite8 (recvData->bus, recvData->dev, recvData->func, recvData->offset, static_cast<uint8_t>(recvData->data));
-		} else if (recvData->width == 16) {
-			pciConfigWrite16(recvData->bus, recvData->dev, recvData->func, recvData->offset, static_cast<uint16_t>(recvData->data));
-		} else if (recvData->width == 32) {
-			pciConfigWrite32(recvData->bus, recvData->dev, recvData->func, recvData->offset, recvData->data);
+		if (recvData.width == 8) {
+			pciConfigWrite8 (recvData.bus, recvData.dev, recvData.func, recvData.offset, static_cast<uint8_t>(recvData.data));
+		} else if (recvData.width == 16) {
+			pciConfigWrite16(recvData.bus, recvData.dev, recvData.func, recvData.offset, static_cast<uint16_t>(recvData.data));
+		} else if (recvData.width == 32) {
+			pciConfigWrite32(recvData.bus, recvData.dev, recvData.func, recvData.offset, recvData.data);
 		}
 	}
 }
@@ -404,41 +404,41 @@ void *handleMsiAlloc(void *arg) {
 
 	// Send
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg = hos_msg();
 
-	auto *sendData = new PciMsiAllocReplyMsgData();
+	auto sendData = PciMsiAllocReplyMsgData();
 
-	sendMsg->type = PCI_MSI_ALLOC_REPLY_MSG_TYPE;
-	sendMsg->buffer = sendData;
-	sendMsg->length = sizeof(PciMsiAllocReplyMsgData);
+	sendMsg.type = PCI_MSI_ALLOC_REPLY_MSG_TYPE;
+	sendMsg.buffer = &sendData;
+	sendMsg.length = sizeof(PciMsiAllocReplyMsgData);
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsiAllocMsgData();
+	auto recvData = PciMsiAllocMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsiAllocMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsiAllocMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSI_ALLOC_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSI_ALLOC_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
 
-		sendMsg->port = recvMsg->src_port;
+		sendMsg.port = recvMsg.src_port;
 
-		sendData->vec = msiEnable(recvData->bus, recvData->dev, recvData->func, recvData->port);
+		sendData.vec = msiEnable(recvData.bus, recvData.dev, recvData.func, recvData.port);
 
-		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
@@ -449,26 +449,26 @@ void *handleMsiFree(void *arg) {
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsiFreeMsgData();
+	auto recvData = PciMsiFreeMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsiFreeMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsiFreeMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSI_FREE_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSI_FREE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
-		msiDisable(recvData->bus, recvData->dev, recvData->func);
+		msiDisable(recvData.bus, recvData.dev, recvData.func);
 	}
 }
 
@@ -479,43 +479,43 @@ void *handleMsixAlloc(void *arg) {
 
 	// Send
 
-	auto *sendMsg = new hos_msg();
+	auto sendMsg = hos_msg();
 
-	auto *sendData = new PciMsixAllocReplyMsgData();
+	auto sendData = PciMsixAllocReplyMsgData();
 
-	sendMsg->type = PCI_MSIX_ALLOC_REPLY_MSG_TYPE;
-	sendMsg->buffer = sendData;
-	sendMsg->length = sizeof(PciMsixAllocReplyMsgData);
+	sendMsg.type = PCI_MSIX_ALLOC_REPLY_MSG_TYPE;
+	sendMsg.buffer = &sendData;
+	sendMsg.length = sizeof(PciMsixAllocReplyMsgData);
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsixAllocMsgData();
+	auto recvData = PciMsixAllocMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsixAllocMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsixAllocMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_ALLOC_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_ALLOC_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
 
-		sendMsg->port = recvMsg->src_port;
+		sendMsg.port = recvMsg.src_port;
 
 		// Ensure global MSI-X enable is set after all desired entries are
 		// programmed.  The caller should send msix_global_enable when done.
-		sendData->vec = msixEnableEntry(recvData->bus, recvData->dev, recvData->func, recvData->idx, recvData->port);
+		sendData.vec = msixEnableEntry(recvData.bus, recvData.dev, recvData.func, recvData.idx, recvData.port);
 
-		send_horizonos_message(pciPort, recvMsg->src_port, sendMsg);
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
@@ -526,26 +526,26 @@ void *handleMsixFree(void *arg) {
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsixFreeMsgData();
+	auto recvData = PciMsixFreeMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsixFreeMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsixFreeMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_FREE_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_FREE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
-		msixDisableEntry(recvData->bus, recvData->dev, recvData->func, recvData->idx, recvData->vec);
+		msixDisableEntry(recvData.bus, recvData.dev, recvData.func, recvData.idx, recvData.vec);
 	}
 }
 
@@ -556,26 +556,26 @@ void *handleMsixGlobalEnable(void *arg) {
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsixGlobalEnableMsgData();
+	auto recvData = PciMsixGlobalEnableMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsixGlobalEnableMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsixGlobalEnableMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
-		msixGlobalEnable(recvData->bus, recvData->dev, recvData->func);
+		msixGlobalEnable(recvData.bus, recvData.dev, recvData.func);
 	}
 }
 
@@ -586,25 +586,25 @@ void *handleMsixGlobalDisable(void *arg) {
 
 	// Recv
 
-	auto *recvMsg = new hos_msg();
+	auto recvMsg = hos_msg();
 
-	auto *recvData = new PciMsixGlobalDisableMsgData();
+	auto recvData = PciMsixGlobalDisableMsgData();
 
-	recvMsg->buffer = recvData;
-	recvMsg->length = sizeof(PciMsixGlobalDisableMsgData);
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciMsixGlobalDisableMsgData);
 
-	auto *filterOptions = new filter_options();
+	auto filterOptions = filter_options();
 
-	filterOptions->whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE };
-	filterOptions->whiteListCount = 1;
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
 
 	for (;;) {
-		const int result = receive_horizonos_message(pciPort, recvMsg, filterOptions);
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
 			continue;
 		}
 
-		msixGlobalDisable(recvData->bus, recvData->dev, recvData->func);
+		msixGlobalDisable(recvData.bus, recvData.dev, recvData.func);
 	}
 }

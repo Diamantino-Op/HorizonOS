@@ -94,59 +94,61 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	{
 		// Send
 
-		auto *newMsg = new hos_msg();
+		auto newMsg = hos_msg();
 
-		auto *registerData = new RegisterMsgData();
+		auto registerData = RegisterMsgData();
 
-		registerData->ownerPid = getpid();
-		registerData->tid = hash<thread::id>{}(this_thread::get_id());
-		strncpy(registerData->name, string("uAcpi").c_str(), sizeof(registerData->name) - 1);
-		registerData->name[sizeof(registerData->name) - 1] = '\0';
-		registerData->nameLength = strlen(registerData->name) + 1;
+		registerData.ownerPid = getpid();
+		registerData.tid = hash<thread::id>{}(this_thread::get_id());
+		strncpy(registerData.name, string("uAcpi").c_str(), sizeof(registerData.name) - 1);
+		registerData.name[sizeof(registerData.name) - 1] = '\0';
+		registerData.nameLength = strlen(registerData.name) + 1;
 
-		newMsg->type = REGISTER_MSG_TYPE;
-		newMsg->port = 1;
-		newMsg->buffer = registerData;
-		newMsg->length = sizeof(RegisterMsgData);
+		newMsg.type = REGISTER_MSG_TYPE;
+		newMsg.port = 1;
+		newMsg.buffer = &registerData;
+		newMsg.length = sizeof(RegisterMsgData);
 
-		send_horizonos_message(uacpiPort, 1, newMsg);
+		send_horizonos_message(uacpiPort, 1, &newMsg);
 
-		delete newMsg;
-		delete registerData;
+		//delete newMsg;
+		//delete registerData;
 
 		// Receive
 
-		auto *recvMsg = new hos_msg();
+		auto recvMsg = hos_msg();
 
-		auto *registerResData = new RegisterReplyMsgData();
+		auto registerResData = RegisterReplyMsgData();
 
-		recvMsg->buffer = registerResData;
-		recvMsg->length = sizeof(RegisterReplyMsgData);
+		recvMsg.buffer = &registerResData;
+		recvMsg.length = sizeof(RegisterReplyMsgData);
 
-		auto *filterOptions = new filter_options();
+		auto filterOptions = filter_options();
 
-		filterOptions->whiteListTypes = new uint64_t[1]{ REPLY_REGISTER_MSG_TYPE };
-		filterOptions->whiteListCount = 1;
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_REGISTER_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
 
-		const int srvRegisterResult = receive_horizonos_message(uacpiPort, recvMsg, filterOptions);
+		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
-		if (srvRegisterResult == 0 and registerResData->success) {
+		if (srvRegisterResult == 0 and registerResData.success) {
 			printf("uACPI: Successfully registered service!\n");
 		} else {
 			printf("uACPI: Failed to register service: %d\n", srvRegisterResult);
 
-			delete recvMsg;
-			delete registerResData;
+			//delete recvMsg;
+			//delete registerResData;
 
-			delete filterOptions;
+			//delete filterOptions;
+			delete[] filterOptions.whiteListTypes;
 
 			return 1;
 		}
 
-		delete recvMsg;
-		delete registerResData;
+		//delete recvMsg;
+		//delete registerResData;
 
-		delete filterOptions;
+		//delete filterOptions;
+		delete[] filterOptions.whiteListTypes;
 	}
 
 	pthread_t handlerThread;
@@ -251,24 +253,24 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
     printf("\033[0;34muACPI: \033[0;37mPCI root bridge: seg=%llu bus=%llu ecam=%llx\n", static_cast<unsigned long long>(seg), static_cast<unsigned long long>(bbn), static_cast<unsigned long long>(ecamBase));
 
     // Send one mcfg_segment message per root bridge found
-    auto *segMsg = new hos_msg();
+    auto segMsg = hos_msg();
 
-	auto *segData = new McfgSegmentMsgData();
+	auto segData = McfgSegmentMsgData();
 
-	segData->ecamBase = ecamBase;
-	segData->segment = seg;
-	segData->bbn = bbn;
-	segData->endBus = 255;
+	segData.ecamBase = ecamBase;
+	segData.segment = seg;
+	segData.bbn = bbn;
+	segData.endBus = 255;
 
-	segMsg->type   = MCFG_SEGMENT_MSG_TYPE;
-    segMsg->port   = pciPort;
-    segMsg->buffer = segData;
-    segMsg->length = sizeof(McfgSegmentMsgData);
+	segMsg.type   = MCFG_SEGMENT_MSG_TYPE;
+    segMsg.port   = pciPort;
+    segMsg.buffer = &segData;
+    segMsg.length = sizeof(McfgSegmentMsgData);
 
-    send_horizonos_message(uacpiPort, pciPort, segMsg);
+    send_horizonos_message(uacpiPort, pciPort, &segMsg);
 
-    delete segMsg;
-	delete segData;
+    //delete segMsg;
+	//delete segData;
 
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
@@ -277,149 +279,153 @@ void *messageHandler(void *) {
 	{
 		// Send
 
-		auto *checkMsg = new hos_msg();
+		auto checkMsg = hos_msg();
 
-		auto *checkData = new CheckMsgData();
+		auto checkData = CheckMsgData();
 
-		strncpy(checkData->name, string("PCI").c_str(), sizeof(checkData->name) - 1);
-		checkData->name[sizeof(checkData->name) - 1] = '\0';
-		checkData->nameLength = strlen(checkData->name) + 1;
+		strncpy(checkData.name, string("PCI").c_str(), sizeof(checkData.name) - 1);
+		checkData.name[sizeof(checkData.name) - 1] = '\0';
+		checkData.nameLength = strlen(checkData.name) + 1;
 
-		checkMsg->type = CHECK_MSG_TYPE;
-		checkMsg->port = 1;
-		checkMsg->buffer = checkData;
-		checkMsg->length = sizeof(CheckMsgData);
+		checkMsg.type = CHECK_MSG_TYPE;
+		checkMsg.port = 1;
+		checkMsg.buffer = &checkData;
+		checkMsg.length = sizeof(CheckMsgData);
 
 		// Reply
 
-		auto *recvCheckMsg = new hos_msg();
+		auto recvCheckMsg = hos_msg();
 
-		auto *checkResData = new CheckReplyMsgData();
+		auto checkResData = CheckReplyMsgData();
 
-		recvCheckMsg->buffer = checkResData;
-		recvCheckMsg->length = sizeof(CheckReplyMsgData);
+		recvCheckMsg.buffer = &checkResData;
+		recvCheckMsg.length = sizeof(CheckReplyMsgData);
 
-		auto *filterOptions = new filter_options();
+		auto filterOptions = filter_options();
 
-		filterOptions->whiteListTypes = new uint64_t[1]{ REPLY_CHECK_MSG_TYPE };
-		filterOptions->whiteListCount = 1;
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_CHECK_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
 
 		for (;;) {
-			send_horizonos_message(uacpiPort, 1, checkMsg);
+			send_horizonos_message(uacpiPort, 1, &checkMsg);
 
-			const int srvRegisterResult = receive_horizonos_message(uacpiPort, recvCheckMsg, filterOptions);
+			const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvCheckMsg, &filterOptions);
 
-			if (srvRegisterResult == 0 and checkResData->exists) {
+			if (srvRegisterResult == 0 and checkResData.exists) {
 				break;
 			}
 		}
 
-		delete checkMsg;
-		delete checkData;
+		//delete checkMsg;
+		//delete checkData;
 
-		delete recvCheckMsg;
-		delete checkResData;
+		//delete recvCheckMsg;
+		//delete checkResData;
 
-		delete filterOptions;
+		//delete filterOptions;
+		delete[] filterOptions.whiteListTypes;
 	}
 
 	{
 		// Send
 
-		auto *getMsg = new hos_msg();
+		auto getMsg = hos_msg();
 
-		auto *getData = new GetMsgData();
+		auto getData = GetMsgData();
 
-		strncpy(getData->name, string("PCI").c_str(), sizeof(getData->name) - 1);
-		getData->name[sizeof(getData->name) - 1] = '\0';
-		getData->nameLength = strlen(getData->name) + 1;
+		strncpy(getData.name, string("PCI").c_str(), sizeof(getData.name) - 1);
+		getData.name[sizeof(getData.name) - 1] = '\0';
+		getData.nameLength = strlen(getData.name) + 1;
 
-		getMsg->type = GET_MSG_TYPE;
-		getMsg->port = 1;
-		getMsg->buffer = getData;
-		getMsg->length = sizeof(GetMsgData);
+		getMsg.type = GET_MSG_TYPE;
+		getMsg.port = 1;
+		getMsg.buffer = &getData;
+		getMsg.length = sizeof(GetMsgData);
 
-		send_horizonos_message(uacpiPort, 1, getMsg);
+		send_horizonos_message(uacpiPort, 1, &getMsg);
 
 		// Reply
 
-		auto *recvGetMsg = new hos_msg();
+		auto recvGetMsg = hos_msg();
 
-		auto *getResData = new GetReplyMsgData();
+		auto getResData = GetReplyMsgData();
 
-		recvGetMsg->buffer = getResData;
-		recvGetMsg->length = sizeof(GetReplyMsgData);
+		recvGetMsg.buffer = &getResData;
+		recvGetMsg.length = sizeof(GetReplyMsgData);
 
-		auto *filterOptions = new filter_options();
+		auto filterOptions = filter_options();
 
-		filterOptions->whiteListTypes = new uint64_t[1]{ REPLY_GET_MSG_TYPE };
-		filterOptions->whiteListCount = 1;
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_GET_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
 
-		const int srvRegisterResult = receive_horizonos_message(uacpiPort, recvGetMsg, filterOptions);
+		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvGetMsg, &filterOptions);
 
 		if (srvRegisterResult != 0) {
 			printf("uACPI: Failed to get PCI port!\n");
 
-			delete getMsg;
-			delete getData;
+			//delete getMsg;
+			//delete getData;
 
-			delete recvGetMsg;
-			delete getResData;
+			//delete recvGetMsg;
+			//delete getResData;
 
-			delete filterOptions;
+			//delete filterOptions;
+			delete[] filterOptions.whiteListTypes;
 
 			return nullptr;
 		}
 
-		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData->port, getResData->tid, getResData->versionMajor, getResData->versionMinor, getResData->versionPatch);
+		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
 
-		pciPort = getResData->port;
-		pciTid = getResData->tid;
+		pciPort = getResData.port;
+		pciTid = getResData.tid;
 
-		delete getMsg;
-		delete getData;
+		//delete getMsg;
+		//delete getData;
 
-		delete recvGetMsg;
-		delete getResData;
+		//delete recvGetMsg;
+		//delete getResData;
 
-		delete filterOptions;
+		//delete filterOptions;
+		delete[] filterOptions.whiteListTypes;
 	}
 
 	while (not uacpi_table_subsystem_available()) { }
 
 	{
 		// Wait for pci_ready from the PCI service (port 3 → port 2).
-		auto *waitMsg = new hos_msg();
+		auto waitMsg = hos_msg();
 
-		waitMsg->length = 0;
+		waitMsg.length = 0;
 
-		auto *filterOptions = new filter_options();
+		auto filterOptions = filter_options();
 
-		filterOptions->whiteListTypes = new uint64_t[1]{ PCI_READY_MSG_TYPE };
-		filterOptions->whiteListCount = 1;
+		filterOptions.whiteListTypes = new uint64_t[1]{ PCI_READY_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
 
-		if (receive_horizonos_message(uacpiPort, waitMsg, filterOptions) == 0) {
+		if (receive_horizonos_message(uacpiPort, &waitMsg, &filterOptions) == 0) {
 			printf("\033[0;34muACPI: \033[0;37mPCI service ready, forwarding MCFG...\n");
 		}
 
-		delete waitMsg;
+		//delete waitMsg;
 
-		delete filterOptions;
+		//delete filterOptions;
+		delete[] filterOptions.whiteListTypes;
 
 		static const char *pciRootIds[] = { "PNP0A03", "PNP0A08", nullptr };
 
 		uacpi_find_devices_at(uacpi_namespace_root(), pciRootIds, pciRootCallback, nullptr);
 
 		// Signal PCI that all segments have been sent.
-		auto *doneMsg = new hos_msg();
+		auto doneMsg = hos_msg();
 
-		doneMsg->type   = MCFG_DONE_MSG_TYPE;
-		doneMsg->port   = pciPort;
-		doneMsg->length = 0;
+		doneMsg.type   = MCFG_DONE_MSG_TYPE;
+		doneMsg.port   = pciPort;
+		doneMsg.length = 0;
 
-		send_horizonos_message(uacpiPort, pciPort, doneMsg);
+		send_horizonos_message(uacpiPort, pciPort, &doneMsg);
 
-		delete doneMsg;
+		//delete doneMsg;
 	}
 
 	for (;;) { }
