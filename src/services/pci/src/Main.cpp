@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstring>
 #include <pthread.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -36,7 +35,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     	auto registerData = RegisterMsgData();
 
     	registerData.ownerPid = getpid();
-    	registerData.tid = hash<thread::id>{}(this_thread::get_id());
+		registerData.tid = static_cast<uint16_t>(gettid());
     	strncpy(registerData.name, string("PCI").c_str(), sizeof(registerData.name) - 1);
     	registerData.name[sizeof(registerData.name) - 1] = '\0';
     	registerData.nameLength = strlen(registerData.name) + 1;
@@ -131,6 +130,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			if (srvRegisterResult == 0 and checkResData.exists) {
 				break;
 			}
+
+			usleep(10000);
 		}
 
 		//delete checkMsg;

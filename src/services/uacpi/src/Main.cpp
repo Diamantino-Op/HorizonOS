@@ -1,6 +1,6 @@
 #include "abi-bits/hos_msg.h"
 #include "horizonos/generic.h"
-#include "thread"
+#include "pthread.h"
 #include "uacpi/event.h"
 #include "uacpi/sleep.h"
 #include "uacpi/status.h"
@@ -99,7 +99,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		auto registerData = RegisterMsgData();
 
 		registerData.ownerPid = getpid();
-		registerData.tid = hash<thread::id>{}(this_thread::get_id());
+		registerData.tid = static_cast<uint16_t>(gettid());
 		strncpy(registerData.name, string("uAcpi").c_str(), sizeof(registerData.name) - 1);
 		registerData.name[sizeof(registerData.name) - 1] = '\0';
 		registerData.nameLength = strlen(registerData.name) + 1;
@@ -156,6 +156,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int handlerThreadResult = pthread_create(&handlerThread, nullptr, messageHandler, nullptr);
 
 	if (handlerThreadResult != 0) {
+		printf("uACPI: Failed to create handler thread!\n");
+
 		return 1;
 	}
 
@@ -314,6 +316,8 @@ void *messageHandler(void *) {
 			if (srvRegisterResult == 0 and checkResData.exists) {
 				break;
 			}
+
+			usleep(10000);
 		}
 
 		//delete checkMsg;

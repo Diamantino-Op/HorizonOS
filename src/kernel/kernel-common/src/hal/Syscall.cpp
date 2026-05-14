@@ -321,7 +321,10 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallExit(long *, u64 staus, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallExit(long *, u64 status, u64, u64, u64, u64, u64) {
+		CommonMain::getTerminal()->debug("Process %lu exited with status code: %lu", "Syscall", Scheduler::getCurrentThread()->getParent()->getId(), status);
+		CommonMain::getTerminal()->info("Process %lu exited with status code: %lu", "Syscall", Scheduler::getCurrentThread()->getParent()->getId(), status);
+
 		CommonMain::getInstance()->getScheduler()->killProcess(Scheduler::getCurrentThread()->getParent());
 
 		return 0;

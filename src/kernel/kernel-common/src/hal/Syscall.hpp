@@ -109,7 +109,7 @@ namespace kernel::common::hal {
     	static u64 syscallMUnmap(long *, u64 addr, u64 size, u64, u64, u64, u64);
     	static u64 syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallArchCtl(long *ret, u64 operation, u64 pointer, u64, u64, u64, u64);
-    	static u64 syscallExit(long *, u64 staus, u64, u64, u64, u64, u64);
+    	static u64 syscallExit(long *, u64 status, u64, u64, u64, u64, u64);
     	static u64 syscallClockGet(long *ret, u64 clock, u64 secs, u64 nanos, u64, u64, u64);
     	static u64 syscallSysInfo(long *ret, u64 info, u64, u64, u64, u64, u64);
     	static u64 syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64);

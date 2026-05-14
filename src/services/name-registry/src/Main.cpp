@@ -143,9 +143,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			int err = is_thread_alive(service->tid, &ret);
 
 			if (err == 0 and !ret) {
-				printf("Service: %s dead, unregistering it!", service->name.c_str());
+				printf("Service: %s dead, unregistering it!\n", service->name.c_str());
 
-				// unregister modifies the services vector, so lock while calling it
 				std::scoped_lock lock(services_mutex);
 				unregisterService(services, service->name);
 			}
@@ -214,11 +213,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				[&](const Service* s) {
 					return s && s->name == name;
 				});
+
+			if (!hasService) {
+				registerService(services, msg.src_port, response.ownerPid, response.tid, name, response.versionMajor, response.versionMinor, response.versionPatch);
+			}
 		}
 
-		if (!hasService) {
-			registerService(services, msg.src_port, response.ownerPid, response.tid, name, response.versionMajor, response.versionMinor, response.versionPatch);
-		} else {
+		if (hasService) {
 			printf("Service already registered!");
 		}
 
@@ -459,14 +460,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 void registerService(vector<Service *> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
-	std::scoped_lock lock(services_mutex);
 	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
 
 	printf("Service %s registered on port %lu!\n", name.c_str(), port);
 }
 
 void unregisterService(vector<Service *> *services, string name) {
-	std::scoped_lock lock(services_mutex);
 	erase_if(*services, [name](const Service *service) { return service->name == name; });
 
 	printf("Service %s unregistered!\n", name.c_str());
