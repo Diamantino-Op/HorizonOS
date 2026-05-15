@@ -593,26 +593,28 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
+		//CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
 		thread->setWaitingPort(0);
 
 		//const bool prevIF = this->schedLock.lock();
 
-		this->blockedThreadList.remove(thread, false);
+		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
 
-		if (thread->getSleepNs() == 0) {
-			thread->setState(ThreadState::RUNNING);
+		//if (wasBlocked) {
+			if (thread->getSleepNs() == 0) {
+				thread->setState(ThreadState::RUNNING);
 
-			if (top) {
-				this->queues[thread->getParent()->getPriority()].addStart(thread);
+				if (top) {
+					this->queues[thread->getParent()->getPriority()].addStart(thread);
+				} else {
+					this->queues[thread->getParent()->getPriority()].addEnd(thread);
+				}
 			} else {
-				this->queues[thread->getParent()->getPriority()].addEnd(thread);
+				if (!this->sleepingThreadList.contains(thread)) {
+					this->sleepingThreadList.addStart(thread);
+				}
 			}
-		} else {
-			if (!this->sleepingThreadList.contains(thread)) {
-				this->sleepingThreadList.addStart(thread);
-			}
-		}
+		//}
 
 		this->schedLock.unlock(prevIF);
 	}

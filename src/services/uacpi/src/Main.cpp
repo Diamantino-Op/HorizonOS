@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <atomic>
 
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx);
 
@@ -77,6 +78,8 @@ struct McfgSegmentMsgData {
 uint64_t uacpiPort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
+
+static atomic_bool namespaceReady { false };
 
 void *messageHandler(void *);
 
@@ -170,6 +173,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	if (const uacpi_status ret = uacpi_namespace_load(); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to load namespaces: %s\n", uacpi_status_to_string(ret));
 	}
+
+	namespaceReady.store(true, memory_order_release);
 
 	long mode = 0;
 
@@ -394,7 +399,7 @@ void *messageHandler(void *) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
-	while (not uacpi_table_subsystem_available()) { }
+	while (not namespaceReady.load(memory_order_acquire)) { }
 
 	{
 		// Wait for pci_ready from the PCI service (port 3 → port 2).

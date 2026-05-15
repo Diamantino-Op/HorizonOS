@@ -92,8 +92,8 @@ static std::mutex services_mutex;
 [[noreturn]] void *getMsgHandler(void *srvsPtr);
 [[noreturn]] void *checkMsgHandler(void *srvsPtr);
 
-void registerService(vector<Service *> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
-void unregisterService(vector<Service *> *services, string name);
+void registerService(vector<Service> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
+void unregisterService(vector<Service> *services, string name);
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort), 1);
@@ -106,8 +106,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	auto *services = new vector<Service *>();
-	
+	auto *services = new vector<Service>();
+
 	pthread_t registerThread;
 	pthread_t unregisterThread;
 	pthread_t getThread;
@@ -131,22 +131,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	for (;;) {
 		// take a snapshot of the services while protected by the mutex
-		vector<Service *> snapshot;
+		vector<Service> snapshot;
 		{
 			const std::scoped_lock lock(services_mutex);
 			snapshot = *services;
 		}
 
-		for (const auto *service : snapshot) {
+		for (const auto &service : snapshot) {
 			bool ret = false;
 
-			int err = is_thread_alive(service->tid, &ret);
+			int err = is_thread_alive(service.tid, &ret);
 
 			if (err == 0 and !ret) {
-				printf("Service: %s dead, unregistering it!\n", service->name.c_str());
+				printf("Service: %s dead, unregistering it!\n", service.name.c_str());
 
 				std::scoped_lock lock(services_mutex);
-				unregisterService(services, service->name);
+				unregisterService(services, service.name);
 			}
 		}
 
@@ -160,7 +160,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 // TODO: Probable culprit of receive heap corruption
 [[noreturn]] void *registerMsgHandler(void *srvsPtr) {
-	auto *services = static_cast<vector<Service *> *>(srvsPtr);
+	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
 	printf("Starting Name/Registry register message handler!\n");
 
@@ -210,8 +210,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			std::scoped_lock lock(services_mutex);
 
 			hasService = ranges::any_of(*services,
-				[&](const Service* s) {
-					return s && s->name == name;
+				[&](const Service& s) {
+					return s.name == name;
 				});
 
 			if (!hasService) {
@@ -242,7 +242,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 [[noreturn]] void *unregisterMsgHandler(void *srvsPtr) {
-	auto *services = static_cast<vector<Service *> *>(srvsPtr);
+	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
 	printf("Starting Name/Registry unregister message handler!\n");
 
@@ -294,7 +294,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 [[noreturn]] void *getMsgHandler(void *srvsPtr) {
-	auto *services = static_cast<vector<Service *> *>(srvsPtr);
+	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
 	printf("Starting Name/Registry get message handler!\n");
 
@@ -348,18 +348,18 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			std::scoped_lock lock(services_mutex);
 
 			const auto res = ranges::find_if(*services,
-				[&](const Service* s) {
-					return s && s->name == name;
+				[&](const Service& s) {
+					return s.name == name;
 				});
 
 			if (res != services->end()) {
-				const Service *srv = *res;
+				const Service &srv = *res;
 
-				port = srv->port;
-				tid = srv->tid;
-				versionMajor = srv->versionMajor;
-				versionMinor = srv->versionMinor;
-				versionPatch = srv->versionPatch;
+				port = srv.port;
+				tid = srv.tid;
+				versionMajor = srv.versionMajor;
+				versionMinor = srv.versionMinor;
+				versionPatch = srv.versionPatch;
 			}
 		}
 
@@ -386,7 +386,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 [[noreturn]] void *checkMsgHandler(void *srvsPtr) {
-	auto *services = static_cast<vector<Service *> *>(srvsPtr);
+	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
 	printf("Starting Name/Registry check message handler!\n");
 
@@ -436,8 +436,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			std::scoped_lock lock(services_mutex);
 
 			exists = ranges::any_of(*services,
-				[&](const Service* s) {
-					return s and (s->name == name or s->tid == response.tid);
+				[&](const Service& s) {
+					return s.name == name or s.tid == response.tid;
 				});
 		}
 
@@ -459,14 +459,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 }
 
-void registerService(vector<Service *> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
-	services->push_back(new Service(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch));
+void registerService(vector<Service> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
+	services->emplace_back(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch);
 
 	printf("Service %s registered on port %lu!\n", name.c_str(), port);
 }
 
-void unregisterService(vector<Service *> *services, string name) {
-	erase_if(*services, [name](const Service *service) { return service->name == name; });
+void unregisterService(vector<Service> *services, string name) {
+	erase_if(*services, [name](const Service &service) { return service.name == name; });
 
 	printf("Service %s unregistered!\n", name.c_str());
 }

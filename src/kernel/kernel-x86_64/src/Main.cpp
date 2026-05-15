@@ -63,7 +63,7 @@ namespace kernel::x86_64 {
 
 		terminal.info("GDT Loaded... OK", "HorizonOS");
 
-		this->tssManager.updateTss();
+		TssManager::updateTss();
 
 		terminal.info("Updated TSS... OK", "HorizonOS");
 

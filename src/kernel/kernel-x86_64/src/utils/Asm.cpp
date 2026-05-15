@@ -111,11 +111,19 @@ namespace kernel::x86_64::utils {
 	}
 
 	void Asm::xsave(const u64 *region) {
-		asm volatile("xsave (%0)" :: "a"(region));
+		const u64 xcr0 = readXCr(0);
+		const u32 eax = static_cast<u32>(xcr0);
+		const u32 edx = static_cast<u32>(xcr0 >> 32);
+
+		asm volatile("xsave (%0)" :: "r"(region), "a"(eax), "d"(edx) : "memory");
 	}
 
 	void Asm::xrstor(const u64 *region) {
-		asm volatile("xrstor (%0)" ::"a"(region));
+		const u64 xcr0 = readXCr(0);
+		const u32 eax = static_cast<u32>(xcr0);
+		const u32 edx = static_cast<u32>(xcr0 >> 32);
+
+		asm volatile("xrstor (%0)" :: "r"(region), "a"(eax), "d"(edx) : "memory");
 	}
 
 	void Asm::fninit() {
@@ -123,11 +131,11 @@ namespace kernel::x86_64::utils {
 	}
 
 	void Asm::fxsave(const u64 *region) {
-		asm volatile("fxsave (%0)" :: "a"(region));
+		asm volatile("fxsave (%0)" :: "r"(region) : "memory");
 	}
 
 	void Asm::fxrstor(const u64 *region) {
-		asm volatile("fxrstor (%0)" ::"a"(region));
+		asm volatile("fxrstor (%0)" :: "r"(region) : "memory");
 	}
 
 	// Msrs

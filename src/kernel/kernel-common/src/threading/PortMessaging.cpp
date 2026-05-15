@@ -107,7 +107,13 @@ namespace kernel::common::threading {
     }
 
 	u64 PortMessaging::getNewPort() {
-	    return currUsedPort++;
+      const bool prevIF = portLock.lock();
+
+      const u64 nextPort = currUsedPort++;
+
+      portLock.unlock(prevIF);
+
+      return nextPort;
     }
 
     PortEntry *PortMessaging::findPortUnlocked(const u64 port) {
@@ -239,11 +245,8 @@ namespace kernel::common::threading {
         entry->lock.unlock(prevEntryIf);
 
     	if (waiter != nullptr) {
-			const bool shouldWake = waiter->thread != nullptr and waiter->thread->getState() == ThreadState::BLOCKED;
-
-    		if (shouldWake) {
-				CommonMain::getInstance()->getScheduler()->unblockThread(waiter->thread->getId(), true);
-    		}
+    		// TODO: There is a race condition that sometimes nukes this_tid
+    		CommonMain::getInstance()->getScheduler()->unblockThread(waiter->thread->getId(), true);
 
 			delete waiter;
     		delete waiterEntry;
