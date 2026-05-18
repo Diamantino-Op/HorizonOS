@@ -65,8 +65,8 @@ namespace kernel::common::threading {
 		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
 	}
 
-	u32 Scheduler::intReSchedule(u64 *intNum) {
-		Interrupts::sendEOI(*intNum);
+	u32 Scheduler::intReSchedule(u64 *) {
+		Interrupts::sendEOI();
 
 		ExecutionNode::reSchedule();
 

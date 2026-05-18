@@ -70,7 +70,8 @@ namespace kernel::x86_64::hal {
     public:
         static void handleInterrupt(Frame *frame);
 
-        static void sendEOI(usize intNo);
+        //static void sendEOI(usize intNo);
+    	static void sendEOI();
 
         static void handlePageFault(Frame *frame);
 

@@ -44,7 +44,7 @@ namespace kernel::x86_64::hal {
 			lastInt = frame->intNo;
 
 			if (CpuManager::getCurrentCore() == nullptr or CpuManager::getCurrentCore()->interruptAllocator == nullptr) {
-				sendEOI(savedIntNo);
+				sendEOI();
 
 				return;
 			}
@@ -52,7 +52,7 @@ namespace kernel::x86_64::hal {
 			const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(savedIntNo);
 
 			if (handler == nullptr or handler->fun == nullptr) {
-				sendEOI(savedIntNo);
+				sendEOI();
 
 				return;
 			}
@@ -64,17 +64,19 @@ namespace kernel::x86_64::hal {
 			}
 
 			if (ret == 0) {
-				sendEOI(savedIntNo);
+				sendEOI();
 			}
 		}
 	}
 
-	void Interrupts::sendEOI(const usize intNo) {
-		if (CpuManager::getCurrentCore()->apic.isInitialized()) {
+	void Interrupts::sendEOI() {
+		/*if (CpuManager::getCurrentCore()->apic.isInitialized()) {
 			CpuManager::getCurrentCore()->apic.eoi();
 		} else {
 			reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->eoi(intNo);
-		}
+		}*/
+
+		CpuManager::getCurrentCore()->apic.eoi();
 	}
 
 	// TODO: Fix
