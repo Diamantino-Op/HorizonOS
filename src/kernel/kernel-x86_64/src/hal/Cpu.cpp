@@ -144,6 +144,10 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::startMultithread() {
+		if (this->coreAmount == 1) {
+			return;
+		}
+
 		this->cpuList = new CoreKernel[this->coreAmount - 1];
 
 		u64 j = 0;

@@ -25,7 +25,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	bool InterruptAllocator::freeInt(const u8 intNum) {
-		if (intNum - 32 < 0 or intNum - 32 > 223) {
+		if (intNum < 32 or intNum > 255) {
 			return false;
 		}
 
@@ -40,14 +40,14 @@ namespace kernel::x86_64::hal {
 	}
 
 	bool InterruptAllocator::allocSpecific(const u8 intNum, const HandlerFun handler, u64 *ctx) {
-		if (intNum - 32 < 0 or intNum - 32 > 223) {
+		if (intNum < 32 or intNum > 255) {
 			return false;
 		}
 
 		const bool prevIF = this->spinLock.lock();
 
-		this->handlers[intNum].fun = handler;
-		this->handlers[intNum].ctx = ctx;
+		this->handlers[intNum - 32].fun = handler;
+		this->handlers[intNum - 32].ctx = ctx;
 
 		this->spinLock.unlock(prevIF);
 
@@ -55,7 +55,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	IsrHandler *InterruptAllocator::getHandler(const u8 intNum) {
-		if (intNum - 32 < 0 or intNum - 32 > 223) {
+		if (intNum < 32 or intNum >= 255) {
 			return nullptr;
 		}
 
@@ -65,12 +65,12 @@ namespace kernel::x86_64::hal {
 	u64 IrqAllocator::allocGsi(const u64 destCpu, const u16 flags, const IOApicDelivery delivery, const HandlerFun handler, u64 *ctx, const bool skipIsos) {
 		const bool prevIF = this->spinLock.lock();
 
-		for (u64 i = this->gsiBase; i < this->gsiAmount + this->gsiBase; i++) {
+		for (u64 i = this->gsiBase + 1; i < this->gsiAmount + this->gsiBase; i++) {
 			bool overlapsIso = false;
 
 			if (skipIsos) {
 				for (u64 j = 0; j < this->irqGsiMappingAmount; j++) {
-					if (this->irqGsiMappings[i].gsi == i) {
+					if (this->irqGsiMappings[j].gsi == i) {
 						overlapsIso = true;
 
 						break;
@@ -83,7 +83,7 @@ namespace kernel::x86_64::hal {
 					auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 					const CpuManager *cpuManager = kernel->getCpuManager();
 
-					if (destCpu > cpuManager->getCoreAmount()) {
+					if (destCpu >= cpuManager->getCoreAmount()) {
 						this->spinLock.unlock(prevIF);
 
 						return 100000000;
@@ -102,7 +102,7 @@ namespace kernel::x86_64::hal {
 					if (intNum == 0) {
 						this->spinLock.unlock(prevIF);
 
-						return 100000000;
+						return 100000001;
 					}
 
 					kernel->getIOApicManager()->setGsi(i, intNum, destCore->apic.getId(), flags, delivery);
@@ -118,7 +118,7 @@ namespace kernel::x86_64::hal {
 
 		this->spinLock.unlock(prevIF);
 
-		return 100000000;
+		return 100000002;
 	}
 
 	u8 IrqAllocator::allocateIrq(const u64 irq, const u64 destCpu, const u16 flags, const IOApicDelivery delivery, const HandlerFun handler, u64 *ctx) {
@@ -138,7 +138,7 @@ namespace kernel::x86_64::hal {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
-		if (destCpu > cpuManager->getCoreAmount()) {
+		if (destCpu >= cpuManager->getCoreAmount()) {
 			this->spinLock.unlock(prevIF);
 
 			return 0;
@@ -162,6 +162,8 @@ namespace kernel::x86_64::hal {
 
 		kernel->getIOApicManager()->setGsi(gsi, intNum, destCore->apic.getId(), extraFlags | flags, delivery);
 
+		CommonMain::getTerminal()->debug("Allocating IRQ: %lu to gsi: %lu. Max GSIs: %lu. GSI Base: %lu", "IrqAllocator", irq, gsi, this->gsiAmount, this->gsiBase);
+
 		this->usedGsis[gsi - this->gsiBase] = intNum;
 
 		this->spinLock.unlock(prevIF);
@@ -183,7 +185,7 @@ namespace kernel::x86_64::hal {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
-		if (destCpu > cpuManager->getCoreAmount()) {
+		if (destCpu >= cpuManager->getCoreAmount()) {
 			this->spinLock.unlock(prevIF);
 
 			return false;
@@ -219,6 +221,9 @@ namespace kernel::x86_64::hal {
 
 	void IrqAllocator::initGsiBitmap(const u64 amount) {
 		this->usedGsis = new u8[amount];
+		this->gsiAmount = amount;
+
+		memset(this->usedGsis, 0, amount);
 	}
 
 	void IrqAllocator::setGsiBase(const u64 base) {

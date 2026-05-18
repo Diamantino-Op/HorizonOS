@@ -46,8 +46,8 @@ namespace kernel::common::threading {
 
 		const u32 gsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, sleepTick, nullptr);
 
-		if (gsi == 100000000) {
-			CommonMain::getTerminal()->error("Hpet gsi not allocated!", "Scheduler", gsi);
+		if (gsi >= 100000000) {
+			CommonMain::getTerminal()->error("Hpet gsi not allocated: %lu", "Scheduler", gsi);
 
 			Asm::lhlt();
 		}
@@ -65,8 +65,8 @@ namespace kernel::common::threading {
 		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
 	}
 
-	u32 Scheduler::intReSchedule(u64 *) {
-		Interrupts::sendEOI(0x21);
+	u32 Scheduler::intReSchedule(u64 *intNum) {
+		Interrupts::sendEOI(*intNum);
 
 		ExecutionNode::reSchedule();
 

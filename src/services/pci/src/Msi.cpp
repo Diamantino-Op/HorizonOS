@@ -50,7 +50,8 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
     	void *handle = nullptr;
 
     	// TODO: Needs checking
-        if (install_irq_handler(v, irqShim, ctx, handle) != 0) {
+    	// TODO: Fix
+        /*if (install_irq_handler(v, irqShim, ctx, handle) != 0) {
             printf("PCI/MSI: install_irq_handler failed for vector %u\n", v);
 
             delete ctx;
@@ -61,7 +62,8 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
                 auto it = m_vectors.find(rv);
 
                 if (it != m_vectors.end()) {
-                	uninstall_irq_handler(irqShim, it->second.irqHandle);
+                	// TODO: Fix
+                	//uninstall_irq_handler(irqShim, it->second.irqHandle);
 
                     delete ctx; // already freed above for failed
 
@@ -69,7 +71,7 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
                 }
             }
             return 0;
-        }
+        }*/
 
         m_vectors[v] = AllocatedVector {.vector = v, .irqHandle = handle, .notifyPort = notifyPort};
     }
@@ -86,7 +88,8 @@ void MsiManager::freeVectors(uint8_t base, int count) {
         auto it = m_vectors.find(v);
         if (it == m_vectors.end()) { continue; }
 
-        uninstall_irq_handler(irqShim, it->second.irqHandle);
+    	// TODO: Fix
+        //uninstall_irq_handler(irqShim, it->second.irqHandle);
         m_vectors.erase(it);
     }
 }

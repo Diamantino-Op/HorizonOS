@@ -15,6 +15,8 @@
 #include "uacpi/log.h"
 #include "uacpi/kernel_api.h"
 
+#include <unordered_map>
+
 using namespace std;
 
 extern uint64_t uacpiPort;
@@ -23,6 +25,8 @@ extern uint64_t pciPort;
 constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
+
+constexpr uint64_t IRQ_RECEIVE_MSG_TYPE = 0x1000;
 
 struct PciReadMsgData {
 	uint8_t bus {};
@@ -45,6 +49,15 @@ struct PciWriteMsgData {
 	uint32_t data {};
 };
 
+struct IrqReceiveData {
+	uint64_t irqNum {};
+};
+
+struct IrqHandleStruct {
+	uacpi_interrupt_handler handler {};
+	uacpi_handle ctx {};
+};
+
 struct UacpiIoRange {
 	uacpi_io_addr base;
 	uacpi_size len;
@@ -59,6 +72,8 @@ struct WorkItem {
 	uacpi_work_handler handler;
 	uacpi_handle ctx;
 };
+
+static unordered_map<uint64_t, IrqHandleStruct> irqHandles {};
 
 static pthread_mutex_t workMutex;
 static pthread_cond_t workCond;
@@ -792,15 +807,67 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *reques
 }
 
 uacpi_status uacpi_kernel_install_interrupt_handler(const uacpi_u32 irq, const uacpi_interrupt_handler intHandler, const uacpi_handle ctx, uacpi_handle *out_irq_handle) {
-	const int err = install_irq_handler(irq, intHandler, ctx, out_irq_handle);
+	const int err = install_irq_handler(irq, uacpiPort);
+
+	*out_irq_handle = reinterpret_cast<uacpi_handle *>(irq);
+
+	irqHandles[irq] = {
+		.handler = intHandler,
+		.ctx = ctx
+	};
 
 	return err == 0 ? UACPI_STATUS_OK : UACPI_STATUS_INTERNAL_ERROR;
 }
 
 uacpi_status uacpi_kernel_uninstall_interrupt_handler(const uacpi_interrupt_handler intHandler, const uacpi_handle irqHandle) {
-	const int err = uninstall_irq_handler(intHandler, irqHandle);
+	const int err = uninstall_irq_handler(reinterpret_cast<uint64_t>(irqHandle));
+
+	irqHandles.erase(reinterpret_cast<uint64_t>(irqHandle));
 
 	return err == 0 ? UACPI_STATUS_OK : UACPI_STATUS_INTERNAL_ERROR;
+}
+
+void *handleIrqs(void *) {
+	printf("Starting uAcpi irq message handler!\n");
+
+	auto response = IrqReceiveData();
+	auto msg = hos_msg();
+
+	msg.buffer = &response;
+	msg.length = sizeof(IrqReceiveData);
+
+	auto filterOptions = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ IRQ_RECEIVE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	for (;;) {
+		const int err = receive_horizonos_message(uacpiPort, &msg, &filterOptions);
+
+		if (err != 0) {
+			printf("uAcpi Service: Failed to receive register message: %d\n", err);
+
+			continue;
+		}
+
+		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(IrqReceiveData)) {
+			printf("uAcpi Service: Dropped wrong irq message (%ld bytes)", msg.ret_length);
+
+			continue;
+		}
+
+		if (msg.type != IRQ_RECEIVE_MSG_TYPE) {
+			printf("uAcpi Service: Dropped non-irq message in register handler (type %lu)", msg.type);
+
+			continue;
+		}
+
+		if (irqHandles.contains(response.irqNum)) {
+			irqHandles[response.irqNum].handler(irqHandles[response.irqNum].ctx);
+		} else {
+			printf("uAcpi Service: IRQ: %lu not handled!", response.irqNum);
+		}
+	}
 }
 
 uacpi_handle uacpi_kernel_create_spinlock() {

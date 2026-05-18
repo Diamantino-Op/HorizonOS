@@ -75,6 +75,8 @@ namespace kernel::x86_64 {
         CpuManager cpuManager {};
 
         IOApicManager ioApicManager {};
+
+    	u64 schedInt {};
     };
 
     class CoreKernel final : CommonCoreMain {
@@ -93,6 +95,8 @@ namespace kernel::x86_64 {
         TssManager coreTssManager {};
         IdtManager *coreIdtManager {};
     	InterruptAllocator interruptAllocator {};
+
+    	u64 schedInt {};
 
     public:
         CpuCore cpuCore {};

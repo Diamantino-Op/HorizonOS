@@ -261,7 +261,7 @@ namespace kernel::x86_64::hal {
 		u64 entry = 0;
 
 		entry |= vector;
-		entry |= delivery & IOApicDelivery::EXT_INT;
+		entry |= static_cast<u64>(delivery);
 		entry |= flags & ~0x7FF;
 		entry |= dest << 56;
 
@@ -279,7 +279,7 @@ namespace kernel::x86_64::hal {
 	void IOApic::unmaskIdx(const u64 idx) {
 		u64 entry = readEntry(idx);
 
-		entry |= ~(1 << 16);
+		entry &= ~(1 << 16);
 
 		writeEntry(idx, entry);
 	}
@@ -301,14 +301,14 @@ namespace kernel::x86_64::hal {
 
 	u64 IOApic::readEntry(const u32 idx) {
 		const u32 lo = this->read(this->entry(idx));
-		const u32 hi = this->read(this->entry(idx + 1));
+		const u32 hi = this->read(this->entry(idx) + 1);
 
 		return (static_cast<u64>(hi) << 32) | lo;
 	}
 
 	void IOApic::writeEntry(const u32 idx, const u64 data) {
 		this->write(this->entry(idx), data & 0xFFFFFFFF);
-		this->write(this->entry(idx + 1), data >> 32);
+		this->write(this->entry(idx) + 1, data >> 32);
 	}
 
 	Pair IOApic::getGsiRange() const {
@@ -341,6 +341,8 @@ namespace kernel::x86_64::hal {
 			CommonMain::getTerminal()->debug("IOApic %lu gsi range: %lu - %lu", "IOApic", i, start, end);
 		}
 
+		CommonMain::getTerminal()->debug("IOApic ISOs: %lu", "IOApic", CommonMain::getInstance()->getUAcpi()->getIsosAmount());
+
 		auto *irqGsiMappings = new IrqGsiMapping[CommonMain::getInstance()->getUAcpi()->getIsosAmount()];
 
 		for (u64 i = 0; i < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); i++) {
@@ -353,7 +355,7 @@ namespace kernel::x86_64::hal {
 
 		auto *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
 
-		irqAllocator->initGsiBitmap(this->maxRange - this->minRange);
+		irqAllocator->initGsiBitmap(this->maxRange - this->minRange + 1);
 		irqAllocator->setGsiBase(this->minRange);
 
 		irqAllocator->setIrqGsiMappings(irqGsiMappings, CommonMain::getInstance()->getUAcpi()->getIsosAmount());
@@ -424,7 +426,7 @@ namespace kernel::x86_64::hal {
 		for (u64 i = 0; i < CommonMain::getInstance()->getUAcpi()->getIoApicsAmount(); i++) {
 			IOApic *entry = &this->ioApics[i];
 
-			if (auto [start, end] = entry->getGsiRange(); start < gsi and gsi <= end) {
+			if (auto [start, end] = entry->getGsiRange(); start <= gsi and gsi <= end) {
 				return entry;
 			}
 		}

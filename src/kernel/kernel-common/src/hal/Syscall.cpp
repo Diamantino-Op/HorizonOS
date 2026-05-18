@@ -217,9 +217,15 @@ namespace kernel::common::hal {
 
 		auto notifyMsg = MessageHeader();
 
-		notifyMsg.type = irqMessageIdBase + irq->irq;
+		auto notifyData = IrqReceiveData();
+
+		notifyData.irqNum = irq->irq;
+
+		notifyMsg.type = irqReceiveMsgType;
 		notifyMsg.port = irq->port;
-		notifyMsg.length = 0;
+
+		notifyMsg.buffer = reinterpret_cast<u64 *>(&notifyData);
+		notifyMsg.length = sizeof(IrqReceiveData);
 
 		PortMessaging::sendMessage(0, irq->port, &notifyMsg);
 

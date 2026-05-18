@@ -11,6 +11,8 @@ namespace kernel::x86_64::hal {
 
 	constexpr usize maxBacktraceFrames = 64;
 
+	static u8 lastInt = 0;
+
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
 		auto *frame = reinterpret_cast<Frame *>(stackFrame);
 
@@ -32,7 +34,27 @@ namespace kernel::x86_64::hal {
 			}
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
-		} else if (const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(frame->intNo); handler != nullptr and handler->fun != nullptr) {
+		} else {
+			if (frame->intNo != 34 and frame->intNo != 32) {
+				CommonMain::getTerminal()->warnNoLock("Int: %lu, CurrentCore: 0x%.16lx, InterruptAlloc: 0x%.16lx", "Interrupts", frame->intNo, CpuManager::getCurrentCore(), CpuManager::getCurrentCore()->interruptAllocator);
+			}
+
+			lastInt = frame->intNo;
+
+			if (CpuManager::getCurrentCore() == nullptr or CpuManager::getCurrentCore()->interruptAllocator == nullptr) {
+				sendEOI(frame->intNo);
+
+				return;
+			}
+
+			const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(frame->intNo);
+
+			if (handler == nullptr or handler->fun == nullptr) {
+				sendEOI(frame->intNo);
+
+				return;
+			}
+
 			handler->fun(handler->ctx);
 
 			if ((frame->cs & 0x3) == 3) {
@@ -58,6 +80,7 @@ namespace kernel::x86_64::hal {
 		Terminal *terminal = CommonMain::getTerminal();
 
 		const u64 faultAddr = Asm::readCr2();
+		const u64 pageAddr = faultAddr & ~0xFFFULL;
 
 		u8 flags = 0b00000011;
 
@@ -65,17 +88,24 @@ namespace kernel::x86_64::hal {
 			flags |= 0b00000100;
 		}
 
-		if (not (frame->errNo & 0x1)) { // Present
-			const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
-
-			CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(faultAddr, physAddress, flags, false, false);
-
-			Asm::invalidatePage(faultAddr);
-
-			terminal->error("PageFault at address: 0x%.16lx", "Interrupts", faultAddr);
-		} else {
+		if (frame->errNo & 0x1) { // Present
 			kernelPanic(frame);
+			return;
 		}
+
+		const u64 physAddress = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
+
+		if (physAddress == 0) {
+			terminal->error("PageFault allocation failed at address: 0x%.16lx", "Interrupts", faultAddr);
+			kernelPanic(frame);
+			return;
+		}
+
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(pageAddr, physAddress, flags, false, false);
+
+		Asm::invalidatePage(pageAddr);
+
+		terminal->error("PageFault at address: 0x%.16lx", "Interrupts", faultAddr);
 	}
 
 	void Interrupts::mask(const u8 id) {
@@ -108,7 +138,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
 		terminal->printfBoth(true, "\033[0;31m│");
 		terminal->printfBoth(true, "\033[0;31m│   Registers:");
-		terminal->printfBoth(true, "\033[0;31m│   int: %u", frame->intNo);
+		terminal->printfBoth(true, "\033[0;31m│   int: %u, lastInt: %u", frame->intNo, lastInt);
 		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
 		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
 		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);

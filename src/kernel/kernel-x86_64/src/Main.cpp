@@ -278,10 +278,10 @@ namespace kernel::x86_64 {
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
-		const u8 scheduleInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, &this->schedInt);
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), scheduleInt, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
 
 		// this->shutdown();
 
@@ -375,9 +375,9 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		const u8 scheduleInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, &this->schedInt);
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), scheduleInt, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

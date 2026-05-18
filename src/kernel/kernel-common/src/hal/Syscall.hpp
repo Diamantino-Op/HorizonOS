@@ -59,7 +59,7 @@ namespace kernel::common::hal {
 	constexpr u64 linuxSyscallAmount = 309;
 	constexpr u64 horizonSyscallAmount = 33;
 
-	constexpr u64 irqMessageIdBase = 0x1000;
+	constexpr u64 irqReceiveMsgType = 0x1000;
 
 	struct KernelSysInfo {
 		long uptime;
@@ -105,6 +105,10 @@ namespace kernel::common::hal {
 		u64 irq;
 		u64 threadId;
 		u64 port;
+	};
+
+	struct IrqReceiveData {
+		u64 irqNum {};
 	};
 
     class SyscallManager {

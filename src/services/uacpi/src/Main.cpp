@@ -83,7 +83,7 @@ uint64_t pciTid = 0;
 
 void processMcfg();
 
-void *messageHandler(void *);
+extern void *handleIrqs(void *);
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&uacpiPort));
@@ -156,17 +156,17 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
-	/*pthread_t handlerThread;
+	/*pthread_t irqHandlerThread;
 
-	const int handlerThreadResult = pthread_create(&handlerThread, nullptr, messageHandler, nullptr);
+	const int irqHandlerThreadResult = pthread_create(&irqHandlerThread, nullptr, handleIrqs, nullptr);
 
-	if (handlerThreadResult != 0) {
-		printf("uACPI: Failed to create handler thread!\n");
+	if (irqHandlerThreadResult != 0) {
+		printf("uACPI: Failed to create irq handler thread!\n");
 
 		return 1;
 	}
 
-	pthread_detach(handlerThread);*/
+	pthread_detach(irqHandlerThread);*/
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s\n", uacpi_status_to_string(ret));
