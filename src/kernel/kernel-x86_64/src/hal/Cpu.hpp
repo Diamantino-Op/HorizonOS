@@ -5,6 +5,7 @@
 
 #include "Apic.hpp"
 #include "GDT.hpp"
+#include "InterruptAllocator.hpp"
 #include "TSS.hpp"
 #include "Tsc.hpp"
 #include "threading/Scheduler.hpp"
@@ -30,7 +31,9 @@ namespace kernel::x86_64::hal {
 
         TssManager *tssManager {};
     	GdtManager *gdtManager {};
+    	InterruptAllocator *interruptAllocator {};
 
+    	u32 cpuArrId {};
         u32 cpuId {};
 
         i64 offset {};

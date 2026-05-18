@@ -40,6 +40,10 @@ namespace kernel::x86_64 {
         GdtManager *getGdtManager();
         TssManager *getTssManager();
         IdtManager *getIdtManager();
+
+    	IrqAllocator *getIrqAllocator();
+    	InterruptAllocator *getInterruptAllocator();
+
         DualPIC *getDualPic();
 
         PIT *getPIT();
@@ -56,6 +60,9 @@ namespace kernel::x86_64 {
         GdtManager gdtManager {};
         TssManager tssManager {};
         IdtManager idtManager {};
+
+    	IrqAllocator irqAllocator {};
+    	InterruptAllocator interruptAllocator {};
 
         DualPIC dualPic {};
 
@@ -79,11 +86,13 @@ namespace kernel::x86_64 {
 
         TssManager *getTssManager();
     	GdtManager *getGdtManager();
+    	InterruptAllocator *getInterruptAllocator();
 
     private:
         GdtManager coreGdtManager {};
         TssManager coreTssManager {};
         IdtManager *coreIdtManager {};
+    	InterruptAllocator interruptAllocator {};
 
     public:
         CpuCore cpuCore {};

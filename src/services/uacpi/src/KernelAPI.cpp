@@ -1,15 +1,16 @@
 #include <thread>
 #include <cstdio>
 #include <cstdlib>
-#include <errno.h>
+#include <cerrno>
 #include <horizonos/generic.h>
 #include <horizonos/syscall.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/io.h>
 #include <sys/mman.h>
-#include <time.h>
+#include <ctime>
 #include <array>
+#include "unistd.h"
 
 #include "uacpi/log.h"
 #include "uacpi/kernel_api.h"
@@ -567,7 +568,7 @@ void uacpi_kernel_sleep(uacpi_u64 mSec) {
 }
 
 uacpi_thread_id uacpi_kernel_get_thread_id() {
-	return reinterpret_cast<uacpi_thread_id>(hash<thread::id>{}(this_thread::get_id()));
+	return reinterpret_cast<uacpi_thread_id>(gettid());
 }
 
 uacpi_handle uacpi_kernel_create_mutex() {

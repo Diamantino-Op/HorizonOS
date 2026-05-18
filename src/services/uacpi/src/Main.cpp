@@ -79,7 +79,9 @@ uint64_t uacpiPort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
 
-static atomic_bool namespaceReady { false };
+//static atomic_bool namespaceReady { false };
+
+void processMcfg();
 
 void *messageHandler(void *);
 
@@ -154,7 +156,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
-	pthread_t handlerThread;
+	/*pthread_t handlerThread;
 
 	const int handlerThreadResult = pthread_create(&handlerThread, nullptr, messageHandler, nullptr);
 
@@ -164,7 +166,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	pthread_detach(handlerThread);
+	pthread_detach(handlerThread);*/
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s\n", uacpi_status_to_string(ret));
@@ -174,7 +176,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to load namespaces: %s\n", uacpi_status_to_string(ret));
 	}
 
-	namespaceReady.store(true, memory_order_release);
+	processMcfg();
 
 	long mode = 0;
 
@@ -228,12 +230,12 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
 	(void)user;
 
     uint64_t seg = 0, bbn = 0;
-    uacpi_eval_integer(node, "_SEG", nullptr, &seg);
-    uacpi_eval_integer(node, "_BBN", nullptr, &bbn);
+    uacpi_eval_simple_integer(node, "_SEG", &seg);
+    uacpi_eval_simple_integer(node, "_BBN", &bbn);
 
     // Try _CBA first — some firmware exposes ECAM base directly on the node
     uint64_t ecamBase = 0;
-    uacpi_eval_integer(node, "_CBA", nullptr, &ecamBase);
+    uacpi_eval_simple_integer(node, "_CBA", &ecamBase);
 
     // If _CBA absent, find it in the MCFG table by matching seg + startBus
     if (ecamBase == 0) {
@@ -282,7 +284,7 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-void *messageHandler(void *) {
+void processMcfg() {
 	{
 		// Send
 
@@ -381,7 +383,7 @@ void *messageHandler(void *) {
 			//delete filterOptions;
 			delete[] filterOptions.whiteListTypes;
 
-			return nullptr;
+			return;
 		}
 
 		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
@@ -399,7 +401,9 @@ void *messageHandler(void *) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
-	while (not namespaceReady.load(memory_order_acquire)) { }
+	//while (not namespaceReady.load(memory_order_acquire)) { }
+
+	//printf("A\n");
 
 	{
 		// Wait for pci_ready from the PCI service (port 3 → port 2).
@@ -436,6 +440,4 @@ void *messageHandler(void *) {
 
 		//delete doneMsg;
 	}
-
-	for (;;) { }
 }

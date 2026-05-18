@@ -11,8 +11,6 @@ namespace kernel::x86_64::hal {
 
 	constexpr usize maxBacktraceFrames = 64;
 
-	IsrHandler Interrupts::handlers[224];
-
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
 		auto *frame = reinterpret_cast<Frame *>(stackFrame);
 
@@ -34,7 +32,7 @@ namespace kernel::x86_64::hal {
 			}
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
-		} else if (const IsrHandler *handler = &handlers[frame->intNo - 32]; handler->fun) {
+		} else if (const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(frame->intNo); handler != nullptr and handler->fun != nullptr) {
 			const u32 ret = handler->fun(handler->ctx);
 
 			if ((frame->cs & 0x3) == 3) {
@@ -80,22 +78,6 @@ namespace kernel::x86_64::hal {
 		} else {
 			kernelPanic(frame);
 		}
-	}
-
-	void Interrupts::setHandler(const u8 id, u64 *handler, u64 *ctx) {
-		handlers[id - 0x20].fun = reinterpret_cast<HandlerFun>(handler);
-		handlers[id - 0x20].ctx = ctx;
-	}
-
-	void Interrupts::setHandler(const u8 id, const HandlerFun handler, u64 *ctx) {
-		CommonMain::getTerminal()->debug("Registering handler for int: %u (%u)", "Interrupts", id - 0x20, id);
-
-		handlers[id - 0x20].fun = handler;
-		handlers[id - 0x20].ctx = ctx;
-	}
-
-	IsrHandler *Interrupts::getHandler(const u8 id) {
-		return &handlers[id - 0x20];
 	}
 
 	void Interrupts::mask(const u8 id) {

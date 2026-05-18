@@ -174,6 +174,7 @@ create_sym_file = custom_target('create_sym_file',
 name_registry_sym_out_file = join_paths(iso_services_path, 'name_registry.sym')
 uacpi_sym_out_file = join_paths(iso_services_path, 'uacpi.sym')
 pci_sym_out_file = join_paths(iso_services_path, 'pci.sym')
+nvme_sym_out_file = join_paths(iso_services_path, 'nvme.sym')
 
 create_services_sym_file = custom_target('create_services_sym_file',
                                 output: [
@@ -184,7 +185,8 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                 input: [
                                     name_registry_exe,
                                     uacpi_exe,
-                                    pci_exe
+                                    pci_exe,
+                                    nvme_exe
                                 ],
                                 command: [
                                     sh, '-c', 'nm -C @INPUT0@ > @0@'.format(name_registry_sym_out_file),
@@ -192,6 +194,8 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     sh, '-c', 'nm -C @INPUT1@ >> @0@'.format(uacpi_sym_out_file),
                                     '&&',
                                     sh, '-c', 'nm -C @INPUT2@ >> @0@'.format(pci_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT3@ >> @0@'.format(nvme_sym_out_file),
                                 ],
                                 depends: [
                                     name_registry_exe,
@@ -208,6 +212,7 @@ install_apps = custom_target('install_apps',
         name_registry_exe,
         uacpi_exe,
         pci_exe,
+        nvme_exe,
 
         # Libs
         join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
@@ -226,7 +231,7 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT3@', iso_services_path,
         '&&',
-        cp, '@INPUT4@', iso_libs_path,
+        cp, '@INPUT4@', iso_services_path,
         '&&',
         cp, '@INPUT5@', iso_libs_path,
         '&&',
@@ -236,6 +241,8 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT8@', iso_libs_path,
         '&&',
+        cp, '@INPUT9@', iso_libs_path,
+        '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',
         sh, '-c', 'for f in @INPUT0@; do echo "$(basename $f)" >> @0@; done'.format(join_paths(iso_out_path, 'InstalledApps.txt'))
@@ -244,7 +251,9 @@ install_apps = custom_target('install_apps',
         hello_world_exe,
         create_services_sym_file,
         name_registry_exe,
-        uacpi_exe
+        uacpi_exe,
+        pci_exe,
+        nvme_exe
     ]
 )
 

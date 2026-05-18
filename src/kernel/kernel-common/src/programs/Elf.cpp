@@ -15,6 +15,7 @@ namespace kernel::common::programs {
 
 			if (physPage != nullptr) {
 				// Map it to the virtual address
+				// TODO: Actually set NX bit
 				ctx->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), ctx->pageFlags | 0b100, false, false);
 
 				if (addr > elfProc->topmostMappedPage) {

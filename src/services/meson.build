@@ -21,3 +21,9 @@ uacpi_exe = uacpi_proj.get_variable('uacpi_exe')
 pci_proj = subproject('pci', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 pci_exe = pci_proj.get_variable('pci_exe')
+
+# NVMe Service
+
+nvme_proj = subproject('nvme', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+nvme_exe = nvme_proj.get_variable('nvme_exe')

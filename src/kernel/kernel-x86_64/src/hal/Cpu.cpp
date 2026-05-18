@@ -128,13 +128,13 @@ namespace kernel::x86_64::hal {
 			if (mpRequest.response->cpus[i]->lapic_id == mpRequest.response->bsp_lapic_id) {
 				this->bootstrapCpu->apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->bootstrapCpu->apic.setIsX2Apic(this->hasX2Apic);
+				this->bootstrapCpu->cpuArrId = 0;
 				this->bootstrapCpu->cpuId = mpRequest.response->cpus[i]->processor_id;
 				this->bootstrapCpu->tssManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getTssManager();
 				this->bootstrapCpu->gdtManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getGdtManager();
+				this->bootstrapCpu->interruptAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getInterruptAllocator();
 
 				setCorePointer(this->bootstrapCpu);
-
-				//asm volatile("swapgs" ::: "memory");
 
 				terminal->debug("BSP Cpu: %u", "Cpu", mpRequest.response->cpus[i]->processor_id);
 
@@ -152,9 +152,11 @@ namespace kernel::x86_64::hal {
 			if (mpRequest.response->cpus[i]->lapic_id != mpRequest.response->bsp_lapic_id) {
 				this->cpuList[j].cpuCore.apic.setId(mpRequest.response->cpus[i]->lapic_id);
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
+				this->cpuList[j].cpuCore.cpuArrId = j + 1;
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
 				this->cpuList[j].cpuCore.tssManager = this->cpuList[j].getTssManager();
 				this->cpuList[j].cpuCore.gdtManager = this->cpuList[j].getGdtManager();
+				this->cpuList[j].cpuCore.interruptAllocator = this->cpuList[j].getInterruptAllocator();
 
 				this->initCore(i, j);
 

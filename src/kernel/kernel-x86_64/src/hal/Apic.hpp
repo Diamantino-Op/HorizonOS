@@ -149,10 +149,12 @@ namespace kernel::x86_64::hal {
 
         bool isInitialized() const;
 
-        u8 getMaxRange() const;
+    	u64 getMinRange() const;
+        u64 getMaxRange() const;
 
     private:
-        u8 maxRange {};
+        u64 minRange {};
+    	u64 maxRange {};
 
         IOApic *ioApics {};
 

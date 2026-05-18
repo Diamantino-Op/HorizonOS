@@ -3,7 +3,7 @@
 #include "CommonMain.hpp"
 #include "Cpu.hpp"
 #include "IOPort.hpp"
-#include "Interrupts.hpp"
+#include "Main.hpp"
 
 namespace kernel::x86_64::hal {
 	using namespace common;
@@ -18,9 +18,7 @@ namespace kernel::x86_64::hal {
 		IOPort::out8(div & 0xFF, channel0DataAddress);
 		IOPort::out8((div >> 8) & 0xFF, channel0DataAddress);
 
-		Interrupts::setHandler(0x20, addTick, nullptr);
-
-		Interrupts::unmask(0x20);
+		reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator()->allocateIrq(0, 0, 0, IOApicDelivery::FIXED, addTick, nullptr);
 
 		this->clock = {
 			.name = "PIT",

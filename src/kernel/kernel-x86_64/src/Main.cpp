@@ -88,9 +88,10 @@ namespace kernel::x86_64 {
 		terminal.info("IDT Loaded... OK", "HorizonOS");
 
 		// PIC
-		this->dualPic.init();
+		// TODO: PIC won't be used
+		//this->dualPic.init();
 
-		terminal.info("PIC Initialised... OK", "HorizonOS");
+		//terminal.info("PIC Initialised... OK", "HorizonOS");
 
 		// Physical Memory
 		this->physicalMemoryManager.init();
@@ -277,8 +278,10 @@ namespace kernel::x86_64 {
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
+		const u8 scheduleInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), scheduleInt, true);
 
 		// this->shutdown();
 
@@ -305,6 +308,14 @@ namespace kernel::x86_64 {
 
 	IdtManager *Kernel::getIdtManager() {
 		return &this->idtManager;
+	}
+
+	IrqAllocator *Kernel::getIrqAllocator() {
+		return &this->irqAllocator;
+	}
+
+	InterruptAllocator *Kernel::getInterruptAllocator() {
+		return &this->interruptAllocator;
 	}
 
 	DualPIC *Kernel::getDualPic() {
@@ -364,7 +375,9 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), 0x21, true);
+		const u8 scheduleInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), scheduleInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 
@@ -377,5 +390,9 @@ namespace kernel::x86_64 {
 
 	GdtManager *CoreKernel::getGdtManager() {
 		return &this->coreGdtManager;
+	}
+
+	InterruptAllocator *CoreKernel::getInterruptAllocator() {
+		return &this->interruptAllocator;
 	}
 }

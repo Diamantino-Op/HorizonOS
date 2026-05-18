@@ -318,7 +318,8 @@ namespace kernel::x86_64::hal {
 	// IOApic Manager
 
 	void IOApicManager::init() {
-		reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->disable();
+		// TODO: We don't even enable it
+		//reinterpret_cast<Kernel *>(CommonMain::getInstance())->getDualPic()->disable();
 
 		this->ioApics = new IOApic[CommonMain::getInstance()->getUAcpi()->getIoApicsAmount()];
 
@@ -331,6 +332,10 @@ namespace kernel::x86_64::hal {
 
 			if (end > this->maxRange) {
 				this->maxRange = end;
+			}
+
+			if (start < this->minRange) {
+				this->minRange = start;
 			}
 
 			CommonMain::getTerminal()->debug("IOApic %lu gsi range: %lu - %lu", "IOApic", i, start, end);
@@ -450,7 +455,11 @@ namespace kernel::x86_64::hal {
 		return this->initialized;
 	}
 
-	u8 IOApicManager::getMaxRange() const {
+	u64 IOApicManager::getMinRange() const {
+		return this->minRange;
+	}
+
+	u64 IOApicManager::getMaxRange() const {
 		return this->maxRange;
 	}
 }

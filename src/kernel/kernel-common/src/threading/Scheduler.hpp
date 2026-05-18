@@ -235,7 +235,7 @@ namespace kernel::common::threading {
         Scheduler();
         ~Scheduler() = default;
 
-    	void initArch();
+    	static void initArch();
 
     	void startProcess(u64 startAddr, ProcessPriority priority, bool isUserspace);
 

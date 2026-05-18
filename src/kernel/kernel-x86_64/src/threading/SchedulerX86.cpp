@@ -32,8 +32,6 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::initArch() {
-		Interrupts::setHandler(0x21, intReSchedule, nullptr);
-
 		const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
 
 		if (hpet->getMaxTimers() == 0) {
@@ -44,23 +42,17 @@ namespace kernel::common::threading {
 
 		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
 
-		u32 gsi = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIOApicManager()->irqToIso(0xa); // 0x2c - irq 10
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
 
-		if (gsi == 1'000'000) {
-			CommonMain::getTerminal()->error("No gsi found!", "Scheduler");
+		const u32 gsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, sleepTick, nullptr);
 
-			gsi = 0xc;
-		} else {
-			CommonMain::getTerminal()->debug("Gsi found: %lu", "Scheduler", gsi);
-		}
+		CommonMain::getTerminal()->debug("Hpet gsi: %lu", "Scheduler", gsi);
 
-		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3) | (1 << 6));
+		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3));
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 
-		Interrupts::setHandler(0x2c, sleepTick, nullptr);
-
-		Interrupts::unmask(0x2c);
+		irqAllocator->unmask(gsi);
 	}
 
 	Thread *Scheduler::getCurrentThread() {
@@ -315,6 +307,7 @@ namespace kernel::common::threading {
 				const u64 startPage = alignDown<u64>(startAddr, pageSize);
 				const u64 endPage = alignUp<u64>(startPage + threadCtxStackSize, pageSize);
 
+				// TODO: Prob wasting 1 page on the top addr
 				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
 					const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
