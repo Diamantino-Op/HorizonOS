@@ -35,33 +35,37 @@ namespace kernel::x86_64::hal {
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
 		} else {
-			if (frame->intNo != 34 and frame->intNo != 32) {
+			const usize savedIntNo = frame->intNo;
+
+			if (savedIntNo != 34 and savedIntNo != 32) {
 				CommonMain::getTerminal()->warnNoLock("Int: %lu, CurrentCore: 0x%.16lx, InterruptAlloc: 0x%.16lx", "Interrupts", frame->intNo, CpuManager::getCurrentCore(), CpuManager::getCurrentCore()->interruptAllocator);
 			}
 
 			lastInt = frame->intNo;
 
 			if (CpuManager::getCurrentCore() == nullptr or CpuManager::getCurrentCore()->interruptAllocator == nullptr) {
-				sendEOI(frame->intNo);
+				sendEOI(savedIntNo);
 
 				return;
 			}
 
-			const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(frame->intNo);
+			const IsrHandler *handler = CpuManager::getCurrentCore()->interruptAllocator->getHandler(savedIntNo);
 
 			if (handler == nullptr or handler->fun == nullptr) {
-				sendEOI(frame->intNo);
+				sendEOI(savedIntNo);
 
 				return;
 			}
 
-			handler->fun(handler->ctx);
+			const u32 ret = handler->fun(handler->ctx);
 
 			if ((frame->cs & 0x3) == 3) {
 				deliverPendingSignal(frame);
 			}
 
-			sendEOI(frame->intNo);
+			if (ret == 0) {
+				sendEOI(savedIntNo);
+			}
 		}
 	}
 
