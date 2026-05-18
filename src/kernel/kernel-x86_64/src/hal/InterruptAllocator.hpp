@@ -16,6 +16,7 @@ namespace kernel::x86_64::hal {
 	struct IrqGsiMapping {
 		u64 irq {};
 		u64 gsi {};
+		u16 flags {};
 	};
 
 	class InterruptAllocator {
@@ -48,7 +49,7 @@ namespace kernel::x86_64::hal {
 		void unmask(u64 irq) const;
 
 	private:
-		u64 getGsi(u64 irq) const;
+		u128 getGsi(u64 irq) const;
 
 		TicketSpinLock spinLock {};
 

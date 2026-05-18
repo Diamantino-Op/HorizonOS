@@ -433,31 +433,63 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallInstallIRQHandler(long *ret, const u64 irq, const u64 handler, const u64 ctx, u64, u64, u64) {
-		if (Interrupts::getHandler(irq + 0x20)->fun != nullptr) {
-			return UACPI_STATUS_ALREADY_EXISTS;
+	u64 SyscallManager::syscallInstallIRQHandler(long *ret, const u64 irq, const u64 port, u64, u64, u64, u64) {
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+
+		auto *registration = new IrqRegistration();
+
+		registration->irq = irq;
+		registration->port = port;
+		registration->threadId = Scheduler::getCurrentThread()->getId();
+
+		if (irqRegistrations.addStart(registration) == nullptr) {
+			delete registration;
+
+			return UACPI_STATUS_INTERNAL_ERROR;
 		}
 
-		Interrupts::setHandler(irq + 0x20, reinterpret_cast<HandlerFun>(handler), reinterpret_cast<u64 *>(ctx));
+		u8 retInt = irqAllocator->allocateIrq(irq, 0, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
 
-		*ret = reinterpret_cast<long>(Interrupts::getHandler(irq + 0x20));
-
-		Interrupts::unmask(irq + 0x20);
+		if (retInt == 0) {
+			return UACPI_STATUS_ALREADY_EXISTS;
+		}
 
 		return UACPI_STATUS_OK;
 	}
 
-	u64 SyscallManager::syscallUninstallIRQHandler(long *ret, const u64 handler, const u64 handle, u64, u64, u64, u64) {
-		if (auto *irqHandler = reinterpret_cast<IsrHandler *>(handle); irqHandler->fun != nullptr && irqHandler->fun == reinterpret_cast<HandlerFun>(handler)) {
-			irqHandler->fun = nullptr;
-			irqHandler->ctx = nullptr;
+	u64 SyscallManager::syscallUninstallIRQHandler(long *ret, const u64 irq, u64, u64, u64, u64, u64) {
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
 
-			return UACPI_STATUS_OK;
+		IrqRegistration *selected = nullptr;
+
+		auto it = irqRegistrations.begin();
+		const auto end = irqRegistrations.end();
+
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
+			if (currEntry.irq == irq) {
+				selected = &currEntry;
+			}
+
+			it = nextIt;
 		}
 
-		// TODO: Mask Interrupt
+		if (selected == nullptr) {
+			return UACPI_STATUS_NOT_FOUND;
+		}
 
-		return UACPI_STATUS_NOT_FOUND;
+		if (not irqRegistrations.remove(selected)) {
+			return UACPI_STATUS_INTERNAL_ERROR;
+		}
+
+		if (not irqAllocator->freeIrq(irq, 0)) {
+			return UACPI_STATUS_INTERNAL_ERROR;
+		}
+
+		return UACPI_STATUS_OK;
 	}
 
 	u64 SyscallManager::syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64) {

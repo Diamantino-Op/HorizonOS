@@ -1,6 +1,7 @@
 #ifndef KERNEL_COMMON_SYSCALL_HPP
 #define KERNEL_COMMON_SYSCALL_HPP
 
+#include "LinkedList.hpp"
 #include "Types.hpp"
 #include "memory/VirtualAllocator.hpp"
 
@@ -58,6 +59,8 @@ namespace kernel::common::hal {
 	constexpr u64 linuxSyscallAmount = 309;
 	constexpr u64 horizonSyscallAmount = 33;
 
+	constexpr u64 irqMessageIdBase = 0x1000;
+
 	struct KernelSysInfo {
 		long uptime;
 		unsigned long loads[3];
@@ -98,6 +101,12 @@ namespace kernel::common::hal {
 		usize whiteListCount;   /* number of entries in whiteListTypes */
 	};
 
+	struct IrqRegistration {
+		u64 irq;
+		u64 threadId;
+		u64 port;
+	};
+
     class SyscallManager {
     public:
         static void init();
@@ -133,8 +142,8 @@ namespace kernel::common::hal {
     	static u64 syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64, u64, u64, u64);
     	static u64 syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallInstallIRQHandler(long *ret, u64 irq, u64 handler, u64 ctx, u64, u64, u64);
-    	static u64 syscallUninstallIRQHandler(long *ret, u64 handler, u64 handle, u64, u64, u64, u64);
+    	static u64 syscallInstallIRQHandler(long *ret, u64 irq, u64 port, u64, u64, u64, u64);
+    	static u64 syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64);
     	static u64 syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallSetIntStatus(long *ret, u64 status, u64, u64, u64, u64, u64);
 
@@ -144,7 +153,11 @@ namespace kernel::common::hal {
     	static u64 getGsBase();
     	static u64 getFsBase();
 
+    	static u32 userIrqHandler(u64 *ctx);
+
     public:
+    	static LinkedList<IrqRegistration> irqRegistrations;
+
 		static SyscallFun horizonSyscalls[horizonSyscallAmount];
     	static SyscallFun linuxSyscalls[linuxSyscallAmount];
     };

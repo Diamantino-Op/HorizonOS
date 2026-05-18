@@ -169,8 +169,10 @@ namespace kernel::common::hal {
 		}
 	}
 
-	SyscallFun SyscallManager::horizonSyscalls[horizonSyscallAmount]{};
-	SyscallFun SyscallManager::linuxSyscalls[linuxSyscallAmount]{};
+	LinkedList<IrqRegistration> SyscallManager::irqRegistrations {};
+
+	SyscallFun SyscallManager::horizonSyscalls[horizonSyscallAmount] {};
+	SyscallFun SyscallManager::linuxSyscalls[linuxSyscallAmount] {};
 
 	void SyscallManager::init() {
 		horizonSyscalls[0] = &syscallPrint;
@@ -208,6 +210,20 @@ namespace kernel::common::hal {
 		horizonSyscalls[32] = &syscallSetIntStatus;
 
 		initArch();
+	}
+
+	u32 SyscallManager::userIrqHandler(u64 *ctx) {
+		const auto *irq = reinterpret_cast<IrqRegistration *>(ctx);
+
+		auto notifyMsg = MessageHeader();
+
+		notifyMsg.type = irqMessageIdBase + irq->irq;
+		notifyMsg.port = irq->port;
+		notifyMsg.length = 0;
+
+		PortMessaging::sendMessage(0, irq->port, &notifyMsg);
+
+		return 0;
 	}
 
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {

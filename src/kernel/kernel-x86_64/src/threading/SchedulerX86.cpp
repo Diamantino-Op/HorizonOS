@@ -46,6 +46,12 @@ namespace kernel::common::threading {
 
 		const u32 gsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, sleepTick, nullptr);
 
+		if (gsi == 100000000) {
+			CommonMain::getTerminal()->error("Hpet gsi not allocated!", "Scheduler", gsi);
+
+			Asm::lhlt();
+		}
+
 		CommonMain::getTerminal()->debug("Hpet gsi: %lu", "Scheduler", gsi);
 
 		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3));

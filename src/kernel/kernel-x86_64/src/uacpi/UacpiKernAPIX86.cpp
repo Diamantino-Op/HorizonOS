@@ -96,30 +96,11 @@ namespace kernel::common::uacpi {
 	// Interrupts
 
 	uacpi_status uacpiKernelInstallInterruptHandler(uacpi_u32 irq, uacpi_interrupt_handler intHandler, uacpi_handle ctx, uacpi_handle *outIrqHandle) {
-		if (Interrupts::getHandler(irq + 0x20)->fun != nullptr) {
-			return UACPI_STATUS_ALREADY_EXISTS;
-		}
-
-		Interrupts::setHandler(irq + 0x20, reinterpret_cast<HandlerFun>(intHandler), static_cast<u64 *>(ctx));
-
-		*outIrqHandle = Interrupts::getHandler(irq + 0x20);
-
-		Interrupts::unmask(irq + 0x20);
-
-		return UACPI_STATUS_OK;
+		return UACPI_STATUS_UNIMPLEMENTED;
 	}
 
 	uacpi_status uacpiKernelUninstallInterruptHandler(uacpi_interrupt_handler intHandler, uacpi_handle irqHandle) {
-		if (auto *handler = static_cast<IsrHandler *>(irqHandle); handler->fun != nullptr && handler->fun == reinterpret_cast<HandlerFun>(intHandler)) {
-			handler->fun = nullptr;
-			handler->ctx = nullptr;
-
-			return UACPI_STATUS_OK;
-		}
-
-		// TODO: Mask Interrupt
-
-		return UACPI_STATUS_NOT_FOUND;
+		return UACPI_STATUS_UNIMPLEMENTED;
 	}
 
 	// Events

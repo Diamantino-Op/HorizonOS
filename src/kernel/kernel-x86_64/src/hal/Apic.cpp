@@ -341,31 +341,22 @@ namespace kernel::x86_64::hal {
 			CommonMain::getTerminal()->debug("IOApic %lu gsi range: %lu - %lu", "IOApic", i, start, end);
 		}
 
-		if (CommonMain::getInstance()->getUAcpi()->getMadtTable()->flags & ACPI_PIC_ENABLED) {
-			u8 hasX80 = 0;
+		auto *irqGsiMappings = new IrqGsiMapping[CommonMain::getInstance()->getUAcpi()->getIsosAmount()];
 
-			for (u8 j = 0; j < this->maxRange; j++) {
-				if (j == 2) {
-					continue;
-				}
+		for (u64 i = 0; i < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); i++) {
+			const acpi_madt_interrupt_source_override entry = CommonMain::getInstance()->getUAcpi()->getIsos()[i];
 
-				if ((j + 0x22) == 0x80) {
-					hasX80 = 1;
-				}
-
-				for (u64 k = 0; k < CommonMain::getInstance()->getUAcpi()->getIsosAmount(); k++) {
-					if (const acpi_madt_interrupt_source_override entry = CommonMain::getInstance()->getUAcpi()->getIsos()[k]; entry.source == j) {
-						this->setGsi(entry.gsi, entry.source + 0x22 + hasX80, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), entry.flags | IOApicFlags::MASKED, IOApicDelivery::FIXED);
-
-						goto end;
-					}
-				}
-
-				this->setGsi(j, j + 0x22 + hasX80, reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu()->apic.getId(), static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED);
-
-				end:
-			}
+			irqGsiMappings[i].irq = entry.source;
+			irqGsiMappings[i].gsi = entry.gsi;
+			irqGsiMappings[i].flags = entry.flags;
 		}
+
+		auto *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+
+		irqAllocator->initGsiBitmap(this->maxRange - this->minRange);
+		irqAllocator->setGsiBase(this->minRange);
+
+		irqAllocator->setIrqGsiMappings(irqGsiMappings, CommonMain::getInstance()->getUAcpi()->getIsosAmount());
 
 		this->initialized = true;
 	}
