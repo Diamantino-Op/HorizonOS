@@ -3,27 +3,47 @@
 
 #include <cstdio>
 #include <string>
-#include <array>
+#include <vector>
+#include <unistd.h>
 
 #include "abi-bits/hos_msg.h"
 #include "horizonos/generic.h"
 
 using namespace std;
 
-// ─── IRQ dispatch shim ───────────────────────────────────────────────────────
-// One C-linkage shim per vector is expensive — instead we use a single
-// generic handler that receives the vector number in ctx.
+namespace {
 
-struct IrqCtx {
-    uint8_t vector;
-};
+uint64_t onlineCpuCount() {
+    const long count = sysconf(_SC_NPROCESSORS_ONLN);
 
-static uint32_t irqShim(void *ctx) {
-    const auto *c = static_cast<IrqCtx *>(ctx);
-    MsiManager::instance().dispatch(c->vector);
+    if (count <= 0) {
+        return 1;
+    }
 
-	return 0;
+    return static_cast<uint64_t>(count);
 }
+
+bool allocateIntVectorForAnyCpu(uint8_t *vectorOut, uint64_t *destCpuOut, int port) {
+    const uint64_t cpuCount = onlineCpuCount();
+
+    for (uint64_t cpuIndex = 0; cpuIndex < cpuCount; ++cpuIndex) {
+        if (allocIntVec(vectorOut, static_cast<uint64_t>(port), cpuIndex) == 0 && *vectorOut != 0) {
+            if (destCpuOut) {
+                *destCpuOut = cpuIndex;
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void freeAllocatedVector(uint8_t vector, uint64_t destCpu) {
+    freeIntVec(vector, destCpu);
+}
+
+} // namespace
 
 // ─── MsiManager ──────────────────────────────────────────────────────────────
 
@@ -33,77 +53,101 @@ MsiManager &MsiManager::instance() {
 }
 
 uint8_t MsiManager::allocVectors(int count, int notifyPort) {
-    scoped_lock lock(m_lock);
+    const scoped_lock lock(m_lock);
 
-    if (m_nextVector + static_cast<uint8_t>(count) > MSI_VECTOR_MAX) {
-        printf("PCI/MSI: Vector space exhausted\n");
-
+    if (count <= 0) {
         return 0;
     }
 
-    const uint8_t base = m_nextVector;
+    vector<uint8_t> allocatedVectors;
+    allocatedVectors.reserve(static_cast<size_t>(count));
 
     for (int i = 0; i < count; ++i) {
-        const uint8_t v = base + static_cast<uint8_t>(i);
+        uint8_t vector = 0;
+        uint64_t destCpu = 0;
 
-        auto *ctx   = new IrqCtx{v};
-    	void *handle = nullptr;
+        if (!allocateIntVectorForAnyCpu(&vector, &destCpu, notifyPort)) {
+            printf("PCI/MSI: allocIntVec failed after allocating %zu vector(s)\n", allocatedVectors.size());
 
-    	// TODO: Needs checking
-    	// TODO: Fix
-        /*if (install_irq_handler(v, irqShim, ctx, handle) != 0) {
-            printf("PCI/MSI: install_irq_handler failed for vector %u\n", v);
+            for (const uint8_t allocatedVector : allocatedVectors) {
+                const auto allocatedIt = m_vectors.find(allocatedVector);
 
-            delete ctx;
-
-            // Roll back already-installed vectors.
-            for (int j = 0; j < i; ++j) {
-                const uint8_t rv = base + static_cast<uint8_t>(j);
-                auto it = m_vectors.find(rv);
-
-                if (it != m_vectors.end()) {
-                	// TODO: Fix
-                	//uninstall_irq_handler(irqShim, it->second.irqHandle);
-
-                    delete ctx; // already freed above for failed
-
-                    m_vectors.erase(it);
+                if (allocatedIt != m_vectors.end()) {
+                    freeAllocatedVector(allocatedIt->second.vector, allocatedIt->second.destCpu);
+                    m_vectors.erase(allocatedIt);
                 }
-            }
-            return 0;
-        }*/
 
-        m_vectors[v] = AllocatedVector {.vector = v, .irqHandle = handle, .notifyPort = notifyPort};
+            }
+
+            if (!allocatedVectors.empty()) {
+                m_allocationBatches.erase(allocatedVectors.front());
+            }
+
+            return 0;
+        }
+
+        AllocatedVector allocatedVector{};
+        allocatedVector.vector = vector;
+        allocatedVector.destCpu = destCpu;
+        allocatedVector.notifyPort = notifyPort;
+
+        m_vectors[vector] = allocatedVector;
+        allocatedVectors.push_back(vector);
     }
 
-    m_nextVector = base + static_cast<uint8_t>(count);
-    return base;
+    m_allocationBatches[allocatedVectors.front()] = allocatedVectors;
+
+    return allocatedVectors.front();
 }
 
 void MsiManager::freeVectors(uint8_t base, int count) {
-    scoped_lock lock(m_lock);
+    const scoped_lock lock(m_lock);
 
-    for (int i = 0; i < count; ++i) {
-        const uint8_t v = base + static_cast<uint8_t>(i);
-        auto it = m_vectors.find(v);
-        if (it == m_vectors.end()) { continue; }
-
-    	// TODO: Fix
-        //uninstall_irq_handler(irqShim, it->second.irqHandle);
-        m_vectors.erase(it);
+    if (count <= 0) {
+        return;
     }
+
+    auto batchIt = m_allocationBatches.find(base);
+
+    if (batchIt != m_allocationBatches.end()) {
+        for (const uint8_t vectorValue : batchIt->second) {
+            auto vectorIt = m_vectors.find(vectorValue);
+
+            if (vectorIt == m_vectors.end()) {
+                continue;
+            }
+
+            freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu);
+            m_vectors.erase(vectorIt);
+        }
+
+        m_allocationBatches.erase(batchIt);
+        return;
+    }
+
+    auto vectorIt = m_vectors.find(base);
+
+    if (vectorIt == m_vectors.end()) {
+        return;
+    }
+
+    freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu);
+    m_vectors.erase(vectorIt);
 }
 
 // TODO
 void MsiManager::dispatch(uint8_t vector) {
     // Called from kernel IRQ context — keep it short.
-    scoped_lock lock(m_lock);
+    const scoped_lock lock(m_lock);
 
-    auto it = m_vectors.find(vector);
-    if (it == m_vectors.end()) { return; }
+    auto vectorIt = m_vectors.find(vector);
+    if (vectorIt == m_vectors.end()) { return; }
 
-    const int port = it->second.notifyPort;
-    if (port <= 0) { return; }
+    const int port = vectorIt->second.notifyPort;
+
+    if (port <= 0) {
+	    return;
+    }
 
     // Post "irq;<vector>" to the driver service.
     auto *msg   = new hos_msg();

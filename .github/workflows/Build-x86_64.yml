@@ -42,7 +42,7 @@ jobs:
         run: sudo apt-get install rsync
 
       - name: Setup Deps
-        run: sh deps/setup_deps.sh trunk trunk trunk trunk for-5.0
+        run: sh deps/setup_deps.sh trunk trunk trunk trunk for-5.0 master
 
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Dqemu_targets=false build
@@ -96,7 +96,7 @@ jobs:
         run: sudo apt-get install xorriso
 
       - name: Setup Deps
-        run: sh deps/setup_deps.sh trunk trunk trunk trunk for-5.0
+        run: sh deps/setup_deps.sh trunk trunk trunk trunk for-5.0 master
 
       - name: Setup Meson
         run: cd ${{github.workspace}} && meson setup --cross-file res/x86_64/horizon-cross.cfg -Ddebug_build=true -Dqemu_targets=false build

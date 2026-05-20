@@ -208,28 +208,12 @@ namespace kernel::common::hal {
 		horizonSyscalls[30] = &syscallUninstallIRQHandler;
 		horizonSyscalls[31] = &syscallGetIRQMode;
 		horizonSyscalls[32] = &syscallSetIntStatus;
+		horizonSyscalls[33] = &syscallAllocIntVec;
+		horizonSyscalls[34] = &syscallFreeIntVec;
+		horizonSyscalls[35] = &syscallAllocGsi;
+		horizonSyscalls[36] = &syscallFreeGsi;
 
 		initArch();
-	}
-
-	u32 SyscallManager::userIrqHandler(u64 *ctx) {
-		const auto *irq = reinterpret_cast<IrqRegistration *>(ctx);
-
-		auto notifyMsg = MessageHeader();
-
-		auto notifyData = IrqReceiveData();
-
-		notifyData.irqNum = irq->irq;
-
-		notifyMsg.type = irqReceiveMsgType;
-		notifyMsg.port = irq->port;
-
-		notifyMsg.buffer = reinterpret_cast<u64 *>(&notifyData);
-		notifyMsg.length = sizeof(IrqReceiveData);
-
-		PortMessaging::sendMessage(0, irq->port, &notifyMsg);
-
-		return 0;
 	}
 
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {

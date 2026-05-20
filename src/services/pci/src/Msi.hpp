@@ -55,7 +55,7 @@ static_assert(sizeof(MsixEntry) == 16, "MsixEntry must be 16 bytes");
 // ─── Allocated vector descriptor ─────────────────────────────────────────────
 struct AllocatedVector {
     uint8_t  vector;
-    void    *irqHandle;  // handle returned by install_irq_handler
+    uint64_t destCpu;
     int      notifyPort; // port to post "irq;<vector>" when the IRQ fires
 };
 
@@ -64,11 +64,13 @@ class MsiManager {
 public:
     static MsiManager &instance();
 
-    // Allocate n contiguous vectors, install kernel handler, return base vector
-    // or 0 on failure.  notifyPort: the port to wake when the IRQ fires.
+    // Allocate n vectors through the HorizonOS interrupt allocator and return
+    // the first vector in the batch, or 0 on failure. The allocated vectors
+    // are not required to be contiguous.
     uint8_t allocVectors(int count, int notifyPort);
 
-    // Release vector(s) starting at base for count entries.
+    // Release the allocation batch identified by base, or a single vector if
+    // the batch is unknown. Vectors are freed by exact ID, not by range.
     void freeVectors(uint8_t base, int count);
 
     // Called by the kernel IRQ shim – post a message to the registered port.
@@ -78,8 +80,8 @@ private:
     MsiManager() = default;
 
     std::mutex                                m_lock;
-    uint8_t                                   m_nextVector{MSI_VECTOR_BASE};
     std::unordered_map<uint8_t, AllocatedVector> m_vectors;
+    std::unordered_map<uint8_t, std::vector<uint8_t>> m_allocationBatches;
 };
 
 // ─── Capability walking helpers ───────────────────────────────────────────────

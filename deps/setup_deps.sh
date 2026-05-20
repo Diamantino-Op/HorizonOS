@@ -32,12 +32,14 @@ cxxhdrs_branch=$2
 flanterm_branch=$3
 limine_protocol_branch=$4
 uacpi_branch=$5
+tcmalloc_branch=$6
 
 ensure_repo https://github.com/osdev0/freestnd-c-hdrs.git "$chdrs_branch" "$repo_root/deps/chdrs"
 ensure_repo https://github.com/osdev0/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$repo_root/deps/cxxhdrs"
 ensure_repo https://github.com/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_root/deps/flanterm"
 ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
+ensure_repo https://github.com/google/tcmalloc.git "$tcmalloc_branch" "$repo_root/libs/tcmalloc"
 
 tag=$(curl -fsSL "https://api.github.com/repos/Limine-Bootloader/Limine/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
 

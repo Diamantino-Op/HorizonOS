@@ -51,6 +51,7 @@ struct PciWriteMsgData {
 
 struct IrqReceiveData {
 	uint64_t irqNum {};
+	bool isIrq {};
 };
 
 struct IrqHandleStruct {

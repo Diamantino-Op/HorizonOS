@@ -70,7 +70,7 @@ namespace kernel::common::threading {
 
 		ExecutionNode::reSchedule();
 
-		return 1;
+		return 10000;
 	}
 
 	void ExecutionNode::reSchedule() {

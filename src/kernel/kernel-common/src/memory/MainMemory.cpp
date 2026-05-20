@@ -74,9 +74,6 @@ void* operator new(const usize size) {
 }
 
 void* operator new[](const usize size) {
-	void* caller = __builtin_return_address(0);
-	kernel::common::CommonMain::getTerminal()->warnNoLock("new[] called from %p", "Heap", caller);
-
 	return malloc(size);
 }
 
@@ -85,9 +82,6 @@ void *operator new(usize, void *p) noexcept {
 }
 
 void *operator new[](usize, void *p) noexcept {
-	void* caller = __builtin_return_address(0);
-	kernel::common::CommonMain::getTerminal()->warnNoLock("new[] called from %p", "Heap", caller);
-
 	return p;
 }
 

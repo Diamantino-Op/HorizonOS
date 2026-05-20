@@ -57,7 +57,7 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 5;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 33;
+	constexpr u64 horizonSyscallAmount = 37;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
 
@@ -103,12 +103,14 @@ namespace kernel::common::hal {
 
 	struct IrqRegistration {
 		u64 irq;
-		u64 threadId;
 		u64 port;
+		bool isIrq;
 	};
 
 	struct IrqReceiveData {
 		u64 irqNum {};
+		u64 cpuId {};
+		bool isIrq {};
 	};
 
     class SyscallManager {
@@ -150,6 +152,10 @@ namespace kernel::common::hal {
     	static u64 syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64);
     	static u64 syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallSetIntStatus(long *ret, u64 status, u64, u64, u64, u64, u64);
+    	static u64 syscallAllocIntVec(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64);
+    	static u64 syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64, u64, u64, u64);
+    	static u64 syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64);
+    	static u64 syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

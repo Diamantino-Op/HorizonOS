@@ -35,11 +35,8 @@ namespace kernel::x86_64::hal {
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
 		} else {
-			const usize savedIntNo = frame->intNo;
-
-			if (savedIntNo != 34 and savedIntNo != 32) {
-				CommonMain::getTerminal()->warnNoLock("Int: %lu, CurrentCore: 0x%.16lx, InterruptAlloc: 0x%.16lx", "Interrupts", frame->intNo, CpuManager::getCurrentCore(), CpuManager::getCurrentCore()->interruptAllocator);
-			}
+			const u8 savedIntNo = frame->intNo;
+			const u8 savedCs = frame->cs;
 
 			lastInt = frame->intNo;
 
@@ -59,7 +56,7 @@ namespace kernel::x86_64::hal {
 
 			const u32 ret = handler->fun(handler->ctx);
 
-			if ((frame->cs & 0x3) == 3) {
+			if ((savedCs & 0x3) == 3) {
 				deliverPendingSignal(frame);
 			}
 

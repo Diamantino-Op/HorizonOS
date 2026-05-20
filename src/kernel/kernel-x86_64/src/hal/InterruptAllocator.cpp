@@ -102,7 +102,7 @@ namespace kernel::x86_64::hal {
 					if (intNum == 0) {
 						this->spinLock.unlock(prevIF);
 
-						return 100000001;
+						return 100000000;
 					}
 
 					kernel->getIOApicManager()->setGsi(i, intNum, destCore->apic.getId(), flags, delivery);
@@ -118,7 +118,7 @@ namespace kernel::x86_64::hal {
 
 		this->spinLock.unlock(prevIF);
 
-		return 100000002;
+		return 100000000;
 	}
 
 	u8 IrqAllocator::allocateIrq(const u64 irq, const u64 destCpu, const u16 flags, const IOApicDelivery delivery, const HandlerFun handler, u64 *ctx) {

@@ -4,6 +4,7 @@
 #include "ErrNo.hpp"
 #include "GDT.hpp"
 #include "Main.hpp"
+#include "threading/PortMessaging.hpp"
 #include "threading/SchedulerX86.hpp"
 #include "uacpi/utilities.h"
 #include "utils/Asm.hpp"
@@ -224,6 +225,28 @@ namespace kernel::common::hal {
 		Asm::wrmsr(Msrs::EFER, efer);
 	}
 
+	u32 SyscallManager::userIrqHandler(u64 *ctx) {
+		const auto *irq = reinterpret_cast<IrqRegistration *>(ctx);
+
+		auto notifyMsg = MessageHeader();
+
+		auto notifyData = IrqReceiveData();
+
+		notifyData.irqNum = irq->irq;
+		notifyData.isIrq = irq->isIrq;
+		notifyData.cpuId = CpuManager::getCurrentCore()->cpuId;
+
+		notifyMsg.type = irqReceiveMsgType;
+		notifyMsg.port = irq->port;
+
+		notifyMsg.buffer = reinterpret_cast<u64 *>(&notifyData);
+		notifyMsg.length = sizeof(IrqReceiveData);
+
+		PortMessaging::sendMessage(0, irq->port, &notifyMsg);
+
+		return 0;
+	}
+
 	void SyscallManager::setGsBase(const u64 gsBase) {
 		Asm::wrmsr(Msrs::KGSBAS, gsBase);
 	}
@@ -439,8 +462,8 @@ namespace kernel::common::hal {
 		auto *registration = new IrqRegistration();
 
 		registration->irq = irq;
+		registration->isIrq = true;
 		registration->port = port;
-		registration->threadId = Scheduler::getCurrentThread()->getId();
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
 			delete registration;
@@ -448,7 +471,7 @@ namespace kernel::common::hal {
 			return UACPI_STATUS_INTERNAL_ERROR;
 		}
 
-		u8 retInt = irqAllocator->allocateIrq(irq, 0, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
+		const u8 retInt = irqAllocator->allocateIrq(irq, 0, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
 
 		if (retInt == 0) {
 			return UACPI_STATUS_ALREADY_EXISTS;
@@ -507,6 +530,107 @@ namespace kernel::common::hal {
 			Asm::sti();
 		} else {
 			Asm::cli();
+		}
+
+		return 0;
+	}
+
+	// TODO: destCpu is currently passed as CPU ID, so it might not work like this
+	u64 SyscallManager::syscallAllocIntVec(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64) {
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		const CpuManager *cpuManager = kernel->getCpuManager();
+
+		if (destCpu >= cpuManager->getCoreAmount()) {
+			return EFAULT;
+		}
+
+		const CpuCore *destCore = nullptr;
+
+		if (destCpu == 0) {
+			destCore = cpuManager->getBootstrapCpu();
+		} else {
+			destCore = &cpuManager->getCoreList()[destCpu - 1].cpuCore;
+		}
+
+		auto *registration = new IrqRegistration();
+
+		registration->port = port;
+
+		if (irqRegistrations.addStart(registration) == nullptr) {
+			delete registration;
+
+			return EFAULT;
+		}
+
+		const u8 intVec = destCore->interruptAllocator->allocInt(&userIrqHandler, reinterpret_cast<u64 *>(registration));
+
+		registration->irq = intVec;
+		registration->isIrq = false;
+
+		*ret = static_cast<long>(intVec);
+
+		if (intVec == 0) {
+			return EFAULT;
+		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64, u64, u64, u64) {
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		const CpuManager *cpuManager = kernel->getCpuManager();
+
+		if (destCpu >= cpuManager->getCoreAmount()) {
+			return EFAULT;
+		}
+
+		const CpuCore *destCore = nullptr;
+
+		if (destCpu == 0) {
+			destCore = cpuManager->getBootstrapCpu();
+		} else {
+			destCore = &cpuManager->getCoreList()[destCpu - 1].cpuCore;
+		}
+
+		if (not destCore->interruptAllocator->freeInt(vec)) {
+			return EFAULT;
+		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64) {
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+
+		auto *registration = new IrqRegistration();
+
+		registration->port = port;
+
+		if (irqRegistrations.addStart(registration) == nullptr) {
+			delete registration;
+
+			return EFAULT;
+		}
+
+		const u64 gsi = irqAllocator->allocGsi(destCpu, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
+
+		registration->irq = gsi;
+		registration->isIrq = true;
+
+		*ret = static_cast<long>(gsi);
+
+		if (gsi == 1000000) {
+			return EFAULT;
+		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64) {
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+
+		if (not irqAllocator->freeIrq(gsi, destCpu)) {
+			return EFAULT;
 		}
 
 		return 0;
