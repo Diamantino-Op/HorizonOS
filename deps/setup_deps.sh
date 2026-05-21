@@ -39,7 +39,8 @@ ensure_repo https://github.com/osdev0/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$
 ensure_repo https://github.com/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_root/deps/flanterm"
 ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
-ensure_repo https://github.com/google/tcmalloc.git "$tcmalloc_branch" "$repo_root/libs/tcmalloc"
+ensure_repo https://github.com/Diamantino-Op/tcmalloc.git "$tcmalloc_branch" "$repo_root/libs/tcmalloc"
+ensure_repo https://github.com/Diamantino-Op/abseil-cpp.git "$tcmalloc_branch" "$repo_root/libs/abseil-cpp"
 
 tag=$(curl -fsSL "https://api.github.com/repos/Limine-Bootloader/Limine/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
 
@@ -56,3 +57,13 @@ mv "$repo_root"/deps/"${extracted_dir}" "$repo_root"/deps/limine
 rm "$repo_root"/deps/limine-binary.tar.xz
 
 cd "$repo_root"/deps/limine && make
+
+# Build TCMalloc
+
+toolchain_dir="$repo_root/toolchain/bin"
+
+cd "$repo_root/libs/tcmalloc"
+
+bazel clean --expunge
+
+bazel build --compilation_mode=opt //tcmalloc:tcmalloc --output_groups=+static_library,+dynamic_library --action_env=CC="$toolchain_dir/clang" --action_env=CXX="$toolchain_dir/clang++" --repo_env=BAZEL_COMPILER="$toolchain_dir/clang"
