@@ -60,10 +60,19 @@ cd "$repo_root"/deps/limine && make
 
 # Build TCMalloc
 
-toolchain_dir="$repo_root/toolchain/bin"
+tcmalloc_build_dir="$repo_root/libs/tcmalloc/out"
 
 cd "$repo_root/libs/tcmalloc"
 
 bazel clean --expunge
 
-bazel build --compilation_mode=opt //tcmalloc:tcmalloc --output_groups=+static_library,+dynamic_library --action_env=CC="$toolchain_dir/clang" --action_env=CXX="$toolchain_dir/clang++" --repo_env=BAZEL_COMPILER="$toolchain_dir/clang"
+bazelisk build --compilation_mode=opt //tcmalloc:tcmalloc --output_groups=+static_library,+dynamic_library --platforms=//platforms:horizonos --spawn_strategy=local --strategy=CppCompile=local --strategy=CppLink=local --define=HORIZON_SYSROOT="$repo_root/libs/sysroot" --define=HORIZON_TOOLCHAIN="$repo_root/toolchain" --action_env=HORIZON_SYSROOT="$repo_root/libs/sysroot" --action_env=HORIZON_TOOLCHAIN="$repo_root/toolchain"
+
+bazel_bin_folder=$(bazelisk info output_path)
+lo_file="${bazel_bin_folder}/k8-opt/bin/tcmalloc/libtcmalloc.lo"
+
+mkdir -p "${tcmalloc_build_dir}"
+
+cp "${lo_file}" "${tcmalloc_build_dir}/libtcmalloc.lo"
+
+"$repo_root"/toolchain/bin/llvm-ar rcs "${tcmalloc_build_dir}/libtcmalloc.a" "${lo_file}"
