@@ -138,6 +138,10 @@ namespace kernel::common::threading {
 		return this->parent;
 	}
 
+	u64 Thread::getLockedCoreId() const {
+		return this->lockedCoreId;
+	}
+
 	// Process
 
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
@@ -598,7 +602,7 @@ namespace kernel::common::threading {
 
 		//const bool prevIF = this->schedLock.lock();
 
-		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
+		//const bool wasBlocked = this->blockedThreadList.remove(thread, false);
 
 		//if (wasBlocked) {
 			if (thread->getSleepNs() == 0) {
@@ -642,7 +646,19 @@ namespace kernel::common::threading {
 
 					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
 
-					schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+					if (currEntry.getLockedCoreId() == ~0x0u) {
+						schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+					} else {
+						ExecutionNode *node = getCoreEN(currEntry.getLockedCoreId());
+
+						if (node == nullptr) {
+							schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+
+							currEntry.setLockedCoreId(~0x0u);
+						} else {
+							node->lockedThreadQueues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+						}
+					}
 				}
 			}
 

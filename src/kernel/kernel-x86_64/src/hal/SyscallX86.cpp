@@ -546,10 +546,20 @@ namespace kernel::common::hal {
 
 		const CpuCore *destCore = nullptr;
 
-		if (destCpu == 0) {
+		if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
 			destCore = cpuManager->getBootstrapCpu();
 		} else {
-			destCore = &cpuManager->getCoreList()[destCpu - 1].cpuCore;
+			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+				if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
+					destCore = &cpuManager->getCoreList()[i].cpuCore;
+
+					break;
+				}
+			}
+		}
+
+		if (destCore == nullptr) {
+			return EFAULT;
 		}
 
 		auto *registration = new IrqRegistration();
@@ -586,13 +596,18 @@ namespace kernel::common::hal {
 
 		const CpuCore *destCore = nullptr;
 
-		if (destCpu == 0) {
+		if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
 			destCore = cpuManager->getBootstrapCpu();
 		} else {
-			destCore = &cpuManager->getCoreList()[destCpu - 1].cpuCore;
+			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+				if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
+					destCore = &cpuManager->getCoreList()[i].cpuCore;
+					break;
+				}
+			}
 		}
 
-		if (not destCore->interruptAllocator->freeInt(vec)) {
+		if (destCore == nullptr or not destCore->interruptAllocator->freeInt(vec)) {
 			return EFAULT;
 		}
 

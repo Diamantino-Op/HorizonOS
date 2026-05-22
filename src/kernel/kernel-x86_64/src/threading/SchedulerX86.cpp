@@ -376,6 +376,30 @@ namespace kernel::common::threading {
 
 		Asm::writeCr3(currPageMap);
 	}
+
+	ExecutionNode *Scheduler::getCoreEN(const u64 cpuId) {
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		const CpuManager *cpuManager = kernel->getCpuManager();
+
+		CpuCore *destCore = nullptr;
+
+		if (cpuManager->getBootstrapCpu()->cpuId == cpuId) {
+			destCore = cpuManager->getBootstrapCpu();
+		} else {
+			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+				if (cpuManager->getCoreList()[i].cpuCore.cpuId == cpuId) {
+					destCore = &cpuManager->getCoreList()[i].cpuCore;
+					break;
+				}
+			}
+		}
+
+		if (destCore == nullptr) {
+			return nullptr;
+		}
+
+		return &destCore->executionNode;
+	}
 }
 
 namespace kernel::x86_64::threading {

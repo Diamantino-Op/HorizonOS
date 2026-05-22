@@ -22,8 +22,8 @@ ensure_repo() {
   fi
 }
 
-[ $# -eq 6 ] || {
-  echo "Usage: $0 <chdrs-branch> <cxxhdrs-branch> <flanterm-branch> <limine-branch> <limine-protocol-branch> <uacpi-branch>" >&2
+[ $# -eq 7 ] || {
+  echo "Usage: $0 <chdrs-branch> <cxxhdrs-branch> <flanterm-branch> <limine-protocol-branch> <uacpi-branch> <tcmalloc-branch> <abseil-cpp-branch>" >&2
   exit 1
 }
 
@@ -33,6 +33,7 @@ flanterm_branch=$3
 limine_protocol_branch=$4
 uacpi_branch=$5
 tcmalloc_branch=$6
+abseil_cpp_branch=$7
 
 ensure_repo https://github.com/osdev0/freestnd-c-hdrs.git "$chdrs_branch" "$repo_root/deps/chdrs"
 ensure_repo https://github.com/osdev0/freestnd-cxx-hdrs.git "$cxxhdrs_branch" "$repo_root/deps/cxxhdrs"
@@ -40,7 +41,7 @@ ensure_repo https://github.com/Mintsuki/Flanterm.git "$flanterm_branch" "$repo_r
 ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_protocol_branch" "$repo_root/deps/limine_protocol"
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
 ensure_repo https://github.com/Diamantino-Op/tcmalloc.git "$tcmalloc_branch" "$repo_root/libs/tcmalloc"
-ensure_repo https://github.com/Diamantino-Op/abseil-cpp.git "$tcmalloc_branch" "$repo_root/libs/abseil-cpp"
+ensure_repo https://github.com/Diamantino-Op/abseil-cpp.git "$abseil_cpp_branch" "$repo_root/libs/abseil-cpp"
 
 tag=$(curl -fsSL "https://api.github.com/repos/Limine-Bootloader/Limine/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
 

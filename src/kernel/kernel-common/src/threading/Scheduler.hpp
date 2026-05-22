@@ -111,6 +111,10 @@ namespace kernel::common::threading {
 
         Process *getParent() const;
 
+    	u64 getLockedCoreId() const;
+
+    	void setLockedCoreId(u64 newId);
+
     private:
         Process *parent {};
         u16 id {};
@@ -118,10 +122,10 @@ namespace kernel::common::threading {
         u64 sleepNs {};
         u64 waitingPort {};
 
-            bool signalPending {};
-            u64 pendingSignal {};
-            bool signalFrameValid {};
-            SignalContext signalFrame {};
+    	bool signalPending {};
+    	u64 pendingSignal {};
+    	bool signalFrameValid {};
+    	SignalContext signalFrame {};
 
         u64 *context {};
 
@@ -134,6 +138,8 @@ namespace kernel::common::threading {
     	ThreadOS os = {};
 
         ThreadState state {};
+
+    	u64 lockedCoreId = ~0x0;
     };
 
     class Process {
@@ -219,6 +225,9 @@ namespace kernel::common::threading {
         LinkedListEntry<Thread> *currentThread {};
 
     	bool oldThreadWasIopb {};
+
+    public:
+    	LinkedList<Thread> lockedThreadQueues[ProcessPriority::COUNT] {};
     };
 
 	[[noreturn]] void idleThreadFun();
@@ -353,6 +362,8 @@ namespace kernel::common::threading {
 		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0, u64 userRsp = 0);
 
     	bool hasThreads() const;
+
+    	static ExecutionNode *getCoreEN(u64 cpuId);
 
     	static u32 sleepTick(u64 *);
 
