@@ -79,8 +79,6 @@ uint64_t uacpiPort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
 
-//static atomic_bool namespaceReady { false };
-
 void processMcfg();
 
 extern void *handleIrqs(void *);
@@ -116,9 +114,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		send_horizonos_message(uacpiPort, 1, &newMsg);
 
-		//delete newMsg;
-		//delete registerData;
-
 		// Receive
 
 		auto recvMsg = hos_msg();
@@ -140,23 +135,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		} else {
 			printf("uACPI: Failed to register service: %d\n", srvRegisterResult);
 
-			//delete recvMsg;
-			//delete registerResData;
-
-			//delete filterOptions;
 			delete[] filterOptions.whiteListTypes;
 
 			return 1;
 		}
 
-		//delete recvMsg;
-		//delete registerResData;
-
-		//delete filterOptions;
 		delete[] filterOptions.whiteListTypes;
 	}
 
-	/*pthread_t irqHandlerThread;
+	pthread_t irqHandlerThread;
 
 	const int irqHandlerThreadResult = pthread_create(&irqHandlerThread, nullptr, handleIrqs, nullptr);
 
@@ -166,7 +153,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	pthread_detach(irqHandlerThread);*/
+	pthread_detach(irqHandlerThread);
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s\n", uacpi_status_to_string(ret));
@@ -278,9 +265,6 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
 
     send_horizonos_message(uacpiPort, pciPort, &segMsg);
 
-    //delete segMsg;
-	//delete segData;
-
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
@@ -327,13 +311,6 @@ void processMcfg() {
 			usleep(10000);
 		}
 
-		//delete checkMsg;
-		//delete checkData;
-
-		//delete recvCheckMsg;
-		//delete checkResData;
-
-		//delete filterOptions;
 		delete[] filterOptions.whiteListTypes;
 	}
 
@@ -374,13 +351,6 @@ void processMcfg() {
 		if (srvRegisterResult != 0) {
 			printf("uACPI: Failed to get PCI port!\n");
 
-			//delete getMsg;
-			//delete getData;
-
-			//delete recvGetMsg;
-			//delete getResData;
-
-			//delete filterOptions;
 			delete[] filterOptions.whiteListTypes;
 
 			return;
@@ -391,19 +361,8 @@ void processMcfg() {
 		pciPort = getResData.port;
 		pciTid = getResData.tid;
 
-		//delete getMsg;
-		//delete getData;
-
-		//delete recvGetMsg;
-		//delete getResData;
-
-		//delete filterOptions;
 		delete[] filterOptions.whiteListTypes;
 	}
-
-	//while (not namespaceReady.load(memory_order_acquire)) { }
-
-	//printf("A\n");
 
 	{
 		// Wait for pci_ready from the PCI service (port 3 → port 2).
@@ -420,9 +379,6 @@ void processMcfg() {
 			printf("\033[0;34muACPI: \033[0;37mPCI service ready, forwarding MCFG...\n");
 		}
 
-		//delete waitMsg;
-
-		//delete filterOptions;
 		delete[] filterOptions.whiteListTypes;
 
 		static const char *pciRootIds[] = { "PNP0A03", "PNP0A08", nullptr };
@@ -437,7 +393,5 @@ void processMcfg() {
 		doneMsg.length = 0;
 
 		send_horizonos_message(uacpiPort, pciPort, &doneMsg);
-
-		//delete doneMsg;
 	}
 }

@@ -3,7 +3,6 @@
 #include "horizonos/generic.h"
 #include "sys/io.h"
 
-#include <array>
 #include <cstdio>
 #include <cstring>
 #include <pthread.h>
@@ -47,9 +46,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
     	send_horizonos_message(pciPort, 1, &newMsg);
 
-    	//delete newMsg;
-    	//delete registerData;
-
     	// Receive
 
     	auto recvMsg = hos_msg();
@@ -71,19 +67,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     	} else {
     		printf("PCI: Failed to register service: %d\n", srvRegisterResult);
 
-    		//delete recvMsg;
-    		//delete registerResData;
-
-    		//delete filterOptions;
     		delete[] filterOptions.whiteListTypes;
 
     		return 1;
     	}
 
-    	//delete recvMsg;
-    	//delete registerResData;
-
-    	//delete filterOptions;
     	delete[] filterOptions.whiteListTypes;
 	}
 
@@ -134,13 +122,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			usleep(10000);
 		}
 
-		//delete checkMsg;
-		//delete checkData;
-
-		//delete recvCheckMsg;
-		//delete checkResData;
-
-		//delete filterOptions;
     	delete[] filterOptions.whiteListTypes;
 	}
 
@@ -181,13 +162,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		if (srvRegisterResult != 0) {
 			printf("PCI: Failed to get uACPI port!\n");
 
-			//delete getMsg;
-			//delete getData;
-
-			//delete recvGetMsg;
-			//delete getResData;
-
-			//delete filterOptions;
 			delete[] filterOptions.whiteListTypes;
 
 			return 1;
@@ -202,13 +176,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		uacpiPort = getResData.port;
 		uacpiTid = getResData.tid;
 
-		//delete getMsg;
-		//delete getData;
-
-		//delete recvGetMsg;
-		//delete getResData;
-
-		//delete filterOptions;
     	delete[] filterOptions.whiteListTypes;
 	}
 
@@ -221,8 +188,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     	notifyMsg.length = 0;
 
     	send_horizonos_message(pciPort, uacpiPort, &notifyMsg);
-
-    	//delete notifyMsg;
     }
 
     printf("PCI: Notified uACPI (port %lu), waiting for MCFG data...\n", uacpiPort);
@@ -243,8 +208,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         	filterOptions.whiteListCount = 2;
 
             if (receive_horizonos_message(pciPort, &msg, &filterOptions) != 0) {
-                //delete msg;
-            	//delete mcfgData;
             	delete[] filterOptions.whiteListTypes;
 
                 continue;
@@ -261,9 +224,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
             if (msg.type == MCFG_SEGMENT_MSG_TYPE) {
             	addEcamSegment(mcfgData.ecamBase, mcfgData.segment, mcfgData.bbn, mcfgData.endBus);
             }
-
-        	//delete msg;
-        	//delete mcfgData;
         }
     }
 

@@ -100,6 +100,16 @@ namespace kernel::common::threading {
 			}
 		}
 
+		if (!hasMoreThreads) {
+			for (const LinkedList<Thread>& currQueue : CpuManager::getCurrentCore()->executionNode.lockedThreadQueues) {
+				if (currQueue.getSize() > 0) {
+					hasMoreThreads = true;
+
+					break;
+				}
+			}
+		}
+
 		if (CommonMain::getInstance()->getScheduler()->readyThreadList.getSize() > 0) {
 			hasMoreThreads = true;
 		}
@@ -158,7 +168,19 @@ namespace kernel::common::threading {
 				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
 			}
 		} else if (this->currentThread != this->idleThread) {
-			schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
+			if (this->currentThread->value->getLockedCoreId() == ~0x0u) {
+				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
+			} else {
+				ExecutionNode *node = Scheduler::getCoreEN(this->currentThread->value->getLockedCoreId());
+
+				if (node == nullptr) {
+					schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
+
+					this->currentThread->value->setLockedCoreId(~0x0u);
+				} else {
+					node->lockedThreadQueues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
+				}
+			}
 		}
 
 		if (oldEntry != nullptr and reinterpret_cast<ThreadContext *>(oldEntry->value->getContext())->threadTssIopb != nullptr) {
@@ -173,11 +195,16 @@ namespace kernel::common::threading {
 			this->currentThread->value->setState(ThreadState::RUNNING);
 		} else {
 			LinkedListEntry<Thread> *selectedEntry = nullptr;
+			usize selectedQueueClass = 0;
+			const usize preferredQueueClass = this->preferLockedQueues ? 1 : 0;
 			bool hasRunnableQueue = false;
 			bool hasQueueWithCredit = false;
 
 			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-				if (schedulerPtr->queues[priority].getSize() > 0) {
+				const bool hasGlobalQueue = schedulerPtr->queues[priority].getSize() > 0;
+				const bool hasLockedQueue = this->lockedThreadQueues[priority].getSize() > 0;
+
+				if (hasGlobalQueue || hasLockedQueue) {
 					hasRunnableQueue = true;
 
 					if (this->priorityCredits[priority] > 0) {
@@ -190,7 +217,7 @@ namespace kernel::common::threading {
 
 			if (hasRunnableQueue && !hasQueueWithCredit) {
 				for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-					if (schedulerPtr->queues[priority].getSize() > 0) {
+					if (schedulerPtr->queues[priority].getSize() > 0 || this->lockedThreadQueues[priority].getSize() > 0) {
 						this->priorityCredits[priority] = priorityWeights[priority];
 					} else {
 						this->priorityCredits[priority] = 0;
@@ -199,12 +226,24 @@ namespace kernel::common::threading {
 			}
 
 			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-				LinkedList<Thread> &currQueue = schedulerPtr->queues[priority];
+				if (this->priorityCredits[priority] == 0) {
+					continue;
+				}
 
-				if (currQueue.getSize() > 0 && this->priorityCredits[priority] > 0) {
-					selectedEntry = currQueue.removeFirstEntry();
-					this->priorityCredits[priority]--;
+				for (usize classOffset = 0; classOffset < 2; ++classOffset) {
+					const usize queueClass = (preferredQueueClass + classOffset) % 2;
+					LinkedList<Thread> &currQueue = queueClass == 0 ? schedulerPtr->queues[priority] : this->lockedThreadQueues[priority];
 
+					if (currQueue.getSize() > 0) {
+						selectedEntry = currQueue.removeFirstEntry();
+						selectedQueueClass = queueClass;
+						this->priorityCredits[priority]--;
+
+						break;
+					}
+				}
+
+				if (selectedEntry != nullptr) {
 					break;
 				}
 			}
@@ -212,16 +251,30 @@ namespace kernel::common::threading {
 			if (selectedEntry == nullptr) {
 				if (hasRunnableQueue) {
 					for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-						if (schedulerPtr->queues[priority].getSize() > 0) {
-							selectedEntry = schedulerPtr->queues[priority].removeFirstEntry();
-							this->priorityCredits[priority] = priorityWeights[priority] - 1;
+						for (usize classOffset = 0; classOffset < 2; ++classOffset) {
+							const usize queueClass = (preferredQueueClass + classOffset) % 2;
+							LinkedList<Thread> &currQueue = queueClass == 0 ? schedulerPtr->queues[priority] : this->lockedThreadQueues[priority];
 
+							if (currQueue.getSize() > 0) {
+								selectedEntry = currQueue.removeFirstEntry();
+								selectedQueueClass = queueClass;
+								this->priorityCredits[priority] = priorityWeights[priority] - 1;
+
+								break;
+							}
+						}
+
+						if (selectedEntry != nullptr) {
 							break;
 						}
 					}
 				} else {
 					selectedEntry = this->idleThread;
 				}
+			}
+
+			if (selectedEntry != nullptr && selectedEntry != this->idleThread) {
+				this->preferLockedQueues = (selectedQueueClass == 0);
 			}
 
 			this->currentThread = selectedEntry;
@@ -385,7 +438,7 @@ namespace kernel::common::threading {
 
 		if (cpuManager->getBootstrapCpu()->cpuId == cpuId) {
 			destCore = cpuManager->getBootstrapCpu();
-		} else {
+		} else if (cpuManager->getCoreList() != nullptr) {
 			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
 				if (cpuManager->getCoreList()[i].cpuCore.cpuId == cpuId) {
 					destCore = &cpuManager->getCoreList()[i].cpuCore;

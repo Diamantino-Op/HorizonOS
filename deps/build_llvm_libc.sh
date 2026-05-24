@@ -89,14 +89,18 @@ build_llvm() {
     -DCMAKE_C_FLAGS=-pipe \
     -DCMAKE_CXX_FLAGS=-pipe \
     -DCMAKE_ASM_FLAGS=-pipe \
-    '-DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld' \
-    '-DLLVM_TARGETS_TO_BUILD=X86;RISCV;AArch64' \
+    '-DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld"' \
+    '-DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64"' \
     "-DCMAKE_INSTALL_PREFIX=$toolchain_path" \
     "-DDEFAULT_SYSROOT=$sysroot_path" \
-    "-DLLVM_DEFAULT_TARGET_TRIPLE=$arch-horizonos-elf" \
+    "-DLLVM_DEFAULT_TARGET_TRIPLE=$arch-horizonos" \
     -DENABLE_LINKER_BUILD_ID=ON \
     -DLLVM_CCACHE_BUILD=ON \
     -DLLVM_LINK_LLVM_DYLIB=ON \
+    -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
+    -DCLANG_DEFAULT_RTLIB=compiler-rt \
+    -DCLANG_DEFAULT_UNWINDLIB=libunwind \
+    -DCLANG_DEFAULT_LINKER=lld \
     -DLLVM_PARALLEL_COMPILE_JOBS=20 \
     -DLLVM_PARALLEL_LINK_JOBS=20
 
@@ -119,8 +123,8 @@ build_libc() {
   llvm_path=$repo_root/deps/llvm
   compiler_rt_path=$llvm_path/compiler-rt
   runtimes_path=$llvm_path/runtimes
-  compiler_rt_build_path=$compiler_rt_path/build-rt-builtins
-  cxx_build_path=$compiler_rt_path/build-cxx
+  compiler_rt_build_path=$llvm_path/build-rt-builtins
+  cxx_build_path=$llvm_path/build-cxx
   toolchain_path=$repo_root/toolchain
   sysroot_root=$repo_root/libs/sysroot
   sysroot_path=$sysroot_root/usr
@@ -151,9 +155,9 @@ build_libc() {
     "-DLLVM_CMAKE_DIR=$toolchain_path/lib/cmake/llvm" \
     "-DCMAKE_SYSROOT=$sysroot_root" \
     "-DCMAKE_INSTALL_PREFIX=$sysroot_path" \
-    "-DCMAKE_C_COMPILER_TARGET=$arch-horizonos-elf" \
-    "-DCMAKE_CXX_COMPILER_TARGET=$arch-horizonos-elf" \
-    "-DCMAKE_ASM_COMPILER_TARGET=$arch-horizonos-elf" \
+    "-DCMAKE_C_COMPILER_TARGET=$arch-horizonos" \
+    "-DCMAKE_CXX_COMPILER_TARGET=$arch-horizonos" \
+    "-DCMAKE_ASM_COMPILER_TARGET=$arch-horizonos" \
     "-DCMAKE_C_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_CXX_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_ASM_FLAGS=-fuse-ld=lld -pipe" \
@@ -168,16 +172,19 @@ build_libc() {
     -DCOMPILER_RT_INCLUDE_TESTS=OFF \
     -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
     -DCOMPILER_RT_BUILD_STANDALONE_LIBATOMIC=ON \
+    -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
     -DLLVM_PARALLEL_COMPILE_JOBS=20 \
     -DLLVM_PARALLEL_LINK_JOBS=20
 
   cmake --build "$compiler_rt_build_path" --target builtins --parallel
   cmake --build "$compiler_rt_build_path" --target install-builtins
-  ln -sr "$sysroot_path/lib/linux/libclang_rt.builtins-$arch.a" "$sysroot_path/lib/libgcc.a"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/libclang_rt.builtins.a" "$sysroot_path/lib/libgcc.a"
 
   clang_resource_dir=$("$bin_path/clang" --print-resource-dir)
   mkdir -p "$clang_resource_dir/lib/$arch-unknown-horizonos-elf"
-  ln -sr "$sysroot_path/lib/linux/libclang_rt.builtins-$arch.a" "$clang_resource_dir/lib/$arch-unknown-horizonos-elf/libclang_rt.builtins.a"
+  mkdir -p "$clang_resource_dir/lib/$arch-unknown-horizonos"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/libclang_rt.builtins.a" "$clang_resource_dir/lib/$arch-unknown-horizonos-elf/libclang_rt.builtins.a"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/libclang_rt.builtins.a" "$clang_resource_dir/lib/$arch-unknown-horizonos/libclang_rt.builtins.a"
 
   cd "$mlibc_path"
   rm -rf build
@@ -190,16 +197,16 @@ build_libc() {
 
   cmake --build "$compiler_rt_build_path" --target crt --parallel
   cmake --build "$compiler_rt_build_path" --target install-crt
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtbegin-$arch.o" "$sysroot_path/lib/crtbegin.o"
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtend-$arch.o" "$sysroot_path/lib/crtend.o"
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtbegin-$arch.o" "$sysroot_path/lib/crtbeginS.o"
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtend-$arch.o" "$sysroot_path/lib/crtendS.o"
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtbegin-$arch.o" "$sysroot_path/lib/crtbeginT.o"
-  ln -sr "$sysroot_path/lib/linux/clang_rt.crtend-$arch.o" "$sysroot_path/lib/crtendT.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtbegin.o" "$sysroot_path/lib/crtbegin.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtend.o" "$sysroot_path/lib/crtend.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtbegin.o" "$sysroot_path/lib/crtbeginS.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtend.o" "$sysroot_path/lib/crtendS.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtbegin.o" "$sysroot_path/lib/crtbeginT.o"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/clang_rt.crtend.o" "$sysroot_path/lib/crtendT.o"
 
   cmake --build "$compiler_rt_build_path" --target "clang_rt.atomic-dynamic-$arch" --parallel
   cmake --build "$compiler_rt_build_path" --target "install-clang_rt.atomic-dynamic-$arch"
-  ln -sr "$sysroot_path/lib/linux/libclang_rt.atomic-$arch.so" "$sysroot_path/lib/libatomic.so"
+  ln -sr "$sysroot_path/lib/$arch-unknown-horizonos/libclang_rt.atomic.so" "$sysroot_path/lib/libatomic.so"
 
   cmake -S "$runtimes_path" -B "$cxx_build_path" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
@@ -208,11 +215,11 @@ build_libc() {
     -DCMAKE_ASM_COMPILER="$bin_path/clang" \
     "-DCMAKE_SYSROOT=$sysroot_root" \
     "-DCMAKE_INSTALL_PREFIX=$sysroot_path" \
-    "-DCMAKE_C_COMPILER_TARGET=$arch-horizonos-elf" \
-    "-DCMAKE_CXX_COMPILER_TARGET=$arch-horizonos-elf" \
-    "-DCMAKE_ASM_COMPILER_TARGET=$arch-horizonos-elf" \
-    "-DLLVM_RUNTIME_TARGETS=$arch-horizonos-elf" \
-    '-DLLVM_ENABLE_RUNTIMES=libunwind;libcxxabi;libcxx' \
+    "-DCMAKE_C_COMPILER_TARGET=$arch-horizonos" \
+    "-DCMAKE_CXX_COMPILER_TARGET=$arch-horizonos" \
+    "-DCMAKE_ASM_COMPILER_TARGET=$arch-horizonos" \
+    "-DLLVM_RUNTIME_TARGETS=$arch-horizonos" \
+    '-DLLVM_ENABLE_RUNTIMES="libunwind;libcxxabi;libcxx"' \
     "-DCMAKE_C_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_CXX_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_ASM_FLAGS=-fuse-ld=lld -pipe" \

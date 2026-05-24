@@ -235,9 +235,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		newMsg.length = sizeof(RegisterReplyMsgData);
 
 		send_horizonos_message(nrPort, msg.src_port, &newMsg);
-
-		//delete retData;
-		//delete newMsg;
 	}
 }
 
@@ -379,9 +376,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		newMsg.length = sizeof(GetReplyMsgData);
 
 		send_horizonos_message(nrPort, msg.src_port, &newMsg);
-
-		//delete retData;
-		//delete newMsg;
 	}
 }
 
@@ -453,9 +447,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		newMsg.length = sizeof(CheckReplyMsgData);
 
 		send_horizonos_message(nrPort, msg.src_port, &newMsg);
-
-		//delete retData;
-		//delete newMsg;
 	}
 }
 

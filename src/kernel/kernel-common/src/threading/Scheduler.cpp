@@ -11,13 +11,13 @@ namespace kernel::common::threading {
 
 	// Threads
 
-	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os) {
+	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os), lockedCoreId(~0x0U) {
 		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userRsp);
 
 		this->id = TIDAllocator::allocTID();
 	}
 
-	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context) {
+	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context), lockedCoreId(~0x0U) {
 		this->id = TIDAllocator::allocTID();
 	}
 
@@ -140,6 +140,10 @@ namespace kernel::common::threading {
 
 	u64 Thread::getLockedCoreId() const {
 		return this->lockedCoreId;
+	}
+
+	void Thread::setLockedCoreId(const u64 newId) {
+		this->lockedCoreId = newId;
 	}
 
 	// Process
@@ -646,7 +650,7 @@ namespace kernel::common::threading {
 
 					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
 
-					if (currEntry.getLockedCoreId() == ~0x0u) {
+					if (currEntry.getLockedCoreId() == ~0x0U) {
 						schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
 					} else {
 						ExecutionNode *node = getCoreEN(currEntry.getLockedCoreId());
@@ -654,7 +658,7 @@ namespace kernel::common::threading {
 						if (node == nullptr) {
 							schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
 
-							currEntry.setLockedCoreId(~0x0u);
+							currEntry.setLockedCoreId(~0x0U);
 						} else {
 							node->lockedThreadQueues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
 						}

@@ -7,8 +7,9 @@
 #include "hal/Cpu.hpp"
 #include "threading/PortMessaging.hpp"
 
-extern limine_rsdp_request rsdpRequest;
+extern volatile limine_rsdp_request rsdpRequest;
 extern volatile limine_memmap_request memMapRequest;
+extern volatile limine_mp_request mpRequest;
 
 namespace kernel::common::hal {
 	using namespace threading;
@@ -212,6 +213,9 @@ namespace kernel::common::hal {
 		horizonSyscalls[34] = &syscallFreeIntVec;
 		horizonSyscalls[35] = &syscallAllocGsi;
 		horizonSyscalls[36] = &syscallFreeGsi;
+		horizonSyscalls[37] = &syscallLockToCore;
+		horizonSyscalls[38] = &syscallGetCpuCount;
+		horizonSyscalls[39] = &syscallGetCpuIDs;
 
 		initArch();
 	}
@@ -427,18 +431,6 @@ namespace kernel::common::hal {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
-
-		return 0;
-	}
-
-	u64 SyscallManager::syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64) {
-		if (ret == nullptr) {
-			return EINVAL;
-		}
-
-		// TODO
-		const auto *core = kernel::x86_64::hal::CpuManager::getCurrentCore();
-		*ret = core != nullptr ? static_cast<long>(core->cpuId) : 0;
 
 		return 0;
 	}
@@ -1232,6 +1224,48 @@ namespace kernel::common::hal {
 		}
 
 		*ret = static_cast<long>(reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address) - CommonMain::getCurrentHhdm());
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64) {
+		Scheduler::getCurrentThread()->setLockedCoreId(cpuId);
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallGetCpuCount(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		if (mpRequest.response == nullptr) {
+			*ret = 0;
+
+			return EFAULT;
+		}
+
+		*ret = static_cast<long>(mpRequest.response->cpu_count);
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallGetCpuIDs(long *ret, u64 cpuCount, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		if (mpRequest.response == nullptr) {
+			return EFAULT;
+		}
+
+		if (cpuCount > mpRequest.response->cpu_count) {
+			return EINVAL;
+		}
+
+		for (u64 i = 0; i < cpuCount; i++) {
+			ret[i] = mpRequest.response->cpus[i]->processor_id;
+		}
 
 		return 0;
 	}

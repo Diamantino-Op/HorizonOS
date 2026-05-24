@@ -214,7 +214,7 @@ namespace kernel::common::hal {
 
 		Asm::wrmsr(Msrs::STAR, star);
 		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(&syscallHandler));
-		Asm::wrmsr(Msrs::FMASK, 0x200 | 0x400);
+		Asm::wrmsr(Msrs::FMASK, ~0x2);
 
 		u64 efer = Asm::rdmsr(Msrs::EFER);
 
@@ -248,7 +248,7 @@ namespace kernel::common::hal {
 	}
 
 	void SyscallManager::setGsBase(const u64 gsBase) {
-		Asm::wrmsr(Msrs::KGSBAS, gsBase);
+		Asm::wrmsr(Msrs::UGSBAS, gsBase);
 	}
 
 	void SyscallManager::setFsBase(const u64 fsBase) {
@@ -256,11 +256,22 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::getGsBase() {
-		return Asm::rdmsr(Msrs::KGSBAS);
+		return Asm::rdmsr(Msrs::UGSBAS);
 	}
 
 	u64 SyscallManager::getFsBase() {
 		return Asm::rdmsr(Msrs::FSBAS);
+	}
+
+	u64 SyscallManager::syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		const auto *core = CpuManager::getCurrentCore();
+		*ret = core != nullptr ? static_cast<long>(core->cpuId) : 0;
+
+		return 0;
 	}
 
 	u64 SyscallManager::syscallIsThreadAlive(long *ret, const u64 tid, u64, u64, u64, u64, u64) {
@@ -650,6 +661,8 @@ namespace kernel::common::hal {
 
 		return 0;
 	}
+
+
 }
 
 namespace kernel::x86_64::hal {

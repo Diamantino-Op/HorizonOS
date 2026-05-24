@@ -77,7 +77,7 @@ namespace kernel::x86_64 {
 
 		// Interrupts
 		for (u16 i = 32; i <= 255; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 4, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		}
 
 		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 3, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
@@ -279,6 +279,8 @@ namespace kernel::x86_64 {
 
 		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 
+		this->idtManager.addEntry(this->schedInt, interruptTable[this->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+
 		// Todo: make one shot and restart when thread goes to sleep
 		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
 
@@ -375,6 +377,8 @@ namespace kernel::x86_64 {
 		Asm::sti();
 
 		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+
+		this->coreIdtManager->addEntry(this->schedInt, interruptTable[this->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		this->cpuCore.apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
 

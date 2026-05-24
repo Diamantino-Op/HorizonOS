@@ -148,6 +148,8 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m│   rsp: 0x%.16lx", frame->rsp);
 		terminal->printfBoth(true, "\033[0;31m│   cr2: 0x%.16lx", Asm::readCr2());
 		terminal->printfBoth(true, "\033[0;31m│   cr3: 0x%.16lx", Asm::readCr3());
+		terminal->printfBoth(true, "\033[0;31m│   UGS: 0x%.16lx", Asm::rdmsr(UGSBAS));
+		terminal->printfBoth(true, "\033[0;31m│   KGS: 0x%.16lx", Asm::rdmsr(KGSBAS));
 		terminal->printfBoth(true, "\033[0;31m│");
 		terminal->printfBoth(true, "\033[0;31m│   Backtrace:");
 		backtrace(frame->rbp, (frame->cs & 0x3) == 3);

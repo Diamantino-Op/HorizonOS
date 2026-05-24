@@ -57,7 +57,7 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 5;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 37;
+	constexpr u64 horizonSyscallAmount = 40;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
 
@@ -156,6 +156,9 @@ namespace kernel::common::hal {
     	static u64 syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64, u64, u64, u64);
     	static u64 syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64);
     	static u64 syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64);
+    	static u64 syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64);
+    	static u64 syscallGetCpuCount(long *ret, u64, u64, u64, u64, u64, u64);
+    	static u64 syscallGetCpuIDs(long *ret, u64 cpuCount, u64, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

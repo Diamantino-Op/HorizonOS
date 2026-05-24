@@ -84,15 +84,15 @@ namespace kernel::common::threading {
         void setWaitingPort(u64 port);
         u64 getWaitingPort() const;
 
-            void queueSignal(u64 signal);
-            bool hasPendingSignal() const;
-            u64 getPendingSignal() const;
-            bool hasSignalFrame() const;
-            void setSignalFrame(const SignalContext &frame);
-            const SignalContext &getSignalFrame() const;
-                    void clearPendingSignal();
-                    void clearSignalFrame();
-            void clearSignalState();
+    	void queueSignal(u64 signal);
+    	bool hasPendingSignal() const;
+    	u64 getPendingSignal() const;
+    	bool hasSignalFrame() const;
+    	void setSignalFrame(const SignalContext &frame);
+    	const SignalContext &getSignalFrame() const;
+    	void clearPendingSignal();
+    	void clearSignalFrame();
+    	void clearSignalState();
 
     	void setStackPointer(u64 newStackPointer);
     	u64 *getStackPointer();
@@ -139,7 +139,7 @@ namespace kernel::common::threading {
 
         ThreadState state {};
 
-    	u64 lockedCoreId = ~0x0;
+    	u64 lockedCoreId {};
     };
 
     class Process {
@@ -220,6 +220,7 @@ namespace kernel::common::threading {
         bool pendingSchedUnlock {};
         bool pendingSchedUnlockIF {};
 		u8 priorityCredits[ProcessPriority::COUNT] {};
+        bool preferLockedQueues {};
 
         LinkedListEntry<Thread> *idleThread {};
         LinkedListEntry<Thread> *currentThread {};

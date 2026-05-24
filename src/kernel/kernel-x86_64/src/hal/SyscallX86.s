@@ -1,6 +1,7 @@
 .global syscallHandler
 .extern callSyscall
 syscallHandler:
+    cli
     swapgs
 
     push r15
@@ -19,8 +20,12 @@ syscallHandler:
     push rbx
     push rax
 
+    sti
+
     mov rdi, rsp
     call callSyscall
+
+    cli
 
     pop rax
     pop rbx
@@ -39,5 +44,6 @@ syscallHandler:
     pop r15
 
     swapgs
+    sti
 
     sysretq
