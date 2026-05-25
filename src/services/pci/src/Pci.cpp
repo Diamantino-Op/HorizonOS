@@ -349,7 +349,11 @@ void *handleSearchDevice(void *devicesArr) {
 	filterOptions.whiteListCount = 1;
 
 	for (;;) {
+		printf("PCI: A!\n");
+
 		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
+
+		printf("PCI: B: %d!\n", result);
 
 		if (result != 0) {
 			continue;

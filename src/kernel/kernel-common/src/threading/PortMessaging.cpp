@@ -242,15 +242,21 @@ namespace kernel::common::threading {
             waiterEntry = nextWaiter;
         }
 
-        entry->lock.unlock(prevEntryIf);
+    	// Save thread ID BEFORE releasing any lock or deleting anything
+    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : 0;
 
+    	// Now it's safe to delete and unlock
     	if (waiter != nullptr) {
-    		// TODO: There is a race condition that sometimes nukes this_tid
-    		CommonMain::getInstance()->getScheduler()->unblockThread(waiter->thread->getId(), true);
-
-			delete waiter;
+    		delete waiter;
     		delete waiterEntry;
-        }
+    	}
+
+    	entry->lock.unlock(prevEntryIf);
+
+    	// Unblock AFTER cleaning up, using the saved ID (no pointer dereference)
+    	if (threadId != 0) {
+    		CommonMain::getInstance()->getScheduler()->unblockThread(threadId, true);
+    	}
 
         return 0;
     }
@@ -379,6 +385,8 @@ namespace kernel::common::threading {
               waiterEntry = waiterEntry->next;
             }
 
+	    	currThread->setWaitingPort(port);
+
             if (!alreadyWaiting) {
               auto *waiter = createWaiter(currThread, options);
 
@@ -388,7 +396,6 @@ namespace kernel::common::threading {
                 return ENOMEM;
               }
 
-              currThread->setWaitingPort(port);
               entry->waiters.addEnd(waiter);
             }
 

@@ -41,6 +41,10 @@ namespace kernel::x86_64::hal {
     	u64 currFrame {};
 
     	bool printEnabled {};
+
+    	u8 lastInt {};
+
+    	u64 schedInt {};
     };
 
     // TODO: Move to a common file

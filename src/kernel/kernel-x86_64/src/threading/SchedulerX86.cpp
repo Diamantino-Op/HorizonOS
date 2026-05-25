@@ -68,17 +68,17 @@ namespace kernel::common::threading {
 	u32 Scheduler::intReSchedule(u64 *) {
 		Interrupts::sendEOI();
 
-		ExecutionNode::reSchedule();
+		switchContextAsm();
 
 		return 10000;
 	}
 
 	void ExecutionNode::reSchedule() {
-		switchContextAsm();
+		CpuManager::getCurrentCore()->apic.ipi(0, Dest::SELF, CpuManager::getCurrentCore()->schedInt);
 	}
 
 	extern "C" u64 checkDisabled() {
-		if (CpuManager::getCurrentCore()->executionNode.isDisabled()) {
+		if (CpuManager::getCurrentCore()->executionNode.isDisabled() or Scheduler::isDisabled) {
 			return 1;
 		}
 

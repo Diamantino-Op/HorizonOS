@@ -9,6 +9,8 @@
 namespace kernel::common::threading {
 	using namespace programs;
 
+	bool Scheduler::isDisabled = false;
+
 	// Threads
 
 	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os), lockedCoreId(~0x0U) {
@@ -513,7 +515,7 @@ namespace kernel::common::threading {
 
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
-		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
+		//CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -537,7 +539,7 @@ namespace kernel::common::threading {
 
 		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
 
-		CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
+		//CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -571,7 +573,7 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
+		//CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 
 		thread->setState(ThreadState::BLOCKED);
 
@@ -606,9 +608,10 @@ namespace kernel::common::threading {
 
 		//const bool prevIF = this->schedLock.lock();
 
-		//const bool wasBlocked = this->blockedThreadList.remove(thread, false);
+		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
+		this->sleepingThreadList.remove(thread, false);
 
-		//if (wasBlocked) {
+		if (wasBlocked || thread->getSleepNs() == 0) {
 			if (thread->getSleepNs() == 0) {
 				thread->setState(ThreadState::RUNNING);
 
@@ -622,7 +625,7 @@ namespace kernel::common::threading {
 					this->sleepingThreadList.addStart(thread);
 				}
 			}
-		//}
+		}
 
 		this->schedLock.unlock(prevIF);
 	}
@@ -642,7 +645,7 @@ namespace kernel::common::threading {
 
 			if (currEntry.getSleepNs() > 0) {
 				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
-					CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
+					//CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
 
 					currEntry.setState(ThreadState::RUNNING);
 

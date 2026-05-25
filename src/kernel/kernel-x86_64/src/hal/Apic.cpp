@@ -141,6 +141,7 @@ namespace kernel::x86_64::hal {
 			write(ApicMsrs::LAPIC_ICRH, static_cast<u32>(id) << 24);
 			write(ApicMsrs::LAPIC_ICRL, flags);
 		} else {
+			asm volatile("mfence; lfence" ::: "memory");
 			write(ApicMsrs::LAPIC_ICRL, (static_cast<u64>(id) << 32) | flags);
 		}
 	}

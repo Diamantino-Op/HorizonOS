@@ -344,6 +344,10 @@ namespace kernel::common {
 		for (;;) {
 			TermMsg message {};
 
+			if (Scheduler::isDisabled) {
+				continue;
+			}
+
 			if (terminal->msgQueue.pop(message)) {
 				switch (message.type) {
 					case MessageType::DEBUG:

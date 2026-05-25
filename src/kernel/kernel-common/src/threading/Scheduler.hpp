@@ -383,6 +383,8 @@ namespace kernel::common::threading {
     	TicketSpinLock schedLock {};
 
     public:
+    	static bool isDisabled;
+
 		LinkedList<Process> processList {};
 
     	LinkedList<Thread> queues[ProcessPriority::COUNT] {};

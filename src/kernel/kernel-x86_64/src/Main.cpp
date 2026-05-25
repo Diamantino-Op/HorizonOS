@@ -193,15 +193,6 @@ namespace kernel::x86_64 {
 
 		CpuManager::getCurrentCore()->executionNode.init();
 
-		/*auto *exampleProcess = new Process(ProcessPriority::NORMAL, false);
-		this->scheduler->addProcess(exampleProcess);
-
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread1), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread2), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread3), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread4), exampleProcess);
-		this->scheduler->addThread(false, reinterpret_cast<u64>(thread5), exampleProcess);*/
-
 		for (u64 i = 0; i < moduleRequest.response->module_count; i++) {
 			const limine_file *moduleFile = moduleRequest.response->modules[i];
 
@@ -234,11 +225,6 @@ namespace kernel::x86_64 {
 				}
 			}
 		}
-
-		//auto *exampleUserProcess = new Process(ProcessPriority::HIGH, true);
-		//this->scheduler->addProcess(exampleUserProcess);
-
-		//this->scheduler->addThread(true, reinterpret_cast<u64>(testUserThread), exampleUserProcess);
 
 		terminal.info("Example threads registered... OK", "HorizonOS");
 
@@ -277,12 +263,12 @@ namespace kernel::x86_64 {
 
 		terminal.info("All Cpus initialized...", "HorizonOS");
 
-		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+		this->cpuManager.getBootstrapCpu()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 
-		this->idtManager.addEntry(this->schedInt, interruptTable[this->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(this->cpuManager.getBootstrapCpu()->schedInt, interruptTable[this->cpuManager.getBootstrapCpu()->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), this->cpuManager.getBootstrapCpu()->schedInt, true);
 
 		// this->shutdown();
 
@@ -376,11 +362,11 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
-		this->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+		CpuManager::getCurrentCore()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 
-		this->coreIdtManager->addEntry(this->schedInt, interruptTable[this->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+		this->coreIdtManager->addEntry(CpuManager::getCurrentCore()->schedInt, interruptTable[CpuManager::getCurrentCore()->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), this->schedInt, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(50), CpuManager::getCurrentCore()->schedInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

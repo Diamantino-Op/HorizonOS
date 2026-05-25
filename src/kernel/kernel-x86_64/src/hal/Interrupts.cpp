@@ -11,8 +11,6 @@ namespace kernel::x86_64::hal {
 
 	constexpr usize maxBacktraceFrames = 64;
 
-	static u8 lastInt = 0;
-
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
 		auto *frame = reinterpret_cast<Frame *>(stackFrame);
 
@@ -22,6 +20,10 @@ namespace kernel::x86_64::hal {
 	void Interrupts::handleInterrupt(Frame *frame) {
 		if (frame->intNo == 14) {
 			handlePageFault(frame);
+
+			if ((frame->cs & 0x3) == 3) {
+				deliverPendingSignal(frame);
+			}
 		} else if (frame->intNo == 2) {
 			Terminal *terminal = CommonMain::getTerminal();
 
@@ -32,13 +34,16 @@ namespace kernel::x86_64::hal {
 			} else {
 				kernelPanic(frame);
 			}
+
+			if ((frame->cs & 0x3) == 3) {
+				deliverPendingSignal(frame);
+			}
 		} else if (frame->intNo == 0x80) {
 			intSyscallEntry(frame);
 		} else {
 			const u8 savedIntNo = frame->intNo;
-			const u8 savedCs = frame->cs;
 
-			lastInt = frame->intNo;
+			CpuManager::getCurrentCore()->lastInt = frame->intNo;
 
 			if (CpuManager::getCurrentCore() == nullptr or CpuManager::getCurrentCore()->interruptAllocator == nullptr) {
 				sendEOI();
@@ -55,10 +60,6 @@ namespace kernel::x86_64::hal {
 			}
 
 			const u32 ret = handler->fun(handler->ctx);
-
-			if ((savedCs & 0x3) == 3) {
-				deliverPendingSignal(frame);
-			}
 
 			if (ret == 0) {
 				sendEOI();
@@ -132,6 +133,8 @@ namespace kernel::x86_64::hal {
 
 		Terminal *terminal = CommonMain::getTerminal();
 
+		Scheduler::isDisabled = true;
+
 		const bool prevIF = terminal->lock();
 
 		u64 offset = 0;
@@ -141,7 +144,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
 		terminal->printfBoth(true, "\033[0;31m│");
 		terminal->printfBoth(true, "\033[0;31m│   Registers:");
-		terminal->printfBoth(true, "\033[0;31m│   int: %u, lastInt: %u", frame->intNo, lastInt);
+		terminal->printfBoth(true, "\033[0;31m│   int: %u, lastInt: %u, schedInt: %u, cpuId: %lu", frame->intNo, CpuManager::getCurrentCore()->lastInt, CpuManager::getCurrentCore()->schedInt, CpuManager::getCurrentCore()->cpuId);
 		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
 		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
 		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);
@@ -157,6 +160,8 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m└──────────────────────────────────────────────────────────────────────");
 
 		terminal->unlock(prevIF);
+
+		Scheduler::isDisabled = false;
 
 		Asm::lhlt();
 	}
