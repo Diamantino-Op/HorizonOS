@@ -168,6 +168,8 @@ namespace kernel::common::hal {
 
     	static u32 userIrqHandler(u64 *ctx);
 
+    	static u32 portWatchdog(u64 *);
+
     public:
     	static LinkedList<IrqRegistration> irqRegistrations;
 

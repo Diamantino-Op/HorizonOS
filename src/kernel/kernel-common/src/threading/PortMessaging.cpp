@@ -225,11 +225,17 @@ namespace kernel::common::threading {
 
         const PortWaiter *waiter = nullptr;
 
+    	u16 fallbackThreadId = 0;
+
         auto *waiterEntry = entry->waiters.getFirst();
 
         while (waiterEntry != nullptr) {
             auto *nextWaiter = waiterEntry->next;
             auto *currWaiter = waiterEntry->value;
+
+        	if (fallbackThreadId == 0 && currWaiter != nullptr && currWaiter->thread != nullptr) {
+        		fallbackThreadId = currWaiter->thread->getId();
+        	}
 
             if (waiterAcceptsMessage(currWaiter, hdr->type)) {
                 if (entry->waiters.removeEntry(waiterEntry)) {
@@ -243,7 +249,7 @@ namespace kernel::common::threading {
         }
 
     	// Save thread ID BEFORE releasing any lock or deleting anything
-    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : 0;
+    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : fallbackThreadId;
 
     	// Now it's safe to delete and unlock
     	if (waiter != nullptr) {
@@ -399,12 +405,26 @@ namespace kernel::common::threading {
               entry->waiters.addEnd(waiter);
             }
 
-    		entry->lock.unlock(prevEntryIf);
+	    	auto *scheduler = CommonMain::getInstance()->getScheduler();
+	    	const bool prevSchedIF = scheduler->getSchedLock()->lock();
 
-    		//Asm::sti();
-    		CommonMain::getInstance()->getScheduler()->blockThread(currThread->getId());
-	    	//CommonMain::getInstance()->getScheduler()->sleepThread(currThread, 500ull * 1'000'000ull);
-    		//Asm::cli();
+	    	currThread->setState(ThreadState::BLOCKED);
+
+	    	// Remove from run queues
+	    	scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
+
+	    	const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
+
+	    	if (!isCurrentThread) {
+	    		scheduler->blockedThreadList.addStart(currThread);
+	    	}
+
+	    	scheduler->getSchedLock()->unlock(prevSchedIF);
+	    	entry->lock.unlock(prevEntryIf);
+
+	    	if (isCurrentThread) {
+	    		ExecutionNode::reSchedule();
+	    	}
 	    }
     }
 

@@ -582,11 +582,11 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		if (thread->getWaitingPort() == 0) {
+		/*if (thread->getWaitingPort() == 0) {
 			this->schedLock.unlock(prevIF);
 
 			return;
-		}
+		}*/
 
 		//CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 

@@ -164,7 +164,15 @@ namespace kernel::common::threading {
 				schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
 			}
 		} else if (this->currentThread->value->getState() == ThreadState::BLOCKED) {
-			if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
+			/*if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
+				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
+			}*/
+			if (this->currentThread->value->getPendingWakeup()) {
+				this->currentThread->value->setPendingWakeup(false);
+				this->currentThread->value->setState(ThreadState::RUNNING);
+
+				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
+			} else if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
 				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
 			}
 		} else if (this->currentThread != this->idleThread) {

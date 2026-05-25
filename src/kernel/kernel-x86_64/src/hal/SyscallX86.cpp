@@ -223,6 +223,29 @@ namespace kernel::common::hal {
 		// efer |= (1 << 15); // TCE
 
 		Asm::wrmsr(Msrs::EFER, efer);
+
+		/*const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
+		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+
+		if (hpet->getMaxTimers() >= 2) {
+			const u64 watchdogTicks = (10 * hpet->getFrequency()) / 1000; // 10ms
+
+			const u32 watchdogGsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, portWatchdog, nullptr);
+
+			if (watchdogGsi < 100000000) {
+				hpet->write(Hpet::getTimerRegister(1), ((watchdogGsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3));
+				hpet->write(Hpet::getComparatorRegister(1), hpet->read() + watchdogTicks);
+				hpet->write(Hpet::getComparatorRegister(1), watchdogTicks);
+
+				irqAllocator->unmask(watchdogGsi);
+
+				CommonMain::getTerminal()->debug("Port watchdog armed (10ms, HPET timer 1)", "Syscalls");
+			} else {
+				CommonMain::getTerminal()->debug("Port watchdog GSI alloc failed, skipping", "Syscalls");
+			}
+		} else {
+			CommonMain::getTerminal()->debug("Only 1 HPET timer, port watchdog skipped", "Syscalls");
+		}*/
 	}
 
 	u32 SyscallManager::userIrqHandler(u64 *ctx) {

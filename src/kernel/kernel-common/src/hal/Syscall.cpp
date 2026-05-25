@@ -220,6 +220,38 @@ namespace kernel::common::hal {
 		initArch();
 	}
 
+	u32 SyscallManager::portWatchdog(u64 *) {
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+		const bool prevIF = schedulerPtr->getSchedLock()->lock();
+
+		auto it  = schedulerPtr->blockedThreadList.begin();
+		auto end = schedulerPtr->blockedThreadList.end();
+
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
+			// Only wake threads blocked waiting on a port message.
+			if (currEntry.getWaitingPort() != 0) {
+				currEntry.setWaitingPort(0);
+				currEntry.setState(ThreadState::RUNNING);
+
+				CommonMain::getTerminal()->debug("Unblocking thread: %lu", "Watchdog", currEntry.getId());
+
+				schedulerPtr->blockedThreadList.remove(&currEntry, false);
+				schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+			}
+
+			it = nextIt;
+		}
+
+		schedulerPtr->getSchedLock()->unlock(prevIF);
+
+		return 0;
+	}
+
 	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
 		const u16 tid = Scheduler::getCurrentThread()->getId();
 
