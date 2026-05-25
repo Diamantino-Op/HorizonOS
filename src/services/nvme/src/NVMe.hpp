@@ -4,6 +4,19 @@
 #include <cstddef>
 #include <cstdint>
 
+struct PciDevice {
+	uint8_t  bus;
+	uint8_t  device;
+	uint8_t  function;
+	uint16_t vendorId;
+	uint16_t deviceId;
+	uint8_t  classCode;
+	uint8_t  subclass;
+	uint8_t  progIf;
+	uint8_t  headerType;
+	bool     isPcie;
+};
+
 enum class FuseType : std::uint8_t {
 	Normal = 0,
 	FirstCommand = 1,

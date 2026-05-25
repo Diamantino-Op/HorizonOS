@@ -190,6 +190,7 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
 
     if (cap == 0) {
         printf("PCI/MSI: No MSI capability on %02x:%02x.%x\n", bus, dev, func);
+
         return 0;
     }
 
@@ -201,7 +202,9 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
 
     // Allocate one vector.
     const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort);
-    if (vector == 0) { return 0; }
+    if (vector == 0) {
+	    return 0;
+    }
 
     // Build address and data fields.
     const uint32_t address = MSI_ADDRESS_BASE; // dest = APIC id 0
@@ -222,15 +225,17 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
     ctrl |= MSI_CTRL_ENABLE;
     pciConfigWrite16(bus, dev, func, cap + MSI_OFF_CTRL, ctrl);
 
-    printf("PCI/MSI: Enabled on %02x:%02x.%x vector=0x%02x\n",
-           bus, dev, func, vector);
+    printf("PCI/MSI: Enabled on %02x:%02x.%x vector=0x%02x\n", bus, dev, func, vector);
 
     return vector;
 }
 
 void msiDisable(uint8_t bus, uint8_t dev, uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSI);
-    if (cap == 0) { return; }
+	
+    if (cap == 0) {
+	    return;
+    }
 
     uint16_t ctrl = pciConfigRead16(bus, dev, func, cap + MSI_OFF_CTRL);
     ctrl &= ~MSI_CTRL_ENABLE;

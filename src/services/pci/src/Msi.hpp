@@ -7,12 +7,6 @@
 #include <mutex>
 #include <vector>
 
-// ─── IRQ vector allocation ────────────────────────────────────────────────────
-// Vectors 0x00-0x2F are reserved (CPU exceptions + legacy PIC).
-// We hand out vectors from 0x30 upward.
-constexpr uint8_t MSI_VECTOR_BASE = 0x30;
-constexpr uint8_t MSI_VECTOR_MAX  = 0xFE; // 0xFF is spurious
-
 // ─── MSI address / data constants (x86-64 xAPIC/x2APIC) ──────────────────────
 // Destination field uses BSP APIC id 0 for simplicity; NVMe/USB don't care.
 constexpr uint32_t MSI_ADDRESS_BASE      = 0xFEE00000u;

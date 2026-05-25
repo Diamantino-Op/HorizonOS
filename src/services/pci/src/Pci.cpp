@@ -183,6 +183,7 @@ void pciConfigWrite8(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, ui
 
     if (base) {
         *(static_cast<uint8_t *>(base) + offset) = value;
+
         return;
     }
 
@@ -307,6 +308,75 @@ bool isPciBridge(uint8_t classCode, uint8_t subclass) {
 }
 
 // ─── Message loop ────────────────────────────────────────────────────────────
+
+void *handleSearchDevice(void *devicesArr) {
+	const auto *devices = static_cast<vector<PciDevice> *>(devicesArr);
+
+	printf("PCI: Search Device message loop started!\n");
+
+	// Send
+
+	auto sendMsg = hos_msg();
+
+	auto sendData = PciDevice();
+
+	sendMsg.type = PCI_SEARCH_DEVICE_REPLY_MSG_TYPE;
+	sendMsg.buffer = &sendData;
+	sendMsg.length = sizeof(PciDevice);
+
+	// Send Start
+
+	auto sendStartMsg = hos_msg();
+
+	uint64_t sendStartAmount = 0;
+
+	sendStartMsg.type = PCI_SEARCH_DEVICE_REPLY_START_MSG_TYPE;
+	sendStartMsg.buffer = &sendStartAmount;
+	sendStartMsg.length = sizeof(uint64_t);
+
+	// Recv
+
+	auto recvMsg = hos_msg();
+
+	auto recvData = PciSearchDeviceMsgData();
+
+	recvMsg.buffer = &recvData;
+	recvMsg.length = sizeof(PciSearchDeviceMsgData);
+
+	auto filterOptions = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_SEARCH_DEVICE_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	for (;;) {
+		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
+
+		if (result != 0) {
+			continue;
+		}
+
+		sendMsg.port = recvMsg.src_port;
+		sendStartMsg.port = recvMsg.src_port;
+
+		vector<PciDevice> matchedDevices {};
+
+		for (const auto device : *devices) {
+			if (device.classCode == recvData.pciClass && device.subclass == recvData.pciSubclass && device.progIf == recvData.pciProg) {
+				matchedDevices.push_back(device);
+
+				sendStartAmount++;
+			}
+		}
+
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendStartMsg);
+
+		for (const auto &d : matchedDevices) {
+			sendData = d;
+
+			send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
+		}
+	}
+}
 
 void *handlePciRead(void *arg) {
 	(void)arg;

@@ -254,6 +254,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
+	pthread_t pciSearchDeviceThread;
+
+	if (pthread_create(&pciSearchDeviceThread, nullptr, handleSearchDevice, nullptr) != 0) {
+		printf("PCI: Failed to create pci search device message loop thread\n");
+
+		return 1;
+	}
+
+	pthread_detach(pciSearchDeviceThread);
+
     pthread_t pciReadThread;
 
     if (pthread_create(&pciReadThread, nullptr, handlePciRead, nullptr) != 0) {

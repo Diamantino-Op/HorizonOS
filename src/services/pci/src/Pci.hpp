@@ -35,6 +35,9 @@ constexpr uint64_t PCI_MSIX_ALLOC_REPLY_MSG_TYPE = 0x90;
 constexpr uint64_t PCI_MSIX_FREE_MSG_TYPE = 0xA0;
 constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE = 0xB0;
 constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE = 0xC0;
+constexpr uint64_t PCI_SEARCH_DEVICE_MSG_TYPE = 0xD0;
+constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_START_MSG_TYPE = 0xE0;
+constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_MSG_TYPE = 0xF0;
 
 constexpr uint64_t MCFG_DONE_MSG_TYPE = 0x100;
 constexpr uint64_t MCFG_SEGMENT_MSG_TYPE = 0x200;
@@ -154,6 +157,12 @@ struct PciMsixGlobalDisableMsgData {
 	uint8_t func {};
 };
 
+struct PciSearchDeviceMsgData {
+	uint8_t pciClass {};
+	uint8_t pciSubclass {};
+	uint8_t pciProg {};
+};
+
 // ─── Legacy PCI port I/O base addresses ──────────────────────────────────────
 constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
 constexpr uint16_t PCI_CONFIG_DATA    = 0xCFC;
@@ -218,13 +227,14 @@ PciBridgeType getPciBridgeType(uint8_t classCode, uint8_t subclass);
 bool isPciBridge(uint8_t classCode, uint8_t subclass);
 
 // ─── Message loop (runs on a dedicated pthread) ───────────────────────────────
-void *handlePciRead(void *arg);
-void *handlePciWrite(void *arg);
-void *handleMsiAlloc(void *arg);
-void *handleMsiFree(void *arg);
-void *handleMsixAlloc(void *arg);
-void *handleMsixFree(void *arg);
-void *handleMsixGlobalEnable(void *arg);
-void *handleMsixGlobalDisable(void *arg);
+[[noreturn]] void *handleSearchDevice(void *devicesArr);
+[[noreturn]] void *handlePciRead(void *arg);
+[[noreturn]] void *handlePciWrite(void *arg);
+[[noreturn]] void *handleMsiAlloc(void *arg);
+[[noreturn]] void *handleMsiFree(void *arg);
+[[noreturn]] void *handleMsixAlloc(void *arg);
+[[noreturn]] void *handleMsixFree(void *arg);
+[[noreturn]] void *handleMsixGlobalEnable(void *arg);
+[[noreturn]] void *handleMsixGlobalDisable(void *arg);
 
 #endif
