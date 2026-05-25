@@ -112,8 +112,10 @@ namespace kernel::common::threading {
         Process *getParent() const;
 
     	u64 getLockedCoreId() const;
-
     	void setLockedCoreId(u64 newId);
+
+    	void setPendingWakeup(bool val);
+    	bool getPendingWakeup() const;
 
     private:
         Process *parent {};
@@ -140,6 +142,8 @@ namespace kernel::common::threading {
         ThreadState state {};
 
     	u64 lockedCoreId {};
+
+    	bool pendingWakeup {};
     };
 
     class Process {

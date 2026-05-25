@@ -148,6 +148,14 @@ namespace kernel::common::threading {
 		this->lockedCoreId = newId;
 	}
 
+	void Thread::setPendingWakeup(const bool val) {
+		this->pendingWakeup = val;
+	}
+
+	bool Thread::getPendingWakeup() const {
+		return this->pendingWakeup;
+	}
+
 	// Process
 
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
@@ -567,6 +575,13 @@ namespace kernel::common::threading {
 			return;
 		}
 
+		if (thread->getPendingWakeup()) {
+			thread->setPendingWakeup(false);
+			this->schedLock.unlock(prevIF);
+
+			return;
+		}
+
 		if (thread->getWaitingPort() == 0) {
 			this->schedLock.unlock(prevIF);
 
@@ -600,6 +615,7 @@ namespace kernel::common::threading {
 
 		if (thread == nullptr) {
 			this->schedLock.unlock(prevIF);
+
 			return;
 		}
 
@@ -609,9 +625,8 @@ namespace kernel::common::threading {
 		//const bool prevIF = this->schedLock.lock();
 
 		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
-		this->sleepingThreadList.remove(thread, false);
 
-		if (wasBlocked || thread->getSleepNs() == 0) {
+		if (wasBlocked) {
 			if (thread->getSleepNs() == 0) {
 				thread->setState(ThreadState::RUNNING);
 
@@ -625,6 +640,10 @@ namespace kernel::common::threading {
 					this->sleepingThreadList.addStart(thread);
 				}
 			}
+		} else {
+			// Thread hasn't called blockThread yet — set the pending wakeup flag
+			// so that the upcoming blockThread() call returns immediately.
+			thread->setPendingWakeup(true);
 		}
 
 		this->schedLock.unlock(prevIF);
