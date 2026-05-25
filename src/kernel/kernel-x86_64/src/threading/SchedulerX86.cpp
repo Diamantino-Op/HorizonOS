@@ -169,6 +169,7 @@ namespace kernel::common::threading {
 			}*/
 			if (this->currentThread->value->getPendingWakeup()) {
 				this->currentThread->value->setPendingWakeup(false);
+				this->currentThread->value->setWaitingPort(0);
 				this->currentThread->value->setState(ThreadState::RUNNING);
 
 				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
@@ -307,10 +308,10 @@ namespace kernel::common::threading {
 
 		// TODO
 
-		// CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
 
-		this->consumePendingSchedUnlock();
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(true);
+		//this->consumePendingSchedUnlock();
+		//CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(true);
 	}
 
 	void ExecutionNode::loadNewThread() {

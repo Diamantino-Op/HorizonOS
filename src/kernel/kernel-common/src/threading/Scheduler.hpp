@@ -383,6 +383,8 @@ namespace kernel::common::threading {
     	void reaperThreadArch(const LinkedListEntry<Thread> *thread);
     	void reaperProcessArch(Process *process);
 
+    	static void debugDump();
+
     private:
     	TicketSpinLock schedLock {};
 

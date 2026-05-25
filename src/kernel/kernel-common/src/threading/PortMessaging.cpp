@@ -419,11 +419,23 @@ namespace kernel::common::threading {
 	    		scheduler->blockedThreadList.addStart(currThread);
 	    	}
 
-	    	scheduler->getSchedLock()->unlock(prevSchedIF);
+	    	//scheduler->getSchedLock()->unlock(prevSchedIF);
 	    	entry->lock.unlock(prevEntryIf);
 
 	    	if (isCurrentThread) {
-	    		ExecutionNode::reSchedule();
+	    		if (currThread->getPendingWakeup()) {
+	    			// Wakeup already arrived — cancel the block.
+	    			currThread->setPendingWakeup(false);
+	    			currThread->setWaitingPort(0);
+	    			currThread->setState(ThreadState::RUNNING);
+	    			scheduler->getSchedLock()->unlock(prevSchedIF);
+	    			// Loop back to retry reading the message.
+	    		} else {
+	    			scheduler->getSchedLock()->unlock(prevSchedIF);
+	    			ExecutionNode::reSchedule();
+	    		}
+	    	} else {
+	    		scheduler->getSchedLock()->unlock(prevSchedIF);
 	    	}
 	    }
     }
@@ -460,5 +472,38 @@ namespace kernel::common::threading {
         }
 
         portLock.unlock(prevIF);
+    }
+
+	void PortMessaging::debugDump() {
+    	auto *term = CommonMain::getTerminal();
+
+    	term->warnNoLock("  === PORT MESSAGING DUMP ===", "SchedDump");
+
+    	if (portList == nullptr) {
+    		term->warnNoLock("    portList is null", "SchedDump");
+    		return;
+    	}
+
+    	for (auto &entry : *portList) {
+    		term->warnNoLock("  Port=%lu messages=%lu waiters=%lu",
+				"SchedDump", entry.port,
+				entry.messages.getSize(),
+				entry.waiters.getSize());
+
+    		for (const auto &msg : entry.messages) {
+    			term->warnNoLock("    Msg: type=%lu srcPort=%lu length=%lu",
+					"SchedDump", msg.type, msg.sourcePort, msg.length);
+    		}
+
+    		for (const auto &waiter : entry.waiters) {
+    			if (waiter.thread != nullptr) {
+    				term->warnNoLock("    Waiter: TID=%u whiteListCount=%lu blackListCount=%lu",
+						"SchedDump",
+						waiter.thread->getId(),
+						waiter.whiteListCount,
+						waiter.blackListCount);
+    			}
+    		}
+    	}
     }
 }

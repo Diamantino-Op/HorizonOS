@@ -44,6 +44,8 @@ namespace kernel::common::threading {
 
         static void removeThread(Thread *thread);
 
+    	static void debugDump();
+
     private:
         static PortEntry *findPortUnlocked(u64 port);
         static PortEntry *createPortUnlocked(u64 port);

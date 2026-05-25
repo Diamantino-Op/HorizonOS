@@ -25,9 +25,17 @@ namespace kernel::x86_64::hal {
 				deliverPendingSignal(frame);
 			}
 		} else if (frame->intNo == 2) {
-			Terminal *terminal = CommonMain::getTerminal();
+			Scheduler::isDisabled = true;
 
-			terminal->debug("NMI Received!", "Interrupts");
+			CommonMain::getTerminal()->warnNoLock("NMI", "Interrupts");
+
+			const bool prevIF = CommonMain::getTerminal()->lock();
+
+			Scheduler::debugDump();
+
+			CommonMain::getTerminal()->unlock(prevIF);
+
+			Scheduler::isDisabled = false;
 		} else if (frame->intNo < 32) {
 			if (frame->cs == (Selector::USER_CODE64 * 8 | 3) or frame->cs == (Selector::USER_CODE32 * 8 | 3)) {
 				userPanic(frame);

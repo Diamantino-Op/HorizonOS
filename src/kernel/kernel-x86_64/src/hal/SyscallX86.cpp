@@ -214,7 +214,8 @@ namespace kernel::common::hal {
 
 		Asm::wrmsr(Msrs::STAR, star);
 		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(&syscallHandler));
-		Asm::wrmsr(Msrs::FMASK, ~0x2);
+		Asm::wrmsr(Msrs::FMASK, static_cast<u32>(~0x2));
+		//Asm::wrmsr(Msrs::FMASK, 0x200 | 0x400);
 
 		u64 efer = Asm::rdmsr(Msrs::EFER);
 

@@ -1,10 +1,11 @@
 #include "Scheduler.hpp"
 
 #include "CommonMain.hpp"
-#include "IDAllocator.hpp"
 #include "Futex.hpp"
+#include "IDAllocator.hpp"
 #include "PortMessaging.hpp"
 #include "programs/Elf.hpp"
+#include "utils/Asm.hpp"
 
 namespace kernel::common::threading {
 	using namespace programs;
@@ -605,6 +606,8 @@ namespace kernel::common::threading {
 		this->schedLock.unlock(prevIF);
 
 		if (shouldReschedule) {
+			// TODO
+			x86_64::utils::Asm::sti();
 			ExecutionNode::reSchedule();
 		}
 	}
@@ -620,13 +623,15 @@ namespace kernel::common::threading {
 		}
 
 		//CommonMain::getTerminal()->debug("Unblocking thread: thread: %u", "Scheduler", thread->getId());
-		thread->setWaitingPort(0);
+		//thread->setWaitingPort(0);
 
 		//const bool prevIF = this->schedLock.lock();
 
 		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
 
 		if (wasBlocked) {
+			thread->setWaitingPort(0);
+
 			if (thread->getSleepNs() == 0) {
 				thread->setState(ThreadState::RUNNING);
 
@@ -720,6 +725,76 @@ namespace kernel::common::threading {
 
 	TicketSpinLock *Scheduler::getSchedLock() {
 		return &this->schedLock;
+	}
+
+	void Scheduler::debugDump() {
+		auto *term = CommonMain::getTerminal();
+		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+
+	    term->warnNoLock("=== SCHEDULER DEBUG DUMP ===", "SchedDump");
+
+	    // Current thread per execution node
+	    const auto *currThread = getCurrentExecutionNode()->getCurrentThread()->value;
+	    term->warnNoLock("  Current thread: TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
+	        "SchedDump",
+	        currThread->getId(),
+	        currThread->getParent()->getId(),
+	        static_cast<u32>(currThread->getState()),
+	        static_cast<u32>(currThread->getPendingWakeup()),
+	        currThread->getWaitingPort());
+
+	    // Run queues
+	    for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+	        auto &q = schedulerPtr->queues[priority];
+	        if (q.getSize() == 0) {
+	        	continue;
+	        }
+
+	        term->warnNoLock("  RunQueue[%lu] size=%lu:", "SchedDump", priority, q.getSize());
+
+	        for (const auto &t : q) {
+	            term->warnNoLock("    TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
+	                "SchedDump",
+	                t.getId(),
+	                t.getParent()->getId(),
+	                static_cast<u32>(t.getState()),
+	                t.getWaitingPort(),
+	                static_cast<u32>(t.getPendingWakeup()));
+	        }
+	    }
+
+	    // Blocked list
+	    term->warnNoLock("  BlockedList size=%lu:", "SchedDump", schedulerPtr->blockedThreadList.getSize());
+
+	    for (const auto &t : schedulerPtr->blockedThreadList) {
+	        term->warnNoLock("    TID=%u PID=%u waitingPort=%lu pendingWakeup=%u sleepNs=%lu",
+	            "SchedDump",
+	            t.getId(),
+	            t.getParent()->getId(),
+	            t.getWaitingPort(),
+	            static_cast<u32>(t.getPendingWakeup()),
+	            t.getSleepNs());
+	    }
+
+	    // Sleeping list
+	    term->warnNoLock("  SleepingList size=%lu:", "SchedDump", schedulerPtr->sleepingThreadList.getSize());
+
+	    for (const auto &t : schedulerPtr->sleepingThreadList) {
+	        term->warnNoLock("    TID=%u PID=%u sleepNs=%lu", "SchedDump",
+	            t.getId(), t.getParent()->getId(), t.getSleepNs());
+	    }
+
+	    // Ready list
+	    term->warnNoLock("  ReadyList size=%lu:", "SchedDump", schedulerPtr->readyThreadList.getSize());
+
+	    for (const auto &t : schedulerPtr->readyThreadList) {
+	        term->warnNoLock("    TID=%u PID=%u", "SchedDump", t.getId(), t.getParent()->getId());
+	    }
+
+	    // Port messaging dump
+	    PortMessaging::debugDump();
+
+	    term->warnNoLock("=== END DUMP ===", "SchedDump");
 	}
 }
 
