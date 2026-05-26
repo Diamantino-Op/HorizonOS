@@ -520,7 +520,7 @@ namespace kernel::common::hal {
 	u64 SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, u64, u64, u64, u64) {
 		// TODO: Check
 
-		CommonMain::getTerminal()->debug("New Thread: Stack: 0x%.16lx", "Syscall Manager", stack);
+		//CommonMain::getTerminal()->debug("New Thread: Stack: 0x%.16lx", "Syscall Manager", stack);
 
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		const auto *currentThread = Scheduler::getCurrentThread();
@@ -604,6 +604,8 @@ namespace kernel::common::hal {
 
 				return result;
 			}
+
+			CommonMain::getTerminal()->debug("Send message retry %lu for port %lu", "Syscall Manager", retryAttempt + 1, port);
 
 			scheduler->sleepThread(thread, sendMessageRetrySleepMs * 1000000ULL);
 		}
@@ -1058,7 +1060,7 @@ namespace kernel::common::hal {
 			*ret = 0;
 		}
 
-		CommonMain::getTerminal()->debug("Memprotect: Prot: %lu, Size: %lu, Addr: 0x%.16lx", "Syscall Manager", prot, size, pointer);
+		//CommonMain::getTerminal()->debug("Memprotect: Prot: %lu, Size: %lu, Addr: 0x%.16lx", "Syscall Manager", prot, size, pointer);
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		const Thread *thread = Scheduler::getCurrentThread();

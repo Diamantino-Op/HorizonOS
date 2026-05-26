@@ -3,18 +3,23 @@
 
 #include "Types.hpp"
 
-#include "Vector.hpp"
-
 namespace kernel::common::hal {
-    using CalibratorFun = void(*)(u64 ms);
+    using CalibratorFun = void (*)(u64 ms);
 
     using GetNsFun = u64 (*)();
+
+	using HandlerFun = u32 (*)();
 
     struct Clock {
         const char *name {};
         usize priority {};
         GetNsFun getNs {};
     };
+
+	struct TimerHandler {
+		HandlerFun fun {};
+		u64 nextCall {};
+	};
 
     class Clocks {
     public:
@@ -30,6 +35,8 @@ namespace kernel::common::hal {
         CalibratorFun getCalibrator();
 
     private:
+    	static u32 timerTick(u64 *);
+
         static void calibrate(u64 ms);
 
         void archPause();

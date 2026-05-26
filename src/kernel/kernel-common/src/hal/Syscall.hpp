@@ -53,8 +53,8 @@ namespace kernel::common::hal {
 
 	constexpr u64 nanosecondsPerSecond = 1'000'000'000ULL;
 
-	constexpr u64 sendMessageRetrySleepMs = 250;
-	constexpr u64 sendMessageRetryCount = 5;
+	constexpr u64 sendMessageRetrySleepMs = 50;
+	constexpr u64 sendMessageRetryCount = 40;
 
 	constexpr u64 linuxSyscallAmount = 309;
 	constexpr u64 horizonSyscallAmount = 40;

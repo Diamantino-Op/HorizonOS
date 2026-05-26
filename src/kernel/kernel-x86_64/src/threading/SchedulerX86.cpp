@@ -54,7 +54,7 @@ namespace kernel::common::threading {
 
 		CommonMain::getTerminal()->debug("Hpet gsi: %lu", "Scheduler", gsi);
 
-		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3));
+		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 6) | (1 << 2) | (1 << 3));
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 

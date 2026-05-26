@@ -50,4 +50,10 @@ namespace kernel::common::hal {
 
 		while (mainClock->getNs() < end) {}
 	}
+
+	u32 Clocks::timerTick(u64 *) {
+
+
+		return 0;
+	}
 }

@@ -657,6 +657,8 @@ namespace kernel::common::threading {
 	u32 Scheduler::sleepTick(u64 *) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
+		CommonMain::getTerminal()->debug("Sleep Tick Start", "Sleep");
+
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
 		auto it = schedulerPtr->sleepingThreadList.begin();
@@ -697,6 +699,8 @@ namespace kernel::common::threading {
 		}
 
 		schedulerPtr->getSchedLock()->unlock(prevIF);
+
+		CommonMain::getTerminal()->debug("Sleep Tick End", "Sleep");
 
 		return 0;
 	}

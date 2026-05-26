@@ -97,7 +97,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		newMsg.buffer = &registerData;
 		newMsg.length = sizeof(RegisterMsgData);
 
-		send_horizonos_message(nvmePort, 1, &newMsg);
+		const int sendNewRet = send_horizonos_message(nvmePort, 1, &newMsg);
+
+		if (sendNewRet != 0) {
+			printf("NVMe: Failed to send register message: %d\n", sendNewRet);
+
+			return 1;
+		}
 
 		// Receive
 
@@ -159,7 +165,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		filterOptions.whiteListCount = 1;
 
 		for (;;) {
-			send_horizonos_message(nvmePort, 1, &checkMsg);
+			const int sendNewRet = send_horizonos_message(nvmePort, 1, &checkMsg);
+
+			if (sendNewRet != 0) {
+				printf("NVMe: Failed to send check message: %d\n", sendNewRet);
+
+				delete[] filterOptions.whiteListTypes;
+
+				return 1;
+			}
 
 			const int srvRegisterResult = receive_horizonos_message(nvmePort, &recvCheckMsg, &filterOptions);
 
@@ -189,7 +203,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		getMsg.buffer = &getData;
 		getMsg.length = sizeof(GetMsgData);
 
-		send_horizonos_message(nvmePort, 1, &getMsg);
+		const int getRet = send_horizonos_message(nvmePort, 1, &getMsg);
+
+		if (getRet != 0) {
+			printf("NVMe: Failed to send get message: %d\n", getRet);
+
+			return 1;
+		}
 
 		// Reply
 
@@ -208,7 +228,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int srvRegisterResult = receive_horizonos_message(nvmePort, &recvGetMsg, &filterOptions);
 
 		if (srvRegisterResult != 0) {
-			printf("NVMe: Failed to get PCI port!\n");
+			printf("NVMe: Failed to get PCI port: %d!\n", srvRegisterResult);
 
 			delete[] filterOptions.whiteListTypes;
 
@@ -243,7 +263,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		searchMsg.buffer = &searchData;
 		searchMsg.length = sizeof(PciSearchDeviceMsgData);
 
-		send_horizonos_message(nvmePort, pciPort, &searchMsg);
+		const int sendSearchRet = send_horizonos_message(nvmePort, pciPort, &searchMsg);
+
+		if (sendSearchRet != 0) {
+			printf("NVMe: Failed to send PCI search message: %d!\n", sendSearchRet);
+
+			return 1;
+		}
 
 		// Start Reply
 

@@ -268,7 +268,7 @@ namespace kernel::common::threading {
     }
 
     u64 PortMessaging::recvMessage(const u64 port, MessageHeader *hdr, const MessageFilterOptions *options) {
-        if (hdr == nullptr) {
+	    if (hdr == nullptr) {
 	        return EINVAL;
 	    }
 
@@ -277,168 +277,172 @@ namespace kernel::common::threading {
 	    }
 
 	    for (;;) {
-		    bool prevIf = portLock.lock();
+	        bool prevIf = portLock.lock();
 
-    		PortEntry *entry = findPortUnlocked(port);
+	        PortEntry *entry = findPortUnlocked(port);
 
-    		if (entry == nullptr) {
-    			portLock.unlock(prevIf);
+	        if (entry == nullptr) {
+	            portLock.unlock(prevIf);
 
-    			return ENOENT;
-    		}
+	            return ENOENT;
+	        }
 
-    		bool prevEntryIf = entry->lock.lock();
+	        bool prevEntryIf = entry->lock.lock();
 
-    		portLock.unlock(prevIf);
+	        portLock.unlock(prevIf);
 
-    		// Walk the message queue to find the first message that passes the filter.
-    		auto *messageEntry = entry->messages.getFirst();
+	        // Walk the message queue to find the first message that passes the filter.
+	        auto *messageEntry = entry->messages.getFirst();
 
-    		while (messageEntry != nullptr) {
-    			auto *message = messageEntry->value;
+	        while (messageEntry != nullptr) {
+	            auto *message = messageEntry->value;
 
-    			// --- Filter check ---
-    			if (options != nullptr) {
-    				bool filtered = false;
+	            // --- Filter check ---
+	            if (options != nullptr) {
+	                bool filtered = false;
 
-    				// Step 1: Blacklist — block if the type is in the blacklist.
-    				if (options->blackListTypes != nullptr && options->blackListCount > 0) {
-    					for (usize i = 0; i < options->blackListCount; ++i) {
-    						if (message->type == options->blackListTypes[i]) {
-    							filtered = true;
+	                if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+	                    for (usize i = 0; i < options->blackListCount; ++i) {
+	                        if (message->type == options->blackListTypes[i]) {
+	                            filtered = true;
+	                            break;
+	                        }
+	                    }
+	                }
 
-    							break;
-    						}
-    					}
-    				}
+	                if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+	                    filtered = true;
 
-    				// Step 2: Whitelist — if provided, block unless the type is in the whitelist.
-    				// Applied after the blacklist, so a type blacklisted AND whitelisted is still blocked.
-    				if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
-    					filtered = true; // Assume blocked unless found
+	                    for (usize i = 0; i < options->whiteListCount; ++i) {
+	                        if (message->type == options->whiteListTypes[i]) {
+	                            filtered = false;
+	                            break;
+	                        }
+	                    }
+	                }
 
-    					for (usize i = 0; i < options->whiteListCount; ++i) {
-    						if (message->type == options->whiteListTypes[i]) {
-    							filtered = false;
+	                if (filtered) {
+	                    messageEntry = messageEntry->next;
+	                    continue;
+	                }
+	            }
+	            // --- End filter check ---
 
-    							break;
-    						}
-    					}
-    				}
+	            const usize messageLength = message->length;
 
-    				if (filtered) {
-    					messageEntry = messageEntry->next;
+	            if (hdr->length < messageLength) {
+	                entry->lock.unlock(prevEntryIf);
+	                return EMSGSIZE;
+	            }
 
-    					continue;
-    				}
-    			}
-    			// --- End filter check ---
+	            if (not entry->messages.removeEntry(messageEntry)) {
+	                entry->lock.unlock(prevEntryIf);
+	                return ENOENT;
+	            }
 
-    			// Found a matching message.
-    			const usize messageLength = message->length;
+	            message = messageEntry->value;
 
-    			if (hdr->length < messageLength) {
-    				entry->lock.unlock(prevEntryIf);
+	            if (messageLength > 0) {
+	                memcpy(hdr->buffer, message->buffer, messageLength);
+	            }
 
-    				return EMSGSIZE;
-    			}
+	            hdr->port      = port;
+	            hdr->srcPort   = message->sourcePort;
+	            hdr->type      = message->type;
+	            hdr->retLength = static_cast<ssize>(messageLength);
 
-    			// Remove this specific entry from the queue.
-    			if (not entry->messages.removeEntry(messageEntry)) {
-    				entry->lock.unlock(prevEntryIf);
+	            entry->lock.unlock(prevEntryIf);
 
-    				return ENOENT;
-    			}
+	            delete message;
+	            delete messageEntry;
 
-    			message = messageEntry->value;
+	            return 0;
+	        }
 
-    			if (messageLength > 0) {
-    				memcpy(hdr->buffer, message->buffer, messageLength);
-    			}
+	        // No matching message found — block and wait.
+	        Thread *currThread = Scheduler::getCurrentThread();
 
-    			hdr->port      = port;
-    			hdr->srcPort   = message->sourcePort;
-    			hdr->type      = message->type;
-    			hdr->retLength = static_cast<ssize>(messageLength);
+	        if (currThread == nullptr) {
+	            entry->lock.unlock(prevEntryIf);
+	            return EFAULT;
+	        }
 
-    			entry->lock.unlock(prevEntryIf);
+	        bool alreadyWaiting = false;
+	        const auto *waiterEntry = entry->waiters.getFirst();
 
-    			delete message;
-    			delete messageEntry;
+	        while (waiterEntry != nullptr) {
+	            if (waiterEntry->value != nullptr && waiterEntry->value->thread == currThread) {
+	                alreadyWaiting = true;
+	                break;
+	            }
+	            waiterEntry = waiterEntry->next;
+	        }
 
-    			return 0;
-    		}
+	        currThread->setWaitingPort(port);
 
-    		// No matching message found — block and wait.
-    		Thread *currThread = Scheduler::getCurrentThread();
+	        if (!alreadyWaiting) {
+	            auto *waiter = createWaiter(currThread, options);
 
-    		if (currThread == nullptr) {
-    			entry->lock.unlock(prevEntryIf);
+	            if (waiter == nullptr) {
+	                entry->lock.unlock(prevEntryIf);
+	                return ENOMEM;
+	            }
 
-    			return EFAULT;
-    		}
+	            entry->waiters.addEnd(waiter);
+	        }
 
-            bool alreadyWaiting = false;
-            const auto *waiterEntry = entry->waiters.getFirst();
+	        auto *scheduler = CommonMain::getInstance()->getScheduler();
+	        const bool prevSchedIF = scheduler->getSchedLock()->lock();
 
-            while (waiterEntry != nullptr) {
-              if (waiterEntry->value != nullptr && waiterEntry->value->thread == currThread) {
-                alreadyWaiting = true;
+	        currThread->setState(ThreadState::BLOCKED);
 
-                break;
-              }
+	        scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
 
-              waiterEntry = waiterEntry->next;
-            }
+	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
 
-	    	currThread->setWaitingPort(port);
+	        if (!isCurrentThread) {
+	            scheduler->blockedThreadList.addStart(currThread);
+	        }
 
-            if (!alreadyWaiting) {
-              auto *waiter = createWaiter(currThread, options);
+	        entry->lock.unlock(prevEntryIf);
 
-              if (waiter == nullptr) {
-                entry->lock.unlock(prevEntryIf);
-
-                return ENOMEM;
-              }
-
-              entry->waiters.addEnd(waiter);
-            }
-
-	    	auto *scheduler = CommonMain::getInstance()->getScheduler();
-	    	const bool prevSchedIF = scheduler->getSchedLock()->lock();
-
-	    	currThread->setState(ThreadState::BLOCKED);
-
-	    	// Remove from run queues
-	    	scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
-
-	    	const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
-
-	    	if (!isCurrentThread) {
-	    		scheduler->blockedThreadList.addStart(currThread);
-	    	}
-
-	    	//scheduler->getSchedLock()->unlock(prevSchedIF);
-	    	entry->lock.unlock(prevEntryIf);
-
-	    	if (isCurrentThread) {
-	    		if (currThread->getPendingWakeup()) {
-	    			// Wakeup already arrived — cancel the block.
-	    			currThread->setPendingWakeup(false);
-	    			currThread->setWaitingPort(0);
-	    			currThread->setState(ThreadState::RUNNING);
-	    			scheduler->getSchedLock()->unlock(prevSchedIF);
-	    			// Loop back to retry reading the message.
-	    		} else {
-	    			scheduler->getSchedLock()->unlock(prevSchedIF);
-	    			ExecutionNode::reSchedule();
-	    		}
-	    	} else {
-	    		scheduler->getSchedLock()->unlock(prevSchedIF);
-	    	}
+	        if (isCurrentThread) {
+	            // Current-thread path: pendingWakeup may have been set between
+	            // entry->lock.unlock and now (while we still hold schedLock).
+	            if (currThread->getPendingWakeup()) {
+	                // Wakeup already arrived — cancel the block.
+	                currThread->setPendingWakeup(false);
+	                currThread->setWaitingPort(0);
+	                currThread->setState(ThreadState::RUNNING);
+	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                // Loop back to retry reading the message.
+	            } else {
+	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                ExecutionNode::reSchedule();
+	            }
+	        } else {
+	            // Non-current-thread path: check pendingWakeup here too.
+	            // unblockThread may have already fired and set pendingWakeup
+	            // because the thread wasn't on blockedThreadList yet.
+	            if (currThread->getPendingWakeup()) {
+	                // Wakeup arrived before we fully blocked — undo the block,
+	                // clear the flag, and loop back to retry.
+	                currThread->setPendingWakeup(false);
+	                currThread->setWaitingPort(0);
+	                currThread->setState(ThreadState::RUNNING);
+	                scheduler->blockedThreadList.remove(currThread, false);
+	                scheduler->queues[currThread->getParent()->getPriority()].addStart(currThread);
+	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                // Loop back to retry reading the message.
+	            } else {
+	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                // Thread is on another CPU — it will get picked up naturally
+	                // on the next scheduler tick for that core. No IPI needed
+	                // since it's not currently executing.
+	            }
+	        }
 	    }
-    }
+	}
 
     void PortMessaging::removeThread(Thread *thread) {
         if (thread == nullptr) {
@@ -502,6 +506,18 @@ namespace kernel::common::threading {
 						waiter.thread->getId(),
 						waiter.whiteListCount,
 						waiter.blackListCount);
+
+    				if (waiter.whiteListTypes != nullptr) {
+    					for (usize i = 0; i < waiter.whiteListCount; ++i) {
+    						term->warnNoLock("      whitelist[%lu] = %lu", "SchedDump", i, waiter.whiteListTypes[i]);
+    					}
+    				}
+
+    				if (waiter.blackListTypes != nullptr) {
+    					for (usize i = 0; i < waiter.blackListCount; ++i) {
+    						term->warnNoLock("      blacklist[%lu] = %lu", "SchedDump", i, waiter.blackListTypes[i]);
+    					}
+    				}
     			}
     		}
     	}
