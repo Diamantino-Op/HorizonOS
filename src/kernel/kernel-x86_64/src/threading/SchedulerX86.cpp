@@ -1,8 +1,9 @@
 #include "SchedulerX86.hpp"
 
-#include "Main.hpp"
 #include "CommonMain.hpp"
+#include "Main.hpp"
 #include "Math.hpp"
+#include "Time.hpp"
 #include "hal/Interrupts.hpp"
 
 #include "hal/Cpu.hpp"
@@ -32,7 +33,7 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::initArch() {
-		const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
+		/*const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
 
 		if (hpet->getMaxTimers() == 0) {
 			CommonMain::getTerminal()->error("Not enough hpet timers!", "Scheduler");
@@ -58,11 +59,19 @@ namespace kernel::common::threading {
 		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
 		hpet->write(Hpet::getComparatorRegister(0), ticks);
 
-		irqAllocator->unmask(gsi);
+		irqAllocator->unmask(gsi);*/
+
+		Clocks::addTimerHandle(sleepTick, TimeUtils::msToNs(10));
 	}
 
 	Thread *Scheduler::getCurrentThread() {
 		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
+	}
+
+	void Scheduler::timerReSchedule() {
+		Interrupts::sendEOI();
+
+		switchContextAsm();
 	}
 
 	u32 Scheduler::intReSchedule(u64 *) {
@@ -74,6 +83,8 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::reSchedule() {
+		Clocks::resetSchedulerTimer();
+
 		CpuManager::getCurrentCore()->apic.ipi(0, Dest::SELF, CpuManager::getCurrentCore()->schedInt);
 	}
 

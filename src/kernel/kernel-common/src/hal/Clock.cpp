@@ -52,8 +52,50 @@ namespace kernel::common::hal {
 	}
 
 	u32 Clocks::timerTick(u64 *) {
+		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
 
+		auto it = clocksPtr->handlers.begin();
+		const auto end = clocksPtr->handlers.end();
 
-		return 0;
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
+			if (currEntry.nextCall <= clocksPtr->getMainClock()->getNs()) {
+				currEntry.nextCall = clocksPtr->getMainClock()->getNs() + currEntry.timeout;
+
+				currEntry.fun();
+			}
+
+			it = nextIt;
+		}
+
+		if (clocksPtr->schedulerHandler.nextCall <= clocksPtr->getMainClock()->getNs()) {
+			clocksPtr->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + clocksPtr->schedulerHandler.timeout;
+
+			clocksPtr->schedulerHandler.fun();
+		} else {
+			finishTimerTick();
+		}
+
+		return 1;
+	}
+
+	void Clocks::resetSchedulerTimer() {
+		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
+
+		clocksPtr->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + clocksPtr->schedulerHandler.timeout;
+	}
+
+	void Clocks::addTimerHandle(const HandlerFun fun, const u64 timeout) {
+		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
+
+		auto *newHandler = new TimerHandler();
+		
+		newHandler->fun = fun;
+		newHandler->timeout = timeout;
+
+		clocksPtr->handlers.addEnd(newHandler);
 	}
 }

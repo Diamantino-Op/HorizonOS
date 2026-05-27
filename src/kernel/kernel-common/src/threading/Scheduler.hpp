@@ -370,8 +370,9 @@ namespace kernel::common::threading {
 
     	static ExecutionNode *getCoreEN(u64 cpuId);
 
-    	static u32 sleepTick(u64 *);
+    	static void sleepTick();
 
+    	static void timerReSchedule();
     	static u32 intReSchedule(u64 *);
 
     	TicketSpinLock *getSchedLock();

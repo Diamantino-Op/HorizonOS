@@ -185,11 +185,18 @@ namespace kernel::x86_64 {
 
 		terminal.info("AcpiPM Clock Initialised... OK", "HorizonOS");
 
+		const u8 clockInt = this->interruptAllocator.allocInt(&Clocks::timerTick, nullptr);
+
+		this->idtManager.addEntry(clockInt, interruptTable[clockInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+
+		this->clocks.schedulerHandler.fun = &Scheduler::timerReSchedule;
+		this->clocks.schedulerHandler.timeout = TimeUtils::msToNs(50);
+
+		terminal.info("Clocks setup... OK", "HorizonOS");
+
 		// Start of multicore
 
-		terminal.info("SIMD Initialised... OK", "HorizonOS");
-
-		this->scheduler->initArch();
+		Scheduler::initArch();
 
 		CpuManager::getCurrentCore()->executionNode.init();
 
@@ -268,7 +275,7 @@ namespace kernel::x86_64 {
 		this->idtManager.addEntry(this->cpuManager.getBootstrapCpu()->schedInt, interruptTable[this->cpuManager.getBootstrapCpu()->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		// Todo: make one shot and restart when thread goes to sleep
-		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(50), this->cpuManager.getBootstrapCpu()->schedInt, true);
+		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(10), clockInt, true);
 
 		// this->shutdown();
 
@@ -363,10 +370,12 @@ namespace kernel::x86_64 {
 		Asm::sti();
 
 		CpuManager::getCurrentCore()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
+		const u8 clockInt = this->interruptAllocator.allocInt(&Clocks::timerTick, nullptr);
 
+		this->coreIdtManager->addEntry(clockInt, interruptTable[clockInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		this->coreIdtManager->addEntry(CpuManager::getCurrentCore()->schedInt, interruptTable[CpuManager::getCurrentCore()->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
-		this->cpuCore.apic.arm(TimeUtils::msToNs(50), CpuManager::getCurrentCore()->schedInt, true);
+		this->cpuCore.apic.arm(TimeUtils::msToNs(10), clockInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
 

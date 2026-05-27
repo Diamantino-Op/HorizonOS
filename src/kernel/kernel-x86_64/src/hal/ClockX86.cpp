@@ -1,3 +1,4 @@
+#include "Interrupts.hpp"
 #include "hal/Clock.hpp"
 
 #include "utils/Asm.hpp"
@@ -27,5 +28,9 @@ namespace kernel::common::hal {
 
 	void Clocks::archPause() {
 		Asm::pause();
+	}
+
+	void Clocks::finishTimerTick() {
+		Interrupts::sendEOI();
 	}
 }

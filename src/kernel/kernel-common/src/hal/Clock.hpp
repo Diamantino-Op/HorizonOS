@@ -1,6 +1,7 @@
 #ifndef KERNEL_COMMON_CLOCK_HPP
 #define KERNEL_COMMON_CLOCK_HPP
 
+#include "LinkedList.hpp"
 #include "Types.hpp"
 
 namespace kernel::common::hal {
@@ -8,7 +9,7 @@ namespace kernel::common::hal {
 
     using GetNsFun = u64 (*)();
 
-	using HandlerFun = u32 (*)();
+	using HandlerFun = void (*)();
 
     struct Clock {
         const char *name {};
@@ -19,6 +20,7 @@ namespace kernel::common::hal {
 	struct TimerHandler {
 		HandlerFun fun {};
 		u64 nextCall {};
+		u64 timeout {};
 	};
 
     class Clocks {
@@ -35,7 +37,7 @@ namespace kernel::common::hal {
         CalibratorFun getCalibrator();
 
     private:
-    	static u32 timerTick(u64 *);
+    	static void finishTimerTick();
 
         static void calibrate(u64 ms);
 
@@ -46,6 +48,16 @@ namespace kernel::common::hal {
         Clock *clocks[5] {}; // TODO: Make dynamic
 
         u8 currClockIndex {};
+
+    public:
+    	static void addTimerHandle(HandlerFun fun, u64 timeout);
+
+    	static u32 timerTick(u64 *);
+
+    	static void resetSchedulerTimer();
+
+    	LinkedList<TimerHandler> handlers {};
+    	TimerHandler schedulerHandler {};
     };
 }
 

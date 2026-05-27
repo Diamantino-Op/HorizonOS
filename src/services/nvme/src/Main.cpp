@@ -327,6 +327,34 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
+	{
+		uint64_t cpuCount = 0;
+
+		const int getErr = getCpuCount(&cpuCount);
+
+		if (getErr != 0 or cpuCount == 0) {
+			printf("NVME: No CPUs found: %d!\n", getErr);
+
+			return 1;
+		}
+
+		auto cpuIds = new long[cpuCount];
+
+		const int getIDsErr = getCpuIds(cpuIds, cpuCount);
+
+		if (getIDsErr != 0) {
+			printf("NVME: Error getting Cpu IDs: %d!\n", getIDsErr);
+
+			return 1;
+		}
+
+		printf("NVMe: CPUs: %lu", cpuCount);
+
+		for (uint64_t i = 0; i < cpuCount; ++i) {
+			printf("NVME: Cpu %lu with ID %ld", i, cpuIds[i]);
+		}
+	}
+
 	for (;;) {}
 
 	return 0;
