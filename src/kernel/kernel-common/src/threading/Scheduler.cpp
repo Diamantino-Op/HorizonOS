@@ -3,6 +3,7 @@
 #include "CommonMain.hpp"
 #include "Futex.hpp"
 #include "IDAllocator.hpp"
+#include "Main.hpp"
 #include "PortMessaging.hpp"
 #include "programs/Elf.hpp"
 #include "utils/Asm.hpp"
@@ -726,26 +727,64 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::debugDump() {
-		auto *term = CommonMain::getTerminal();
-		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+	    auto *term = CommonMain::getTerminal();
+	    Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+	    auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
+	    const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
 
 	    term->warnNoLock("=== SCHEDULER DEBUG DUMP ===", "SchedDump");
 
-	    // Current thread per execution node
-	    const auto *currThread = getCurrentExecutionNode()->getCurrentThread()->value;
-	    term->warnNoLock("  Current thread: TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
-	        "SchedDump",
-	        currThread->getId(),
-	        currThread->getParent()->getId(),
-	        static_cast<u32>(currThread->getState()),
-	        static_cast<u32>(currThread->getPendingWakeup()),
-	        currThread->getWaitingPort());
+	    // ── Per-core running threads ──────────────────────────────────────────────
+	    term->warnNoLock("  === RUNNING THREADS PER CORE ===", "SchedDump");
 
-	    // Run queues
+	    // Bootstrap core
+	    const x86_64::CpuCore *bsp = cpuManager->getBootstrapCpu();
+
+	    if (bsp != nullptr) {
+	        const auto *bspThread = bsp->executionNode.getCurrentThread();
+
+	        if (bspThread != nullptr && bspThread->value != nullptr) {
+	            term->warnNoLock("  Core CPU=%u (BSP): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
+	                "SchedDump",
+	                bsp->cpuId,
+	                bspThread->value->getId(),
+	                bspThread->value->getParent()->getId(),
+	                static_cast<u32>(bspThread->value->getState()),
+	                static_cast<u32>(bspThread->value->getPendingWakeup()),
+	                bspThread->value->getWaitingPort());
+	        } else {
+	            term->warnNoLock("  Core CPU=%u (BSP): no current thread", "SchedDump", bsp->cpuId);
+	        }
+	    }
+
+	    // AP cores
+	    if (cpuManager->getCoreList() != nullptr && cpuManager->getCoreAmount() > 1) {
+	        for (u64 i = 0; i < cpuManager->getCoreAmount() - 1; i++) {
+	            const x86_64::CpuCore *core = &cpuManager->getCoreList()[i].cpuCore;
+	            const auto *coreThread = core->executionNode.getCurrentThread();
+
+	            if (coreThread != nullptr && coreThread->value != nullptr) {
+	                term->warnNoLock("  Core CPU=%u (AP %lu): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
+	                    "SchedDump",
+	                    core->cpuId,
+	                    i,
+	                    coreThread->value->getId(),
+	                    coreThread->value->getParent()->getId(),
+	                    static_cast<u32>(coreThread->value->getState()),
+	                    static_cast<u32>(coreThread->value->getPendingWakeup()),
+	                    coreThread->value->getWaitingPort());
+	            } else {
+	                term->warnNoLock("  Core CPU=%u (AP %lu): no current thread", "SchedDump", core->cpuId, i);
+	            }
+	        }
+	    }
+
+	    // ── Run queues ────────────────────────────────────────────────────────────
 	    for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
 	        auto &q = schedulerPtr->queues[priority];
+
 	        if (q.getSize() == 0) {
-	        	continue;
+	            continue;
 	        }
 
 	        term->warnNoLock("  RunQueue[%lu] size=%lu:", "SchedDump", priority, q.getSize());
@@ -761,7 +800,7 @@ namespace kernel::common::threading {
 	        }
 	    }
 
-	    // Blocked list
+	    // ── Blocked list ──────────────────────────────────────────────────────────
 	    term->warnNoLock("  BlockedList size=%lu:", "SchedDump", schedulerPtr->blockedThreadList.getSize());
 
 	    for (const auto &t : schedulerPtr->blockedThreadList) {
@@ -774,7 +813,7 @@ namespace kernel::common::threading {
 	            t.getSleepNs());
 	    }
 
-	    // Sleeping list
+	    // ── Sleeping list ─────────────────────────────────────────────────────────
 	    term->warnNoLock("  SleepingList size=%lu:", "SchedDump", schedulerPtr->sleepingThreadList.getSize());
 
 	    for (const auto &t : schedulerPtr->sleepingThreadList) {
@@ -782,14 +821,14 @@ namespace kernel::common::threading {
 	            t.getId(), t.getParent()->getId(), t.getSleepNs());
 	    }
 
-	    // Ready list
+	    // ── Ready list ────────────────────────────────────────────────────────────
 	    term->warnNoLock("  ReadyList size=%lu:", "SchedDump", schedulerPtr->readyThreadList.getSize());
 
 	    for (const auto &t : schedulerPtr->readyThreadList) {
 	        term->warnNoLock("    TID=%u PID=%u", "SchedDump", t.getId(), t.getParent()->getId());
 	    }
 
-	    // Port messaging dump
+	    // ── Port messaging ────────────────────────────────────────────────────────
 	    PortMessaging::debugDump();
 
 	    term->warnNoLock("=== END DUMP ===", "SchedDump");

@@ -367,29 +367,33 @@ namespace kernel::common::threading {
 	            return EFAULT;
 	        }
 
-	        bool alreadyWaiting = false;
-	        const auto *waiterEntry = entry->waiters.getFirst();
+	    	auto *existingWaiterEntry = entry->waiters.getFirst();
 
-	        while (waiterEntry != nullptr) {
-	            if (waiterEntry->value != nullptr && waiterEntry->value->thread == currThread) {
-	                alreadyWaiting = true;
-	                break;
-	            }
-	            waiterEntry = waiterEntry->next;
-	        }
+	    	while (existingWaiterEntry != nullptr) {
+	    		auto *next = existingWaiterEntry->next;
+	    		
+	    		if (existingWaiterEntry->value != nullptr && existingWaiterEntry->value->thread == currThread) {
+	    			if (entry->waiters.removeEntry(existingWaiterEntry)) {
+	    				delete existingWaiterEntry->value;
+	    				delete existingWaiterEntry;
+	    			}
+
+	    			break;
+	    		}
+
+	    		existingWaiterEntry = next;
+	    	}
 
 	        currThread->setWaitingPort(port);
 
-	        if (!alreadyWaiting) {
-	            auto *waiter = createWaiter(currThread, options);
+	    	auto *waiter = createWaiter(currThread, options);
 
-	            if (waiter == nullptr) {
-	                entry->lock.unlock(prevEntryIf);
-	                return ENOMEM;
-	            }
+	    	if (waiter == nullptr) {
+	    		entry->lock.unlock(prevEntryIf);
+	    		return ENOMEM;
+	    	}
 
-	            entry->waiters.addEnd(waiter);
-	        }
+	    	entry->waiters.addEnd(waiter);
 
 	        auto *scheduler = CommonMain::getInstance()->getScheduler();
 	        const bool prevSchedIF = scheduler->getSchedLock()->lock();
