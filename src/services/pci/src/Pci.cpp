@@ -48,7 +48,8 @@ bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t e
         mapSize
     });
 
-    printf("PCI: ECAM segment %u mapped: phys=%lx virt=%lx buses=%u-%u\n", seg, physBase, virt, startBus, endBus);
+    printf("PCI: ECAM segment %u mapped: phys=%lx virt=%lx buses=%u-%u", seg, physBase, virt, startBus, endBus);
+	fflush(stdout);
 
     return true;
 }
@@ -269,7 +270,8 @@ void enumeratePci(vector<PciDevice> &devices) {
 	vector visitedBuses(256, false);
 
 	for (const auto &seg : g_ecamSegments) {
-		printf("PCI: Enumerating root complex seg=%u bus %02x-%02x\n", seg.segmentGroup, seg.startBus, seg.endBus);
+		printf("PCI: Enumerating root complex seg=%u bus %02x-%02x", seg.segmentGroup, seg.startBus, seg.endBus);
+		fflush(stdout);
 
 		if (!visitedBuses[seg.startBus]) {
 			visitedBuses[seg.startBus] = true;
@@ -312,7 +314,8 @@ bool isPciBridge(uint8_t classCode, uint8_t subclass) {
 void *handleSearchDevice(void *devicesArr) {
 	const auto *devices = static_cast<vector<PciDevice> *>(devicesArr);
 
-	printf("PCI: Search Device message loop started!\n");
+	printf("PCI: Search Device message loop started!");
+	fflush(stdout);
 
 	// Send
 
@@ -381,7 +384,8 @@ void *handleSearchDevice(void *devicesArr) {
 void *handlePciRead(void *arg) {
 	(void)arg;
 
-	printf("PCI: Read message loop started!\n");
+	printf("PCI: Read message loop started!");
+	fflush(stdout);
 
 	// Send
 
@@ -434,7 +438,8 @@ void *handlePciRead(void *arg) {
 void *handlePciWrite(void *arg) {
 	(void)arg;
 
-	printf("PCI: Write message loop started!\n");
+	printf("PCI: Write message loop started!");
+	fflush(stdout);
 
 	// Recv
 
@@ -470,7 +475,8 @@ void *handlePciWrite(void *arg) {
 void *handleMsiAlloc(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msi Alloc message loop started!\n");
+	printf("PCI: Msi Alloc message loop started!");
+	fflush(stdout);
 
 	// Send
 
@@ -515,7 +521,8 @@ void *handleMsiAlloc(void *arg) {
 void *handleMsiFree(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msi Free message loop started!\n");
+	printf("PCI: Msi Free message loop started!");
+	fflush(stdout);
 
 	// Recv
 
@@ -545,7 +552,8 @@ void *handleMsiFree(void *arg) {
 void *handleMsixAlloc(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msix Alloc message loop started!\n");
+	printf("PCI: Msix Alloc message loop started!");
+	fflush(stdout);
 
 	// Send
 
@@ -592,7 +600,8 @@ void *handleMsixAlloc(void *arg) {
 void *handleMsixFree(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msix Free message loop started!\n");
+	printf("PCI: Msix Free message loop started!");
+	fflush(stdout);
 
 	// Recv
 
@@ -622,7 +631,8 @@ void *handleMsixFree(void *arg) {
 void *handleMsixGlobalEnable(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msix Global Enable message loop started!\n");
+	printf("PCI: Msix Global Enable message loop started!");
+	fflush(stdout);
 
 	// Recv
 
@@ -652,7 +662,8 @@ void *handleMsixGlobalEnable(void *arg) {
 void *handleMsixGlobalDisable(void *arg) {
 	(void)arg;
 
-	printf("PCI: Msix Global Disable message loop started!\n");
+	printf("PCI: Msix Global Disable message loop started!");
+	fflush(stdout);
 
 	// Recv
 

@@ -87,9 +87,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&uacpiPort));
 
 	if (registerResult == 0) {
-		printf("uACPI: Successfully registered port!\n");
+		printf("uACPI: Successfully registered port!");
+		fflush(stdout);
 	} else {
-		printf("uACPI: Failed to register port: %d\n", registerResult);
+		printf("uACPI: Failed to register port: %d", registerResult);
+		fflush(stdout);
 
 		return 1;
 	}
@@ -131,9 +133,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
 		if (srvRegisterResult == 0 and registerResData.success) {
-			printf("uACPI: Successfully registered service!\n");
+			printf("uACPI: Successfully registered service!");
+			fflush(stdout);
 		} else {
-			printf("uACPI: Failed to register service: %d\n", srvRegisterResult);
+			printf("uACPI: Failed to register service: %d", srvRegisterResult);
+			fflush(stdout);
 
 			delete[] filterOptions.whiteListTypes;
 
@@ -148,7 +152,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int irqHandlerThreadResult = pthread_create(&irqHandlerThread, nullptr, handleIrqs, nullptr);
 
 	if (irqHandlerThreadResult != 0) {
-		printf("uACPI: Failed to create irq handler thread!\n");
+		printf("uACPI: Failed to create irq handler thread!");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -156,11 +161,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(irqHandlerThread);
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	if (const uacpi_status ret = uacpi_namespace_load(); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to load namespaces: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to load namespaces: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	processMcfg();
@@ -170,19 +177,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	get_irq_mode(&mode);
 
 	if (const uacpi_status ret = uacpi_set_interrupt_model(static_cast<uacpi_interrupt_model>(mode)); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to set interrupt model: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to set interrupt model: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	if (const uacpi_status ret = uacpi_namespace_initialize(); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize namespaces: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize namespaces: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	if (const uacpi_status ret = uacpi_finalize_gpe_initialization(); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize GPEs: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize GPEs: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	if (const uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, &handlerPowerBtn, nullptr); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to install pwr button handler: %s\n", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to install pwr button handler: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 	}
 
 	for (;;) {}
@@ -193,19 +204,24 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 // TODO: Maybe move to syscall
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx) {
 	if (const uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to prepare for S5: %s\n\o{33}[0m", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to prepare for S5: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 
 		return UACPI_INTERRUPT_NOT_HANDLED;
 	}
 
-	printf("\o{33}[0;34muACPI: \o{33}[0;37mPreparing to enter S5...\n\o{33}[0m");
+	printf("\o{33}[0;34muACPI: \o{33}[0;37mPreparing to enter S5...");
+	fflush(stdout);
 
 	//this->disableInts();
+	set_int_status(false);
 
-	printf("\o{33}[0;34muACPI: \o{33}[0;37mEntering S5...\n\o{33}[0m");
+	printf("\o{33}[0;34muACPI: \o{33}[0;37mEntering S5...");
+	fflush(stdout);
 
 	if (const uacpi_status ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
-		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to enter S5: %s\n\o{33}[0m", uacpi_status_to_string(ret));
+		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to enter S5: %s", uacpi_status_to_string(ret));
+		fflush(stdout);
 
 		return UACPI_INTERRUPT_NOT_HANDLED;
 	}
@@ -246,7 +262,8 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
         }
     }
 
-    printf("\033[0;34muACPI: \033[0;37mPCI root bridge: seg=%llu bus=%llu ecam=%llx\n", static_cast<unsigned long long>(seg), static_cast<unsigned long long>(bbn), static_cast<unsigned long long>(ecamBase));
+    printf("\033[0;34muACPI: \033[0;37mPCI root bridge: seg=%llu bus=%llu ecam=%llx", static_cast<unsigned long long>(seg), static_cast<unsigned long long>(bbn), static_cast<unsigned long long>(ecamBase));
+	fflush(stdout);
 
     // Send one mcfg_segment message per root bridge found
     auto segMsg = hos_msg();
@@ -349,14 +366,16 @@ void processMcfg() {
 		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvGetMsg, &filterOptions);
 
 		if (srvRegisterResult != 0) {
-			printf("uACPI: Failed to get PCI port!\n");
+			printf("uACPI: Failed to get PCI port!");
+			fflush(stdout);
 
 			delete[] filterOptions.whiteListTypes;
 
 			return;
 		}
 
-		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		fflush(stdout);
 
 		pciPort = getResData.port;
 		pciTid = getResData.tid;
@@ -376,7 +395,8 @@ void processMcfg() {
 		filterOptions.whiteListCount = 1;
 
 		if (receive_horizonos_message(uacpiPort, &waitMsg, &filterOptions) == 0) {
-			printf("\033[0;34muACPI: \033[0;37mPCI service ready, forwarding MCFG...\n");
+			printf("\033[0;34muACPI: \033[0;37mPCI service ready, forwarding MCFG...");
+			fflush(stdout);
 		}
 
 		delete[] filterOptions.whiteListTypes;

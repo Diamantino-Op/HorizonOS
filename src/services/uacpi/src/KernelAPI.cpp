@@ -164,6 +164,8 @@ void uacpi_kernel_log(const uacpi_log_level level, const uacpi_char* str) {
 			printf("\o{33}[0;32muACPI: \o{33}[0;37m%s", str);
 			break;
 	}
+
+	fflush(stdout);
 }
 
 uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot() {
@@ -797,6 +799,7 @@ uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *reques
 					request->fatal.type,
 					request->fatal.code,
 					static_cast<unsigned long long>(request->fatal.arg));
+			fflush(stderr);
 
 			abort();
 
@@ -829,7 +832,8 @@ uacpi_status uacpi_kernel_uninstall_interrupt_handler(const uacpi_interrupt_hand
 }
 
 void *handleIrqs(void *) {
-	printf("Starting uAcpi irq message handler!\n");
+	printf("Starting uAcpi irq message handler!");
+	fflush(stdout);
 
 	auto response = IrqReceiveData();
 	auto msg = hos_msg();
@@ -846,19 +850,22 @@ void *handleIrqs(void *) {
 		const int err = receive_horizonos_message(uacpiPort, &msg, &filterOptions);
 
 		if (err != 0) {
-			printf("uAcpi Service: Failed to receive register message: %d\n", err);
+			printf("uAcpi Service: Failed to receive register message: %d", err);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(IrqReceiveData)) {
 			printf("uAcpi Service: Dropped wrong irq message (%ld bytes)", msg.ret_length);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.type != IRQ_RECEIVE_MSG_TYPE) {
 			printf("uAcpi Service: Dropped non-irq message in register handler (type %lu)", msg.type);
+			fflush(stdout);
 
 			continue;
 		}
@@ -867,6 +874,7 @@ void *handleIrqs(void *) {
 			irqHandles[response.irqNum].handler(irqHandles[response.irqNum].ctx);
 		} else {
 			printf("uAcpi Service: IRQ: %lu not handled!", response.irqNum);
+			fflush(stdout);
 		}
 	}
 }

@@ -248,10 +248,8 @@ namespace kernel::common::threading {
             waiterEntry = nextWaiter;
         }
 
-    	// Save thread ID BEFORE releasing any lock or deleting anything
-    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : fallbackThreadId;
+    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : 0;
 
-    	// Now it's safe to delete and unlock
     	if (waiter != nullptr) {
     		delete waiter;
     		delete waiterEntry;
@@ -371,7 +369,7 @@ namespace kernel::common::threading {
 
 	    	while (existingWaiterEntry != nullptr) {
 	    		auto *next = existingWaiterEntry->next;
-	    		
+
 	    		if (existingWaiterEntry->value != nullptr && existingWaiterEntry->value->thread == currThread) {
 	    			if (entry->waiters.removeEntry(existingWaiterEntry)) {
 	    				delete existingWaiterEntry->value;
@@ -393,8 +391,6 @@ namespace kernel::common::threading {
 	    		return ENOMEM;
 	    	}
 
-	    	entry->waiters.addEnd(waiter);
-
 	        auto *scheduler = CommonMain::getInstance()->getScheduler();
 	        const bool prevSchedIF = scheduler->getSchedLock()->lock();
 
@@ -407,6 +403,8 @@ namespace kernel::common::threading {
 	        if (!isCurrentThread) {
 	            scheduler->blockedThreadList.addStart(currThread);
 	        }
+
+	    	entry->waiters.addEnd(waiter);
 
 	        entry->lock.unlock(prevEntryIf);
 

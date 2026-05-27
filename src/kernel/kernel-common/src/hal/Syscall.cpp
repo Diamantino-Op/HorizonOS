@@ -1284,7 +1284,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetCpuIDs(long *ret, u64 cpuCount, u64, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallGetCpuIDs(long *ret, const u64 cpuCount, u64, u64, u64, u64, u64) {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1298,7 +1298,9 @@ namespace kernel::common::hal {
 		}
 
 		for (u64 i = 0; i < cpuCount; i++) {
-			ret[i] = mpRequest.response->cpus[i]->processor_id;
+			CommonMain::getTerminal()->debug("Cpu ID: %lu", "Syscall Manager", mpRequest.response->cpus[i]->processor_id);
+
+			reinterpret_cast<uint64_t *>(ret)[i] = mpRequest.response->cpus[i]->processor_id;
 		}
 
 		return 0;

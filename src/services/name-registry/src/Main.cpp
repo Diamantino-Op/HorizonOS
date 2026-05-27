@@ -99,9 +99,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort), 1);
 
 	if (registerResult == 0) {
-		printf("Name/Registry Service: Successfully registered port: %lu!\n", nrPort);
+		printf("Name/Registry Service: Successfully registered port: %lu!", nrPort);
+		fflush(stdout);
 	} else {
-		printf("Name/Registry Service: Failed to register port: %d\n", registerResult);
+		printf("Name/Registry Service: Failed to register port: %d", registerResult);
+		fflush(stdout);
 
 		return 1;
 	}
@@ -143,7 +145,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			int err = is_thread_alive(service.tid, &ret);
 
 			if (err == 0 and !ret) {
-				printf("Service: %s dead, unregistering it!\n", service.name.c_str());
+				printf("Service: %s dead, unregistering it!", service.name.c_str());
+				fflush(stdout);
 
 				std::scoped_lock lock(services_mutex);
 				unregisterService(services, service.name);
@@ -162,7 +165,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 [[noreturn]] void *registerMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
-	printf("Starting Name/Registry register message handler!\n");
+	printf("Starting Name/Registry register message handler!");
+	fflush(stdout);
 
 	auto response = RegisterMsgData();
 	auto msg = hos_msg();
@@ -179,19 +183,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
-			printf("Name/Registry Service: Failed to receive register message: %d\n", err);
+			printf("Name/Registry Service: Failed to receive register message: %d", err);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(RegisterMsgData)) {
 			printf("Name/Registry Service: Dropped wrong register message (%ld bytes)", msg.ret_length);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.type != REGISTER_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-register message in register handler (type %lu)", msg.type);
+			fflush(stdout);
 
 			continue;
 		}
@@ -199,7 +206,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		string name;
 
 		if (!extractServiceName(&response, name)) {
-			printf("Name/Registry Service: Dropped invalid register message name length (%zu)\n", response.nameLength);
+			printf("Name/Registry Service: Dropped invalid register message name length (%zu)", response.nameLength);
+			fflush(stdout);
 
 			continue;
 		}
@@ -221,6 +229,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		if (hasService) {
 			printf("Service already registered!");
+			fflush(stdout);
 		}
 
 		auto newMsg = hos_msg();
@@ -241,7 +250,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 [[noreturn]] void *unregisterMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
-	printf("Starting Name/Registry unregister message handler!\n");
+	printf("Starting Name/Registry unregister message handler!");
+	fflush(stdout);
 
 	auto response = UnregisterMsgData();
 	auto msg = hos_msg();
@@ -258,19 +268,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
-			printf("Name/Registry Service: Failed to receive unregister message: %d\n", err);
+			printf("Name/Registry Service: Failed to receive unregister message: %d", err);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(UnregisterMsgData)) {
 			printf("Name/Registry Service: Dropped wrong unregister message (%ld bytes)", msg.ret_length);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.type != UNREGISTER_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-unregister message in unregister handler (type %lu)", msg.type);
+			fflush(stdout);
 
 			continue;
 		}
@@ -279,7 +292,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			string name;
 
 			if (!extractServiceName(&response, name)) {
-				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)\n", response.nameLength);
+				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)", response.nameLength);
+				fflush(stdout);
 
 				continue;
 			}
@@ -293,7 +307,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 [[noreturn]] void *getMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
-	printf("Starting Name/Registry get message handler!\n");
+	printf("Starting Name/Registry get message handler!");
+	fflush(stdout);
 
 	auto response = GetMsgData();
 	auto msg = hos_msg();
@@ -310,19 +325,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
-			printf("Name/Registry Service: Failed to receive get message: %d\n", err);
+			printf("Name/Registry Service: Failed to receive get message: %d", err);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(GetMsgData)) {
 			printf("Name/Registry Service: Dropped wrong get message (%ld bytes)", msg.ret_length);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.type != GET_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-get message in get handler (type %lu)", msg.type);
+			fflush(stdout);
 
 			continue;
 		}
@@ -330,7 +348,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		string name;
 
 		if (!extractServiceName(&response, name)) {
-			printf("Name/Registry Service: Dropped invalid get message name length (%zu)\n", response.nameLength);
+			printf("Name/Registry Service: Dropped invalid get message name length (%zu)", response.nameLength);
+			fflush(stdout);
 
 			continue;
 		}
@@ -382,7 +401,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 [[noreturn]] void *checkMsgHandler(void *srvsPtr) {
 	auto *services = static_cast<vector<Service> *>(srvsPtr);
 
-	printf("Starting Name/Registry check message handler!\n");
+	printf("Starting Name/Registry check message handler!");
+	fflush(stdout);
 
 	auto response = CheckMsgData();
 	auto msg = hos_msg();
@@ -399,19 +419,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int err = receive_horizonos_message(nrPort, &msg, &filterOptions);
 
 		if (err != 0) {
-			printf("Name/Registry Service: Failed to receive check message: %d\n", err);
+			printf("Name/Registry Service: Failed to receive check message: %d", err);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.ret_length < 0 or static_cast<size_t>(msg.ret_length) != sizeof(CheckMsgData)) {
 			printf("Name/Registry Service: Dropped wrong check message (%ld bytes)", msg.ret_length);
+			fflush(stdout);
 
 			continue;
 		}
 
 		if (msg.type != CHECK_MSG_TYPE) {
 			printf("Name/Registry Service: Dropped non-check message in check handler (type %lu)", msg.type);
+			fflush(stdout);
 
 			continue;
 		}
@@ -419,7 +442,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		string name;
 
 		if (!extractServiceName(&response, name)) {
-			printf("Name/Registry Service: Dropped invalid check message name length (%zu)\n", response.nameLength);
+			printf("Name/Registry Service: Dropped invalid check message name length (%zu)", response.nameLength);
+			fflush(stdout);
 
 			continue;
 		}
@@ -453,11 +477,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 void registerService(vector<Service> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
 	services->emplace_back(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch);
 
-	printf("Service %s registered on port %lu!\n", name.c_str(), port);
+	printf("Service %s registered on port %lu!", name.c_str(), port);
+	fflush(stdout);
 }
 
 void unregisterService(vector<Service> *services, string name) {
 	erase_if(*services, [name](const Service &service) { return service.name == name; });
 
-	printf("Service %s unregistered!\n", name.c_str());
+	printf("Service %s unregistered!", name.c_str());
+	fflush(stdout);
 }

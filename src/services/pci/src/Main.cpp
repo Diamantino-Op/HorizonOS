@@ -18,12 +18,14 @@ uint64_t uacpiTid = 0;
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	// ── 1. Register port ───────────────────────────────────────────────────
     if (const int r = register_horizonos_port(reinterpret_cast<long *>(&pciPort)); r != 0) {
-        printf("PCI: Failed to register port: %d\n", r);
+        printf("PCI: Failed to register port: %d", r);
+    	fflush(stdout);
 
         return 1;
     }
 
-    printf("PCI: Successfully registered port!\n");
+    printf("PCI: Successfully registered port!");
+	fflush(stdout);
 
     // ── 2. Register with name-registry ───────────────────────────────────────
 	{
@@ -63,9 +65,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     	const int srvRegisterResult = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
     	if (srvRegisterResult == 0 and registerResData.success) {
-    		printf("PCI: Successfully registered service!\n");
+    		printf("PCI: Successfully registered service!");
+    		fflush(stdout);
     	} else {
-    		printf("PCI: Failed to register service: %d\n", srvRegisterResult);
+    		printf("PCI: Failed to register service: %d", srvRegisterResult);
+    		fflush(stdout);
 
     		delete[] filterOptions.whiteListTypes;
 
@@ -112,7 +116,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			const int srvRegisterResult = receive_horizonos_message(pciPort, &recvCheckMsg, &filterOptions);
 
 			if (srvRegisterResult != 0 and checkMsg.type != REPLY_CHECK_MSG_TYPE) {
-				printf("PCI: Received unexpected message type while checking for uACPI: %lu\n", recvCheckMsg.type);
+				printf("PCI: Received unexpected message type while checking for uACPI: %lu", recvCheckMsg.type);
+				fflush(stdout);
 			}
 
 			if (srvRegisterResult == 0 and checkResData.exists) {
@@ -160,7 +165,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int srvRegisterResult = receive_horizonos_message(pciPort, &recvGetMsg, &filterOptions);
 
 		if (srvRegisterResult != 0) {
-			printf("PCI: Failed to get uACPI port!\n");
+			printf("PCI: Failed to get uACPI port!");
+			fflush(stdout);
 
 			delete[] filterOptions.whiteListTypes;
 
@@ -168,10 +174,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		}
 
     	if (recvGetMsg.type != REPLY_GET_MSG_TYPE) {
-    		printf("PCI: Received unexpected message type while getting uACPI port: %lu\n", recvGetMsg.type);
+    		printf("PCI: Received unexpected message type while getting uACPI port: %lu", recvGetMsg.type);
+    		fflush(stdout);
     	}
 
-		printf("PCI: uAcpi info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		printf("PCI: uAcpi info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+    	fflush(stdout);
 
 		uacpiPort = getResData.port;
 		uacpiTid = getResData.tid;
@@ -190,7 +198,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     	send_horizonos_message(pciPort, uacpiPort, &notifyMsg);
     }
 
-    printf("PCI: Notified uACPI (port %lu), waiting for MCFG data...\n", uacpiPort);
+    printf("PCI: Notified uACPI (port %lu), waiting for MCFG data...", uacpiPort);
+	fflush(stdout);
 
     // ── 5. Receive mcfg_segment messages from uACPI ───────────────────────────
     {
@@ -216,7 +225,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
         	delete[] filterOptions.whiteListTypes;
 
             if (msg.type == MCFG_DONE_MSG_TYPE) {
-                printf("PCI: All MCFG segments received (%zu segment(s))\n", g_ecamSegments.size());
+                printf("PCI: All MCFG segments received (%zu segment(s))", g_ecamSegments.size());
+            	fflush(stdout);
 
                 break;
             }
@@ -228,28 +238,32 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     }
 
     // ── 6. Enumerate and log all devices ─────────────────────────────────────
-    printf("PCI: Enumerating devices...\n");
+    printf("PCI: Enumerating devices...");
+	fflush(stdout);
 
     vector<PciDevice> devices;
     enumeratePci(devices);
 
-    printf("PCI: Found %zu device(s):\n", devices.size());
+    printf("PCI: Found %zu device(s):", devices.size());
+	fflush(stdout);
 
     for (const auto &d : devices) {
         printf("  [%04x:%02x:%02x.%x]  Vendor=%04x  Device=%04x  "
-               "Class=%02x:%02x  ProgIF=%02x  %s\n",
+               "Class=%02x:%02x  ProgIF=%02x  %s",
                0,           // segment group (extend later if needed)
                d.bus, d.device, d.function,
                d.vendorId, d.deviceId,
                d.classCode, d.subclass,
                d.progIf,
                d.isPcie ? "(PCIe/ECAM)" : "(PCI/legacy)");
+    	fflush(stdout);
     }
 
     // ── 7. Start the message-handling thread ──────────────────────────────────
 	// Keep legacy I/O mapped permanently for fallback reads/writes.
 	if (ioperm(PCI_CONFIG_ADDRESS, 8, 1) != 0) {
-		printf("PCI: Failed to acquire I/O permissions in message loop\n");
+		printf("PCI: Failed to acquire I/O permissions in message loop");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -257,7 +271,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciSearchDeviceThread;
 
 	if (pthread_create(&pciSearchDeviceThread, nullptr, handleSearchDevice, &devices) != 0) {
-		printf("PCI: Failed to create pci search device message loop thread\n");
+		printf("PCI: Failed to create pci search device message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -267,7 +282,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
     pthread_t pciReadThread;
 
     if (pthread_create(&pciReadThread, nullptr, handlePciRead, nullptr) != 0) {
-        printf("PCI: Failed to create pci read message loop thread\n");
+        printf("PCI: Failed to create pci read message loop thread");
+    	fflush(stdout);
 
         return 1;
     }
@@ -277,7 +293,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciWriteThread;
 
 	if (pthread_create(&pciWriteThread, nullptr, handlePciWrite, nullptr) != 0) {
-		printf("PCI: Failed to create pci write message loop thread\n");
+		printf("PCI: Failed to create pci write message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -287,7 +304,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsiAllocThread;
 
 	if (pthread_create(&pciMsiAllocThread, nullptr, handleMsiAlloc, nullptr) != 0) {
-		printf("PCI: Failed to create pci msi alloc message loop thread\n");
+		printf("PCI: Failed to create pci msi alloc message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -297,7 +315,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsiFreeThread;
 
 	if (pthread_create(&pciMsiFreeThread, nullptr, handleMsiFree, nullptr) != 0) {
-		printf("PCI: Failed to create pci msi free message loop thread\n");
+		printf("PCI: Failed to create pci msi free message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -307,7 +326,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsixAllocThread;
 
 	if (pthread_create(&pciMsixAllocThread, nullptr, handleMsixAlloc, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix alloc message loop thread\n");
+		printf("PCI: Failed to create pci msix alloc message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -317,7 +337,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsixFreeThread;
 
 	if (pthread_create(&pciMsixFreeThread, nullptr, handleMsixFree, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix free message loop thread\n");
+		printf("PCI: Failed to create pci msix free message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -327,7 +348,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsixGlobalEnableThread;
 
 	if (pthread_create(&pciMsixGlobalEnableThread, nullptr, handleMsixGlobalEnable, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix gobal enable message loop thread\n");
+		printf("PCI: Failed to create pci msix gobal enable message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}
@@ -337,7 +359,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t pciMsixGlobalDisableThread;
 
 	if (pthread_create(&pciMsixGlobalDisableThread, nullptr, handleMsixGlobalDisable, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix gobal disable message loop thread\n");
+		printf("PCI: Failed to create pci msix gobal disable message loop thread");
+		fflush(stdout);
 
 		return 1;
 	}

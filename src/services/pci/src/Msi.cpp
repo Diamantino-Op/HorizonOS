@@ -67,7 +67,8 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
         uint64_t destCpu = 0;
 
         if (!allocateIntVectorForAnyCpu(&vector, &destCpu, notifyPort)) {
-            printf("PCI/MSI: allocIntVec failed after allocating %zu vector(s)\n", allocatedVectors.size());
+            printf("PCI/MSI: allocIntVec failed after allocating %zu vector(s)", allocatedVectors.size());
+        	fflush(stdout);
 
             for (const uint8_t allocatedVector : allocatedVectors) {
                 const auto allocatedIt = m_vectors.find(allocatedVector);
@@ -158,6 +159,7 @@ void MsiManager::dispatch(uint8_t vector) {
     msg->length = body.size();
 
     send_horizonos_message(pciPort, port, msg);
+
     delete msg;
 }
 
@@ -167,7 +169,10 @@ uint8_t pciFindCapability(uint8_t bus, uint8_t dev, uint8_t func, uint8_t capId)
     // Capability list starts at offset 0x34 (pointer to first entry).
     // Only valid if Status register (0x06) bit 4 = Capabilities List.
     const uint16_t status = pciConfigRead16(bus, dev, func, 0x06);
-    if (!(status & (1u << 4))) { return 0; }
+
+    if (!(status & (1u << 4))) {
+	    return 0;
+    }
 
     uint8_t ptr = pciConfigRead8(bus, dev, func, 0x34) & 0xFCu;
 
@@ -175,8 +180,14 @@ uint8_t pciFindCapability(uint8_t bus, uint8_t dev, uint8_t func, uint8_t capId)
         const uint8_t id   = pciConfigRead8(bus, dev, func, ptr);
         const uint8_t next = pciConfigRead8(bus, dev, func, ptr + 1u) & 0xFCu;
 
-        if (id == capId) { return ptr; }
-        if (next == 0)   { break; }
+        if (id == capId) {
+	        return ptr;
+        }
+
+        if (next == 0) {
+	        break;
+        }
+
         ptr = next;
     }
 
@@ -189,7 +200,8 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSI);
 
     if (cap == 0) {
-        printf("PCI/MSI: No MSI capability on %02x:%02x.%x\n", bus, dev, func);
+        printf("PCI/MSI: No MSI capability on %02x:%02x.%x", bus, dev, func);
+    	fflush(stdout);
 
         return 0;
     }
@@ -202,6 +214,7 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
 
     // Allocate one vector.
     const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort);
+
     if (vector == 0) {
 	    return 0;
     }
@@ -225,7 +238,8 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
     ctrl |= MSI_CTRL_ENABLE;
     pciConfigWrite16(bus, dev, func, cap + MSI_OFF_CTRL, ctrl);
 
-    printf("PCI/MSI: Enabled on %02x:%02x.%x vector=0x%02x\n", bus, dev, func, vector);
+    printf("PCI/MSI: Enabled on %02x:%02x.%x vector=0x%02x", bus, dev, func, vector);
+	fflush(stdout);
 
     return vector;
 }
@@ -272,20 +286,22 @@ static volatile MsixEntry *msixTablePtr(uint8_t bus, uint8_t dev, uint8_t func, 
     uint64_t virt = 0;
 
     if (mmap_phys(tablePhys, MAP_SIZE, &virt) != 0) {
-        printf("PCI/MSI-X: mmap_phys of table failed (phys=%llx)\n",
-               static_cast<unsigned long long>(tablePhys));
+        printf("PCI/MSI-X: mmap_phys of table failed (phys=%llx)", static_cast<unsigned long long>(tablePhys));
+    	fflush(stdout);
+
         return nullptr;
     }
 
     return reinterpret_cast<volatile MsixEntry *>(virt);
 }
 
-uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func,
-                        uint16_t tableIndex, int notifyPort) {
+uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIndex, int notifyPort) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
 
     if (cap == 0) {
-        printf("PCI/MSI-X: No MSI-X capability on %02x:%02x.%x\n", bus, dev, func);
+        printf("PCI/MSI-X: No MSI-X capability on %02x:%02x.%x", bus, dev, func);
+    	fflush(stdout);
+
         return 0;
     }
 
@@ -306,18 +322,21 @@ uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func,
     table[tableIndex].data       = data;
     table[tableIndex].vectorCtrl = 0u; // unmask
 
-    printf("PCI/MSI-X: Entry %u on %02x:%02x.%x vector=0x%02x\n",
-           tableIndex, bus, dev, func, vector);
+    printf("PCI/MSI-X: Entry %u on %02x:%02x.%x vector=0x%02x", tableIndex, bus, dev, func, vector);
+	fflush(stdout);
 
     return vector;
 }
 
-void msixDisableEntry(uint8_t bus, uint8_t dev, uint8_t func,
-                      uint16_t tableIndex, uint8_t vector) {
+void msixDisableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIndex, uint8_t vector) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
-    if (cap == 0) { return; }
+
+    if (cap == 0) {
+	    return;
+    }
 
     volatile MsixEntry *table = msixTablePtr(bus, dev, func, cap);
+
     if (table) {
         table[tableIndex].vectorCtrl = 1u; // mask
     }
@@ -327,19 +346,29 @@ void msixDisableEntry(uint8_t bus, uint8_t dev, uint8_t func,
 
 void msixGlobalEnable(uint8_t bus, uint8_t dev, uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
-    if (cap == 0) { return; }
+
+    if (cap == 0) {
+	    return;
+    }
 
     uint16_t ctrl = pciConfigRead16(bus, dev, func, cap + MSIX_OFF_CTRL);
+
     ctrl &= ~MSIX_CTRL_FMASK;  // clear function mask
     ctrl |=  MSIX_CTRL_ENABLE; // enable MSI-X
+
     pciConfigWrite16(bus, dev, func, cap + MSIX_OFF_CTRL, ctrl);
 }
 
 void msixGlobalDisable(uint8_t bus, uint8_t dev, uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
-    if (cap == 0) { return; }
+
+    if (cap == 0) {
+	    return;
+    }
 
     uint16_t ctrl = pciConfigRead16(bus, dev, func, cap + MSIX_OFF_CTRL);
+
     ctrl &= ~MSIX_CTRL_ENABLE;
+
     pciConfigWrite16(bus, dev, func, cap + MSIX_OFF_CTRL, ctrl);
 }

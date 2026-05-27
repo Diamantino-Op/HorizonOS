@@ -72,9 +72,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nvmePort));
 
 	if (registerResult == 0) {
-		printf("NVMe: Successfully registered port!\n");
+		printf("NVMe: Successfully registered port!");
+		fflush(stdout);
 	} else {
-		printf("NVMe: Failed to register port: %d\n", registerResult);
+		printf("NVMe: Failed to register port: %d", registerResult);
+		fflush(stdout);
 
 		return 1;
 	}
@@ -100,7 +102,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int sendNewRet = send_horizonos_message(nvmePort, 1, &newMsg);
 
 		if (sendNewRet != 0) {
-			printf("NVMe: Failed to send register message: %d\n", sendNewRet);
+			printf("NVMe: Failed to send register message: %d", sendNewRet);
+			fflush(stdout);
 
 			return 1;
 		}
@@ -122,9 +125,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int srvRegisterResult = receive_horizonos_message(nvmePort, &recvMsg, &filterOptions);
 
 		if (srvRegisterResult == 0 and registerResData.success) {
-			printf("NVMe: Successfully registered service!\n");
+			printf("NVMe: Successfully registered service!");
+			fflush(stdout);
 		} else {
-			printf("NVMe: Failed to register service: %d\n", srvRegisterResult);
+			printf("NVMe: Failed to register service: %d", srvRegisterResult);
+			fflush(stdout);
 
 			delete[] filterOptions.whiteListTypes;
 
@@ -168,7 +173,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			const int sendNewRet = send_horizonos_message(nvmePort, 1, &checkMsg);
 
 			if (sendNewRet != 0) {
-				printf("NVMe: Failed to send check message: %d\n", sendNewRet);
+				printf("NVMe: Failed to send check message: %d", sendNewRet);
+				fflush(stdout);
 
 				delete[] filterOptions.whiteListTypes;
 
@@ -206,7 +212,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int getRet = send_horizonos_message(nvmePort, 1, &getMsg);
 
 		if (getRet != 0) {
-			printf("NVMe: Failed to send get message: %d\n", getRet);
+			printf("NVMe: Failed to send get message: %d", getRet);
+			fflush(stdout);
 
 			return 1;
 		}
@@ -228,14 +235,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int srvRegisterResult = receive_horizonos_message(nvmePort, &recvGetMsg, &filterOptions);
 
 		if (srvRegisterResult != 0) {
-			printf("NVMe: Failed to get PCI port: %d!\n", srvRegisterResult);
+			printf("NVMe: Failed to get PCI port: %d!", srvRegisterResult);
+			fflush(stdout);
 
 			delete[] filterOptions.whiteListTypes;
 
 			return 1;
 		}
 
-		printf("NVMe: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.\n", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		printf("NVMe: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		fflush(stdout);
 
 		pciPort = getResData.port;
 		pciTid = getResData.tid;
@@ -246,7 +255,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	vector<PciDevice> nvmeDevices {};
 
 	{
-		printf("NVMe: Requesting PCI service to search for NVMe devices...\n");
+		printf("NVMe: Requesting PCI service to search for NVMe devices...");
+		fflush(stdout);
 
 		// Send
 
@@ -266,7 +276,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int sendSearchRet = send_horizonos_message(nvmePort, pciPort, &searchMsg);
 
 		if (sendSearchRet != 0) {
-			printf("NVMe: Failed to send PCI search message: %d!\n", sendSearchRet);
+			printf("NVMe: Failed to send PCI search message: %d!", sendSearchRet);
+			fflush(stdout);
 
 			return 1;
 		}
@@ -302,18 +313,21 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int startMsgResult = receive_horizonos_message(nvmePort, &recvStartSearchMsg, &startFilterOptions);
 
 		if (startMsgResult != 0) {
-			printf("NVMe: Failed to receive PCI search start message!\n");
+			printf("NVMe: Failed to receive PCI search start message!");
+			fflush(stdout);
 
 			return 1;
 		}
 
-		printf("NVMe: PCI service will send %lu NVMe device(s).\n", getStartSearchData);
+		printf("NVMe: PCI service will send %lu NVMe device(s).", getStartSearchData);
+		fflush(stdout);
 
 		for (uint64_t i = 0; i < getStartSearchData; ++i) {
 			const int msgResult = receive_horizonos_message(nvmePort, &recvSearchMsg, &filterOptions);
 
 			if (msgResult != 0) {
-				printf("NVMe: Failed to receive PCI search device message!\n");
+				printf("NVMe: Failed to receive PCI search device message!");
+				fflush(stdout);
 
 				return 1;
 			}
@@ -321,7 +335,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			nvmeDevices.push_back(getSearchData);
 		}
 
-		printf("NVMe: Received %zu NVMe device(s) from PCI service.\n", nvmeDevices.size());
+		printf("NVMe: Received %zu NVMe device(s) from PCI service.", nvmeDevices.size());
+		fflush(stdout);
 
 		delete[] startFilterOptions.whiteListTypes;
 		delete[] filterOptions.whiteListTypes;
@@ -333,25 +348,29 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		const int getErr = getCpuCount(&cpuCount);
 
 		if (getErr != 0 or cpuCount == 0) {
-			printf("NVME: No CPUs found: %d!\n", getErr);
+			printf("NVME: No CPUs found: %d!", getErr);
+			fflush(stdout);
 
 			return 1;
 		}
 
-		auto cpuIds = new long[cpuCount];
+		auto cpuIds = new uint64_t[cpuCount];
 
-		const int getIDsErr = getCpuIds(cpuIds, cpuCount);
+		const int getIDsErr = getCpuIds(reinterpret_cast<long *>(cpuIds), cpuCount);
 
 		if (getIDsErr != 0) {
-			printf("NVME: Error getting Cpu IDs: %d!\n", getIDsErr);
+			printf("NVME: Error getting Cpu IDs: %d!", getIDsErr);
+			fflush(stdout);
 
 			return 1;
 		}
 
 		printf("NVMe: CPUs: %lu", cpuCount);
+		fflush(stdout);
 
 		for (uint64_t i = 0; i < cpuCount; ++i) {
 			printf("NVME: Cpu %lu with ID %ld", i, cpuIds[i]);
+			fflush(stdout);
 		}
 	}
 
