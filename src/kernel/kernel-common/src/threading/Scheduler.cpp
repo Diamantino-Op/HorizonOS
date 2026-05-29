@@ -613,12 +613,19 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void Scheduler::unblockThread(const u16 threadId, const bool top) {
-		const bool prevIF = this->schedLock.lock();
+	void Scheduler::unblockThread(const u16 threadId, const bool top, bool useLock) {
+		bool prevIF = true;
+
+		if (useLock) {
+			prevIF = this->schedLock.lock();
+		}
+
 		Thread *thread = this->getThread(threadId);
 
 		if (thread == nullptr) {
-			this->schedLock.unlock(prevIF);
+			if (useLock) {
+				this->schedLock.unlock(prevIF);
+			}
 
 			return;
 		}
@@ -628,7 +635,7 @@ namespace kernel::common::threading {
 
 		//const bool prevIF = this->schedLock.lock();
 
-		const bool wasBlocked = this->blockedThreadList.remove(thread, false);
+		const bool wasBlocked = this->blockedThreadList.remove(thread, false, false);
 
 		if (wasBlocked) {
 			thread->setWaitingPort(0);
@@ -637,13 +644,13 @@ namespace kernel::common::threading {
 				thread->setState(ThreadState::RUNNING);
 
 				if (top) {
-					this->queues[thread->getParent()->getPriority()].addStart(thread);
+					this->queues[thread->getParent()->getPriority()].addStart(thread, false);
 				} else {
-					this->queues[thread->getParent()->getPriority()].addEnd(thread);
+					this->queues[thread->getParent()->getPriority()].addEnd(thread, false);
 				}
 			} else {
 				if (!this->sleepingThreadList.contains(thread)) {
-					this->sleepingThreadList.addStart(thread);
+					this->sleepingThreadList.addStart(thread, false);
 				}
 			}
 		} else {
@@ -652,7 +659,9 @@ namespace kernel::common::threading {
 			thread->setPendingWakeup(true);
 		}
 
-		this->schedLock.unlock(prevIF);
+		if (useLock) {
+			this->schedLock.unlock(prevIF);
+		}
 	}
 
 	void Scheduler::sleepTick() {

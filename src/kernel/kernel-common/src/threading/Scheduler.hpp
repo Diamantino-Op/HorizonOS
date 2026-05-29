@@ -354,7 +354,7 @@ namespace kernel::common::threading {
 		 *  @param threadId The id of the thread to be put to unblock.
 		 *  @param top Push the thread to the top of the queue.
 		 **/
-    	void unblockThread(u16 threadId, bool top);
+    	void unblockThread(u16 threadId, bool top, bool useLock = true);
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.

@@ -47,7 +47,6 @@ struct GetMsgData {
 };
 
 struct CheckMsgData {
-	uint16_t tid {};
 	char name[16] {};
 	size_t nameLength {};
 };

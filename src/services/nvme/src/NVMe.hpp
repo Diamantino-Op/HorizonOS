@@ -294,6 +294,26 @@ private:
 uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
 void pciWrite32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint32_t data);
 
+inline uint8_t *mmioBytes(uint64_t *base) noexcept {
+	return reinterpret_cast<uint8_t *>(base);
+}
+
+inline uint32_t mmioRead32(uint64_t *base, size_t offset) noexcept {
+	return *reinterpret_cast<uint32_t *>(mmioBytes(base) + offset);
+}
+
+inline void mmioWrite32(uint64_t *base, size_t offset, uint32_t value) noexcept {
+	*reinterpret_cast<volatile uint32_t *>(mmioBytes(base) + offset) = value;
+}
+
+inline uint64_t mmioRead64(uint64_t *base, size_t offset) noexcept {
+	return *reinterpret_cast<volatile uint64_t *>(mmioBytes(base) + offset);
+}
+
+inline void mmioWrite64(uint64_t *base, size_t offset, uint64_t value) noexcept {
+	*reinterpret_cast<uint64_t *>(mmioBytes(base) + offset) = value;
+}
+
 static_assert(sizeof(CommandDword) == 4, "CommandDword must be 4 bytes");
 static_assert(sizeof(Command) == 64, "Command must be 64 bytes");
 static_assert(sizeof(VendorSpecificCommand) == 64, "VendorSpecificCommand must be 64 bytes");

@@ -29,48 +29,57 @@ void NvmeDriver::attachRegisters(uint64_t* base, const uint64_t size, PciDevice 
 
 // Resets the controller and waits for it to report that it is ready.
 bool NvmeDriver::resetController() noexcept {
-	// Read CC, clear EN bit (bit 0)
-	auto ccReg = *reinterpret_cast<volatile uint32_t*>(mmioBase + 0x14);
-	ccReg &= ~(1U << 0);
-	*reinterpret_cast<volatile uint32_t*>(mmioBase + 0x14) = ccReg;
+	if (this->mmioBase == nullptr) {
+		return false;
+	}
 
-	// Poll CSTS.RDY until it clears (controller is disabled)
+	std::uint32_t cc = mmioRead32(this->mmioBase, 0x14); // CC
+	cc &= ~(1u << 0); // EN = 0
+	mmioWrite32(this->mmioBase, 0x14, cc);
+
 	for (int i = 0; i < 100000; ++i) {
-		const auto csts = *reinterpret_cast<volatile uint32_t*>(mmioBase + 0x1C);
-
-		if ((csts & 0x1U) == 0) {
+		const std::uint32_t csts = mmioRead32(this->mmioBase, 0x1C); // CSTS
+		if ((csts & 0x1u) == 0) {
 			return true;
 		}
 
 		usleep(10000);
 	}
 
-	return false; // timeout
+	return false;
 }
 
 bool NvmeDriver::enableController() noexcept {
-	auto cc = *reinterpret_cast<volatile uint32_t*>(mmioBase + 0x14);
-	cc |= (1u << 0);        // Set EN
-	cc |= (4u << 16);       // IOSQES = 6 (2^6 = 64 bytes per SQ entry)
-	cc |= (4u << 20);       // IOCQES = 4 (2^4 = 16 bytes per CQ entry)
-	*reinterpret_cast<volatile uint32_t*>(mmioBase + 0x14) = cc;
+	if (this->mmioBase == nullptr) {
+		return false;
+	}
 
-	// Poll CSTS.RDY = 1
+	std::uint32_t cc = mmioRead32(this->mmioBase, 0x14); // CC
+	cc |= (1u << 0);      // EN
+	cc &= ~(0xFu << 16);  // clear IOSQES
+	cc &= ~(0xFu << 20);  // clear IOCQES
+	cc |= (6u << 16);     // IOSQES = 6 => 64-byte SQ entries
+	cc |= (4u << 20);     // IOCQES = 4 => 16-byte CQ entries
+	mmioWrite32(this->mmioBase, 0x14, cc);
+
 	for (int i = 0; i < 100000; ++i) {
-		auto csts = *reinterpret_cast<volatile uint32_t*>(mmioBase + 0x1C);
-
-		if (csts & 0x1U) {
+		const std::uint32_t csts = mmioRead32(this->mmioBase, 0x1C); // CSTS
+		if ((csts & 0x1u) != 0) {
 			return true;
 		}
 
 		usleep(10000);
 	}
 
-	return false; // timeout
+	return false;
 }
 
 // Configures the admin submission queue and admin completion queue.
 bool NvmeDriver::initializeAdminQueues() noexcept {
+	if (this->mmioBase == nullptr) {
+		return false;
+	}
+
 	uint64_t adminSQPhys = 0;
 	uint64_t adminCQPhys = 0;
 
@@ -82,27 +91,31 @@ bool NvmeDriver::initializeAdminQueues() noexcept {
 		return false;
 	}
 
-	if (mmap_phys(adminSQPhys, 1, reinterpret_cast<uint64_t *>(this->adminSQ), false) != 0) {
+	uint64_t adminSQVirt = 0;
+	uint64_t adminCQVirt = 0;
+
+	const uint64_t adminSQSize = this->adminQDepth * sizeof(Command);
+	const uint64_t adminCQSize = this->adminQDepth * sizeof(CompletionEntry);
+
+	if (mmap_phys(adminSQPhys, adminSQSize, &adminSQVirt, false) != 0) {
 		return false;
 	}
 
-	if (mmap_phys(adminCQPhys, 1, reinterpret_cast<uint64_t *>(this->adminCQ), false) != 0) {
+	if (mmap_phys(adminCQPhys, adminCQSize, &adminCQVirt, false) != 0) {
 		return false;
 	}
 
-	memset(this->adminSQ, 0, this->adminQDepth * sizeof(Command));
-	memset(this->adminCQ, 0, this->adminQDepth * sizeof(CompletionEntry));
+	this->adminSQ = reinterpret_cast<Command *>(adminSQVirt);
+	this->adminCQ = reinterpret_cast<CompletionEntry *>(adminCQVirt);
 
-	// AQA (Admin Queue Attributes) at offset 0x24
-	// Bits [27:16] = ACQS-1, Bits [11:0] = ASQS-1
-	uint32_t aqa = ((adminQDepth - 1) << 16) | (adminQDepth - 1);
-	*reinterpret_cast<volatile uint32_t*>(mmioBase + 0x24) = aqa;
+	memset(this->adminSQ, 0, adminSQSize);
+	memset(this->adminCQ, 0, adminCQSize);
 
-	// ASQ (Admin Submission Queue Base Address) at offset 0x28 (64-bit)
-	*reinterpret_cast<volatile uint64_t*>(mmioBase + 0x28) = adminSQPhys;
+	const uint32_t aqa = ((this->adminQDepth - 1) << 16) | ((this->adminQDepth - 1) <<  0);
 
-	// ACQ (Admin Completion Queue Base Address) at offset 0x30 (64-bit)
-	*reinterpret_cast<volatile uint64_t*>(mmioBase + 0x30) = adminCQPhys;
+	mmioWrite32(this->mmioBase, 0x24, aqa);         // AQA
+	mmioWrite64(this->mmioBase, 0x28, adminSQPhys); // ASQ
+	mmioWrite64(this->mmioBase, 0x30, adminCQPhys); // ACQ
 
 	return true;
 }
@@ -167,6 +180,7 @@ uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev
 	receive_horizonos_message(nvmePort, &recvMsg, &filter);
 
 	delete[] filter.whiteListTypes;
+
 	return replyData.data;
 }
 

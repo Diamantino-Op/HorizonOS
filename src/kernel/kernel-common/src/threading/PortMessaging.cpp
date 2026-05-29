@@ -22,7 +22,7 @@ namespace kernel::common::threading {
             }
 
             if (waiter->blackListTypes != nullptr && waiter->blackListCount > 0) {
-                for (usize i = 0; i < waiter->blackListCount; ++i) {
+                for (usize i = 0; i < waiter->blackListCount; i++) {
                     if (messageType == waiter->blackListTypes[i]) {
                         return false;
                     }
@@ -30,7 +30,7 @@ namespace kernel::common::threading {
             }
 
             if (waiter->whiteListTypes != nullptr && waiter->whiteListCount > 0) {
-                for (usize i = 0; i < waiter->whiteListCount; ++i) {
+                for (usize i = 0; i < waiter->whiteListCount; i++) {
                     if (messageType == waiter->whiteListTypes[i]) {
                         return true;
                     }
@@ -225,17 +225,11 @@ namespace kernel::common::threading {
 
         const PortWaiter *waiter = nullptr;
 
-    	u16 fallbackThreadId = 0;
-
         auto *waiterEntry = entry->waiters.getFirst();
 
         while (waiterEntry != nullptr) {
             auto *nextWaiter = waiterEntry->next;
             auto *currWaiter = waiterEntry->value;
-
-        	if (fallbackThreadId == 0 && currWaiter != nullptr && currWaiter->thread != nullptr) {
-        		fallbackThreadId = currWaiter->thread->getId();
-        	}
 
             if (waiterAcceptsMessage(currWaiter, hdr->type)) {
                 if (entry->waiters.removeEntry(waiterEntry)) {
@@ -255,12 +249,12 @@ namespace kernel::common::threading {
     		delete waiterEntry;
     	}
 
-    	entry->lock.unlock(prevEntryIf);
-
     	// Unblock AFTER cleaning up, using the saved ID (no pointer dereference)
     	if (threadId != 0) {
-    		CommonMain::getInstance()->getScheduler()->unblockThread(threadId, true);
+    		CommonMain::getInstance()->getScheduler()->unblockThread(threadId, true, false);
     	}
+
+    	entry->lock.unlock(prevEntryIf);
 
         return 0;
     }
@@ -285,35 +279,37 @@ namespace kernel::common::threading {
 	            return ENOENT;
 	        }
 
-	        bool prevEntryIf = entry->lock.lock();
+	        entry->lock.lockNoCli();
 
-	        portLock.unlock(prevIf);
+	        portLock.unlockNoSti();
 
 	        // Walk the message queue to find the first message that passes the filter.
 	        auto *messageEntry = entry->messages.getFirst();
 
 	        while (messageEntry != nullptr) {
-	            auto *message = messageEntry->value;
+				const auto *message = messageEntry->value;
 
 	            // --- Filter check ---
 	            if (options != nullptr) {
 	                bool filtered = false;
 
-	                if (options->blackListTypes != nullptr && options->blackListCount > 0) {
-	                    for (usize i = 0; i < options->blackListCount; ++i) {
+	                if (options->blackListTypes != nullptr and options->blackListCount > 0) {
+	                    for (usize i = 0; i < options->blackListCount; i++) {
 	                        if (message->type == options->blackListTypes[i]) {
 	                            filtered = true;
+
 	                            break;
 	                        }
 	                    }
 	                }
 
-	                if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+	                if (not filtered and options->whiteListTypes != nullptr and options->whiteListCount > 0) {
 	                    filtered = true;
 
-	                    for (usize i = 0; i < options->whiteListCount; ++i) {
+	                    for (usize i = 0; i < options->whiteListCount; i++) {
 	                        if (message->type == options->whiteListTypes[i]) {
 	                            filtered = false;
+
 	                            break;
 	                        }
 	                    }
@@ -321,6 +317,7 @@ namespace kernel::common::threading {
 
 	                if (filtered) {
 	                    messageEntry = messageEntry->next;
+
 	                    continue;
 	                }
 	            }
@@ -329,16 +326,18 @@ namespace kernel::common::threading {
 	            const usize messageLength = message->length;
 
 	            if (hdr->length < messageLength) {
-	                entry->lock.unlock(prevEntryIf);
+	                entry->lock.unlock(prevIf);
+
 	                return EMSGSIZE;
 	            }
 
+	        	message = messageEntry->value;
+
 	            if (not entry->messages.removeEntry(messageEntry)) {
-	                entry->lock.unlock(prevEntryIf);
+	                entry->lock.unlock(prevIf);
+
 	                return ENOENT;
 	            }
-
-	            message = messageEntry->value;
 
 	            if (messageLength > 0) {
 	                memcpy(hdr->buffer, message->buffer, messageLength);
@@ -349,10 +348,10 @@ namespace kernel::common::threading {
 	            hdr->type      = message->type;
 	            hdr->retLength = static_cast<ssize>(messageLength);
 
-	            entry->lock.unlock(prevEntryIf);
-
 	            delete message;
 	            delete messageEntry;
+
+	        	entry->lock.unlock(prevIf);
 
 	            return 0;
 	        }
@@ -361,7 +360,8 @@ namespace kernel::common::threading {
 	        Thread *currThread = Scheduler::getCurrentThread();
 
 	        if (currThread == nullptr) {
-	            entry->lock.unlock(prevEntryIf);
+	            entry->lock.unlock(prevIf);
+
 	            return EFAULT;
 	        }
 
@@ -370,7 +370,7 @@ namespace kernel::common::threading {
 	    	while (existingWaiterEntry != nullptr) {
 	    		auto *next = existingWaiterEntry->next;
 
-	    		if (existingWaiterEntry->value != nullptr && existingWaiterEntry->value->thread == currThread) {
+	    		if (existingWaiterEntry->value != nullptr and existingWaiterEntry->value->thread == currThread) {
 	    			if (entry->waiters.removeEntry(existingWaiterEntry)) {
 	    				delete existingWaiterEntry->value;
 	    				delete existingWaiterEntry;
@@ -387,12 +387,13 @@ namespace kernel::common::threading {
 	    	auto *waiter = createWaiter(currThread, options);
 
 	    	if (waiter == nullptr) {
-	    		entry->lock.unlock(prevEntryIf);
+	    		entry->lock.unlock(prevIf);
+
 	    		return ENOMEM;
 	    	}
 
 	        auto *scheduler = CommonMain::getInstance()->getScheduler();
-	        const bool prevSchedIF = scheduler->getSchedLock()->lock();
+	        scheduler->getSchedLock()->lockNoCli();
 
 	        currThread->setState(ThreadState::BLOCKED);
 
@@ -404,29 +405,36 @@ namespace kernel::common::threading {
 	            scheduler->blockedThreadList.addStart(currThread);
 	        }
 
-	    	entry->waiters.addEnd(waiter);
-
-	        entry->lock.unlock(prevEntryIf);
+	        entry->lock.unlockNoSti();
 
 	        if (isCurrentThread) {
 	            // Current-thread path: pendingWakeup may have been set between
 	            // entry->lock.unlock and now (while we still hold schedLock).
 	            if (currThread->getPendingWakeup()) {
+	            	delete waiter;
+
 	                // Wakeup already arrived — cancel the block.
 	                currThread->setPendingWakeup(false);
 	                currThread->setWaitingPort(0);
 	                currThread->setState(ThreadState::RUNNING);
-	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                scheduler->getSchedLock()->unlock(prevIf);
 	                // Loop back to retry reading the message.
-	            } else {
-	                scheduler->getSchedLock()->unlock(prevSchedIF);
-	                ExecutionNode::reSchedule();
+
+	            	continue;
 	            }
-	        } else {
+
+				entry->waiters.addEnd(waiter);
+
+				scheduler->getSchedLock()->unlock(prevIf);
+
+				ExecutionNode::reSchedule();
+			} else {
 	            // Non-current-thread path: check pendingWakeup here too.
 	            // unblockThread may have already fired and set pendingWakeup
 	            // because the thread wasn't on blockedThreadList yet.
 	            if (currThread->getPendingWakeup()) {
+	            	delete waiter;
+
 	                // Wakeup arrived before we fully blocked — undo the block,
 	                // clear the flag, and loop back to retry.
 	                currThread->setPendingWakeup(false);
@@ -434,15 +442,19 @@ namespace kernel::common::threading {
 	                currThread->setState(ThreadState::RUNNING);
 	                scheduler->blockedThreadList.remove(currThread, false);
 	                scheduler->queues[currThread->getParent()->getPriority()].addStart(currThread);
-	                scheduler->getSchedLock()->unlock(prevSchedIF);
+	                scheduler->getSchedLock()->unlock(prevIf);
 	                // Loop back to retry reading the message.
-	            } else {
-	                scheduler->getSchedLock()->unlock(prevSchedIF);
-	                // Thread is on another CPU — it will get picked up naturally
-	                // on the next scheduler tick for that core. No IPI needed
-	                // since it's not currently executing.
+
+	            	continue;
 	            }
-	        }
+
+				entry->waiters.addEnd(waiter);
+
+				scheduler->getSchedLock()->unlock(prevIf);
+				// Thread is on another CPU — it will get picked up naturally
+				// on the next scheduler tick for that core. No IPI needed
+				// since it's not currently executing.
+			}
 	    }
 	}
 

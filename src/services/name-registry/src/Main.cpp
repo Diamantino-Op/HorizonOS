@@ -48,7 +48,6 @@ struct GetMsgData {
 };
 
 struct CheckMsgData {
-	uint16_t tid {};
 	char name[16] {};
 	size_t nameLength {};
 };
@@ -451,11 +450,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		bool exists = false;
 
 		{
-			std::scoped_lock lock(services_mutex);
-
 			exists = ranges::any_of(*services,
 				[&](const Service& s) {
-					return s.name == name or s.tid == response.tid;
+					return s.name == name;
 				});
 		}
 

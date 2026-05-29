@@ -38,7 +38,6 @@ struct GetMsgData {
 };
 
 struct CheckMsgData {
-	uint16_t tid {};
 	char name[16] {};
 	size_t nameLength {};
 };
@@ -390,19 +389,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		    }
 
 		    // Compute size
-		    uint64_t barSize = 0;
+			uint64_t sizeMask;
 
-		    if (sizeLo != 0) {
-		        barSize = static_cast<uint64_t>(~sizeLo + 1);
-		    } else if (sizeHi != 0 && sizeHi != 0xFFFFFFFF) {
-		        uint64_t sizeMask = static_cast<uint64_t>(sizeHi) << 32;
-		        barSize = ~sizeMask + 1;
-		    } else {
-		        barSize = 0x4000; // 16 KiB safe default per NVMe spec
+			if (is64bit) {
+				sizeMask = (static_cast<uint64_t>(sizeHi) << 32) | (sizeLo & ~0xFu);
+			} else {
+				sizeMask = sizeLo & ~0xFu;
+			}
 
-		        printf("NVMe: BAR size probe inconclusive for %02x:%02x.%x, using 16 KiB default.", dev.bus, dev.device, dev.function);
-		        fflush(stdout);
-		    }
+			uint64_t barSize = (sizeMask != 0) ? (~sizeMask + 1) : 0x4000;
 
 		    printf("NVMe: barPhys: 0x%lx, barSize: 0x%lx", barPhys, barSize);
 		    fflush(stdout);

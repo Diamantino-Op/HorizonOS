@@ -1205,7 +1205,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, u64 isHhdm, u64, u64, u64) {
+	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, const u64 isHhdm, u64, u64, u64) {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
