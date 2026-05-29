@@ -441,6 +441,13 @@ void *handlePciWrite(void *arg) {
 	printf("PCI: Write message loop started!");
 	fflush(stdout);
 
+	// Send
+
+	auto sendMsg = hos_msg();
+
+	sendMsg.type = PCI_WRITE_REPLY_MSG_TYPE;
+	sendMsg.length = 0;
+
 	// Recv
 
 	auto recvMsg = hos_msg();
@@ -463,12 +470,16 @@ void *handlePciWrite(void *arg) {
 		}
 
 		if (recvData.width == 8) {
-			pciConfigWrite8 (recvData.bus, recvData.dev, recvData.func, recvData.offset, static_cast<uint8_t>(recvData.data));
+			pciConfigWrite8(recvData.bus, recvData.dev, recvData.func, recvData.offset, static_cast<uint8_t>(recvData.data));
 		} else if (recvData.width == 16) {
 			pciConfigWrite16(recvData.bus, recvData.dev, recvData.func, recvData.offset, static_cast<uint16_t>(recvData.data));
 		} else if (recvData.width == 32) {
 			pciConfigWrite32(recvData.bus, recvData.dev, recvData.func, recvData.offset, recvData.data);
 		}
+
+		sendMsg.port = recvMsg.src_port;
+
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
@@ -508,7 +519,6 @@ void *handleMsiAlloc(void *arg) {
 		if (result != 0) {
 			continue;
 		}
-
 
 		sendMsg.port = recvMsg.src_port;
 

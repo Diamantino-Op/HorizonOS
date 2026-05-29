@@ -401,7 +401,7 @@ void processMcfg() {
 
 		delete[] filterOptions.whiteListTypes;
 
-		static const char *pciRootIds[] = { "PNP0A03", "PNP0A08", nullptr };
+		const char *pciRootIds[] = { "PNP0A03", "PNP0A08", nullptr };
 
 		uacpi_find_devices_at(uacpi_namespace_root(), pciRootIds, pciRootCallback, nullptr);
 

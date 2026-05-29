@@ -755,6 +755,28 @@ namespace kernel::common::threading {
 	        } else {
 	            term->warnNoLock("  Core CPU=%u (BSP): no current thread", "SchedDump", bsp->cpuId);
 	        }
+
+	    	// BSP locked thread queues
+	    	for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+	    		const auto &lq = bsp->executionNode.lockedThreadQueues[priority];
+
+	    		if (lq.getSize() == 0) {
+	    			continue;
+	    		}
+
+	    		term->warnNoLock("    LockedQueue[%lu] size=%lu (BSP CPU=%u):",
+					"SchedDump", priority, lq.getSize(), bsp->cpuId);
+
+	    		for (const auto &t : lq) {
+	    			term->warnNoLock("      TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
+						"SchedDump",
+						t.getId(),
+						t.getParent()->getId(),
+						static_cast<u32>(t.getState()),
+						t.getWaitingPort(),
+						static_cast<u32>(t.getPendingWakeup()));
+	    		}
+	    	}
 	    }
 
 	    // AP cores
@@ -776,6 +798,28 @@ namespace kernel::common::threading {
 	            } else {
 	                term->warnNoLock("  Core CPU=%u (AP %lu): no current thread", "SchedDump", core->cpuId, i);
 	            }
+
+	        	// AP locked thread queues
+	        	for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
+	        		const auto &lq = core->executionNode.lockedThreadQueues[priority];
+
+	        		if (lq.getSize() == 0) {
+	        			continue;
+	        		}
+
+	        		term->warnNoLock("    LockedQueue[%lu] size=%lu (AP CPU=%u):",
+						"SchedDump", priority, lq.getSize(), core->cpuId);
+
+	        		for (const auto &t : lq) {
+	        			term->warnNoLock("      TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
+							"SchedDump",
+							t.getId(),
+							t.getParent()->getId(),
+							static_cast<u32>(t.getState()),
+							t.getWaitingPort(),
+							static_cast<u32>(t.getPendingWakeup()));
+	        		}
+	        	}
 	        }
 	    }
 

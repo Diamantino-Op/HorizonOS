@@ -25,6 +25,7 @@ extern uint64_t pciPort;
 constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
+constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
 
 constexpr uint64_t IRQ_RECEIVE_MSG_TYPE = 0x1000;
 
@@ -353,9 +354,6 @@ uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uac
 
 	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	//delete sendMsg;
-	//delete sendData;
-
 	// Recv
 
 	auto recvMsg    = hos_msg();
@@ -372,18 +370,13 @@ uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uac
 
 	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
 
-	//delete recvMsg;
 	delete[] filterOptions.whiteListTypes;
 
 	if (result != 0) {
-		//delete recvData;
-
 		return UACPI_STATUS_INTERNAL_ERROR;
 	}
 
 	*value = recvData.data;
-
-	//delete recvData;
 
 	return UACPI_STATUS_OK;
 }
@@ -413,8 +406,24 @@ uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uac
 
 	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	//delete sendMsg;
-	//delete sendData;
+	// Recv
+
+	auto recvMsg    = hos_msg();
+
+	recvMsg.length  = 0;
+
+	auto filterOptions           = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_WRITE_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
+
+	delete[] filterOptions.whiteListTypes;
+
+	if (result != 0) {
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
 
 	return UACPI_STATUS_OK;
 }
@@ -444,8 +453,24 @@ uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, ua
 
 	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	//delete sendMsg;
-	//delete sendData;
+	// Recv
+
+	auto recvMsg    = hos_msg();
+
+	recvMsg.length  = 0;
+
+	auto filterOptions           = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_WRITE_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
+
+	delete[] filterOptions.whiteListTypes;
+
+	if (result != 0) {
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
 
 	return UACPI_STATUS_OK;
 }
@@ -475,8 +500,24 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 
 	send_horizonos_message(uacpiPort, pciPort, &sendMsg);
 
-	//delete sendMsg;
-	//delete sendData;
+	// Recv
+
+	auto recvMsg    = hos_msg();
+
+	recvMsg.length  = 0;
+
+	auto filterOptions           = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_WRITE_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	const int result = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
+
+	delete[] filterOptions.whiteListTypes;
+
+	if (result != 0) {
+		return UACPI_STATUS_INTERNAL_ERROR;
+	}
 
 	return UACPI_STATUS_OK;
 }

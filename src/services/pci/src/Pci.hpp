@@ -27,6 +27,7 @@ constexpr uint64_t PCI_READY_MSG_TYPE = 0x10;
 constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
+constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
 constexpr uint64_t PCI_MSI_ALLOC_MSG_TYPE = 0x50;
 constexpr uint64_t PCI_MSI_ALLOC_REPLY_MSG_TYPE = 0x60;
 constexpr uint64_t PCI_MSI_FREE_MSG_TYPE = 0x70;

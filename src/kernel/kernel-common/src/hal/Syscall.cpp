@@ -216,6 +216,7 @@ namespace kernel::common::hal {
 		horizonSyscalls[37] = &syscallLockToCore;
 		horizonSyscalls[38] = &syscallGetCpuCount;
 		horizonSyscalls[39] = &syscallGetCpuIDs;
+		horizonSyscalls[40] = &syscallAllocPhysPage;
 
 		initArch();
 	}
@@ -1204,7 +1205,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, u64, u64, u64, u64) {
+	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, u64 isHhdm, u64, u64, u64) {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1232,13 +1233,26 @@ namespace kernel::common::hal {
 		const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
 		const u64 hhdmBase = CommonMain::getCurrentHhdm();
 
+		// TODO: Check if it should be used before re-mapping it
+
 		for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
-			const u64 virtAddr = i + hhdmBase;
+			if (static_cast<bool>(isHhdm)) {
+				const u64 virtAddr = i + hhdmBase;
 
-			kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
-			processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
 
-			PageMap::invPg(virtAddr);
+				PageMap::invPg(virtAddr);
+			} else {
+				const u64 virtAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
+
+				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
+
+				if (virtAddr > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
+					Scheduler::getCurrentThread()->getParent()->topmostMappedPage = virtAddr;
+				}
+			}
 		}
 
 		*ret = static_cast<long>(physAddr + hhdmBase);
@@ -1284,8 +1298,10 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetCpuIDs(long *ret, const u64 cpuCount, u64, u64, u64, u64, u64) {
-		if (ret == nullptr) {
+	u64 SyscallManager::syscallGetCpuIDs(long *, const u64 cpuIdOutArray, const u64 cpuCount, u64, u64, u64, u64) {
+		const auto cpuIdArr = reinterpret_cast<u64 *>(cpuIdOutArray);
+
+		if (cpuIdArr == nullptr) {
 			return EINVAL;
 		}
 
@@ -1298,10 +1314,24 @@ namespace kernel::common::hal {
 		}
 
 		for (u64 i = 0; i < cpuCount; i++) {
-			CommonMain::getTerminal()->debug("Cpu ID: %lu", "Syscall Manager", mpRequest.response->cpus[i]->processor_id);
-
-			reinterpret_cast<uint64_t *>(ret)[i] = mpRequest.response->cpus[i]->processor_id;
+			cpuIdArr[i] = mpRequest.response->cpus[i]->processor_id;
 		}
+
+		return 0;
+	}
+
+	u64 SyscallManager::syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64) {
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		const u64 *page = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+
+		if (page == nullptr) {
+			return ENOMEM;
+		}
+
+		*ret = reinterpret_cast<long>(page);
 
 		return 0;
 	}

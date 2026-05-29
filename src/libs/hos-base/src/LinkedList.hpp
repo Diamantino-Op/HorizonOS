@@ -421,11 +421,11 @@ public:
         LinkedListEntry<T>* current;
     };
 
-    Iterator begin() {
+    Iterator begin() const {
         return Iterator(this->listStart);
     }
 
-    Iterator end() {
+    Iterator end() const {
         return Iterator(nullptr);
     }
 

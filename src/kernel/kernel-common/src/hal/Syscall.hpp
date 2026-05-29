@@ -57,7 +57,7 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 40;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 40;
+	constexpr u64 horizonSyscallAmount = 41;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
 
@@ -146,7 +146,7 @@ namespace kernel::common::hal {
     	static u64 syscallIoPl(long *ret, u64 level, u64, u64, u64, u64, u64);
     	static u64 syscallKill(long *ret, u64 pid, u64 signal, u64, u64, u64, u64);
     	static u64 syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64, u64, u64, u64);
+    	static u64 syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64 isHhdm, u64, u64, u64);
     	static u64 syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallInstallIRQHandler(long *ret, u64 irq, u64 port, u64, u64, u64, u64);
     	static u64 syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64);
@@ -158,7 +158,8 @@ namespace kernel::common::hal {
     	static u64 syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64);
     	static u64 syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64);
     	static u64 syscallGetCpuCount(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallGetCpuIDs(long *ret, u64 cpuCount, u64, u64, u64, u64, u64);
+    	static u64 syscallGetCpuIDs(long *, u64 cpuIdOutArray, u64 cpuCount, u64, u64, u64, u64);
+    	static u64 syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64);
 
     private:
     	static void setGsBase(u64 gsBase);

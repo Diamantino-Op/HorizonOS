@@ -2,6 +2,7 @@
 
 #include "horizonos/generic.h"
 #include "unistd.h"
+#include "pthread.h"
 
 #include <vector>
 #include <cstdio>
@@ -342,13 +343,127 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		delete[] filterOptions.whiteListTypes;
 	}
 
+	vector<NvmeDriver> controllerDrivers {};
+
+	{
+		if (nvmeDevices.empty()) {
+			printf("NVMe: No nvme devices found, exiting.");
+			fflush(stdout);
+
+			return 2;
+		}
+
+		for (auto& dev : nvmeDevices) {
+		    // 1. Read BAR0 physical address
+		    uint32_t bar0lo = pciRead32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x10);
+		    bool is64bit = ((bar0lo & 0x6u) == 0x4u);
+
+		    // Read bar0hi ONCE — reused for both barPhys and post-probe restore
+		    uint32_t bar0hi = is64bit
+		        ? pciRead32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x14)
+		        : 0u;
+
+		    uint64_t barPhys = is64bit
+		        ? (static_cast<uint64_t>(bar0hi) << 32) | (bar0lo & ~0xFu)
+		        : (bar0lo & ~0xFu);
+
+		    // 2. Discover BAR size — disable Memory Space during probe
+		    uint32_t origCmd = pciRead32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04);
+		    pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd & ~(1u << 1));
+
+		    // Write all 1s to both halves
+		    pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x10, 0xFFFFFFFF);
+		    if (is64bit) {
+		    	pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x14, 0xFFFFFFFF);
+		    }
+
+		    // Read back size mask
+		    uint32_t sizeLo = pciRead32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x10) & ~0xFu;
+		    uint32_t sizeHi = is64bit
+		        ? pciRead32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x14)
+		        : 0u;
+
+		    // Restore original BAR values
+		    pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x10, bar0lo);
+		    if (is64bit) {
+		    	pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x14, bar0hi);
+		    }
+
+		    // Compute size
+		    uint64_t barSize = 0;
+
+		    if (sizeLo != 0) {
+		        barSize = static_cast<uint64_t>(~sizeLo + 1);
+		    } else if (sizeHi != 0 && sizeHi != 0xFFFFFFFF) {
+		        uint64_t sizeMask = static_cast<uint64_t>(sizeHi) << 32;
+		        barSize = ~sizeMask + 1;
+		    } else {
+		        barSize = 0x4000; // 16 KiB safe default per NVMe spec
+
+		        printf("NVMe: BAR size probe inconclusive for %02x:%02x.%x, using 16 KiB default.", dev.bus, dev.device, dev.function);
+		        fflush(stdout);
+		    }
+
+		    printf("NVMe: barPhys: 0x%lx, barSize: 0x%lx", barPhys, barSize);
+		    fflush(stdout);
+
+		    // 3. Enable Bus Master + Memory Space
+		    pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd | (1u << 1) | (1u << 2));
+
+		    // 4. Map MMIO
+		    uint64_t mmioVirt = 0;
+		    if (mmap_phys(barPhys, barSize, &mmioVirt, false) != 0) {
+		        printf("NVMe: Failed to map BAR0 for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
+		        fflush(stdout);
+
+		        continue;
+		    }
+
+		    // 5. Attach and initialize
+		    NvmeDriver driver {};
+
+		    driver.attachRegisters(reinterpret_cast<uint64_t *>(mmioVirt), barSize, &dev);
+
+		    if (!driver.resetController()) {
+		        printf("NVMe: Reset failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
+		        fflush(stdout);
+
+		        continue;
+		    }
+
+		    if (!driver.initializeAdminQueues()) {
+		        printf("NVMe: Admin queue init failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
+		        fflush(stdout);
+
+		        continue;
+		    }
+
+		    if (!driver.enableController()) {
+		        printf("NVMe: Enable controller failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
+		        fflush(stdout);
+
+		        continue;
+		    }
+
+		    printf("NVMe: Controller %02x:%02x.%x ready.", dev.bus, dev.device, dev.function);
+		    fflush(stdout);
+
+		    controllerDrivers.push_back(driver);
+		}
+	}
+
+	printf("NVMe: %zu controller(s) initialized.", controllerDrivers.size());
+	fflush(stdout);
+
+	vector<pthread_t> coreThreads {};
+
 	{
 		uint64_t cpuCount = 0;
 
 		const int getErr = getCpuCount(&cpuCount);
 
 		if (getErr != 0 or cpuCount == 0) {
-			printf("NVME: No CPUs found: %d!", getErr);
+			printf("NVMe: No CPUs found: %d!", getErr);
 			fflush(stdout);
 
 			return 1;
@@ -356,10 +471,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		auto cpuIds = new uint64_t[cpuCount];
 
-		const int getIDsErr = getCpuIds(reinterpret_cast<long *>(cpuIds), cpuCount);
+		const int getIDsErr = getCpuIds(cpuIds, cpuCount);
 
 		if (getIDsErr != 0) {
-			printf("NVME: Error getting Cpu IDs: %d!", getIDsErr);
+			printf("NVMe: Error getting Cpu IDs: %d!", getIDsErr);
 			fflush(stdout);
 
 			return 1;
@@ -369,8 +484,29 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		fflush(stdout);
 
 		for (uint64_t i = 0; i < cpuCount; ++i) {
-			printf("NVME: Cpu %lu with ID %ld", i, cpuIds[i]);
+			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
 			fflush(stdout);
+
+			pthread_t coreThread;
+
+			auto *coreStruct = new CoreStruct();
+
+			coreStruct->cpuId = cpuIds[i];
+			coreStruct->nvmeDevices = &nvmeDevices;
+			coreStruct->controllerDrivers = &controllerDrivers;
+
+			const int coreResult = pthread_create(&coreThread, nullptr, NvmeDriver::coreHandler, coreStruct);
+
+			if (coreResult != 0) {
+				printf("NVMe: Failed to create core handler thread for core: %lu!", cpuIds[i]);
+				fflush(stdout);
+
+				return 1;
+			}
+
+			coreThreads.push_back(coreThread);
+
+			pthread_detach(coreThread);
 		}
 	}
 
