@@ -399,6 +399,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 			uint64_t barSize = (sizeMask != 0) ? (~sizeMask + 1) : 0x4000;
 
+			if (barSize == 0 || barSize > 0x10000000) { // sanity: max 256 MB
+				printf("NVMe: Unreasonable BAR size 0x%lx, skipping.", barSize);
+
+				continue;
+			}
+
 		    printf("NVMe: barPhys: 0x%lx, barSize: 0x%lx", barPhys, barSize);
 		    fflush(stdout);
 
@@ -408,6 +414,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		    // 4. Map MMIO
 		    uint64_t mmioVirt = 0;
 		    if (mmap_phys(barPhys, barSize, &mmioVirt, false) != 0) {
+		    	pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
+
 		        printf("NVMe: Failed to map BAR0 for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
 		        fflush(stdout);
 

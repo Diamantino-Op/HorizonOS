@@ -133,10 +133,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	for (;;) {
 		// take a snapshot of the services while protected by the mutex
 		vector<Service> snapshot;
-		{
-			const std::scoped_lock lock(services_mutex);
-			snapshot = *services;
-		}
+
+		snapshot = *services;
 
 		for (const auto &service : snapshot) {
 			bool ret = false;
@@ -147,7 +145,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				printf("Service: %s dead, unregistering it!", service.name.c_str());
 				fflush(stdout);
 
-				std::scoped_lock lock(services_mutex);
 				unregisterService(services, service.name);
 			}
 		}

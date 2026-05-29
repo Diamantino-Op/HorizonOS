@@ -204,7 +204,7 @@ namespace kernel::common::threading {
 		return this->processContextKernel;
 	}
 
-	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
+	LinkedListEntry<Thread> *Process::	addThread(Thread *entry) {
 		return this->threadList.addStart(entry);
 	}
 

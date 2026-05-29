@@ -415,9 +415,11 @@ void *handlePciRead(void *arg) {
 		const int result = receive_horizonos_message(pciPort, &recvMsg, &filterOptions);
 
 		if (result != 0) {
+			printf("PCI: Read message failed: %d!", result);
+			fflush(stdout);
+
 			continue;
 		}
-
 
 		sendMsg.port = recvMsg.src_port;
 
@@ -431,7 +433,12 @@ void *handlePciRead(void *arg) {
 			sendData.data = pciConfigRead32(recvData.bus, recvData.dev, recvData.func, recvData.offset);
 		}
 
-		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
+		const int sendRes = send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
+
+		if (sendRes != 0) {
+			printf("PCI: Read message send failed: %d!", sendRes);
+			fflush(stdout);
+		}
 	}
 }
 

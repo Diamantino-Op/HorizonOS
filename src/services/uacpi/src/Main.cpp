@@ -2,6 +2,7 @@
 #include "horizonos/generic.h"
 #include "pthread.h"
 #include "uacpi/event.h"
+#include "uacpi/internal/types.h"
 #include "uacpi/sleep.h"
 #include "uacpi/status.h"
 #include "uacpi/tables.h"
@@ -9,10 +10,10 @@
 #include "unistd.h"
 
 #include <array>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <string>
-#include <atomic>
 
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx);
 
@@ -239,6 +240,8 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
     uint64_t ecamBase = 0;
     uacpi_eval_simple_integer(node, "_CBA", &ecamBase);
 
+	uint8_t endBus = 255;
+
     // If _CBA absent, find it in the MCFG table by matching seg + startBus
     if (ecamBase == 0) {
         uacpi_table mcfgTable;
@@ -252,6 +255,7 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
                 if (allocs[i].segment == static_cast<uint16_t>(seg) && allocs[i].start_bus <= static_cast<uint8_t>(bbn) && allocs[i].end_bus >= static_cast<uint8_t>(bbn)) {
                     // ECAM base for this specific bus within the segment
                     ecamBase = allocs[i].address + (bbn << 20);
+                	endBus = allocs[i].end_bus;
 
                     break;
                 }
@@ -272,7 +276,7 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
 	segData.ecamBase = ecamBase;
 	segData.segment = seg;
 	segData.bbn = bbn;
-	segData.endBus = 255;
+	segData.endBus = endBus;
 
 	segMsg.type   = MCFG_SEGMENT_MSG_TYPE;
     segMsg.port   = pciPort;

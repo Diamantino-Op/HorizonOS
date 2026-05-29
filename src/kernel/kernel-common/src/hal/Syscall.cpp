@@ -1235,6 +1235,14 @@ namespace kernel::common::hal {
 
 		// TODO: Check if it should be used before re-mapping it
 
+		u64 retAddr = 0;
+
+		if (static_cast<bool>(isHhdm)) {
+			retAddr = physAddr + hhdmBase;
+		} else {
+			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
+		}
+
 		for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
 			if (static_cast<bool>(isHhdm)) {
 				const u64 virtAddr = i + hhdmBase;
@@ -1255,7 +1263,7 @@ namespace kernel::common::hal {
 			}
 		}
 
-		*ret = static_cast<long>(physAddr + hhdmBase);
+		*ret = static_cast<long>(retAddr);
 
 		return 0;
 	}

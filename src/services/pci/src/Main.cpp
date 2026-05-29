@@ -121,6 +121,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			}
 
 			if (srvRegisterResult == 0 and checkResData.exists) {
+				printf("PCI: uACPI exists");
+				fflush(stdout);
+
 				break;
 			}
 
@@ -368,9 +371,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(pciMsixGlobalDisableThread);
 
     // ── 8. Main thread idle loop ──────────────────────────────────────────────
-    for (;;) {
-        usleep(1000000);
-    }
+    for (;;) {}
 
     return 0;
 }

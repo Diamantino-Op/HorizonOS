@@ -365,16 +365,16 @@ namespace kernel::common::threading {
 	            return EFAULT;
 	        }
 
-	    	auto *existingWaiterEntry = entry->waiters.getFirst();
+			const auto *existingWaiterEntry = entry->waiters.getFirst();
 
 	    	while (existingWaiterEntry != nullptr) {
-	    		auto *next = existingWaiterEntry->next;
+				const auto *next = existingWaiterEntry->next;
 
 	    		if (existingWaiterEntry->value != nullptr and existingWaiterEntry->value->thread == currThread) {
-	    			if (entry->waiters.removeEntry(existingWaiterEntry)) {
+	    			/*if (entry->waiters.removeEntry(existingWaiterEntry)) {
 	    				delete existingWaiterEntry->value;
 	    				delete existingWaiterEntry;
-	    			}
+	    			}*/
 
 	    			break;
 	    		}
@@ -384,12 +384,16 @@ namespace kernel::common::threading {
 
 	        currThread->setWaitingPort(port);
 
-	    	auto *waiter = createWaiter(currThread, options);
+	    	PortWaiter *waiter = nullptr;
 
-	    	if (waiter == nullptr) {
-	    		entry->lock.unlock(prevIf);
+	    	if (existingWaiterEntry == nullptr) {
+	    		waiter = createWaiter(currThread, options);
 
-	    		return ENOMEM;
+	    		if (waiter == nullptr) {
+	    			entry->lock.unlock(prevIf);
+
+	    			return ENOMEM;
+	    		}
 	    	}
 
 	        auto *scheduler = CommonMain::getInstance()->getScheduler();
@@ -411,7 +415,9 @@ namespace kernel::common::threading {
 	            // Current-thread path: pendingWakeup may have been set between
 	            // entry->lock.unlock and now (while we still hold schedLock).
 	            if (currThread->getPendingWakeup()) {
-	            	delete waiter;
+	            	if (existingWaiterEntry == nullptr) {
+	            		delete waiter;
+	            	}
 
 	                // Wakeup already arrived — cancel the block.
 	                currThread->setPendingWakeup(false);
@@ -423,7 +429,9 @@ namespace kernel::common::threading {
 	            	continue;
 	            }
 
-				entry->waiters.addEnd(waiter);
+	        	if (existingWaiterEntry == nullptr) {
+	        		entry->waiters.addEnd(waiter);
+	        	}
 
 				scheduler->getSchedLock()->unlock(prevIf);
 
@@ -433,7 +441,9 @@ namespace kernel::common::threading {
 	            // unblockThread may have already fired and set pendingWakeup
 	            // because the thread wasn't on blockedThreadList yet.
 	            if (currThread->getPendingWakeup()) {
-	            	delete waiter;
+	            	if (existingWaiterEntry == nullptr) {
+	            		delete waiter;
+	            	}
 
 	                // Wakeup arrived before we fully blocked — undo the block,
 	                // clear the flag, and loop back to retry.
@@ -448,7 +458,9 @@ namespace kernel::common::threading {
 	            	continue;
 	            }
 
-				entry->waiters.addEnd(waiter);
+				if (existingWaiterEntry == nullptr) {
+					entry->waiters.addEnd(waiter);
+				}
 
 				scheduler->getSchedLock()->unlock(prevIf);
 				// Thread is on another CPU — it will get picked up naturally
