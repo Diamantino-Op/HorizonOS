@@ -490,15 +490,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
 			fflush(stdout);
 
-			pthread_t coreThread;
-
 			auto *coreStruct = new CoreStruct();
 
 			coreStruct->cpuId = cpuIds[i];
 			coreStruct->nvmeDevices = &nvmeDevices;
 			coreStruct->controllerDrivers = &controllerDrivers;
 
-			const int coreResult = pthread_create(&coreThread, nullptr, NvmeDriver::coreHandler, coreStruct);
+			pthread_attr_t threadAttr;
+
+			pthread_attr_setstacksize(&threadAttr, 0x4000); // 16 KB stack
+
+			pthread_t coreThread;
+
+			const int coreResult = pthread_create(&coreThread, &threadAttr, NvmeDriver::coreHandler, coreStruct);
 
 			if (coreResult != 0) {
 				printf("NVMe: Failed to create core handler thread for core: %lu!", cpuIds[i]);
@@ -507,9 +511,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				return 1;
 			}
 
-			coreThreads.push_back(coreThread);
-
 			pthread_detach(coreThread);
+
+			coreThreads.push_back(coreThread);
 		}
 	}
 

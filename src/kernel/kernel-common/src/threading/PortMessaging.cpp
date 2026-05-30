@@ -3,143 +3,155 @@
 #include "CommonMain.hpp"
 #include "ErrNo.hpp"
 #include "memory/MainMemory.hpp"
-#include "utils/Asm.hpp" // Added for Asm::sti() and Asm::cli()
 
 namespace kernel::common::threading {
     using namespace kernel::common::hal;
     using namespace kernel::common::memory;
-    using namespace kernel::x86_64::utils; // Added for Asm::sti() and Asm::cli()
 
-    TicketSpinLock PortMessaging::portLock {};
-	u64 PortMessaging::currUsedPort = 2;
+    // =========================================================================
+    // Static member definitions
+    // =========================================================================
+
+    TicketSpinLock PortMessaging::portLock   {};
+    u64            PortMessaging::currUsedPort = 2; // 0 = invalid, 1 = kernel-reserved
+
+    // =========================================================================
+    // Module-internal state
+    // =========================================================================
 
     namespace {
+        // Global port list.  Allocated on first use; never freed.
         LinkedList<PortEntry> *portList {};
 
-        bool waiterAcceptsMessage(const PortWaiter *waiter, const u64 messageType) {
-            if (waiter == nullptr) {
-                return false;
-            }
-
-            if (waiter->blackListTypes != nullptr && waiter->blackListCount > 0) {
-                for (usize i = 0; i < waiter->blackListCount; i++) {
-                    if (messageType == waiter->blackListTypes[i]) {
-                        return false;
-                    }
-                }
-            }
-
-            if (waiter->whiteListTypes != nullptr && waiter->whiteListCount > 0) {
-                for (usize i = 0; i < waiter->whiteListCount; i++) {
-                    if (messageType == waiter->whiteListTypes[i]) {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            return true;
-        }
-
-        PortWaiter *createWaiter(Thread *thread, const MessageFilterOptions *options) {
-            auto *waiter = new PortWaiter();
-
-            if (waiter == nullptr) {
-                return nullptr;
-            }
-
-            waiter->thread = thread;
-
-            if (options != nullptr) {
-                waiter->blackListCount = options->blackListCount;
-                waiter->whiteListCount = options->whiteListCount;
-
-                if (options->blackListTypes != nullptr && options->blackListCount > 0) {
-                    waiter->blackListTypes = new u64[options->blackListCount];
-
-                    if (waiter->blackListTypes == nullptr) {
-                        delete waiter;
-
-                        return nullptr;
-                    }
-
-                    memcpy(waiter->blackListTypes, options->blackListTypes, options->blackListCount * sizeof(u64));
-                }
-
-                if (options->whiteListTypes != nullptr && options->whiteListCount > 0) {
-                    waiter->whiteListTypes = new u64[options->whiteListCount];
-
-                    if (waiter->whiteListTypes == nullptr) {
-                        delete waiter;
-
-                        return nullptr;
-                    }
-
-                    memcpy(waiter->whiteListTypes, options->whiteListTypes, options->whiteListCount * sizeof(u64));
-                }
-            }
-
-            return waiter;
-        }
-
-        LinkedList<PortEntry> &getPortListUnlocked() {
+        LinkedList<PortEntry> &getPortList() {
             if (portList == nullptr) {
                 portList = new LinkedList<PortEntry>();
             }
-
             return *portList;
         }
-    }
+    } // anonymous namespace
+
+    // =========================================================================
+    // PortMessage
+    // =========================================================================
 
     PortMessage::~PortMessage() {
-        delete[] this->buffer;
+        delete[] buffer;
     }
+
+    // =========================================================================
+    // PortWaiter
+    // =========================================================================
 
     PortWaiter::~PortWaiter() {
-		delete[] this->blackListTypes;
-		delete[] this->whiteListTypes;
+        delete[] blackListTypes;
+        delete[] whiteListTypes;
     }
 
-    PortEntry::~PortEntry() {
-		this->waiters.clear(true);
-		this->messages.clear(true);
-    }
-
-	u64 PortMessaging::getNewPort() {
-      const bool prevIF = portLock.lock();
-
-      const u64 nextPort = currUsedPort++;
-
-      portLock.unlock(prevIF);
-
-      return nextPort;
-    }
-
-    PortEntry *PortMessaging::findPortUnlocked(const u64 port) {
-        auto &ports = getPortListUnlocked();
-
-        for (auto &currPort : ports) {
-            if (currPort.port == port) {
-                return &currPort;
+    bool PortWaiter::accepts(const u64 messageType) const {
+        // 1. Black-list check — explicitly blocked types are rejected first.
+        if (blackListTypes != nullptr && blackListCount > 0) {
+            for (usize i = 0; i < blackListCount; ++i) {
+                if (messageType == blackListTypes[i]) {
+                    return false;
+                }
             }
         }
 
+        // 2. White-list check — if a white-list is defined, the type must be in it.
+        if (whiteListTypes != nullptr && whiteListCount > 0) {
+            for (usize i = 0; i < whiteListCount; ++i) {
+                if (messageType == whiteListTypes[i]) {
+                    return true;
+                }
+            }
+            return false; // type not in white-list
+        }
+
+        return true; // no white-list filter → accept everything not black-listed
+    }
+
+    // =========================================================================
+    // PortEntry
+    // =========================================================================
+
+    PortEntry::~PortEntry() {
+        waiters.clear(true);
+        messages.clear(true);
+    }
+
+    // =========================================================================
+    // Helpers — must be called with portLock held
+    // =========================================================================
+
+    PortEntry *PortMessaging::findPortUnlocked(const u64 port) {
+        for (auto &entry : getPortList()) {
+            if (entry.port == port) {
+                return &entry;
+            }
+        }
         return nullptr;
     }
 
     PortEntry *PortMessaging::createPortUnlocked(const u64 port) {
         auto *entry = new PortEntry();
-
         if (entry == nullptr) {
-          return nullptr;
+            return nullptr;
+        }
+        entry->port = port;
+        getPortList().addEnd(entry);
+        return entry;
+    }
+
+    // =========================================================================
+    // Helper — wake the first matching waiter.
+    // Called with entry->lock held; portLock must NOT be held.
+    // Returns the TID of the thread unblocked, or 0 if none.
+    // =========================================================================
+
+    u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
+        auto *waiterNode = entry->waiters.getFirst();
+
+        while (waiterNode != nullptr) {
+            auto *next    = waiterNode->next;
+            auto *waiter  = waiterNode->value;
+
+            if (waiter != nullptr && waiter->accepts(messageType)) {
+                const u16 tid = waiter->thread ? waiter->thread->getId() : 0;
+
+                // Remove the waiter node before releasing any lock —
+                // the waiter pointer must not be accessed after this.
+                if (entry->waiters.removeEntry(waiterNode)) {
+                    delete waiter;
+                    delete waiterNode;
+                }
+
+                return tid;
+            }
+
+            waiterNode = next;
         }
 
-        entry->port = port;
+        return 0; // no suitable waiter found
+    }
 
-        getPortListUnlocked().addEnd(entry);
+    // =========================================================================
+    // Public API
+    // =========================================================================
 
-        return entry;
+    u64 PortMessaging::getNewPort() {
+        const bool prevIF = portLock.lock();
+
+        if (currUsedPort == 0) {
+            // Wrapped around — u64 exhaustion is theoretically impossible but
+            // handle it defensively.
+            portLock.unlock(prevIF);
+            return 0;
+        }
+
+        const u64 next = currUsedPort++;
+        portLock.unlock(prevIF);
+        return next;
     }
 
     u64 PortMessaging::registerPort(const u64 port) {
@@ -151,22 +163,35 @@ namespace kernel::common::threading {
 
         if (findPortUnlocked(port) != nullptr) {
             portLock.unlock(prevIF);
-
             return EEXIST;
         }
 
-    	if (createPortUnlocked(port) == nullptr) {
-    		portLock.unlock(prevIF);
-
-    		return ENOMEM;
-    	}
+        if (createPortUnlocked(port) == nullptr) {
+            portLock.unlock(prevIF);
+            return ENOMEM;
+        }
 
         portLock.unlock(prevIF);
-
         return 0;
     }
 
-    u64 PortMessaging::sendMessage(const u64 sendPort, const u64 port, MessageHeader *hdr) {
+    // =========================================================================
+    // sendMessage
+    //
+    // Locking protocol
+    // ----------------
+    //  1. Acquire portLock (coarse).
+    //  2. Locate the PortEntry.
+    //  3. Acquire entry->lock (fine) — saved IF state is entry-specific.
+    //  4. Release portLock while still holding entry->lock.
+    //  5. Enqueue the message.
+    //  6. Find and remove a suitable waiter; save TID only (no pointer).
+    //  7. Release entry->lock.
+    //  8. Unblock the saved TID outside all locks.
+    // =========================================================================
+
+    u64 PortMessaging::sendMessage(const u64 sendPort, const u64 port,
+                                   MessageHeader *const hdr) {
         if (hdr == nullptr) {
             return EINVAL;
         }
@@ -175,377 +200,413 @@ namespace kernel::common::threading {
             return EINVAL;
         }
 
-        if (hdr->length > 0 and hdr->buffer == nullptr) {
+        if (hdr->length > 0 && hdr->buffer == nullptr) {
             return EINVAL;
         }
 
-        bool prevIf = portLock.lock();
+        // --- Locate port (coarse lock) ---
+        bool prevPortIF = portLock.lock();
 
         PortEntry *entry = findPortUnlocked(port);
-
         if (entry == nullptr) {
-            portLock.unlock(prevIf);
-
+            portLock.unlock(prevPortIF);
             return ENOENT;
         }
 
-        bool prevEntryIf = entry->lock.lock();
+        // Promote to per-entry lock, then drop the coarse lock.
+        bool prevEntryIF = entry->lock.lock();
+        portLock.unlock(prevPortIF); // safe: we hold entry->lock, entry won't disappear
 
-        portLock.unlock(prevIf);
-
-    	auto *message = new PortMessage();
-
-    	if (message == nullptr) {
-    		entry->lock.unlock(prevEntryIf);
-
-    		return ENOMEM;
-    	}
+        // --- Allocate and fill message ---
+        auto *msg = new PortMessage();
+        if (msg == nullptr) {
+            entry->lock.unlock(prevEntryIF);
+            return ENOMEM;
+        }
 
         if (hdr->length > 0) {
-            message->buffer = new u8[hdr->length];
-
-            if (message->buffer == nullptr) {
-                entry->lock.unlock(prevEntryIf);
-
-                delete message;
-
+            msg->buffer = new u8[hdr->length];
+            if (msg->buffer == nullptr) {
+                delete msg;
+                entry->lock.unlock(prevEntryIF);
                 return ENOMEM;
             }
-
-            memcpy(message->buffer, hdr->buffer, hdr->length);
+            memcpy(msg->buffer, hdr->buffer, hdr->length);
         }
 
-        message->length = hdr->length;
-    	message->sourcePort = sendPort;
-    	message->type = hdr->type;
+        msg->length     = hdr->length;
+        msg->sourcePort = sendPort;
+        msg->type       = hdr->type;
 
-    	hdr->retLength = static_cast<ssize>(message->length);
+        hdr->retLength = static_cast<ssize>(msg->length);
 
-        entry->messages.addEnd(message);
+        entry->messages.addEnd(msg);
 
-        const PortWaiter *waiter = nullptr;
+        // --- Wake a waiter (if any) ---
+        // wakeOneWaiter removes the waiter node and returns the TID.
+        // We must not dereference any waiter pointer after this call.
+        const u16 tidToWake = wakeOneWaiter(entry, hdr->type);
 
-        auto *waiterEntry = entry->waiters.getFirst();
+        entry->lock.unlock(prevEntryIF);
 
-        while (waiterEntry != nullptr) {
-            auto *nextWaiter = waiterEntry->next;
-            auto *currWaiter = waiterEntry->value;
-
-            if (waiterAcceptsMessage(currWaiter, hdr->type)) {
-                if (entry->waiters.removeEntry(waiterEntry)) {
-                    waiter = currWaiter;
-
-                    break;
-                }
-            }
-
-            waiterEntry = nextWaiter;
+        // Unblock outside all locks so the scheduler can run freely.
+        if (tidToWake != 0) {
+            CommonMain::getInstance()->getScheduler()
+                ->unblockThread(tidToWake, /*top=*/true, /*useLock=*/false);
         }
-
-    	const u16 threadId = (waiter != nullptr) ? waiter->thread->getId() : 0;
-
-    	if (waiter != nullptr) {
-    		delete waiter;
-    		delete waiterEntry;
-    	}
-
-    	// Unblock AFTER cleaning up, using the saved ID (no pointer dereference)
-    	if (threadId != 0) {
-    		CommonMain::getInstance()->getScheduler()->unblockThread(threadId, true, false);
-    	}
-
-    	entry->lock.unlock(prevEntryIf);
 
         return 0;
     }
 
-    u64 PortMessaging::recvMessage(const u64 port, MessageHeader *hdr, const MessageFilterOptions *options) {
-	    if (hdr == nullptr) {
-	        return EINVAL;
-	    }
+    // =========================================================================
+    // recvMessage
+    //
+    // Blocking receive loop.  The thread loops until a matching message is
+    // dequeued or (if timeoutNs > 0) the deadline expires.
+    //
+    // Locking protocol inside the loop
+    // ----------------------------------
+    //  1. Acquire portLock.
+    //  2. Locate entry; acquire entry->lock via lockNoCli().
+    //  3. Release portLock via unlockNoSti() — interrupts still disabled.
+    //  4. Walk message queue.
+    //     a. Found matching message → copy out, delete, unlock, return.
+    //     b. No match → register waiter, block under schedLock, reschedule.
+    //  5. On wake-up, loop back to step 1.
+    // =========================================================================
 
-	    if (hdr->length > 0 && hdr->buffer == nullptr) {
-	        return EINVAL;
-	    }
+    u64 PortMessaging::recvMessage(const u64 port, MessageHeader *const hdr, const MessageFilterOptions *const options) {
+        if (hdr == nullptr) {
+            return EINVAL;
+        }
 
-	    for (;;) {
-	        bool prevIf = portLock.lock();
+        if (hdr->length > 0 && hdr->buffer == nullptr) {
+            return EINVAL;
+        }
 
-	        PortEntry *entry = findPortUnlocked(port);
+        // Compute optional deadline.
+        const u64 deadlineNs = (hdr->timeoutNs > 0) ? (CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + hdr->timeoutNs) : 0;
 
-	        if (entry == nullptr) {
-	            portLock.unlock(prevIf);
+        for (;;) {
+            // -----------------------------------------------------------------
+            // Step 1-3: lock hierarchy
+            // -----------------------------------------------------------------
+            bool prevPortIF = portLock.lock();
 
-	            return ENOENT;
-	        }
+            PortEntry *entry = findPortUnlocked(port);
 
-	        entry->lock.lockNoCli();
+            if (entry == nullptr) {
+                portLock.unlock(prevPortIF);
 
-	        portLock.unlockNoSti();
+                return ENOENT;
+            }
 
-	        // Walk the message queue to find the first message that passes the filter.
-	        auto *messageEntry = entry->messages.getFirst();
+            entry->lock.lockNoCli(); // acquires entry lock, keeps IF disabled
+            portLock.unlockNoSti();                     // drops port lock, IF stays disabled
 
-	        while (messageEntry != nullptr) {
-				const auto *message = messageEntry->value;
+            // -----------------------------------------------------------------
+            // Step 4a: walk the message queue for a matching message
+            // -----------------------------------------------------------------
+            auto *msgNode = entry->messages.getFirst();
 
-	            // --- Filter check ---
-	            if (options != nullptr) {
-	                bool filtered = false;
+            while (msgNode != nullptr) {
+                const PortMessage *msg = msgNode->value;
 
-	                if (options->blackListTypes != nullptr and options->blackListCount > 0) {
-	                    for (usize i = 0; i < options->blackListCount; i++) {
-	                        if (message->type == options->blackListTypes[i]) {
-	                            filtered = true;
+                // --- Apply filter ---
+                bool filtered = false;
 
-	                            break;
-	                        }
-	                    }
-	                }
+                if (options != nullptr) {
+                    if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+                        for (usize i = 0; i < options->blackListCount; ++i) {
+                            if (msg->type == options->blackListTypes[i]) {
+                                filtered = true;
 
-	                if (not filtered and options->whiteListTypes != nullptr and options->whiteListCount > 0) {
-	                    filtered = true;
+                                break;
+                            }
+                        }
+                    }
 
-	                    for (usize i = 0; i < options->whiteListCount; i++) {
-	                        if (message->type == options->whiteListTypes[i]) {
-	                            filtered = false;
+                    if (!filtered && options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+                        filtered = true;
 
-	                            break;
-	                        }
-	                    }
-	                }
+                        for (usize i = 0; i < options->whiteListCount; ++i) {
+                            if (msg->type == options->whiteListTypes[i]) {
+                                filtered = false;
 
-	                if (filtered) {
-	                    messageEntry = messageEntry->next;
+                                break;
+                            }
+                        }
+                    }
+                }
 
-	                    continue;
-	                }
-	            }
-	            // --- End filter check ---
+                if (filtered) {
+                    msgNode = msgNode->next;
 
-	            const usize messageLength = message->length;
+                    continue;
+                }
 
-	            if (hdr->length < messageLength) {
-	                entry->lock.unlock(prevIf);
+                // Message passes the filter — check buffer capacity.
+                if (hdr->length < msg->length) {
+                    entry->lock.unlock(prevPortIF);
 
-	                return EMSGSIZE;
-	            }
+                    return EMSGSIZE;
+                }
 
-	        	message = messageEntry->value;
+                // Snapshot all fields before we delete the node.
+                const usize  msgLen    = msg->length;
+                const u64    msgSrcPort = msg->sourcePort;
+                const u64    msgType   = msg->type;
 
-	            if (not entry->messages.removeEntry(messageEntry)) {
-	                entry->lock.unlock(prevIf);
+                if (!entry->messages.removeEntry(msgNode)) {
+                    entry->lock.unlock(prevPortIF);
 
-	                return ENOENT;
-	            }
+                    return ENOENT; // should never happen
+                }
 
-	            if (messageLength > 0) {
-	                memcpy(hdr->buffer, message->buffer, messageLength);
-	            }
+                if (msgLen > 0) {
+                    memcpy(hdr->buffer, msg->buffer, msgLen);
+                }
 
-	            hdr->port      = port;
-	            hdr->srcPort   = message->sourcePort;
-	            hdr->type      = message->type;
-	            hdr->retLength = static_cast<ssize>(messageLength);
+                hdr->port      = port;
+                hdr->srcPort   = msgSrcPort;
+                hdr->type      = msgType;
+                hdr->retLength = static_cast<ssize>(msgLen);
 
-	            delete message;
-	            delete messageEntry;
+                delete msg;
+                delete msgNode;
 
-	        	entry->lock.unlock(prevIf);
+                entry->lock.unlock(prevPortIF);
 
-	            return 0;
-	        }
+                return 0;
+            }
 
-	        // No matching message found — block and wait.
-	        Thread *currThread = Scheduler::getCurrentThread();
+            // -----------------------------------------------------------------
+            // Step 4b: no matching message — check timeout before blocking
+            // -----------------------------------------------------------------
+            if (deadlineNs != 0) {
+                const u64 nowNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-	        if (currThread == nullptr) {
-	            entry->lock.unlock(prevIf);
+                if (nowNs >= deadlineNs) {
+                    entry->lock.unlock(prevPortIF);
 
-	            return EFAULT;
-	        }
+                    return ETIMEDOUT;
+                }
+            }
 
-			const auto *existingWaiterEntry = entry->waiters.getFirst();
+            Thread *currThread = Scheduler::getCurrentThread();
 
-	    	while (existingWaiterEntry != nullptr) {
-				const auto *next = existingWaiterEntry->next;
+            if (currThread == nullptr) {
+                entry->lock.unlock(prevPortIF);
 
-	    		if (existingWaiterEntry->value != nullptr and existingWaiterEntry->value->thread == currThread) {
-	    			/*if (entry->waiters.removeEntry(existingWaiterEntry)) {
-	    				delete existingWaiterEntry->value;
-	    				delete existingWaiterEntry;
-	    			}*/
+                return EFAULT;
+            }
 
-	    			break;
-	    		}
+            // Check for a duplicate waiter entry (same thread already registered).
+            bool alreadyWaiting = false;
+            {
+                auto *w = entry->waiters.getFirst();
 
-	    		existingWaiterEntry = next;
-	    	}
+                while (w != nullptr) {
+                    if (w->value != nullptr && w->value->thread == currThread) {
+                        alreadyWaiting = true;
 
-	        currThread->setWaitingPort(port);
+                        break;
+                    }
 
-	    	PortWaiter *waiter = nullptr;
+                    w = w->next;
+                }
+            }
 
-	    	if (existingWaiterEntry == nullptr) {
-	    		waiter = createWaiter(currThread, options);
+            PortWaiter *waiter = nullptr;
 
-	    		if (waiter == nullptr) {
-	    			entry->lock.unlock(prevIf);
+            if (!alreadyWaiting) {
+                // Deep-copy filter options into the waiter.
+                waiter = new PortWaiter();
 
-	    			return ENOMEM;
-	    		}
-	    	}
+                if (waiter == nullptr) {
+                    entry->lock.unlock(prevPortIF);
 
-	        auto *scheduler = CommonMain::getInstance()->getScheduler();
-	        scheduler->getSchedLock()->lockNoCli();
+                    return ENOMEM;
+                }
 
-	        currThread->setState(ThreadState::BLOCKED);
+                waiter->thread = currThread;
 
-	        scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
+                if (options != nullptr) {
+                    waiter->blackListCount = options->blackListCount;
+                    waiter->whiteListCount = options->whiteListCount;
 
-	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
+                    if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+                        waiter->blackListTypes = new u64[options->blackListCount];
 
-	        if (!isCurrentThread) {
-	            scheduler->blockedThreadList.addStart(currThread);
-	        }
+                        if (waiter->blackListTypes == nullptr) {
+                            delete waiter;
 
-	        entry->lock.unlockNoSti();
+                            entry->lock.unlock(prevPortIF);
 
-	        if (isCurrentThread) {
-	            // Current-thread path: pendingWakeup may have been set between
-	            // entry->lock.unlock and now (while we still hold schedLock).
-	            if (currThread->getPendingWakeup()) {
-	            	if (existingWaiterEntry == nullptr) {
-	            		delete waiter;
-	            	}
+                            return ENOMEM;
+                        }
 
-	                // Wakeup already arrived — cancel the block.
-	                currThread->setPendingWakeup(false);
-	                currThread->setWaitingPort(0);
-	                currThread->setState(ThreadState::RUNNING);
-	                scheduler->getSchedLock()->unlock(prevIf);
-	                // Loop back to retry reading the message.
+                        memcpy(waiter->blackListTypes, options->blackListTypes, options->blackListCount * sizeof(u64));
+                    }
 
-	            	continue;
-	            }
+                    if (options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+                        waiter->whiteListTypes = new u64[options->whiteListCount];
 
-	        	if (existingWaiterEntry == nullptr) {
-	        		entry->waiters.addEnd(waiter);
-	        	}
+                        if (waiter->whiteListTypes == nullptr) {
+                            // blackListTypes is freed by ~PortWaiter via delete waiter
+                            delete waiter;
 
-				scheduler->getSchedLock()->unlock(prevIf);
+                            entry->lock.unlock(prevPortIF);
 
-				ExecutionNode::reSchedule();
-			} else {
-	            // Non-current-thread path: check pendingWakeup here too.
-	            // unblockThread may have already fired and set pendingWakeup
-	            // because the thread wasn't on blockedThreadList yet.
-	            if (currThread->getPendingWakeup()) {
-	            	if (existingWaiterEntry == nullptr) {
-	            		delete waiter;
-	            	}
+                            return ENOMEM;
+                        }
 
-	                // Wakeup arrived before we fully blocked — undo the block,
-	                // clear the flag, and loop back to retry.
-	                currThread->setPendingWakeup(false);
-	                currThread->setWaitingPort(0);
-	                currThread->setState(ThreadState::RUNNING);
-	                scheduler->blockedThreadList.remove(currThread, false);
-	                scheduler->queues[currThread->getParent()->getPriority()].addStart(currThread);
-	                scheduler->getSchedLock()->unlock(prevIf);
-	                // Loop back to retry reading the message.
+                        memcpy(waiter->whiteListTypes, options->whiteListTypes, options->whiteListCount * sizeof(u64));
+                    }
+                }
+            }
 
-	            	continue;
-	            }
+            // -----------------------------------------------------------------
+            // Acquire schedLock (no CLI needed — IF already disabled).
+            // Set thread to BLOCKED under both entry->lock and schedLock so
+            // sendMessage cannot miss the wakeup.
+            // -----------------------------------------------------------------
+            auto *scheduler = CommonMain::getInstance()->getScheduler();
+            scheduler->getSchedLock()->lockNoCli();
 
-				if (existingWaiterEntry == nullptr) {
-					entry->waiters.addEnd(waiter);
-				}
+            currThread->setState(ThreadState::BLOCKED);
+            currThread->setWaitingPort(port);
 
-				scheduler->getSchedLock()->unlock(prevIf);
-				// Thread is on another CPU — it will get picked up naturally
-				// on the next scheduler tick for that core. No IPI needed
-				// since it's not currently executing.
-			}
-	    }
-	}
+            scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
 
-    void PortMessaging::removeThread(Thread *thread) {
+            const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
+
+            if (!isCurrentThread) {
+                scheduler->blockedThreadList.addStart(currThread);
+            }
+
+            // Check for a pending wakeup that arrived between our message scan
+            // and acquiring schedLock (covers both current and non-current paths).
+            if (currThread->getPendingWakeup()) {
+                if (!alreadyWaiting) {
+                    delete waiter;
+                }
+
+                currThread->setPendingWakeup(false);
+                currThread->setWaitingPort(0);
+                currThread->setState(ThreadState::RUNNING);
+
+                if (!isCurrentThread) {
+                    scheduler->blockedThreadList.remove(currThread, false);
+                    scheduler->queues[currThread->getParent()->getPriority()].addStart(currThread);
+                }
+
+                scheduler->getSchedLock()->unlock(prevPortIF);
+                // Loop back to retry dequeuing.
+
+                continue;
+            }
+
+            // Commit the waiter to the list, drop entry lock, then reschedule.
+            if (!alreadyWaiting) {
+                entry->waiters.addEnd(waiter);
+            }
+
+            entry->lock.unlockNoSti(); // entry lock released; IF still disabled
+
+            scheduler->getSchedLock()->unlock(prevPortIF); // re-enables IF
+
+            if (isCurrentThread) {
+                ExecutionNode::reSchedule(); // yields; returns when unblocked
+            }
+            // Non-current thread: will be rescheduled on its own CPU naturally.
+
+            // Loop back to retry.
+        }
+    }
+
+    // =========================================================================
+    // removeThread — purge all waiters belonging to `thread`
+    // =========================================================================
+
+    void PortMessaging::removeThread(Thread *const thread) {
         if (thread == nullptr) {
             return;
         }
 
-        const bool prevIF = portLock.lock();
+        const bool prevPortIF = portLock.lock();
+
         thread->setWaitingPort(0);
 
-        auto &ports = getPortListUnlocked();
-
-        for (auto &currPort : ports) {
+        for (auto &currPort : getPortList()) {
             const bool portPrevIF = currPort.lock.lock();
 
-            auto *waiterEntry = currPort.waiters.getFirst();
+            auto *waiterNode = currPort.waiters.getFirst();
 
-            while (waiterEntry != nullptr) {
-                auto *nextWaiter = waiterEntry->next;
+            while (waiterNode != nullptr) {
+                auto *next   = waiterNode->next;
+                auto *waiter = waiterNode->value;
 
-                if (waiterEntry->value != nullptr && waiterEntry->value->thread == thread) {
-                    if (currPort.waiters.removeEntry(waiterEntry)) {
-                        delete waiterEntry->value;
-                        delete waiterEntry;
+                if (waiter != nullptr && waiter->thread == thread) {
+                    if (currPort.waiters.removeEntry(waiterNode)) {
+                        delete waiter;
+                        delete waiterNode;
                     }
                 }
 
-                waiterEntry = nextWaiter;
+                waiterNode = next;
             }
 
             currPort.lock.unlock(portPrevIF);
         }
 
-        portLock.unlock(prevIF);
+        portLock.unlock(prevPortIF);
     }
 
-	void PortMessaging::debugDump() {
-    	auto *term = CommonMain::getTerminal();
+    // =========================================================================
+    // debugDump
+    // =========================================================================
 
-    	term->warnNoLock("  === PORT MESSAGING DUMP ===", "SchedDump");
+    void PortMessaging::debugDump() {
+        auto *term = CommonMain::getTerminal();
 
-    	if (portList == nullptr) {
-    		term->warnNoLock("    portList is null", "SchedDump");
-    		return;
-    	}
+        term->warnNoLock("  === PORT MESSAGING DUMP ===", "SchedDump");
 
-    	for (auto &entry : *portList) {
-    		term->warnNoLock("  Port=%lu messages=%lu waiters=%lu",
-				"SchedDump", entry.port,
-				entry.messages.getSize(),
-				entry.waiters.getSize());
+        if (portList == nullptr) {
+            term->warnNoLock("    portList is null", "SchedDump");
+            return;
+        }
 
-    		for (const auto &msg : entry.messages) {
-    			term->warnNoLock("    Msg: type=%lu srcPort=%lu length=%lu",
-					"SchedDump", msg.type, msg.sourcePort, msg.length);
-    		}
+        for (auto &entry : *portList) {
+            term->warnNoLock("  Port=%lu  messages=%lu  waiters=%lu",
+                             "SchedDump",
+                             entry.port,
+                             entry.messages.getSize(),
+                             entry.waiters.getSize());
 
-    		for (const auto &waiter : entry.waiters) {
-    			if (waiter.thread != nullptr) {
-    				term->warnNoLock("    Waiter: TID=%u whiteListCount=%lu blackListCount=%lu",
-						"SchedDump",
-						waiter.thread->getId(),
-						waiter.whiteListCount,
-						waiter.blackListCount);
+            for (const auto &msg : entry.messages) {
+                term->warnNoLock("    Msg: type=%lu  srcPort=%lu  length=%lu",
+                                 "SchedDump", msg.type, msg.sourcePort, msg.length);
+            }
 
-    				if (waiter.whiteListTypes != nullptr) {
-    					for (usize i = 0; i < waiter.whiteListCount; ++i) {
-    						term->warnNoLock("      whitelist[%lu] = %lu", "SchedDump", i, waiter.whiteListTypes[i]);
-    					}
-    				}
+            for (const auto &w : entry.waiters) {
+                if (w.thread == nullptr) continue;
+                term->warnNoLock("    Waiter: TID=%u  white=%lu  black=%lu",
+                                 "SchedDump",
+                                 w.thread->getId(),
+                                 w.whiteListCount,
+                                 w.blackListCount);
 
-    				if (waiter.blackListTypes != nullptr) {
-    					for (usize i = 0; i < waiter.blackListCount; ++i) {
-    						term->warnNoLock("      blacklist[%lu] = %lu", "SchedDump", i, waiter.blackListTypes[i]);
-    					}
-    				}
-    			}
-    		}
-    	}
+                for (usize i = 0; i < w.whiteListCount; ++i) {
+                    term->warnNoLock("      whitelist[%lu] = %lu",
+                                     "SchedDump", i, w.whiteListTypes[i]);
+                }
+
+                for (usize i = 0; i < w.blackListCount; ++i) {
+                    term->warnNoLock("      blacklist[%lu] = %lu",
+                                     "SchedDump", i, w.blackListTypes[i]);
+                }
+            }
+        }
     }
 }

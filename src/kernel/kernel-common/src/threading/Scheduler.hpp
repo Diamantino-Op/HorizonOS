@@ -346,7 +346,7 @@ namespace kernel::common::threading {
 		 *
 		 *  @param threadId The id of the thread to be put to block.
 		 **/
-    	void blockThread(u16 threadId);
+    	void blockThread(u16 threadId, bool useLock = true);
 
     	/**
 		 *  Unblock the specified thread.

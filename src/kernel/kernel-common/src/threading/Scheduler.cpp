@@ -568,18 +568,29 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void Scheduler::blockThread(const u16 threadId) {
-		const bool prevIF = this->schedLock.lock();
+	void Scheduler::blockThread(const u16 threadId, const bool useLock) {
+		bool prevIF = true;
+
+		if (useLock) {
+			prevIF = this->schedLock.lock();
+		}
+
 		Thread *thread = this->getThread(threadId);
 
 		if (thread == nullptr) {
-			this->schedLock.unlock(prevIF);
+			if (useLock) {
+				this->schedLock.unlock(prevIF);
+			}
+
 			return;
 		}
 
 		if (thread->getPendingWakeup()) {
 			thread->setPendingWakeup(false);
-			this->schedLock.unlock(prevIF);
+
+			if (useLock) {
+				this->schedLock.unlock(prevIF);
+			}
 
 			return;
 		}
@@ -604,7 +615,9 @@ namespace kernel::common::threading {
 			this->blockedThreadList.addStart(thread);
 		}
 
-		this->schedLock.unlock(prevIF);
+		if (useLock) {
+			this->schedLock.unlock(prevIF);
+		}
 
 		if (shouldReschedule) {
 			// TODO
@@ -613,7 +626,7 @@ namespace kernel::common::threading {
 		}
 	}
 
-	void Scheduler::unblockThread(const u16 threadId, const bool top, bool useLock) {
+	void Scheduler::unblockThread(const u16 threadId, const bool top, const bool useLock) {
 		bool prevIF = true;
 
 		if (useLock) {
