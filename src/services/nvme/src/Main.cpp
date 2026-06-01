@@ -448,6 +448,19 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		        continue;
 		    }
 
+			if (!driver.identifyController()) {
+				printf("NVMe: Identify controller failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
+				fflush(stdout);
+
+				continue;
+			}
+
+			// Identify all namespaces reported by the controller
+			// (controllerInfo.nn is now populated after identifyController)
+			for (uint32_t nsid = 1; nsid <= driver.getNamespaceCount(); ++nsid) {
+				driver.identifyNamespace(nsid);
+			}
+
 		    printf("NVMe: Controller %02x:%02x.%x ready.", dev.bus, dev.device, dev.function);
 		    fflush(stdout);
 
@@ -460,7 +473,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	vector<pthread_t> coreThreads {};
 
-	{
+	/*{
 		uint64_t cpuCount = 0;
 
 		const int getErr = getCpuCount(&cpuCount);
@@ -486,6 +499,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		printf("NVMe: CPUs: %lu", cpuCount);
 		fflush(stdout);
 
+		pthread_attr_t threadAttr;
+
+		pthread_attr_init(&threadAttr);
+		pthread_attr_setstacksize(&threadAttr, 0x4000); // 16 KB stack
+
 		for (uint64_t i = 0; i < cpuCount; ++i) {
 			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
 			fflush(stdout);
@@ -495,10 +513,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			coreStruct->cpuId = cpuIds[i];
 			coreStruct->nvmeDevices = &nvmeDevices;
 			coreStruct->controllerDrivers = &controllerDrivers;
-
-			pthread_attr_t threadAttr;
-
-			pthread_attr_setstacksize(&threadAttr, 0x4000); // 16 KB stack
 
 			pthread_t coreThread;
 
@@ -515,7 +529,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 			coreThreads.push_back(coreThread);
 		}
-	}
+
+		pthread_attr_destroy(&threadAttr);
+	}*/
 
 	for (;;) {}
 

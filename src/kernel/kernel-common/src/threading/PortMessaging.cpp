@@ -27,6 +27,7 @@ namespace kernel::common::threading {
             if (portList == nullptr) {
                 portList = new LinkedList<PortEntry>();
             }
+
             return *portList;
         }
     } // anonymous namespace
@@ -65,6 +66,7 @@ namespace kernel::common::threading {
                     return true;
                 }
             }
+
             return false; // type not in white-list
         }
 
@@ -90,16 +92,21 @@ namespace kernel::common::threading {
                 return &entry;
             }
         }
+
         return nullptr;
     }
 
     PortEntry *PortMessaging::createPortUnlocked(const u64 port) {
         auto *entry = new PortEntry();
+
         if (entry == nullptr) {
             return nullptr;
         }
+
         entry->port = port;
+
         getPortList().addEnd(entry);
+
         return entry;
     }
 
@@ -109,30 +116,22 @@ namespace kernel::common::threading {
     // Returns the TID of the thread unblocked, or 0 if none.
     // =========================================================================
 
-    u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
-        auto *waiterNode = entry->waiters.getFirst();
+	u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
+    	auto *waiterNode = entry->waiters.getFirst();
 
-        while (waiterNode != nullptr) {
-            auto *next    = waiterNode->next;
-            auto *waiter  = waiterNode->value;
+    	while (waiterNode != nullptr) {
+    		auto *waiter = waiterNode->value;
 
-            if (waiter != nullptr && waiter->accepts(messageType)) {
-                const u16 tid = waiter->thread ? waiter->thread->getId() : 0;
+    		if (waiter != nullptr && waiter->accepts(messageType)) {
+    			// Return TID only — do NOT remove the waiter here.
+    			// The waiter thread will remove itself when it dequeues the message.
+    			return waiter->thread ? waiter->thread->getId() : 0;
+    		}
 
-                // Remove the waiter node before releasing any lock —
-                // the waiter pointer must not be accessed after this.
-                if (entry->waiters.removeEntry(waiterNode)) {
-                    delete waiter;
-                    delete waiterNode;
-                }
+    		waiterNode = waiterNode->next;
+    	}
 
-                return tid;
-            }
-
-            waiterNode = next;
-        }
-
-        return 0; // no suitable waiter found
+    	return 0;
     }
 
     // =========================================================================
@@ -146,11 +145,14 @@ namespace kernel::common::threading {
             // Wrapped around — u64 exhaustion is theoretically impossible but
             // handle it defensively.
             portLock.unlock(prevIF);
+
             return 0;
         }
 
         const u64 next = currUsedPort++;
+
         portLock.unlock(prevIF);
+
         return next;
     }
 
@@ -163,15 +165,18 @@ namespace kernel::common::threading {
 
         if (findPortUnlocked(port) != nullptr) {
             portLock.unlock(prevIF);
+
             return EEXIST;
         }
 
         if (createPortUnlocked(port) == nullptr) {
             portLock.unlock(prevIF);
+
             return ENOMEM;
         }
 
         portLock.unlock(prevIF);
+
         return 0;
     }
 
@@ -190,8 +195,7 @@ namespace kernel::common::threading {
     //  8. Unblock the saved TID outside all locks.
     // =========================================================================
 
-    u64 PortMessaging::sendMessage(const u64 sendPort, const u64 port,
-                                   MessageHeader *const hdr) {
+    u64 PortMessaging::sendMessage(const u64 sendPort, const u64 port, MessageHeader *const hdr) {
         if (hdr == nullptr) {
             return EINVAL;
         }
@@ -205,11 +209,12 @@ namespace kernel::common::threading {
         }
 
         // --- Locate port (coarse lock) ---
-        bool prevPortIF = portLock.lock();
+        const bool prevPortIF = portLock.lock();
 
         PortEntry *entry = findPortUnlocked(port);
         if (entry == nullptr) {
             portLock.unlock(prevPortIF);
+
             return ENOENT;
         }
 
@@ -226,11 +231,13 @@ namespace kernel::common::threading {
 
         if (hdr->length > 0) {
             msg->buffer = new u8[hdr->length];
+
             if (msg->buffer == nullptr) {
                 delete msg;
                 entry->lock.unlock(prevEntryIF);
                 return ENOMEM;
             }
+
             memcpy(msg->buffer, hdr->buffer, hdr->length);
         }
 
@@ -251,8 +258,7 @@ namespace kernel::common::threading {
 
         // Unblock outside all locks so the scheduler can run freely.
         if (tidToWake != 0) {
-            CommonMain::getInstance()->getScheduler()
-                ->unblockThread(tidToWake, /*top=*/true, /*useLock=*/false);
+            CommonMain::getInstance()->getScheduler()->unblockThread(tidToWake, /*top=*/true, /*useLock=*/false);
         }
 
         return 0;
@@ -353,19 +359,42 @@ namespace kernel::common::threading {
                 }
 
                 // Snapshot all fields before we delete the node.
-                const usize  msgLen    = msg->length;
-                const u64    msgSrcPort = msg->sourcePort;
-                const u64    msgType   = msg->type;
+            	const usize msgLen     = msg->length;
+            	const u64   msgSrcPort = msg->sourcePort;
+            	const u64   msgType    = msg->type;
 
-                if (!entry->messages.removeEntry(msgNode)) {
-                    entry->lock.unlock(prevPortIF);
+            	if (!entry->messages.removeEntry(msgNode)) {
+            		entry->lock.unlock(prevPortIF);
 
-                    return ENOENT; // should never happen
-                }
+            		return ENOENT;
+            	}
 
-                if (msgLen > 0) {
-                    memcpy(hdr->buffer, msg->buffer, msgLen);
-                }
+            	// Remove this thread's waiter entry from the port (it was registered
+            	// when we first blocked; now that we have the message, clean it up).
+	            {
+                	auto *w = entry->waiters.getFirst();
+
+                	while (w != nullptr) {
+                		auto *next = w->next;
+
+                		if (w->value != nullptr && w->value->thread == Scheduler::getCurrentThread()) {
+                			const PortWaiter *dw = w->value;
+
+                			entry->waiters.removeEntry(w);
+
+                			delete dw;
+                			delete w;
+
+                			break;
+                		}
+
+                		w = next;
+                	}
+	            }
+
+            	if (msgLen > 0) {
+            		memcpy(hdr->buffer, msg->buffer, msgLen);
+            	}
 
                 hdr->port      = port;
                 hdr->srcPort   = msgSrcPort;
@@ -381,147 +410,139 @@ namespace kernel::common::threading {
             }
 
             // -----------------------------------------------------------------
-            // Step 4b: no matching message — check timeout before blocking
-            // -----------------------------------------------------------------
-            if (deadlineNs != 0) {
-                const u64 nowNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+	        // Step 4b: no matching message.
+	        // We must hold BOTH entry->lock AND schedLock while we:
+	        //   1. Register the waiter in the port's waiter list.
+	        //   2. Mark the thread BLOCKED.
+	        //   3. Remove it from the run queue.
+	        // This way sendMessage, which also acquires entry->lock before
+	        // calling wakeOneWaiter, cannot sneak in between steps 1 and 2
+	        // and fire an unblockThread on a thread that isn't sleeping yet.
+	        // -----------------------------------------------------------------
 
-                if (nowNs >= deadlineNs) {
-                    entry->lock.unlock(prevPortIF);
+	        if (deadlineNs != 0) {
+	            const u64 nowNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-                    return ETIMEDOUT;
-                }
-            }
+	            if (nowNs >= deadlineNs) {
+	                entry->lock.unlock(prevPortIF);
 
-            Thread *currThread = Scheduler::getCurrentThread();
+	                return ETIMEDOUT;
+	            }
+	        }
 
-            if (currThread == nullptr) {
-                entry->lock.unlock(prevPortIF);
+	        Thread *currThread = Scheduler::getCurrentThread();
 
-                return EFAULT;
-            }
+	        if (currThread == nullptr) {
+	            entry->lock.unlock(prevPortIF);
 
-            // Check for a duplicate waiter entry (same thread already registered).
-            bool alreadyWaiting = false;
-            {
-                auto *w = entry->waiters.getFirst();
+	            return EFAULT;
+	        }
 
-                while (w != nullptr) {
-                    if (w->value != nullptr && w->value->thread == currThread) {
-                        alreadyWaiting = true;
+	        auto *scheduler = CommonMain::getInstance()->getScheduler();
 
-                        break;
-                    }
+	        // Acquire schedLock while still holding entry->lock (both NoCli —
+	        // IF is already disabled from portLock.lock() at the top of the loop).
+	        // Locking order: portLock → entry->lock → schedLock.
+	        // sendMessage order: portLock → entry->lock  (never touches schedLock).
+	        // So no deadlock is possible.
+	        scheduler->getSchedLock()->lockNoCli();
 
-                    w = w->next;
-                }
-            }
+	        // --- With both locks held, check for a duplicate waiter ---
+	        bool alreadyWaiting = false;
 
-            PortWaiter *waiter = nullptr;
+	        {
+	            auto *w = entry->waiters.getFirst();
 
-            if (!alreadyWaiting) {
-                // Deep-copy filter options into the waiter.
-                waiter = new PortWaiter();
+	            while (w != nullptr) {
+	                if (w->value != nullptr && w->value->thread == currThread) {
+	                    alreadyWaiting = true;
 
-                if (waiter == nullptr) {
-                    entry->lock.unlock(prevPortIF);
+	                    break;
+	                }
 
-                    return ENOMEM;
-                }
+	                w = w->next;
+	            }
+	        }
 
-                waiter->thread = currThread;
+	        PortWaiter *waiter = nullptr;
 
-                if (options != nullptr) {
-                    waiter->blackListCount = options->blackListCount;
-                    waiter->whiteListCount = options->whiteListCount;
+	        if (!alreadyWaiting) {
+	            waiter = new PortWaiter();
 
-                    if (options->blackListTypes != nullptr && options->blackListCount > 0) {
-                        waiter->blackListTypes = new u64[options->blackListCount];
+	            if (waiter == nullptr) {
+	                scheduler->getSchedLock()->unlockNoSti();
+	                entry->lock.unlock(prevPortIF);
 
-                        if (waiter->blackListTypes == nullptr) {
-                            delete waiter;
+	                return ENOMEM;
+	            }
 
-                            entry->lock.unlock(prevPortIF);
+	            waiter->thread = currThread;
 
-                            return ENOMEM;
-                        }
+	            if (options != nullptr) {
+	                waiter->blackListCount = options->blackListCount;
+	                waiter->whiteListCount = options->whiteListCount;
 
-                        memcpy(waiter->blackListTypes, options->blackListTypes, options->blackListCount * sizeof(u64));
-                    }
+	                if (options->blackListTypes != nullptr && options->blackListCount > 0) {
+	                    waiter->blackListTypes = new u64[options->blackListCount];
 
-                    if (options->whiteListTypes != nullptr && options->whiteListCount > 0) {
-                        waiter->whiteListTypes = new u64[options->whiteListCount];
+	                    if (waiter->blackListTypes == nullptr) {
+	                        delete waiter;
 
-                        if (waiter->whiteListTypes == nullptr) {
-                            // blackListTypes is freed by ~PortWaiter via delete waiter
-                            delete waiter;
+	                        scheduler->getSchedLock()->unlockNoSti();
+	                        entry->lock.unlock(prevPortIF);
 
-                            entry->lock.unlock(prevPortIF);
+	                        return ENOMEM;
+	                    }
 
-                            return ENOMEM;
-                        }
+	                    memcpy(waiter->blackListTypes, options->blackListTypes, options->blackListCount * sizeof(u64));
+	                }
 
-                        memcpy(waiter->whiteListTypes, options->whiteListTypes, options->whiteListCount * sizeof(u64));
-                    }
-                }
-            }
+	                if (options->whiteListTypes != nullptr && options->whiteListCount > 0) {
+	                    waiter->whiteListTypes = new u64[options->whiteListCount];
 
-            // -----------------------------------------------------------------
-            // Acquire schedLock (no CLI needed — IF already disabled).
-            // Set thread to BLOCKED under both entry->lock and schedLock so
-            // sendMessage cannot miss the wakeup.
-            // -----------------------------------------------------------------
-            auto *scheduler = CommonMain::getInstance()->getScheduler();
-            scheduler->getSchedLock()->lockNoCli();
+	                    if (waiter->whiteListTypes == nullptr) {
+	                        delete waiter;
 
-            currThread->setState(ThreadState::BLOCKED);
-            currThread->setWaitingPort(port);
+	                        scheduler->getSchedLock()->unlockNoSti();
+	                        entry->lock.unlock(prevPortIF);
 
-            scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
+	                        return ENOMEM;
+	                    }
 
-            const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
+	                    memcpy(waiter->whiteListTypes, options->whiteListTypes, options->whiteListCount * sizeof(u64));
+	                }
+	            }
 
-            if (!isCurrentThread) {
-                scheduler->blockedThreadList.addStart(currThread);
-            }
+	            // Commit waiter to the port BEFORE marking thread as blocked.
+	            // sendMessage holds entry->lock when it calls wakeOneWaiter, so
+	            // it cannot see this waiter until we release entry->lock below —
+	            // by which point the thread is already BLOCKED and in blockedList.
+	            entry->waiters.addEnd(waiter);
+	        }
 
-            // Check for a pending wakeup that arrived between our message scan
-            // and acquiring schedLock (covers both current and non-current paths).
-            if (currThread->getPendingWakeup()) {
-                if (!alreadyWaiting) {
-                    delete waiter;
-                }
+	        // Mark the thread BLOCKED under schedLock so the scheduler
+	        // won't re-queue it and sendMessage's unblockThread sees a
+	        // consistent state.
+	        currThread->setState(ThreadState::BLOCKED);
+	        currThread->setWaitingPort(port);
 
-                currThread->setPendingWakeup(false);
-                currThread->setWaitingPort(0);
-                currThread->setState(ThreadState::RUNNING);
+	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
 
-                if (!isCurrentThread) {
-                    scheduler->blockedThreadList.remove(currThread, false);
-                    scheduler->queues[currThread->getParent()->getPriority()].addStart(currThread);
-                }
+	        scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
 
-                scheduler->getSchedLock()->unlock(prevPortIF);
-                // Loop back to retry dequeuing.
+	        if (!isCurrentThread) {
+	            scheduler->blockedThreadList.addStart(currThread);
+	        }
 
-                continue;
-            }
+	        // Release both locks together. entry->lock first (NoSti — keep IF
+	        // disabled), then schedLock with the original prevPortIF to finally
+	        // restore the pre-syscall interrupt state.
+	        entry->lock.unlockNoSti();
+	        scheduler->getSchedLock()->unlock(prevPortIF);  // restores IF
 
-            // Commit the waiter to the list, drop entry lock, then reschedule.
-            if (!alreadyWaiting) {
-                entry->waiters.addEnd(waiter);
-            }
-
-            entry->lock.unlockNoSti(); // entry lock released; IF still disabled
-
-            scheduler->getSchedLock()->unlock(prevPortIF); // re-enables IF
-
-            if (isCurrentThread) {
-                ExecutionNode::reSchedule(); // yields; returns when unblocked
-            }
-            // Non-current thread: will be rescheduled on its own CPU naturally.
-
-            // Loop back to retry.
+	        if (isCurrentThread) {
+	            ExecutionNode::reSchedule();
+	        }
         }
     }
 

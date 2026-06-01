@@ -145,6 +145,17 @@ namespace kernel::x86_64::hal {
 
 		const bool prevIF = terminal->lock();
 
+		const Thread *thread = Scheduler::getCurrentThread();
+
+		u16 tid = 0;
+		u16 pid = 0;
+
+		if (thread != nullptr) {
+			tid = thread->getId();
+			pid = thread->getParent()->getId();
+
+		}
+
 		u64 offset = 0;
 
 		terminal->printfBoth(true, "\033[0;31m┌──────────────────────────[ Kernel Panic ]───────────────────────────");
@@ -152,6 +163,7 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
 		terminal->printfBoth(true, "\033[0;31m│");
 		terminal->printfBoth(true, "\033[0;31m│   Registers:");
+		terminal->printfBoth(true, "\033[0;31m│   tid: %u, pid: %u", tid, pid);
 		terminal->printfBoth(true, "\033[0;31m│   int: %u, lastInt: %u, schedInt: %u, cpuId: %lu", frame->intNo, CpuManager::getCurrentCore()->lastInt, CpuManager::getCurrentCore()->schedInt, CpuManager::getCurrentCore()->cpuId);
 		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
 		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));

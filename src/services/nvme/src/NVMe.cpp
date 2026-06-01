@@ -117,22 +117,134 @@ bool NvmeDriver::initializeAdminQueues() noexcept {
 	mmioWrite64(this->mmioBase, 0x28, adminSQPhys); // ASQ
 	mmioWrite64(this->mmioBase, 0x30, adminCQPhys); // ACQ
 
+	this->doorbellStride = 4U << ((mmioRead64(mmioBase, 0x00) >> 32) & 0xFU);
+
 	return true;
 }
 
 // Submits an admin command and retrieves the matching completion entry.
-bool NvmeDriver::submitAdminCommand(const Command&, CompletionEntry&) noexcept {
+bool NvmeDriver::submitAdminCommand(const Command& command, CompletionEntry& result) noexcept {
+	Command entry = command;
+
+	entry.cdw0.setCid(static_cast<uint16_t>(adminSQTail));
+	adminSQ[adminSQTail] = entry;
+
+	adminSQTail = (adminSQTail + 1) % adminQDepth;
+	mmioWrite32(mmioBase, 0x1000, adminSQTail); // Admin SQ Tail Doorbell
+
+	for (int i = 0; i < 100000; ++i) {
+		const CompletionEntry& cqe = adminCQ[adminCQHead];
+
+		if (cqe.status.phase == adminCQPhase) {
+			result = cqe;
+
+			adminCQHead = (adminCQHead + 1) % adminQDepth;
+
+			if (adminCQHead == 0) {
+				adminCQPhase ^= 1U;
+			}
+
+			mmioWrite32(mmioBase, 0x1000 + this->doorbellStride, adminCQHead);
+
+			return result.status.statusCode == 0;
+		}
+	}
+
 	return false;
 }
 
 // Reads the controller's identification structure.
 bool NvmeDriver::identifyController() noexcept {
-	return false;
+	uint64_t dataPhys = 0;
+
+	if (allocPhysPage(&dataPhys) != 0) {
+		return false;
+	}
+
+	uint64_t dataVirt = 0;
+
+	if (mmap_phys(dataPhys, sizeof(IdentifyControllerData), &dataVirt, false) != 0) {
+		return false;
+	}
+
+	memset(reinterpret_cast<void*>(dataVirt), 0, sizeof(IdentifyControllerData));
+
+	Command cmd {};
+	cmd.cdw0.setOpCode(0x06);           // Identify opcode
+	cmd.nsid      = 0;                       // nsid = 0 for controller identify
+	cmd.dptrLow   = dataPhys;                // PRP Entry 1: 4 KiB buffer
+	cmd.dptrHigh  = 0;
+	cmd.cdw10.raw = 0x01;                    // CNS = 01h → Identify Controller
+
+	// 3. Submit and wait for completion
+	CompletionEntry cqe {};
+
+	if (not submitAdminCommand(cmd, cqe)) {
+		return false;
+	}
+
+	// 4. Copy result into local storage
+	memcpy(&controllerInfo, reinterpret_cast<void*>(dataVirt), sizeof(IdentifyControllerData));
+
+	// Trim trailing spaces from model/serial for readable logging
+	printf("NVMe: Controller model: %.40s, serial: %.20s, namespaces: %u\n", controllerInfo.mn, controllerInfo.sn, controllerInfo.nn);
+	fflush(stdout);
+
+	return true;
 }
 
 // Reads the identification data for a specific namespace.
-bool NvmeDriver::identifyNamespace(std::uint32_t) noexcept {
-	return false;
+bool NvmeDriver::identifyNamespace(uint32_t namespaceId) noexcept {
+	// 1. Allocate a 4 KiB physical page for the DMA buffer
+	uint64_t dataPhys = 0;
+
+	if (allocPhysPage(&dataPhys) != 0) {
+		return false;
+	}
+
+	uint64_t dataVirt = 0;
+
+	if (mmap_phys(dataPhys, sizeof(IdentifyNamespaceData), &dataVirt, false) != 0) {
+		return false;
+	}
+
+	memset(reinterpret_cast<void*>(dataVirt), 0, sizeof(IdentifyNamespaceData));
+
+	// 2. Build the Identify command
+	Command cmd {};
+	cmd.cdw0.setOpCode(0x06);       // Identify opcode
+	cmd.nsid      = namespaceId;         // Target namespace
+	cmd.dptrLow   = dataPhys;
+	cmd.dptrHigh  = 0;
+	cmd.cdw10.raw = 0x00;               // CNS = 00h → Identify Namespace
+
+	// 3. Submit
+	CompletionEntry cqe {};
+
+	if (not submitAdminCommand(cmd, cqe)) {
+		return false;
+	}
+
+	// 4. Parse the result
+	const auto* nsData = reinterpret_cast<IdentifyNamespaceData*>(dataVirt);
+
+	// flbas[3:0] is the index of the active LBA format
+	const uint8_t lbafIndex = nsData->flbas & 0x0Fu;
+	const uint8_t lbads     = nsData->lbaf[lbafIndex].lbads; // power of 2
+
+	NamespaceInfo info {};
+
+	info.nsid      = namespaceId;
+	info.totalLbas = nsData->nsze;
+	info.lbaSize   = (lbads > 0) ? (1u << lbads) : 512u; // fallback to 512
+	info.valid     = true;
+
+	printf("NVMe: Namespace %u — %lu LBAs × %u bytes = %lu MB\n", namespaceId, info.totalLbas, info.lbaSize, (info.totalLbas * info.lbaSize) / (1024 * 1024));
+	fflush(stdout);
+
+	namespaces.push_back(info);
+
+	return true;
 }
 
 // Issues a namespace read request.
@@ -153,6 +265,10 @@ bool NvmeDriver::flush(std::uint32_t) noexcept {
 // Stops the controller and clears local driver state.
 void NvmeDriver::shutdown() noexcept {
 	mmioBase = nullptr;
+}
+
+uint32_t NvmeDriver::getNamespaceCount() const noexcept {
+	return controllerInfo.nn;
 }
 
 uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) {

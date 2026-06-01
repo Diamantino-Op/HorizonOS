@@ -89,8 +89,8 @@ build_llvm() {
     -DCMAKE_C_FLAGS=-pipe \
     -DCMAKE_CXX_FLAGS=-pipe \
     -DCMAKE_ASM_FLAGS=-pipe \
-    '-DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld"' \
-    '-DLLVM_TARGETS_TO_BUILD="X86;RISCV;AArch64"' \
+    '-DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld' \
+    '-DLLVM_TARGETS_TO_BUILD=X86;RISCV;AArch64' \
     "-DCMAKE_INSTALL_PREFIX=$toolchain_path" \
     "-DDEFAULT_SYSROOT=$sysroot_path" \
     "-DLLVM_DEFAULT_TARGET_TRIPLE=$arch-horizonos" \
@@ -219,7 +219,7 @@ build_libc() {
     "-DCMAKE_CXX_COMPILER_TARGET=$arch-horizonos" \
     "-DCMAKE_ASM_COMPILER_TARGET=$arch-horizonos" \
     "-DLLVM_RUNTIME_TARGETS=$arch-horizonos" \
-    '-DLLVM_ENABLE_RUNTIMES="libunwind;libcxxabi;libcxx"' \
+    '-DLLVM_ENABLE_RUNTIMES=libunwind;libcxxabi;libcxx' \
     "-DCMAKE_C_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_CXX_FLAGS=-fuse-ld=lld -pipe" \
     "-DCMAKE_ASM_FLAGS=-fuse-ld=lld -pipe" \

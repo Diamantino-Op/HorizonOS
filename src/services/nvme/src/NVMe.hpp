@@ -242,6 +242,48 @@ struct CompletionEntry {
 	CompletionEntryStatus status {}; // Completion status information.
 };
 
+struct IdentifyControllerData {
+	uint16_t vid;             // PCI Vendor ID
+	uint16_t ssvid;           // PCI Subsystem Vendor ID
+	char     sn[20];          // Serial Number (ASCII, space-padded)
+	char     mn[40];          // Model Number (ASCII, space-padded)
+	char     fr[8];           // Firmware Revision
+	uint8_t  rab;             // Recommended Arbitration Burst
+	uint8_t  ieee[3];         // IEEE OUI Identifier
+	uint8_t  cmic;            // Controller Multi-Path I/O
+	uint8_t  mdts;            // Max Data Transfer Size (power of 2, in MPS units; 0 = no limit)
+	uint16_t cntlid;          // Controller ID
+	uint8_t  reserved[172];   // bytes 24–195, simplified
+	uint32_t nn;              // Number of Namespaces
+} __attribute__((packed, aligned(4096)));
+
+struct LBAFormat {
+	uint16_t ms;    // Metadata Size
+	uint8_t  lbads; // LBA Data Size as power of 2 (e.g. 9 = 512 bytes, 12 = 4096 bytes)
+	uint8_t  rp;    // Relative Performance
+} __attribute__((packed));
+
+struct IdentifyNamespaceData {
+	uint64_t  nsze;        // Namespace Size (total LBAs)
+	uint64_t  ncap;        // Namespace Capacity (usable LBAs)
+	uint64_t  nuse;        // Namespace Utilization
+	uint8_t   nsfeat;      // Namespace Features
+	uint8_t   nlbaf;       // Number of LBA Formats (0-based, so +1 for count)
+	uint8_t   flbas;       // Formatted LBA Size (bits[3:0] = index into lbaf[])
+	uint8_t   mc;          // Metadata Capabilities
+	uint8_t   dpc;         // End-to-end Data Protection Capabilities
+	uint8_t   dps;         // End-to-end Data Protection Settings
+	uint8_t   reserved[98];
+	LBAFormat lbaf[16];    // LBA Format Support array
+} __attribute__((packed, aligned(4096)));
+
+struct NamespaceInfo {
+	uint32_t nsid;
+	uint64_t totalLbas;    // nsze
+	uint32_t lbaSize;      // bytes per LBA (e.g. 512 or 4096)
+	bool     valid;
+};
+
 class NvmeDriver {
 public:
 	NvmeDriver() = default;
@@ -260,13 +302,13 @@ public:
 	[[nodiscard]] bool initializeAdminQueues() noexcept;
 
 	// Sends a single admin command and waits for the completion entry.
-	[[nodiscard]] bool submitAdminCommand(const Command& command, CompletionEntry& completion) noexcept;
+	[[nodiscard]] bool submitAdminCommand(const Command& command, CompletionEntry& result) noexcept;
 
 	// Reads the controller identification data.
 	[[nodiscard]] bool identifyController() noexcept;
 
 	// Reads namespace identification data for a specific namespace.
-	[[nodiscard]] bool identifyNamespace(std::uint32_t namespaceId) noexcept;
+	[[nodiscard]] bool identifyNamespace(uint32_t namespaceId) noexcept;
 
 	// Issues a read request for a namespace.
 	[[nodiscard]] bool read(uint32_t namespaceId, uint64_t lba, void* buffer, size_t blockCount) noexcept;
@@ -276,6 +318,8 @@ public:
 
 	// Flushes outstanding writes for a namespace.
 	[[nodiscard]] bool flush(uint32_t namespaceId) noexcept;
+
+	[[nodiscard]] uint32_t getNamespaceCount() const noexcept;
 
 	// Shuts the controller down and clears local state.
 	void shutdown() noexcept;
@@ -289,6 +333,15 @@ private:
 	Command* adminSQ {};   // Admin Submission Queue (64-byte entries)
 	CompletionEntry* adminCQ {};   // Admin Completion Queue (16-byte entries)
 	uint32_t adminQDepth { 64 };
+
+	uint32_t adminSQTail { 0 };
+	uint32_t adminCQHead { 0 };
+	uint8_t  adminCQPhase { 1 };
+
+	uint32_t doorbellStride { 4 };
+
+	IdentifyControllerData controllerInfo {};
+	vector<NamespaceInfo> namespaces;
 };
 
 uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
@@ -326,5 +379,7 @@ static_assert(sizeof(SGLLastSegment) == 16, "SGLLastSegment must be 16 bytes");
 static_assert(sizeof(SGLKeyedDataBlock) == 16, "SGLKeyedDataBlock must be 16 bytes");
 static_assert(sizeof(CompletionEntryStatus) == 2, "CompletionEntryStatus must be 2 bytes");
 static_assert(sizeof(CompletionEntry) == 16, "CompletionEntry must be 16 bytes");
+static_assert(sizeof(IdentifyControllerData) == 4096, "IdentifyControllerData must be 4096 bytes");
+static_assert(sizeof(IdentifyNamespaceData) == 4096, "IdentifyNamespaceData must be 4096 bytes");
 
 #endif

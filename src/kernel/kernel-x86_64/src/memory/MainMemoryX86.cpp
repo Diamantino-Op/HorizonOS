@@ -29,7 +29,6 @@ namespace kernel::common::memory {
 			auto copyCount = size;
 
 			asm volatile(
-				"cld\n\t"
 				"rep movsb"
 				: "+D"(pDest), "+S"(pSrc), "+c"(copyCount)
 				:
@@ -43,7 +42,6 @@ namespace kernel::common::memory {
 		usize byteCount = size & 0x7;
 
 		asm volatile(
-			"cld\n\t"
 			"rep movsq"
 			: "+D"(pDest), "+S"(pSrc), "+c"(qwordCount)
 			:
@@ -65,14 +63,13 @@ namespace kernel::common::memory {
 			return addr;
 		}
 
-		auto p = static_cast<u8 *>(addr);
+		auto *p = static_cast<u8 *>(addr);
 
 		if (hasErmsFast()) {
 			u8 byteValue = static_cast<u8>(val);
 			auto byteCount = size;
 
 			asm volatile(
-				"cld\n\t"
 				"rep stosb"
 				: "+D"(p), "+c"(byteCount), "+a"(byteValue)
 				:
@@ -91,7 +88,6 @@ namespace kernel::common::memory {
 		u8 byteValue = static_cast<u8>(val);
 
 		asm volatile(
-			"cld\n\t"
 			"rep stosq"
 			: "+D"(p), "+c"(qwordCount), "+a"(qwordValue)
 			:

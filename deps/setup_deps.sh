@@ -42,12 +42,15 @@ ensure_repo https://github.com/Limine-Bootloader/limine-protocol.git "$limine_pr
 ensure_repo https://github.com/uACPI/uACPI.git "$uacpi_branch" "$repo_root/deps/uacpi"
 ensure_repo https://github.com/Diamantino-Op/tcmalloc.git "$tcmalloc_branch" "$repo_root/libs/tcmalloc"
 ensure_repo https://github.com/Diamantino-Op/abseil-cpp.git "$abseil_cpp_branch" "$repo_root/libs/abseil-cpp"
+ensure_repo https://github.com/jothepro/doxygen-awesome-css.git main "$repo_root/deps/doxygen-awesome-css"
 
 tag=$(curl -fsSL "https://api.github.com/repos/Limine-Bootloader/Limine/releases/latest" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\(.*\)".*/\1/')
 
 echo "Latest release: ${tag}"
 
 curl -fsSL -o "$repo_root"/deps/limine-binary.tar.xz "https://github.com/Limine-Bootloader/Limine/releases/download/${tag}/limine-binary.tar.xz"
+
+rm -rf "$repo_root"/deps/limine "$repo_root"/deps/limine-binary
 
 tar -xf "$repo_root"/deps/limine-binary.tar.xz -C "$repo_root"/deps
 
@@ -64,8 +67,6 @@ cd "$repo_root"/deps/limine && make
 tcmalloc_build_dir="$repo_root/libs/tcmalloc/out"
 
 cd "$repo_root/libs/tcmalloc"
-
-bazel clean --expunge
 
 bazelisk build --compilation_mode=opt //tcmalloc:tcmalloc --output_groups=+static_library,+dynamic_library --platforms=//platforms:horizonos --spawn_strategy=local --strategy=CppCompile=local --strategy=CppLink=local --define=HORIZON_SYSROOT="$repo_root/libs/sysroot" --define=HORIZON_TOOLCHAIN="$repo_root/toolchain" --action_env=HORIZON_SYSROOT="$repo_root/libs/sysroot" --action_env=HORIZON_TOOLCHAIN="$repo_root/toolchain"
 
