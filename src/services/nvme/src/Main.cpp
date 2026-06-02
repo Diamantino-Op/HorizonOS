@@ -425,7 +425,25 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		    // 5. Attach and initialize
 		    NvmeDriver driver {};
 
-		    driver.attachRegisters(reinterpret_cast<uint64_t *>(mmioVirt), barSize, &dev);
+			uint64_t dataPhys = 0;
+
+			if (allocPhysPage(&dataPhys) != 0) {
+				printf("NVMe: Failed to allocate phys page.");
+				fflush(stdout);
+
+				continue;
+			}
+
+			uint64_t dataVirt = 0;
+
+			if (mmap_phys(dataPhys, 0x1000, &dataVirt, false) != 0) {
+				printf("NVMe: Failed to map data page.");
+				fflush(stdout);
+
+				continue;
+			}
+
+		    driver.attachRegisters(dataPhys, dataVirt, reinterpret_cast<uint64_t *>(mmioVirt), barSize, &dev);
 
 		    if (!driver.resetController()) {
 		        printf("NVMe: Reset failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
@@ -455,10 +473,15 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				continue;
 			}
 
-			// Identify all namespaces reported by the controller
-			// (controllerInfo.nn is now populated after identifyController)
-			for (uint32_t nsid = 1; nsid <= driver.getNamespaceCount(); ++nsid) {
-				driver.identifyNamespace(nsid);
+			vector<uint32_t> activeNsids;
+
+			if (driver.getActiveNamespaces(activeNsids)) {
+				for (const uint32_t nsid : activeNsids) {
+					driver.identifyNamespace(nsid);
+				}
+			} else {
+				printf("NVMe: Failed to retrieve active namespace list.");
+				fflush(stdout);
 			}
 
 		    printf("NVMe: Controller %02x:%02x.%x ready.", dev.bus, dev.device, dev.function);

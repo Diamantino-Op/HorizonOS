@@ -2,9 +2,15 @@
 .extern callSyscall
 syscallHandler:
     cli
+
+    mov r15, rsp
+
+    mov rsp,  gs:[0x0]
+
     swapgs
 
     push r15
+
     push r14
     push r13
     push r12
@@ -42,6 +48,8 @@ syscallHandler:
     pop r13
     pop r14
     pop r15
+
+    mov rsp, r15
 
     swapgs
     sti

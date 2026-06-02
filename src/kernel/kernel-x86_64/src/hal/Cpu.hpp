@@ -25,6 +25,8 @@ namespace kernel::x86_64::hal {
     class Tsc;
 
     struct CpuCore {
+    	u64 kernelStack {};
+
         Apic apic {};
         Tsc tsc {};
         ExecutionNode executionNode {};

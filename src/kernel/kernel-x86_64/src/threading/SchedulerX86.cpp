@@ -303,9 +303,9 @@ namespace kernel::common::threading {
 			this->currentThread->prev = nullptr;
 		}
 
-		if (oldEntry != this->currentThread && oldEntry != nullptr) {
+		/*if (oldEntry != this->currentThread && oldEntry != nullptr) {
 			//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
-		}
+		}*/
 
 		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
@@ -330,22 +330,25 @@ namespace kernel::common::threading {
 
 		ctx->load();
 
+		CpuCore *core = CpuManager::getCurrentCore();
+
 		if (ctx->threadTssIopb != nullptr) {
 			ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
 
-			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 
 			TssManager::updateTss();
 		} else {
 			if (this->oldThreadWasIopb) {
-				CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(CpuManager::getCurrentCore()->tssManager->getTss());
+				core->gdtManager->getGdt()->tssEntry = GdtTssEntry(core->tssManager->getTss());
 
 				this->oldThreadWasIopb = false;
 
 				TssManager::updateTss();
 			}
 
-			CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+			core->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+			core->kernelStack = this->currentThread->value->getKStackPointer();
 		}
 	}
 
@@ -381,10 +384,10 @@ namespace kernel::common::threading {
 			u64 userStack = userRsp;
 
 			if (userRsp == 0) {
-				const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadCtxStackSize + pageSize) * (prid + 1));
+				const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadUserStackSize + pageSize) * (prid + 1));
 
 				const u64 startPage = alignDown<u64>(startAddr, pageSize);
-				const u64 endPage = alignUp<u64>(startPage + threadCtxStackSize, pageSize);
+				const u64 endPage = alignUp<u64>(startPage + threadUserStackSize, pageSize);
 
 				// TODO: Prob wasting 1 page on the top addr
 				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
@@ -397,11 +400,11 @@ namespace kernel::common::threading {
 					}
 				}
 
-				CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadCtxStackSize, process->getProcessContext()->pageFlags | 0b100);
+				CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadUserStackSize, process->getProcessContext()->pageFlags | 0b100);
 
 				context->userStackPointer = startPage;
 
-				userStack = startPage + threadCtxStackSize;
+				userStack = startPage + threadUserStackSize;
 
 				setUserStackAsm(&userStack);
 			}

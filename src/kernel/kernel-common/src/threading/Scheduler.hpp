@@ -241,7 +241,9 @@ namespace kernel::common::threading {
 
 	extern "C" void switchContextAsm();
 
-  constexpr u64 threadCtxStackSize = pageSize * 4;
+	// TODO: Make configurable
+    constexpr u64 threadCtxStackSize = pageSize * 2;
+	constexpr u64 threadUserStackSize = pageSize * 8;
 
 	// TODO: Maybe do sleep queues and block queues
     class Scheduler {

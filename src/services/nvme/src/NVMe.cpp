@@ -5,6 +5,13 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
+
+static string nvmeTrimString(const char* s, size_t len) noexcept {
+	const string str(s, len);
+	const auto end = str.find_last_not_of(' ');
+	return end == string::npos ? string{} : str.substr(0, end + 1);
+}
 
 void *NvmeDriver::coreHandler(void *ctx) {
 	auto *coreStruct = static_cast<CoreStruct *>(ctx);
@@ -21,7 +28,9 @@ void *NvmeDriver::coreHandler(void *ctx) {
 }
 
 // Stores the controller MMIO base for later register access.
-void NvmeDriver::attachRegisters(uint64_t* base, const uint64_t size, PciDevice *ownDevice) noexcept {
+void NvmeDriver::attachRegisters(uint64_t physData, uint64_t virtData, uint64_t* base, const uint64_t size, PciDevice *ownDevice) noexcept {
+	this->dataPhys = physData;
+	this->dataVirt = virtData;
 	this->mmioBase = base;
 	this->mmioSize = size;
 	this->device = ownDevice;
@@ -148,6 +157,8 @@ bool NvmeDriver::submitAdminCommand(const Command& command, CompletionEntry& res
 
 			return result.status.statusCode == 0;
 		}
+
+		usleep(10000);
 	}
 
 	return false;
@@ -155,24 +166,12 @@ bool NvmeDriver::submitAdminCommand(const Command& command, CompletionEntry& res
 
 // Reads the controller's identification structure.
 bool NvmeDriver::identifyController() noexcept {
-	uint64_t dataPhys = 0;
-
-	if (allocPhysPage(&dataPhys) != 0) {
-		return false;
-	}
-
-	uint64_t dataVirt = 0;
-
-	if (mmap_phys(dataPhys, sizeof(IdentifyControllerData), &dataVirt, false) != 0) {
-		return false;
-	}
-
-	memset(reinterpret_cast<void*>(dataVirt), 0, sizeof(IdentifyControllerData));
+	memset(reinterpret_cast<void*>(this->dataVirt), 0, 0x1000);
 
 	Command cmd {};
 	cmd.cdw0.setOpCode(0x06);           // Identify opcode
 	cmd.nsid      = 0;                       // nsid = 0 for controller identify
-	cmd.dptrLow   = dataPhys;                // PRP Entry 1: 4 KiB buffer
+	cmd.dptrLow   = this->dataPhys;                // PRP Entry 1: 4 KiB buffer
 	cmd.dptrHigh  = 0;
 	cmd.cdw10.raw = 0x01;                    // CNS = 01h → Identify Controller
 
@@ -184,10 +183,9 @@ bool NvmeDriver::identifyController() noexcept {
 	}
 
 	// 4. Copy result into local storage
-	memcpy(&controllerInfo, reinterpret_cast<void*>(dataVirt), sizeof(IdentifyControllerData));
+	memcpy(&controllerInfo, reinterpret_cast<void*>(this->dataVirt), 0x1000);
 
-	// Trim trailing spaces from model/serial for readable logging
-	printf("NVMe: Controller model: %.40s, serial: %.20s, namespaces: %u\n", controllerInfo.mn, controllerInfo.sn, controllerInfo.nn);
+	printf("NVMe: Controller model: %s, serial: %s, namespaces: %u", nvmeTrimString(controllerInfo.mn, sizeof(controllerInfo.mn)).c_str(), nvmeTrimString(controllerInfo.sn, sizeof(controllerInfo.sn)).c_str(), controllerInfo.nn);
 	fflush(stdout);
 
 	return true;
@@ -195,26 +193,13 @@ bool NvmeDriver::identifyController() noexcept {
 
 // Reads the identification data for a specific namespace.
 bool NvmeDriver::identifyNamespace(uint32_t namespaceId) noexcept {
-	// 1. Allocate a 4 KiB physical page for the DMA buffer
-	uint64_t dataPhys = 0;
-
-	if (allocPhysPage(&dataPhys) != 0) {
-		return false;
-	}
-
-	uint64_t dataVirt = 0;
-
-	if (mmap_phys(dataPhys, sizeof(IdentifyNamespaceData), &dataVirt, false) != 0) {
-		return false;
-	}
-
-	memset(reinterpret_cast<void*>(dataVirt), 0, sizeof(IdentifyNamespaceData));
+	memset(reinterpret_cast<void*>(this->dataVirt), 0, 0x1000);
 
 	// 2. Build the Identify command
 	Command cmd {};
 	cmd.cdw0.setOpCode(0x06);       // Identify opcode
 	cmd.nsid      = namespaceId;         // Target namespace
-	cmd.dptrLow   = dataPhys;
+	cmd.dptrLow   = this->dataPhys;
 	cmd.dptrHigh  = 0;
 	cmd.cdw10.raw = 0x00;               // CNS = 00h → Identify Namespace
 
@@ -226,7 +211,7 @@ bool NvmeDriver::identifyNamespace(uint32_t namespaceId) noexcept {
 	}
 
 	// 4. Parse the result
-	const auto* nsData = reinterpret_cast<IdentifyNamespaceData*>(dataVirt);
+	const auto* nsData = reinterpret_cast<IdentifyNamespaceData*>(this->dataVirt);
 
 	// flbas[3:0] is the index of the active LBA format
 	const uint8_t lbafIndex = nsData->flbas & 0x0Fu;
@@ -239,7 +224,7 @@ bool NvmeDriver::identifyNamespace(uint32_t namespaceId) noexcept {
 	info.lbaSize   = (lbads > 0) ? (1u << lbads) : 512u; // fallback to 512
 	info.valid     = true;
 
-	printf("NVMe: Namespace %u — %lu LBAs × %u bytes = %lu MB\n", namespaceId, info.totalLbas, info.lbaSize, (info.totalLbas * info.lbaSize) / (1024 * 1024));
+	printf("NVMe: Namespace %u — %lu LBAs × %u bytes = %lu MB", namespaceId, info.totalLbas, info.lbaSize, (info.totalLbas * info.lbaSize) / (1024 * 1024));
 	fflush(stdout);
 
 	namespaces.push_back(info);
@@ -269,6 +254,49 @@ void NvmeDriver::shutdown() noexcept {
 
 uint32_t NvmeDriver::getNamespaceCount() const noexcept {
 	return controllerInfo.nn;
+}
+
+bool NvmeDriver::getActiveNamespaces(vector<uint32_t>& nsids) noexcept {
+	uint64_t dataPhys = 0;
+
+	if (allocPhysPage(&dataPhys) != 0) {
+		return false;
+	}
+
+	uint64_t dataVirt = 0;
+
+	if (mmap_phys(dataPhys, 4096, &dataVirt, false) != 0) {
+		return false;
+	}
+
+	memset(reinterpret_cast<void*>(dataVirt), 0, 4096);
+
+	Command cmd {};
+	cmd.cdw0.setOpCode(0x06);  // Identify opcode
+	cmd.nsid      = 0;          // Start after NSID 0 = return all active NSIDs
+	cmd.dptrLow   = dataPhys;
+	cmd.dptrHigh  = 0;
+	cmd.cdw10.raw = 0x02;       // CNS = 02h → Active Namespace ID List
+
+	CompletionEntry cqe {};
+
+	if (not submitAdminCommand(cmd, cqe)) {
+		return false;
+	}
+
+	// The response is an array of up to 1024 uint32_t NSIDs.
+	// A value of 0x00000000 marks the end of the list.
+	const auto* list = reinterpret_cast<const uint32_t*>(dataVirt);
+
+	for (int i = 0; i < 1024; ++i) {
+		if (list[i] == 0) {
+			break;
+		}
+
+		nsids.push_back(list[i]);
+	}
+
+	return true;
 }
 
 uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) {

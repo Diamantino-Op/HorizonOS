@@ -243,18 +243,18 @@ struct CompletionEntry {
 };
 
 struct IdentifyControllerData {
-	uint16_t vid;             // PCI Vendor ID
-	uint16_t ssvid;           // PCI Subsystem Vendor ID
-	char     sn[20];          // Serial Number (ASCII, space-padded)
-	char     mn[40];          // Model Number (ASCII, space-padded)
-	char     fr[8];           // Firmware Revision
-	uint8_t  rab;             // Recommended Arbitration Burst
-	uint8_t  ieee[3];         // IEEE OUI Identifier
-	uint8_t  cmic;            // Controller Multi-Path I/O
-	uint8_t  mdts;            // Max Data Transfer Size (power of 2, in MPS units; 0 = no limit)
-	uint16_t cntlid;          // Controller ID
-	uint8_t  reserved[172];   // bytes 24–195, simplified
-	uint32_t nn;              // Number of Namespaces
+	uint16_t vid;
+	uint16_t ssvid;
+	char     sn[20];
+	char     mn[40];
+	char     fr[8];
+	uint8_t  rab;
+	uint8_t  ieee[3];
+	uint8_t  cmic;
+	uint8_t  mdts;
+	uint16_t cntlid;
+	uint8_t  reserved[436]; // pad from offset 24 → 344
+	uint32_t nn;
 } __attribute__((packed, aligned(4096)));
 
 struct LBAFormat {
@@ -291,7 +291,7 @@ public:
 	static void *coreHandler(void *ctx);
 
 	// Stores the MMIO base so later calls can read and write controller registers.
-	void attachRegisters(uint64_t* base, uint64_t size, PciDevice *ownDevice) noexcept;
+	void attachRegisters(uint64_t physData, uint64_t virtData, uint64_t* base, uint64_t size, PciDevice *ownDevice) noexcept;
 
 	// Resets the controller and waits for it to become ready.
 	[[nodiscard]] bool resetController() noexcept;
@@ -321,10 +321,15 @@ public:
 
 	[[nodiscard]] uint32_t getNamespaceCount() const noexcept;
 
+	[[nodiscard]] bool getActiveNamespaces(vector<uint32_t>& nsids) noexcept;
+
 	// Shuts the controller down and clears local state.
 	void shutdown() noexcept;
 
 private:
+	uint64_t dataPhys {};
+	uint64_t dataVirt {};
+
 	uint64_t* mmioBase {};
 	uint64_t mmioSize {};
 
