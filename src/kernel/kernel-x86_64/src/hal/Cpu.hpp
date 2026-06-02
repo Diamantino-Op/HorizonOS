@@ -26,6 +26,7 @@ namespace kernel::x86_64::hal {
 
     struct CpuCore {
     	u64 kernelStack {};
+    	u64 scratchUserRsp {};
 
         Apic apic {};
         Tsc tsc {};

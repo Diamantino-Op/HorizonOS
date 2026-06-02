@@ -28,6 +28,10 @@ namespace kernel::common::threading {
 	Thread::~Thread() {
 		TIDAllocator::freeTID(this->id);
 
+		if (this->syscallStackPointer != 0) {
+			VirtualAllocator::free(this->parent->getProcessContext(), reinterpret_cast<u64 *>(this->syscallStackPointer));
+		}
+
 		if (this->context != nullptr) {
 			this->deleteThreadArch();
 
@@ -116,6 +120,14 @@ namespace kernel::common::threading {
 
 	u64 Thread::getKStackPointer() const {
 		return this->kernelStackPointer;
+	}
+
+	void Thread::setSyscallStackPointer(const u64 newSyscallStackPointer) {
+		this->syscallStackPointer = newSyscallStackPointer;
+	}
+
+	u64 Thread::getSyscallStackPointer() const {
+		return this->syscallStackPointer;
 	}
 
 	bool Thread::is32Bit() const {

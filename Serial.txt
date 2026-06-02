@@ -6,7 +6,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mUpdated TSS... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mIDT Loaded... OK[0m
 [ [1;34minformation [0m] [1;30mPMM: [0;37mInitializing Physical Memory Manager...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8196894720[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8187162624[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAllocator Context created...[0m
 [ [1;34minformation [0m] [1;30mVMM: [0;37mInitializing Virtual Memory Manager...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVMM Loaded... OK[0m
@@ -14,15 +14,15 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVirtual Page Allocator initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mBrand: Intel(R) Core(TM) i9-10900 CPU @ 2.80GHz[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mVendor: GenuineIntel[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCores: 10[0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCores: 1[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mSIMD Enabled[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mCpu initialized...[0m
 [ [1;34minformation [0m] [1;30muACPI: [0;37mstarting uACPI, version 4.0.0
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mXSDT 0x000000007FB7D0E8 00000054 v01 (BOCHS  BXPC    )
-[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mDSDT 0x000000007FB7A000 000025D8 v01 (BOCHS  BXPC    )
+[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mDSDT 0x000000007FB7A000 000022D4 v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mFACP 0x000000007FB79000 000000F4 v03 (BOCHS  BXPC    )
-[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mAPIC 0x000000007FB78000 000000C0 v03 (BOCHS  BXPC    )
+[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mAPIC 0x000000007FB78000 00000078 v03 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mHPET 0x000000007FB77000 00000038 v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mMCFG 0x000000007FB76000 0000003C v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )
@@ -42,19 +42,19 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mClock: [0;37mNew main clock: Kvm[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAcpiPM Clock Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mClocks setup... OK[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 77683[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 77860[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 1: /boot/HorizonOS/services/name_registry Size: 1634672[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 1 as ELF...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 2: /boot/HorizonOS/services/name_registry.sym Size: 435791[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 3: /boot/HorizonOS/services/uacpi Size: 2333456[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 3 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/uacpi.sym Size: 124634321[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/uacpi.sym Size: 128396789[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 5: /boot/HorizonOS/services/pci Size: 1941672[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 5 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/pci.sym Size: 132692000[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/pci.sym Size: 136701752[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/nvme Size: 1609016[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 7 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/nvme.sym Size: 77785189[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/nvme.sym Size: 81272032[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mExample threads registered... OK[0m
 [ [1;34minformation [0m] [1;30mClock: [0;37mRegistering new clock: TSC[0m
 [ [1;34minformation [0m] [1;30mClock: [0;37mNew main clock: Kvm[0m

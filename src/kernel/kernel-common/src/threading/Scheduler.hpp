@@ -100,6 +100,9 @@ namespace kernel::common::threading {
     	void setKStackPointer(u64 newKStackPointer);
     	u64 getKStackPointer() const;
 
+    	void setSyscallStackPointer(u64 newSyscallStackPointer);
+    	u64 getSyscallStackPointer() const;
+
     	bool is32Bit() const;
 
     	ThreadOS getOS() const;
@@ -134,6 +137,8 @@ namespace kernel::common::threading {
 		u64 stackPointer {};
 
     	u64 kernelStackPointer {};
+
+    	u64 syscallStackPointer {};
 
     	bool bit32 = {};
 

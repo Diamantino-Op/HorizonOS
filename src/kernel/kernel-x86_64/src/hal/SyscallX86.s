@@ -3,14 +3,14 @@
 syscallHandler:
     cli
 
-    mov r15, rsp
-
-    mov rsp,  gs:[0x0]
-
     swapgs
 
-    push r15
+    mov gs:[0x8], rsp
+    mov rsp, gs:[0x0]
 
+    push gs:[0x8]
+
+    push r15
     push r14
     push r13
     push r12
@@ -49,7 +49,7 @@ syscallHandler:
     pop r14
     pop r15
 
-    mov rsp, r15
+    pop rsp
 
     swapgs
     sti

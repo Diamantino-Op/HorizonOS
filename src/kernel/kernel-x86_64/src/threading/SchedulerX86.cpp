@@ -348,7 +348,7 @@ namespace kernel::common::threading {
 			}
 
 			core->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
-			core->kernelStack = this->currentThread->value->getKStackPointer();
+			core->kernelStack = this->currentThread->value->getSyscallStackPointer();
 		}
 	}
 
@@ -381,6 +381,8 @@ namespace kernel::common::threading {
 		thread->setKStackPointer(newRsp);
 
 		if (isUser) {
+			thread->setSyscallStackPointer(reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize);
+
 			u64 userStack = userRsp;
 
 			if (userRsp == 0) {
