@@ -1292,25 +1292,18 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		// Validate the requested CPU ID exists.
 		if (mpRequest.response == nullptr) {
 			return EINVAL;
 		}
 
 		thread->setLockedCoreId(cpuId);
 
-		// Force this thread off the current CPU so the scheduler re-queues it
-		// on the correct execution node before it runs again.
 		const bool prevIF = scheduler->getSchedLock()->lock();
 
-		thread->setState(ThreadState::READY);
 		scheduler->removeThread(thread);
-		scheduler->readyThreadList.addEnd(thread);
 
 		scheduler->getSchedLock()->unlock(prevIF);
 
-		// Yield: this returns only once the scheduler picks us back up
-		// on the locked core.
 		ExecutionNode::reSchedule();
 
 		return 0;

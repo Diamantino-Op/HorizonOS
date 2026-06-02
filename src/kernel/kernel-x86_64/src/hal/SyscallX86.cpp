@@ -272,7 +272,7 @@ namespace kernel::common::hal {
 	}
 
 	void SyscallManager::setGsBase(const u64 gsBase) {
-		Asm::wrmsr(Msrs::KGSBAS, gsBase);
+		Asm::wrmsr(Msrs::UGSBAS, gsBase);
 	}
 
 	void SyscallManager::setFsBase(const u64 fsBase) {
@@ -280,7 +280,7 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::getGsBase() {
-		return Asm::rdmsr(Msrs::KGSBAS);
+		return Asm::rdmsr(Msrs::UGSBAS);
 	}
 
 	u64 SyscallManager::getFsBase() {

@@ -332,6 +332,8 @@ namespace kernel::common::threading {
 
 		CpuCore *core = CpuManager::getCurrentCore();
 
+		core->kernelStack = this->currentThread->value->getSyscallStackPointer();
+
 		if (ctx->threadTssIopb != nullptr) {
 			ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
 
@@ -348,7 +350,6 @@ namespace kernel::common::threading {
 			}
 
 			core->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
-			core->kernelStack = this->currentThread->value->getSyscallStackPointer();
 		}
 	}
 

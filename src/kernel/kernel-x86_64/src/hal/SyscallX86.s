@@ -3,12 +3,14 @@
 syscallHandler:
     cli
 
-    swapgs
+    #swapgs
 
     mov gs:[0x8], rsp
     mov rsp, gs:[0x0]
 
     push gs:[0x8]
+
+    swapgs
 
     push r15
     push r14

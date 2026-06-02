@@ -174,11 +174,11 @@ namespace kernel::x86_64::hal {
 
 		// Keep core pointer in KGSBAS (persists through swapgs).
 		// UGSBAS will hold either core ptr (kernel after user entry) or user GS (user mode).
-		Asm::wrmsr(UGSBAS, corePtr);
+		Asm::wrmsr(KGSBAS, corePtr);
 	}
 
 	CpuCore *CpuManager::getCurrentCore() {
-		return reinterpret_cast<CpuCore *>(Asm::rdmsr(UGSBAS));
+		return reinterpret_cast<CpuCore *>(Asm::rdmsr(KGSBAS));
 	}
 
 	void CpuManager::initCore(const u64 coreId, const u64 listIndex) const {

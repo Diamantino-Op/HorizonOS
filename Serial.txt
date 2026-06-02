@@ -6,7 +6,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mUpdated TSS... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mIDT Loaded... OK[0m
 [ [1;34minformation [0m] [1;30mPMM: [0;37mInitializing Physical Memory Manager...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8187162624[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8171843584[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAllocator Context created...[0m
 [ [1;34minformation [0m] [1;30mVMM: [0;37mInitializing Virtual Memory Manager...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVMM Loaded... OK[0m
@@ -14,15 +14,15 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVirtual Page Allocator initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mBrand: Intel(R) Core(TM) i9-10900 CPU @ 2.80GHz[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mVendor: GenuineIntel[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCores: 1[0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCores: 10[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mSIMD Enabled[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mCpu initialized...[0m
 [ [1;34minformation [0m] [1;30muACPI: [0;37mstarting uACPI, version 4.0.0
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mXSDT 0x000000007FB7D0E8 00000054 v01 (BOCHS  BXPC    )
-[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mDSDT 0x000000007FB7A000 000022D4 v01 (BOCHS  BXPC    )
+[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mDSDT 0x000000007FB7A000 000025D8 v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mFACP 0x000000007FB79000 000000F4 v03 (BOCHS  BXPC    )
-[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mAPIC 0x000000007FB78000 00000078 v03 (BOCHS  BXPC    )
+[0m[ [1;34minformation [0m] [1;30muACPI: [0;37mAPIC 0x000000007FB78000 000000C0 v03 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mHPET 0x000000007FB77000 00000038 v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mMCFG 0x000000007FB76000 0000003C v01 (BOCHS  BXPC    )
 [0m[ [1;34minformation [0m] [1;30muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )
@@ -48,16 +48,116 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 2: /boot/HorizonOS/services/name_registry.sym Size: 435791[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 3: /boot/HorizonOS/services/uacpi Size: 2333456[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 3 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/uacpi.sym Size: 128396789[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/uacpi.sym Size: 132995361[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 5: /boot/HorizonOS/services/pci Size: 1941672[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 5 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/pci.sym Size: 136701752[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/nvme Size: 1609016[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/pci.sym Size: 141602560[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/nvme Size: 1632864[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 7 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/nvme.sym Size: 81272032[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/nvme.sym Size: 85537271[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mExample threads registered... OK[0m
 [ [1;34minformation [0m] [1;30mClock: [0;37mRegistering new clock: TSC[0m
 [ [1;34minformation [0m] [1;30mClock: [0;37mNew main clock: Kvm[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTSC Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mSyscalls Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAll Cpus initialized...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 3: Name/Registry Service: Successfully registered port: 1![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 19: Starting Name/Registry check message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 18: Starting Name/Registry get message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 17: Starting Name/Registry unregister message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 16: Starting Name/Registry register message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 16: Service NVMe registered on port 2![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 16: Service PCI registered on port 3![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 16: Service uAcpi registered on port 4![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mstarting uACPI, version 4.0.0[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mXSDT 0x000000007FB7D0E8 00000054 v01 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mDSDT 0x000000007FB7A000 000025D8 v01 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACP 0x000000007FB79000 000000F4 v03 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mAPIC 0x000000007FB78000 000000C0 v03 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mHPET 0x000000007FB77000 00000038 v01 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mMCFG 0x000000007FB76000 0000003C v01 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mBGRT 0x000000007FB74000 00000038 v01 (INTEL  EDK2    )[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACS 0x000000007FBDD000 00000040[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 20: Starting uAcpi irq message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1789 ops in 0ms (avg 2196186/s)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 4, TID: 4, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 4), waiting for MCFG data...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI service ready, forwarding MCFG...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=0 ecam=e0000000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=128 ecam=e8000000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Requesting PCI service to search for NVMe devices...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e0000000 virt=ffff8000e0000000 buses=0-255[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e8000000 virt=ffff8000e8000000 buses=128-255[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: All MCFG segments received (2 segment(s))[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating devices...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating root complex seg=0 bus 00-ff[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating root complex seg=0 bus 80-ff[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Found 10 device(s):[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:00.0]  Vendor=8086  Device=29c0  Class=06:00  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:01.0]  Vendor=1234  Device=1111  Class=03:00  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:02.0]  Vendor=8086  Device=10d3  Class=02:00  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:03.0]  Vendor=1b36  Device=000b  Class=06:00  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:04.0]  Vendor=1b36  Device=0010  Class=01:08  ProgIF=02  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:1f.0]  Vendor=8086  Device=2918  Class=06:01  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:1f.2]  Vendor=8086  Device=2922  Class=01:06  ProgIF=01  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:00:1f.3]  Vendor=8086  Device=2930  Class=0c:05  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:80:00.0]  Vendor=1b36  Device=000c  Class=06:04  ProgIF=00  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5:   [0000:81:00.0]  Vendor=1b36  Device=000d  Class=0c:03  ProgIF=30  (PCIe/ECAM)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 29: PCI: Msix Global Disable message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: PCI: Msix Global Enable message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 27: PCI: Msix Free message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: PCI: Msix Alloc message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 25: PCI: Msi Free message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 24: PCI: Msi Alloc message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 23: PCI: Write message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 22: PCI: Read message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: PCI: Search Device message loop started![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI service will send 1 NVMe device(s).[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Received 1 NVMe device(s) from PCI service.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: barPhys: 0x7000000000, barSize: 0x4000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mnamespace initialization done in 147ms: 48 devices, 0 thermal zones[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37menabled 2 GPEs in block _GPE@[0->64][0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller model: QEMU NVMe Ctrl, serial: deadbeef, namespaces: 256[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Namespace 1 — 41943040 LBAs × 512 bytes = 20480 MB[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller 00:04.0 ready.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: 1 controller(s) initialized.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: CPUs: 10[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 0 with ID 0[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 1 with ID 1[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 2 with ID 2[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 3 with ID 3[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 4 with ID 4[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 5 with ID 5[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 6 with ID 6[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 7 with ID 7[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 8 with ID 8[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 9 with ID 9[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 39: NVMe 9: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 38: NVMe 8: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 37: NVMe 7: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 36: NVMe 6: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 35: NVMe 5: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 34: NVMe 4: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 33: NVMe 3: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 32: NVMe 2: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 31: NVMe 1: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 30: NVMe 0: Started handler for core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 36: NVMe 6: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 37: NVMe 7: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 34: NVMe 4: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 38: NVMe 8: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 35: NVMe 5: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 31: NVMe 1: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 39: NVMe 9: Locked to core![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 33: NVMe 3: Locked to core![0m

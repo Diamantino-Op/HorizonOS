@@ -496,7 +496,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	vector<pthread_t> coreThreads {};
 
-	/*{
+	{
 		uint64_t cpuCount = 0;
 
 		const int getErr = getCpuCount(&cpuCount);
@@ -525,7 +525,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		pthread_attr_t threadAttr;
 
 		pthread_attr_init(&threadAttr);
-		pthread_attr_setstacksize(&threadAttr, 0x4000); // 16 KB stack
+		pthread_attr_setstacksize(&threadAttr, 0xF000); // 16 KB stack
 
 		for (uint64_t i = 0; i < cpuCount; ++i) {
 			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
@@ -551,10 +551,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			pthread_detach(coreThread);
 
 			coreThreads.push_back(coreThread);
+
+			//usleep(10000);
 		}
 
 		pthread_attr_destroy(&threadAttr);
-	}*/
+	}
 
 	for (;;) {}
 
