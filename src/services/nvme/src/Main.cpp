@@ -473,10 +473,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				continue;
 			}
 
-			vector<uint32_t> activeNsids;
+			vector<uint32_t> activeNsIDs;
 
-			if (driver.getActiveNamespaces(activeNsids)) {
-				for (const uint32_t nsid : activeNsids) {
+			if (driver.getActiveNamespaces(activeNsIDs)) {
+				for (const uint32_t nsid : activeNsIDs) {
 					driver.identifyNamespace(nsid);
 				}
 			} else {
@@ -508,7 +508,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			return 1;
 		}
 
-		auto cpuIds = new uint64_t[cpuCount];
+		auto *cpuIds = new uint64_t[cpuCount];
 
 		const int getIDsErr = getCpuIds(cpuIds, cpuCount);
 
@@ -522,10 +522,21 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		printf("NVMe: CPUs: %lu", cpuCount);
 		fflush(stdout);
 
+		for (uint64_t i = 0; i < cpuCount; ++i) {
+			for (size_t c = 0; c < controllerDrivers.size(); ++c) {
+				const auto queueId = static_cast<uint16_t>(c * cpuCount + i + 1);
+
+				if (not controllerDrivers[c].createIoQueueForCore(i, queueId)) {
+					printf("NVMe: Failed to create I/O queue for core %lu, ctrl %zu", i, c);
+					fflush(stdout);
+				}
+			}
+		}
+
 		pthread_attr_t threadAttr;
 
 		pthread_attr_init(&threadAttr);
-		pthread_attr_setstacksize(&threadAttr, 0xF000); // 16 KB stack
+		pthread_attr_setstacksize(&threadAttr, 0x8000); // 32 KB stack
 
 		for (uint64_t i = 0; i < cpuCount; ++i) {
 			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
@@ -534,6 +545,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			auto *coreStruct = new CoreStruct();
 
 			coreStruct->cpuId = cpuIds[i];
+			coreStruct->coreSlot  = i;
+			coreStruct->nvmePort  = nvmePort;
 			coreStruct->nvmeDevices = &nvmeDevices;
 			coreStruct->controllerDrivers = &controllerDrivers;
 

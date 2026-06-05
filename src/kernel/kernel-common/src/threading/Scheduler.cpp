@@ -623,9 +623,9 @@ namespace kernel::common::threading {
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
-		if (!shouldReschedule) {
+		//if (!shouldReschedule) {
 			this->blockedThreadList.addStart(thread);
-		}
+		//}
 
 		if (useLock) {
 			this->schedLock.unlock(prevIF);

@@ -63,7 +63,7 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	const u64 roundedLen = roundUp<u64>(len + offset, pageSize);
 
 	for (u64 i = alignedAddr; i < alignedAddr + roundedLen; i += pageSize) {
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.unMapPage(i);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.unMapPage(i, false);
 	}
 }
 

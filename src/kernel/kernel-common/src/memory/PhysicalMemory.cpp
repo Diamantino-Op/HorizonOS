@@ -109,11 +109,13 @@ namespace kernel::common::memory {
 	}
 
 	void PhysicalMemoryManager::freePagesCtx(const AllocContext *ctx, u64 *virtAddress, const usize pageAmount) {
+		this->freePagesPhys(reinterpret_cast<u64 *>(ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(virtAddress))), pageAmount);
+	}
+
+	void PhysicalMemoryManager::freePagesPhys(u64 *physAddress, const usize pageAmount) {
 		const bool prevIF = this->pmmSpinLock.lock();
 
-		const u64 hhdmVirtAddress = ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(virtAddress)) + CommonMain::getCurrentHhdm();
-
-		auto *currEntry = reinterpret_cast<PmmListEntry *>(hhdmVirtAddress);
+		auto *currEntry = reinterpret_cast<PmmListEntry *>(physAddress + CommonMain::getCurrentHhdm());
 
 		memset(currEntry, 0, pageAmount * pageSize);
 

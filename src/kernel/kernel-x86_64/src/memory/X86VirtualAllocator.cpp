@@ -8,7 +8,7 @@ namespace kernel::common::memory {
 	using namespace x86_64::memory;
 	using namespace x86_64::utils;
 
-	void VirtualAllocator::freePageTableChildren(AllocContext *ctx, const u64 *tableAddr, const bool level5Paging, const u8 depth) {
+	void VirtualAllocator::freePageTableChildren(const u64 *tableAddr, const bool level5Paging, const u8 depth) {
 		const auto *table = reinterpret_cast<const PageTable *>(tableAddr);
 		const u8 leafTableDepth = level5Paging ? 4 : 3;
 
@@ -40,13 +40,14 @@ namespace kernel::common::memory {
 					continue;
 				}
 
-				CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), pageCount);
+				CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(entryPhysAddress), pageCount);
+
 				continue;
 			}
 
-			freePageTableChildren(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
+			freePageTableChildren(reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
 
-			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), 1);
+			CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(entryPhysAddress), 1);
 		}
 	}
 
@@ -65,12 +66,12 @@ namespace kernel::common::memory {
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
-		freePageTableChildren(ctx, ctx->pageMap.getPageTable(), ctx->pageMap.level5Paging(), 0);
+		freePageTableChildren(ctx->pageMap.getPageTable(), ctx->pageMap.level5Paging(), 0);
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 
-		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(pageTablePhys + CommonMain::getCurrentHhdm()), 1);
-		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(ctxPhys + CommonMain::getCurrentHhdm()), 1);
+		CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(pageTablePhys), 1);
+		CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(ctxPhys), 1);
 	}
 
 	void VirtualAllocator::shareKernelPages(const AllocContext *ctx) {

@@ -48,10 +48,10 @@ handleInterrupt:
     add rsp, 16
 
     test byte ptr [rsp + 8], 3
-    jz .exixInterrupt
+    jz .exitInterrupt
     swapgs
 
-.exixInterrupt:
+.exitInterrupt:
     iretq
 
 .macro createInterruptHandler interruptNumber

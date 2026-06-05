@@ -65,6 +65,10 @@ namespace kernel::common::threading {
 	}
 
 	Thread *Scheduler::getCurrentThread() {
+		if (CpuManager::getCurrentCore() == nullptr or CpuManager::getCurrentCore()->executionNode.getCurrentThread() == nullptr) {
+			return nullptr;
+		}
+
 		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
 	}
 
@@ -188,7 +192,7 @@ namespace kernel::common::threading {
 				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
 			}
 		} else if (this->currentThread != this->idleThread) {
-			if (this->currentThread->value->getLockedCoreId() == ~0x0u) {
+			if (this->currentThread->value->getLockedCoreId() == ~0x0U) {
 				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 			} else {
 				ExecutionNode *node = Scheduler::getCoreEN(this->currentThread->value->getLockedCoreId());
@@ -196,7 +200,7 @@ namespace kernel::common::threading {
 				if (node == nullptr) {
 					schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 
-					this->currentThread->value->setLockedCoreId(~0x0u);
+					this->currentThread->value->setLockedCoreId(~0x0U);
 				} else {
 					node->lockedThreadQueues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
 				}
@@ -293,8 +297,8 @@ namespace kernel::common::threading {
 				}
 			}
 
-			if (selectedEntry != nullptr && selectedEntry != this->idleThread) {
-				this->preferLockedQueues = (selectedQueueClass == 0);
+			if (selectedEntry != nullptr and selectedEntry != this->idleThread) {
+				this->preferLockedQueues = (selectedQueueClass == 1);
 			}
 
 			this->currentThread = selectedEntry;

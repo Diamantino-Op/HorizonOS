@@ -433,9 +433,9 @@ namespace kernel::common::hal {
 			const u8 bitIdx  = port % 8;
 
 			if (state != 0) {
-				threadTss->iopb[byteIdx] &= ~(1u << bitIdx);
+				threadTss->iopb[byteIdx] &= ~(1U << bitIdx);
 			} else {
-				threadTss->iopb[byteIdx] |=  (1u << bitIdx);
+				threadTss->iopb[byteIdx] |=  (1U << bitIdx);
 			}
 		}
 

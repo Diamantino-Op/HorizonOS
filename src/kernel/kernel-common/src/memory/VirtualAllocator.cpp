@@ -332,9 +332,9 @@ namespace kernel::common::memory {
 		for (usize i = 0; i < pagesToFree * pageSize; i += pageSize) {
 			auto *virtAddress = reinterpret_cast<u64 *>(blockStart + i);
 
-			ctx->pageMap.unMapPage(reinterpret_cast<u64>(virtAddress));
+			//CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, virtAddress, 1);
 
-			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, virtAddress, 1);
+			ctx->pageMap.unMapPage(reinterpret_cast<u64>(virtAddress));
 		}
 
 		if (prev != nullptr) {

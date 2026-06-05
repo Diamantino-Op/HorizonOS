@@ -14,6 +14,15 @@ constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
 constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
 
+constexpr uint64_t NVME_READ_MSG_BASE        = 0x10000;
+constexpr uint64_t NVME_WRITE_MSG_BASE       = 0x20000;
+constexpr uint64_t NVME_FLUSH_MSG_BASE       = 0x30000;
+constexpr uint64_t NVME_REPLY_READ_MSG_BASE  = 0x40000;
+constexpr uint64_t NVME_REPLY_WRITE_MSG_BASE = 0x50000;
+constexpr uint64_t NVME_REPLY_FLUSH_MSG_BASE = 0x60000;
+
+constexpr uint32_t NVME_MAX_PAGES_PER_MSG = 256;
+
 struct PciReadMsgData {
 	uint8_t bus {};
 	uint8_t dev {};
@@ -48,8 +57,46 @@ struct PciDevice {
 	bool     isPcie;
 };
 
+// Read/write carry a fixed-size array of physical page addresses.
+// pageCount <= NVME_MAX_PAGES_PER_MSG. Pages are NOT assumed contiguous.
+struct NvmeReadMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t lba {};
+	uint32_t pageCount {};         // number of entries in pagePhysArray
+	uint64_t pagePhysArray[NVME_MAX_PAGES_PER_MSG] {};
+};
+
+struct NvmeReadReplyMsgData {
+	bool     success {};
+	uint32_t pageCount {};
+};
+
+struct NvmeWriteMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t lba {};
+	uint32_t pageCount {};
+	uint64_t pagePhysArray[NVME_MAX_PAGES_PER_MSG] {};
+};
+
+struct NvmeWriteReplyMsgData {
+	bool success {};
+};
+
+struct NvmeFlushMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+};
+
+struct NvmeFlushReplyMsgData {
+	bool success {};
+};
+
 struct CoreStruct {
 	uint64_t cpuId {};
+	uint64_t coreSlot {};
+	uint64_t nvmePort {};
 	vector<PciDevice> *nvmeDevices {};
 	vector<NvmeDriver> *controllerDrivers {};
 };
@@ -284,49 +331,50 @@ struct NamespaceInfo {
 	bool     valid;
 };
 
+struct PrpListPage {
+	uint64_t phys {};
+	uint64_t virt {};
+};
+
+struct IoQueuePair {
+	Command*         sq {};
+	CompletionEntry* cq {};
+	uint64_t         sqPhys {};
+	uint64_t         cqPhys {};
+	uint32_t         depth { 64 };
+	uint32_t         sqTail { 0 };
+	uint32_t         cqHead { 0 };
+	uint8_t          cqPhase { 1 };
+	uint16_t         queueId { 0 };   // NVMe queue ID (1-based, admin = 0)
+	bool             valid { false };
+};
+
 class NvmeDriver {
 public:
 	NvmeDriver() = default;
 
-	static void *coreHandler(void *ctx);
+	static auto coreHandler(void *ctx) -> void *;
 
-	// Stores the MMIO base so later calls can read and write controller registers.
-	void attachRegisters(uint64_t physData, uint64_t virtData, uint64_t* base, uint64_t size, PciDevice *ownDevice) noexcept;
-
-	// Resets the controller and waits for it to become ready.
-	[[nodiscard]] bool resetController() noexcept;
-
-	[[nodiscard]] bool enableController() noexcept;
-
-	// Configures the admin submission and completion queues.
-	[[nodiscard]] bool initializeAdminQueues() noexcept;
-
-	// Sends a single admin command and waits for the completion entry.
-	[[nodiscard]] bool submitAdminCommand(const Command& command, CompletionEntry& result) noexcept;
-
-	// Reads the controller identification data.
-	[[nodiscard]] bool identifyController() noexcept;
-
-	// Reads namespace identification data for a specific namespace.
-	[[nodiscard]] bool identifyNamespace(uint32_t namespaceId) noexcept;
-
-	// Issues a read request for a namespace.
-	[[nodiscard]] bool read(uint32_t namespaceId, uint64_t lba, void* buffer, size_t blockCount) noexcept;
-
-	// Issues a write request for a namespace.
-	[[nodiscard]] bool write(uint32_t namespaceId, uint64_t lba, const void* buffer, size_t blockCount) noexcept;
-
-	// Flushes outstanding writes for a namespace.
-	[[nodiscard]] bool flush(uint32_t namespaceId) noexcept;
-
-	[[nodiscard]] uint32_t getNamespaceCount() const noexcept;
-
-	[[nodiscard]] bool getActiveNamespaces(vector<uint32_t>& nsids) noexcept;
-
-	// Shuts the controller down and clears local state.
+	void attachRegisters(uint64_t physData, uint64_t virtData, uint64_t *base, uint64_t size, PciDevice *ownDevice) noexcept;
+	auto resetController() const noexcept -> bool;
+	auto enableController() const noexcept -> bool;
+	auto initializeAdminQueues() noexcept -> bool;
+	auto submitAdminCommand(const Command &command, CompletionEntry &result) noexcept -> bool;
+	auto identifyController() noexcept -> bool;
+	auto identifyNamespace(uint32_t namespaceId) noexcept -> bool;
+	auto read(uint32_t namespaceId, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, uint64_t coreSlot) noexcept -> bool;
+	auto write(uint32_t namespaceId, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, uint64_t coreSlot) noexcept -> bool;
+	auto flush(uint32_t namespaceId, uint64_t coreSlot) noexcept -> bool;
+	auto createIoQueueForCore(uint64_t coreSlot, uint16_t queueId) noexcept -> bool;
+	auto submitIoCommand(IoQueuePair& queue, const Command &command, CompletionEntry &result) const noexcept -> bool;
+	auto getNamespaceCount() const noexcept -> uint32_t;
+	auto getActiveNamespaces(vector<uint32_t> &nsIDs) noexcept -> bool;
 	void shutdown() noexcept;
 
 private:
+	static auto buildChainedPrpList(const uint64_t* pagePhysArray, uint32_t pageCount, uint64_t& prp1, uint64_t& prp2, vector<PrpListPage>& prpListPages) noexcept -> bool;
+	static void freePrpListPages(vector<PrpListPage>& pages) noexcept;
+
 	uint64_t dataPhys {};
 	uint64_t dataVirt {};
 
@@ -335,8 +383,8 @@ private:
 
 	PciDevice *device {};
 
-	Command* adminSQ {};   // Admin Submission Queue (64-byte entries)
-	CompletionEntry* adminCQ {};   // Admin Completion Queue (16-byte entries)
+	Command* adminSQ {};
+	CompletionEntry* adminCQ {};
 	uint32_t adminQDepth { 64 };
 
 	uint32_t adminSQTail { 0 };
@@ -347,28 +395,31 @@ private:
 
 	IdentifyControllerData controllerInfo {};
 	vector<NamespaceInfo> namespaces;
+	
+	vector<IoQueuePair> ioQueues;
+	uint32_t maxTransferBlocks { 0 };
 };
 
-uint32_t pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
+auto pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) -> uint32_t;
 void pciWrite32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint32_t data);
 
-inline uint8_t *mmioBytes(uint64_t *base) noexcept {
+inline auto mmioBytes(uint64_t *base) noexcept -> uint8_t * {
 	return reinterpret_cast<uint8_t *>(base);
 }
 
-inline uint32_t mmioRead32(uint64_t *base, size_t offset) noexcept {
+inline auto mmioRead32(uint64_t *base, size_t offset) noexcept -> uint32_t {
 	return *reinterpret_cast<uint32_t *>(mmioBytes(base) + offset);
 }
 
-inline void mmioWrite32(uint64_t *base, size_t offset, uint32_t value) noexcept {
+inline void mmioWrite32(uint64_t *base, const size_t offset, const uint32_t value) noexcept {
 	*reinterpret_cast<volatile uint32_t *>(mmioBytes(base) + offset) = value;
 }
 
-inline uint64_t mmioRead64(uint64_t *base, size_t offset) noexcept {
+inline auto mmioRead64(uint64_t *base, const size_t offset) noexcept -> uint64_t {
 	return *reinterpret_cast<volatile uint64_t *>(mmioBytes(base) + offset);
 }
 
-inline void mmioWrite64(uint64_t *base, size_t offset, uint64_t value) noexcept {
+inline void mmioWrite64(uint64_t *base, const size_t offset, const uint64_t value) noexcept {
 	*reinterpret_cast<uint64_t *>(mmioBytes(base) + offset) = value;
 }
 

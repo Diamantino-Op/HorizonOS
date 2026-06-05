@@ -94,7 +94,7 @@ namespace kernel::common::memory {
 	}
 
 	// TODO: Free pages
-	void PageMap::unMapPage(const u64 vAddr) {
+	void PageMap::unMapPage(const u64 vAddr, bool freePage) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -130,7 +130,18 @@ namespace kernel::common::memory {
 
 		auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
 		if (lvl1Table->entries[lvl1].present) {
-			memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
+			if (freePage) {
+				const u64 physAddr = (lvl1Table->entries[lvl1].address << 12) + (vAddr & 0xFFF);
+				const bool hadAddr = lvl1Table->entries[lvl1].address != 0;
+
+				memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
+
+				if (hadAddr) {
+					CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(physAddr), 1);
+				}
+			} else {
+				memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
+			}
 		}
 
 		if (not isKernel) {

@@ -27,6 +27,8 @@ namespace kernel::common::memory {
 
     	void freePagesCtx(const AllocContext *ctx, u64 *virtAddress, usize pageAmount);
 
+    	void freePagesPhys(u64 *physAddress, usize pageAmount);
+
         u64 getFreeMemory() const;
 
     private:

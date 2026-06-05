@@ -314,8 +314,8 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMUnmap(long *, const u64 addr, const u64 size, u64, u64, u64, u64) {
-		if (size == 0 || addr == 0) {
+	u64 SyscallManager::syscallMUnmap(long *, const u64 addr, const u64 size, const u64 freePage, u64, u64, u64) {
+		if (size == 0 or addr == 0) {
 			return EINVAL;
 		}
 
@@ -325,7 +325,7 @@ namespace kernel::common::hal {
 		const u64 topAddr = alignUp<u64>(addr + size, pageSize);
 
 		for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
-			ctx->pageMap.unMapPage(i);
+			ctx->pageMap.unMapPage(i, static_cast<bool>(freePage));
 		}
 
 		return 0;

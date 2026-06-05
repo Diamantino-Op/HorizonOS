@@ -26,7 +26,7 @@ namespace kernel::common::memory {
 
         void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
 
-        void unMapPage(u64 vAddr);
+        void unMapPage(u64 vAddr, bool freePage = true);
 
     	bool protectPage(u64 vAddr, u8 prot);
 

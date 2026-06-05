@@ -131,7 +131,7 @@ void *uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) {
 }
 
 void uacpi_kernel_unmap(void *addr, const uacpi_size len) {
-	munmap(addr, len);
+	munmap_extra(addr, len, false);
 }
 
 void *uacpi_kernel_alloc(const uacpi_size size) {

@@ -121,7 +121,7 @@ namespace kernel::common::hal {
     	// HorizonOS / Linux syscalls
 		static u64 syscallPrint(long *, u64 message, u64, u64, u64, u64, u64);
     	static u64 syscallMMap(long *ret, u64 hint, u64 size, u64 prot, u64 flags, u64 fd, u64 offset);
-    	static u64 syscallMUnmap(long *, u64 addr, u64 size, u64, u64, u64, u64);
+    	static u64 syscallMUnmap(long *, u64 addr, u64 size, u64 freePage, u64, u64, u64);
     	static u64 syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64);
     	static u64 syscallArchCtl(long *ret, u64 operation, u64 pointer, u64, u64, u64, u64);
     	static u64 syscallExit(long *, u64 status, u64, u64, u64, u64, u64);
