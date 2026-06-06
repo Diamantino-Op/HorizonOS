@@ -1,6 +1,7 @@
 #include "CpuId.hpp"
 
 #include "CommonMain.hpp"
+#include "memory/MainMemory.hpp"
 
 namespace kernel::x86_64::utils {
 	using namespace kernel::common;
@@ -28,8 +29,9 @@ namespace kernel::x86_64::utils {
 				signature[1] = res.ecx;
 				signature[2] = res.edx;
 
-				if (!memcmp("KVMKVMKVM\0\0\0", signature, 12))
+				if (not memcmp("KVMKVMKVM\0\0\0", signature, 12)) {
 					return base;
+				}
 			}
 		}
 

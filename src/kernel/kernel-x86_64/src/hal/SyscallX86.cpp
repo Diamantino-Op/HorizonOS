@@ -551,7 +551,7 @@ namespace kernel::common::hal {
 	}
 
 	u64 SyscallManager::syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64) {
-		*ret = CpuManager::getCurrentCore()->apic.isInitialized() ?  UACPI_INTERRUPT_MODEL_IOAPIC : UACPI_INTERRUPT_MODEL_PIC;
+		*ret = CpuManager::getCurrentCore()->apic.isInitialized() ?  1 : 0;
 
 		return 0;
 	}

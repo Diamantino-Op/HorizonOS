@@ -2,6 +2,7 @@
 
 #include "CommonMain.hpp"
 #include "Math.hpp"
+#include "memory/MainMemory.hpp"
 
 namespace kernel::common::programs {
 	// Helper function to map a range of memory for ELF loading

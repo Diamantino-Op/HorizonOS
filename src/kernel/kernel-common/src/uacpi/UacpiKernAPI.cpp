@@ -1,12 +1,8 @@
-#define UACPI_NATIVE_ALLOC_ZEROED
-//#define UACPI_BAREBONES_MODE
-
 #include "UacpiKernAPI.hpp"
 
 #include "CommonMain.hpp"
 #include "memory/MainMemory.hpp"
 #include "Math.hpp"
-#include "Event.hpp"
 #include "utils/Asm.hpp"
 
 #include "limine.h"
@@ -67,36 +63,6 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	}
 }
 
-u64 *lastAllocatedAddr = nullptr;
-
-void *uacpi_kernel_alloc(uacpi_size size) {
-	void *mem = malloc(size);
-
-	if (mem == nullptr) {
-		CommonMain::getTerminal()->debug("Allocating %u bytes, failed: 0x%.16lx, last address: 0x%.16lx", "uACPI", size, mem, lastAllocatedAddr);
-	} else {
-		lastAllocatedAddr = static_cast<u64 *>(mem);
-	}
-
-	return mem;
-}
-
-void *uacpi_kernel_alloc_zeroed(uacpi_size size) {
-	void *mem = malloc(size);
-
-	if (mem == nullptr) {
-		CommonMain::getTerminal()->debug("Allocating zeroed %u bytes, failed: 0x%.16lx, last address: 0x%.16lx", "uACPI", size, mem, lastAllocatedAddr);
-	} else {
-		lastAllocatedAddr = static_cast<u64 *>(mem);
-	}
-
-	return mem;
-}
-
-void uacpi_kernel_free(void *mem) {
-	free(mem);
-}
-
 void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
 	Terminal* terminal = CommonMain::getTerminal();
 
@@ -120,240 +86,18 @@ void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
 	}
 }
 
-uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot() {
-	return CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
-}
-
-void uacpi_kernel_stall(uacpi_u8 uSec) {
-	CommonMain::getTerminal()->debug("Stalling for: %u us", "uACPI", uSec);
-	CommonMain::getInstance()->getClocks()->stallNs(uSec * 1000);
-}
-
-// PCI
-
-uacpi_status uacpi_kernel_pci_device_open(uacpi_pci_address address, uacpi_handle *out_handle) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-void uacpi_kernel_pci_device_close(uacpi_handle handle) {
-
-}
-
-uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacpi_u8 *value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uacpi_u16 *value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uacpi_u32 *value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uacpi_u8 value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, uacpi_u16 value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, uacpi_u32 value) {
-	return UACPI_STATUS_UNIMPLEMENTED;
-}
-
-// I/O
-
-// TODO: Use new VPage map
-
-uacpi_status uacpi_kernel_io_map(uacpi_io_addr base, uacpi_size len, uacpi_handle *out_handle) {
-	CommonMain::getTerminal()->debug("Mapping %u bytes at 0x%.16lx", "uACPI", len, base);
-
-	*out_handle = reinterpret_cast<u64 *>(base); // TODO: to fix (for other arches)
-
-	return UACPI_STATUS_OK;
-}
-
-void uacpi_kernel_io_unmap(uacpi_handle handle) {
-
-}
-
-uacpi_status uacpi_kernel_io_read8(uacpi_handle handle, uacpi_size offset, uacpi_u8 *out_value) {
-	return uacpiKernelIoRead8(handle, offset, out_value);
-}
-
-uacpi_status uacpi_kernel_io_read16(uacpi_handle handle, uacpi_size offset, uacpi_u16 *out_value) {
-	return uacpiKernelIoRead16(handle, offset, out_value);
-}
-
-uacpi_status uacpi_kernel_io_read32(uacpi_handle handle, uacpi_size offset, uacpi_u32 *out_value) {
-	return uacpiKernelIoRead32(handle, offset, out_value);
-}
-
-uacpi_status uacpi_kernel_io_write8(uacpi_handle handle, uacpi_size offset, uacpi_u8 in_value) {
-	return uacpiKernelIoWrite8(handle, offset, in_value);
-}
-
-uacpi_status uacpi_kernel_io_write16(uacpi_handle handle, uacpi_size offset, uacpi_u16 in_value) {
-	return uacpiKernelIoWrite16(handle, offset, in_value);
-}
-
-uacpi_status uacpi_kernel_io_write32(uacpi_handle handle, uacpi_size offset, uacpi_u32 in_value) {
-	return uacpiKernelIoWrite32(handle, offset, in_value);
-}
-
-// Threads
-// TODO: Create threads first
-void uacpi_kernel_sleep(uacpi_u64 mSec) {
-	CommonMain::getInstance()->getClocks()->stallNs(mSec * 1'000'000ull); // TODO: use real sleep
-}
-
-uacpi_thread_id uacpi_kernel_get_thread_id() {
-	return reinterpret_cast<void *>(1);
-}
-
-uacpi_handle uacpi_kernel_create_mutex() {
-	return new SimpleSpinLock();
-}
-
-void uacpi_kernel_free_mutex(uacpi_handle handle) {
-	free(handle);
-}
-
-uacpi_status uacpi_kernel_acquire_mutex(uacpi_handle handle, uacpi_u16 timeout) {
-	static_cast<SimpleSpinLock *>(handle)->lock();
-
-	return UACPI_STATUS_OK;
-}
-
-void uacpi_kernel_release_mutex(uacpi_handle handle) {
-	static_cast<SimpleSpinLock *>(handle)->unlock(true);
-}
-
-uacpi_bool uacpi_kernel_wait_for_event(uacpi_handle handle, uacpi_u16 timeout) {
-	const auto event = static_cast<SimpleEvent *>(handle);
-
-	if (timeout == 0xFFFF) {
-		while (!event->decrement()) {
-			uacpi_kernel_sleep(1);
-		}
-
-		return true;
-	}
-
-	i64 remaining = timeout;
-
-	while (!event->decrement()) {
-		if (remaining <= 0) {
-			return false;
-		}
-
-		uacpi_kernel_sleep(1);
-		remaining -= 1;
-	}
-
-	return true;
-}
-
-uacpi_handle uacpi_kernel_create_event() {
-	return new SimpleEvent(0);
-}
-
-void uacpi_kernel_free_event(uacpi_handle handle) {
-	delete static_cast<SimpleEvent *>(handle);
-}
-
-void uacpi_kernel_signal_event(uacpi_handle handle) {
-	static_cast<SimpleEvent *>(handle)->add(1);
-}
-
-void uacpi_kernel_reset_event(uacpi_handle handle) {
-	static_cast<SimpleEvent *>(handle)->set(0);
-}
-
-uacpi_status uacpi_kernel_schedule_work(uacpi_work_type workType, uacpi_work_handler workHandler, uacpi_handle ctx) {
-	return UACPI_STATUS_OK;
-}
-
-uacpi_status uacpi_kernel_wait_for_work_completion() {
-	return UACPI_STATUS_OK;
-}
-
-// Interrupts
-
-uacpi_status uacpi_kernel_handle_firmware_request(uacpi_firmware_request *request) {
-	return UACPI_STATUS_OK;
-}
-
-uacpi_status uacpi_kernel_install_interrupt_handler(uacpi_u32 irq, uacpi_interrupt_handler intHandler, uacpi_handle ctx, uacpi_handle *out_irq_handle) {
-	return uacpiKernelInstallInterruptHandler(irq, intHandler, ctx, out_irq_handle);
-}
-
-uacpi_status uacpi_kernel_uninstall_interrupt_handler(uacpi_interrupt_handler intHandler, uacpi_handle irq_handle) {
-	return uacpiKernelUninstallInterruptHandler(intHandler, irq_handle);
-}
-
-uacpi_handle uacpi_kernel_create_spinlock() {
-	return new TicketSpinLock();
-}
-
-void uacpi_kernel_free_spinlock(uacpi_handle handle) {
-	delete static_cast<TicketSpinLock *>(handle);
-}
-
-uacpi_cpu_flags uacpi_kernel_lock_spinlock(uacpi_handle handle) {
-	return static_cast<TicketSpinLock *>(handle)->lock();
-}
-
-void uacpi_kernel_unlock_spinlock(uacpi_handle handle, uacpi_cpu_flags prevIF) {
-	static_cast<TicketSpinLock *>(handle)->unlock(prevIF);
-}
-
 // API
 
 #include "uacpi/uacpi.h"
 #include "uacpi/event.h"
-#include "uacpi/sleep.h"
 #include "uacpi/tables.h"
 #include "uacpi/context.h"
 
 namespace kernel::common::uacpi {
-	void UAcpi::init() {
-		Terminal* terminal = CommonMain::getTerminal();
-
-		if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to initialize: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-
-		if (const uacpi_status ret = uacpi_namespace_load(); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to load namespaces: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-
-		this->archMiddleInit();
-
-		if (const uacpi_status ret = uacpi_namespace_initialize(); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to initialize namespaces: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-
-		if (const uacpi_status ret = uacpi_finalize_gpe_initialization(); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to initialize GPEs: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-
-		// Free early init table
-
-		CommonMain::getInstance()->getPMM()->freePages(this->earlyInitTablePtr, 1);
-
-		// Events
-
-		if (const uacpi_status ret = uacpi_install_fixed_event_handler(UACPI_FIXED_EVENT_POWER_BUTTON, &handlerPowerBtn, nullptr); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to install pwr button handler: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-	}
-
 	void UAcpi::earlyInit() {
 		uacpi_context_set_log_level(UACPI_LOG_INFO);
 
+		// TODO: Maybe free this
 		this->earlyInitTablePtr = CommonMain::getInstance()->getPMM()->allocPages(1, true);
 
 		uacpi_setup_early_table_access(this->earlyInitTablePtr, pageSize);
@@ -426,47 +170,27 @@ namespace kernel::common::uacpi {
 		}
 	}
 
-	void UAcpi::shutdown() {
-		Terminal* terminal = CommonMain::getTerminal();
-
-		if (const uacpi_status ret = uacpi_prepare_for_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to prepare for S5: %s", "uAcpi", uacpi_status_to_string(ret));
-
-			return;
-		}
-
-		terminal->debug("Preparing to enter S5...", "uAcpi");
-
-		this->disableInts();
-
-		terminal->debug("Entering S5...", "uAcpi");
-
-		if (const uacpi_status ret = uacpi_enter_sleep_state(UACPI_SLEEP_STATE_S5); uacpi_unlikely_error(ret)) {
-			terminal->error("Failed to enter S5: %s", "uAcpi", uacpi_status_to_string(ret));
-		}
-	}
-
-	acpi_fadt *UAcpi::getFadtTable() const {
+	auto UAcpi::getFadtTable() const -> acpi_fadt * {
 		return this->fadt;
 	}
 
-	acpi_madt *UAcpi::getMadtTable() const {
+	auto UAcpi::getMadtTable() const -> acpi_madt * {
 		return this->madt;
 	}
 
-	acpi_madt_ioapic *UAcpi::getIoApics() const {
+	auto UAcpi::getIoApics() const -> acpi_madt_ioapic * {
 		return this->ioApics;
 	}
 
-	u64 UAcpi::getIoApicsAmount() const {
+	auto UAcpi::getIoApicsAmount() const -> u64 {
 		return this->ioApicsAmount;
 	}
 
-	acpi_madt_interrupt_source_override *UAcpi::getIsos() const {
+	auto UAcpi::getIsos() const -> acpi_madt_interrupt_source_override * {
 		return this->isos;
 	}
 
-	u64 UAcpi::getIsosAmount() const {
+	auto UAcpi::getIsosAmount() const -> u64 {
 		return this->isosAmount;
 	}
 }

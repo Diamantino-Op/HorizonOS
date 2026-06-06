@@ -38,7 +38,7 @@ namespace kernel::common::hal {
         bool initialized {};
 
         acpi_gas timerBlock {};
-        uacpi_mapped_gas *timerBlockMapped {};
+        u32 *timerBlockMapped {};
 
         Clock clock {};
     };

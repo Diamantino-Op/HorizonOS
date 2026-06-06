@@ -30,7 +30,9 @@ kernel_c_flags = [
     '-Wno-error=unused-private-field',
     '-Wno-error=cast-function-type-mismatch',
     '-Wno-error=deprecated-enum-enum-conversion',
-    '-Wno-unused-command-line-argument'
+    '-Wno-unused-command-line-argument',
+    '-DUACPI_NATIVE_ALLOC_ZEROED',
+    '-DUACPI_BAREBONES_MODE'
 ]
 
 kernel_cpp_flags = []

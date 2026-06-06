@@ -41,23 +41,30 @@ namespace kernel::common::hal {
 			v1 = readInternal();
 			v2 = readInternal();
 			v3 = readInternal();
-		} while (__builtin_expect(((v1 > v2 && v1 < v3) || (v2 > v3 && v2 < v1) || (v3 > v1 && v3 < v2)), 0));
+		} while (__builtin_expect(((v1 > v2 and v1 < v3) or (v2 > v3 and v2 < v1) or (v3 > v1 and v3 < v2)), 0));
 
 		return v2 & mask;
 	}
 
 	u64 AcpiPM::readInternal() const {
-		u64 value;
+		if (timerBlock.address_space_id == UACPI_ADDRESS_SPACE_SYSTEM_IO) {
+			u32 value = 0;
 
-		if (timerBlockMapped == nullptr) {
-			return 0;
+			// TODO: Make for other arches too
+			asm volatile("inl %1, %0" : "=a"(value) : "Nd"(static_cast<u16>(timerBlock.address)));
+
+			return value;
 		}
 
-		if (uacpi_gas_read_mapped(timerBlockMapped, &value) != UACPI_STATUS_OK) {
-			return 0;
+		if (timerBlock.address_space_id == UACPI_ADDRESS_SPACE_SYSTEM_MEMORY) {
+			if (this->timerBlockMapped == nullptr) {
+				return 0;
+			}
+
+			return *this->timerBlockMapped;
 		}
 
-		return value;
+		return 0;
 	}
 
 	bool AcpiPM::supported() {
@@ -77,10 +84,18 @@ namespace kernel::common::hal {
 			return false;
 		}
 
-		if (timerBlockMapped == nullptr) {
-			if (uacpi_map_gas(&timerBlock, &timerBlockMapped) != UACPI_STATUS_OK) {
-				return false;
+		if (timerBlock.address_space_id == UACPI_ADDRESS_SPACE_SYSTEM_MEMORY) {
+			if (this->timerBlockMapped == nullptr) {
+				this->timerBlockMapped = reinterpret_cast<u32 *>(timerBlock.address + CommonMain::getCurrentHhdm());
+
+				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(reinterpret_cast<u64>(this->timerBlockMapped), timerBlock.address, 0b00000011, true, false);
+
+				if (this->timerBlockMapped == nullptr) {
+					return false;
+				}
 			}
+		} else if (timerBlock.address_space_id != UACPI_ADDRESS_SPACE_SYSTEM_IO) {
+			return false;
 		}
 
 		mask = (fadtTable->flags & (1 << 8)) ? 0xFFFFFFFF : 0xFFFFFF;

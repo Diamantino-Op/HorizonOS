@@ -288,8 +288,6 @@ namespace kernel::x86_64 {
 
 	void Kernel::shutdown() {
 		terminal.info("Shutting down...", "HorizonOS");
-
-		this->uAcpi.shutdown();
 	}
 
 	GdtManager *Kernel::getGdtManager() {
