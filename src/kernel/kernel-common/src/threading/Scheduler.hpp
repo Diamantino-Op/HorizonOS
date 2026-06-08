@@ -5,6 +5,7 @@
 #include "LinkedList.hpp"
 #include "Types.hpp"
 #include "memory/VirtualAllocator.hpp"
+#include "bstree.hpp"
 
 namespace kernel::common::threading {
     using namespace memory;
@@ -66,6 +67,7 @@ namespace kernel::common::threading {
 
     class Process;
 	class Scheduler;
+	class ExecutionNode;
 
     class Thread {
     public:
@@ -120,6 +122,16 @@ namespace kernel::common::threading {
     	void setPendingWakeup(bool val);
     	bool getPendingWakeup() const;
 
+    	void setQueuedExecutionNode(ExecutionNode *node);
+    	ExecutionNode *getQueuedExecutionNode() const;
+
+    	void setQueued(bool val);
+    	bool isQueued() const;
+
+    	u8 computeInteractiveScore() const;
+
+    	void recomputeDynPriority();
+
     private:
         Process *parent {};
         u16 id {};
@@ -140,15 +152,28 @@ namespace kernel::common::threading {
 
     	u64 syscallStackPointer {};
 
-    	bool bit32 = {};
+    	bool bit32 {};
 
-    	ThreadOS os = {};
+    	ThreadOS os {};
 
         ThreadState state {};
 
     	u64 lockedCoreId {};
 
     	bool pendingWakeup {};
+
+    	ExecutionNode *queuedExecutionNode {};
+    	bool queued {};
+
+    public:
+    	u64 runTime     {};   // ns spent running (updated on context switch-out)
+    	u64 sleepTime   {};   // ns spent sleeping (updated on wakeup)
+    	u8  dynPriority {}; // 0=highest, 255=lowest; recomputed each tick
+
+    	u64 lastScheduledNs {};
+
+    	bstree_node_t bstNode {};   // embedded node — no separate allocation needed
+    	u64           schedKey  {};  // (dynPriority << 32) | insertionSeq, set on enqueue
     };
 
     class Process {
@@ -195,9 +220,159 @@ namespace kernel::common::threading {
         SignalAction signalActions[signalActionCount] {};
     };
 
+	struct UleRunQueue {
+		bstree_t tree {};
+		u64      seqCounter {}; // monotonic insertion counter for FIFO within same priority
+		u8       minDynPrio {}; // tracks the best (lowest) dynPriority currently in tree
+		bool     valid      {}; // false when tree is empty
+		ExecutionNode *owner {};
+
+		// value_of_node callback — must be a free function or static lambda
+		static auto nodeKey(bstree_node_t* n) -> u64 {
+			const Thread *thread = container_of(n, &Thread::bstNode);
+
+			return thread->schedKey;
+		}
+
+		void init(ExecutionNode *newOwner) {
+			this->owner              = newOwner;
+			this->tree.value_of_node = &UleRunQueue::nodeKey;
+			this->tree.root          = nullptr;
+			this->tree.type          = BST_TYPE_RB; // balanced — O(log n) insert/remove
+			this->valid              = false;
+		}
+
+		void enqueue(Thread* thread, const u8 dynPrio) {
+			thread->dynPriority = dynPrio;
+			thread->schedKey    = (static_cast<u64>(dynPrio) << 32) | (this->seqCounter++);
+			thread->setQueuedExecutionNode(this->owner);
+			thread->setQueued(true);
+
+			bstree_insert(&this->tree, &thread->bstNode);
+
+			if (not this->valid or dynPrio < this->minDynPrio) {
+				this->minDynPrio = dynPrio;
+				this->valid      = true;
+			}
+		}
+
+		void enqueueWaking(Thread *thread, const u8 rawDynPrio) {
+			u8 clamped = rawDynPrio;
+
+			if (this->valid) {
+				// Don't let a waking thread be better than
+				// (best current thread - 1 priority step), minimum 0
+				const u8 floor = this->minDynPrio > 0 ? this->minDynPrio - 1 : 0;
+
+				if (clamped < floor) {
+					clamped = floor;
+				}
+			}
+
+			enqueue(thread, clamped);
+		}
+
+		// O(1): leftmost node = smallest key = highest priority
+		auto dequeueMin() -> Thread* {
+			if (this->tree.root == nullptr) {
+				this->valid = false; return nullptr;
+			}
+
+			bstree_node_t *min = bstree_minimum(this->tree.root);
+			bstree_remove(&this->tree, min);
+			Thread *thread = container_of(min, &Thread::bstNode);
+			thread->setQueued(false);
+			thread->setQueuedExecutionNode(nullptr);
+			thread->bstNode = {};
+
+			// Recompute minDynPrio from new minimum
+			if (this->tree.root != nullptr) {
+				bstree_node_t *newMin = bstree_minimum(this->tree.root);
+				const Thread *newThread = container_of(newMin, &Thread::bstNode);
+
+				this->minDynPrio = newThread->dynPriority;
+			} else {
+				this->valid = false;
+			}
+
+			return thread;
+		}
+
+		auto remove(Thread* thread) -> bool {
+			if (!thread->isQueued() || thread->getQueuedExecutionNode() != this->owner) {
+				return false;
+			}
+
+			bstree_remove(&tree, &thread->bstNode);
+			thread->setQueued(false);
+			thread->setQueuedExecutionNode(nullptr);
+			thread->bstNode = {};
+
+			// Recompute minDynPrio after arbitrary removal
+			if (this->tree.root != nullptr) {
+				bstree_node_t *newMin = bstree_minimum(tree.root);
+				const Thread *tMin = container_of(newMin, &Thread::bstNode);
+
+				minDynPrio = tMin->dynPriority;
+				valid      = true;
+			} else {
+				valid = false;
+			}
+
+			return true;
+		}
+
+		auto stealOne() -> Thread * {
+			if (tree.root == nullptr) {
+				return nullptr;
+			}
+
+			bstree_node_t *max = bstree_maximum(tree.root);
+			bstree_remove(&tree, max);
+			Thread *thread = container_of(max, &Thread::bstNode);
+			thread->setQueued(false);
+			thread->setQueuedExecutionNode(nullptr);
+			thread->bstNode = {};
+
+			if (tree.root != nullptr) {
+				bstree_node_t *newMin = bstree_minimum(tree.root);
+				const Thread *newThread = container_of(newMin, &Thread::bstNode);
+
+				minDynPrio = newThread->dynPriority;
+				valid      = true;
+			} else {
+				valid = false;
+			}
+
+			return thread;
+		}
+
+		auto size() const -> usize {
+			usize count = 0;
+
+			if (tree.root == nullptr) {
+				return 0;
+			}
+
+			const bstree_node_t *cur = bstree_minimum(tree.root);
+
+			while (cur != nullptr) {
+				count++;
+
+				cur = bstree_successor(cur);
+			}
+
+			return count;
+		}
+
+		auto isEmpty() const -> bool {
+			return tree.root == nullptr;
+		}
+	};
+
     class ExecutionNode {
     public:
-        ExecutionNode() = default;
+        ExecutionNode();
         ~ExecutionNode() = default;
 
     	void init();
@@ -209,6 +384,11 @@ namespace kernel::common::threading {
     	void setCurrentThread(LinkedListEntry<Thread> *thread);
     	LinkedListEntry<Thread> *getCurrentThread() const;
     	LinkedListEntry<Thread> *getIdleThread() const;
+
+    	Thread* getNextThread();
+    	void enqueueThread(Thread *thread, bool waking = false);
+    	bool removeThread(Thread *thread);
+    	bool hasRunnableThreads() const;
 
 		u128 saveOldThread(u64 oldRsp);
 
@@ -228,8 +408,6 @@ namespace kernel::common::threading {
 		bool isDisabledFlag {};
         bool pendingSchedUnlock {};
         bool pendingSchedUnlockIF {};
-		u8 priorityCredits[ProcessPriority::COUNT] {};
-        bool preferLockedQueues {};
 
         LinkedListEntry<Thread> *idleThread {};
         LinkedListEntry<Thread> *currentThread {};
@@ -237,7 +415,8 @@ namespace kernel::common::threading {
     	bool oldThreadWasIopb {};
 
     public:
-    	LinkedList<Thread> lockedThreadQueues[ProcessPriority::COUNT] {};
+    	UleRunQueue uleQueue {};
+    	TicketSpinLock coreLock {};
     };
 
 	[[noreturn]] void idleThreadFun();
@@ -361,7 +540,11 @@ namespace kernel::common::threading {
 		 *  @param threadId The id of the thread to be put to unblock.
 		 *  @param top Push the thread to the top of the queue.
 		 **/
-    	void unblockThread(u16 threadId, bool top, bool useLock = true);
+		void unblockThread(u16 threadId, bool top, bool useLock = true);
+
+    	void enqueueThread(Thread *thread, bool waking = false);
+    	void enqueueThread(Thread *thread, ExecutionNode *target, bool waking = false);
+    	bool hasRunnableThreads();
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -372,8 +555,6 @@ namespace kernel::common::threading {
 		 *  @return The address of the created context.
 		 */
 		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0, u64 userRsp = 0);
-
-    	bool hasThreads() const;
 
     	static ExecutionNode *getCoreEN(u64 cpuId);
 
@@ -401,9 +582,6 @@ namespace kernel::common::threading {
 
 		LinkedList<Process> processList {};
 
-    	LinkedList<Thread> queues[ProcessPriority::COUNT] {};
-
-		LinkedList<Thread> readyThreadList {};
     	LinkedList<Thread> blockedThreadList {};
     	LinkedList<Thread> sleepingThreadList {};
 

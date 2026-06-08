@@ -1,6 +1,11 @@
-#pragma once
+// Code edited from EvalynGoemer's rbtree.h
 
-#include "bstree.h"
+#ifndef LIB_HOS_BASE_RBTREE_HPP
+#define LIB_HOS_BASE_RBTREE_HPP
 
-extern void rbtree_insert_fixup(bstree_t* tree, bstree_node_t* node, bstree_node_t* parent, bstree_direction_t dir);
-extern void rbtree_remove_fixup(bstree_t* tree, bstree_node_t* node, bstree_node_t* parent, bstree_node_t* replacement, bstree_direction_t dir);
+#include "bstree.hpp"
+
+void rbtree_insert_fixup(bstree_t* tree, bstree_node_t* node, bstree_node_t* parent, bstree_direction_t dir);
+void rbtree_remove_fixup(bstree_t* tree, bstree_node_t* node, const bstree_node_t * parent, bstree_node_t* replacement, bstree_direction_t dir);
+
+#endif

@@ -16,10 +16,6 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
-	namespace {
-		constexpr u8 priorityWeights[ProcessPriority::COUNT] = {8, 4, 2, 1};
-	}
-
 	void idleThreadFun() {
 		for (;;) {
 			asm volatile ("pause" ::: "memory");
@@ -32,35 +28,8 @@ namespace kernel::common::threading {
 		delete threadContext;
 	}
 
+	// TODO: Move to non arch
 	void Scheduler::initArch() {
-		/*const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
-
-		if (hpet->getMaxTimers() == 0) {
-			CommonMain::getTerminal()->error("Not enough hpet timers!", "Scheduler");
-
-			return;
-		}
-
-		const u64 ticks = (10 * hpet->getFrequency()) / 1000;
-
-		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
-
-		const u32 gsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, sleepTick, nullptr);
-
-		if (gsi >= 100000000) {
-			CommonMain::getTerminal()->error("Hpet gsi not allocated: %lu", "Scheduler", gsi);
-
-			Asm::lhlt();
-		}
-
-		CommonMain::getTerminal()->debug("Hpet gsi: %lu", "Scheduler", gsi);
-
-		hpet->write(Hpet::getTimerRegister(0), ((gsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 6) | (1 << 2) | (1 << 3));
-		hpet->write(Hpet::getComparatorRegister(0), hpet->read() + ticks);
-		hpet->write(Hpet::getComparatorRegister(0), ticks);
-
-		irqAllocator->unmask(gsi);*/
-
 		Clocks::addTimerHandle(sleepTick, TimeUtils::msToNs(10));
 	}
 
@@ -93,43 +62,27 @@ namespace kernel::common::threading {
 	}
 
 	extern "C" u64 checkDisabled() {
-		if (CpuManager::getCurrentCore()->executionNode.isDisabled() or Scheduler::isDisabled) {
+		const CpuCore *currentCore = CpuManager::getCurrentCore();
+		const ExecutionNode &currentNode = currentCore->executionNode;
+		const Thread *currentThread = Scheduler::getCurrentThread();
+
+		if (currentNode.isDisabled() or Scheduler::isDisabled) {
 			return 1;
 		}
 
-		if (Scheduler::getCurrentThread() == CpuManager::getCurrentCore()->executionNode.getIdleThread()->value) {
+		if (currentThread == currentNode.getIdleThread()->value) {
 			return 0;
 		}
 
-		if (Scheduler::getCurrentThread()->getState() != ThreadState::RUNNING) {
+		if (currentThread->getState() != ThreadState::RUNNING) {
 			return 0;
 		}
 
-		bool hasMoreThreads = false;
-
-		for (const LinkedList<Thread>& currQueue : CommonMain::getInstance()->getScheduler()->queues) {
-			if (currQueue.getSize() > 0) {
-				hasMoreThreads = true;
-
-				break;
-			}
+		if (currentThread->getLockedCoreId() != ~0x0U && currentThread->getLockedCoreId() != currentCore->cpuId) {
+			return 0;
 		}
 
-		if (!hasMoreThreads) {
-			for (const LinkedList<Thread>& currQueue : CpuManager::getCurrentCore()->executionNode.lockedThreadQueues) {
-				if (currQueue.getSize() > 0) {
-					hasMoreThreads = true;
-
-					break;
-				}
-			}
-		}
-
-		if (CommonMain::getInstance()->getScheduler()->readyThreadList.getSize() > 0) {
-			hasMoreThreads = true;
-		}
-
-		if (!hasMoreThreads) {
+		if (!currentNode.hasRunnableThreads()) {
 			return 1;
 		}
 
@@ -165,147 +118,83 @@ namespace kernel::common::threading {
 
 		// Save the old thread state
 
-		const LinkedListEntry<Thread> *oldEntry = this->currentThread;
+		Thread *oldThread = this->currentThread->value;
 
-		reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext())->save();
+		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
 
-		this->currentThread->value->setStackPointer(oldRsp);
+		oldThread->setStackPointer(oldRsp);
 
-		if (this->currentThread->value->getState() == ThreadState::TERMINATED) {
-			// TODO: This might create nullptr if the reaper thread kills this while it is being used here
-			schedulerPtr->awaitingKillThreadList.addEnd(this->currentThread);
-		} else if (this->currentThread->value->getSleepNs() > 0) {
-			if (!schedulerPtr->sleepingThreadList.contains(this->currentThread->value)) {
-				schedulerPtr->sleepingThreadList.addEnd(this->currentThread);
-			}
-		} else if (this->currentThread->value->getState() == ThreadState::BLOCKED) {
-			/*if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
-				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
-			}*/
-			if (this->currentThread->value->getPendingWakeup()) {
-				this->currentThread->value->setPendingWakeup(false);
-				this->currentThread->value->setWaitingPort(0);
-				this->currentThread->value->setState(ThreadState::RUNNING);
+		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
-			} else if (!schedulerPtr->blockedThreadList.contains(this->currentThread->value)) {
-				schedulerPtr->blockedThreadList.addEnd(this->currentThread);
-			}
-		} else if (this->currentThread != this->idleThread) {
-			if (this->currentThread->value->getLockedCoreId() == ~0x0U) {
-				schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
-			} else {
-				ExecutionNode *node = Scheduler::getCoreEN(this->currentThread->value->getLockedCoreId());
-
-				if (node == nullptr) {
-					schedulerPtr->queues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
-
-					this->currentThread->value->setLockedCoreId(~0x0U);
-				} else {
-					node->lockedThreadQueues[this->currentThread->value->getParent()->getPriority()].addEnd(this->currentThread);
-				}
-			}
+		if (oldThread != this->idleThread->value && oldThread->lastScheduledNs != 0 && oldThread->getState() == ThreadState::RUNNING) {
+			oldThread->runTime += now - oldThread->lastScheduledNs;
+			oldThread->recomputeDynPriority();
 		}
 
-		if (oldEntry != nullptr and reinterpret_cast<ThreadContext *>(oldEntry->value->getContext())->threadTssIopb != nullptr) {
+		if (oldThread->getState() == ThreadState::TERMINATED) {
+			schedulerPtr->awaitingKillThreadList.addEnd(oldThread);
+		} else if (oldThread->getSleepNs() > 0) {
+			oldThread->lastScheduledNs = now;
+
+			if (!schedulerPtr->sleepingThreadList.contains(oldThread)) {
+				schedulerPtr->sleepingThreadList.addEnd(oldThread);
+			}
+		} else if (oldThread->getState() == ThreadState::BLOCKED) {
+			oldThread->lastScheduledNs = now;
+
+			if (oldThread->getPendingWakeup()) {
+				oldThread->setPendingWakeup(false);
+				oldThread->setWaitingPort(0);
+				oldThread->setSleepNs(0);
+				oldThread->setState(ThreadState::RUNNING);
+
+				/*if (oldThread->getLockedCoreId() != ~0x0U) {
+					ExecutionNode *targetNode = Scheduler::getCoreEN(oldThread->getLockedCoreId());
+
+					if (targetNode != nullptr) {
+						schedulerPtr->enqueueThread(oldThread, targetNode, true);
+					} else {
+						schedulerPtr->enqueueThread(oldThread, true);
+					}
+				} else {
+					schedulerPtr->enqueueThread(oldThread, true);
+				}*/
+
+				schedulerPtr->enqueueThread(oldThread, true);
+			} else if (!schedulerPtr->blockedThreadList.contains(oldThread)) {
+				schedulerPtr->blockedThreadList.addEnd(oldThread);
+			}
+		} else if (oldThread != this->idleThread->value) {
+			/*if (oldThread->getLockedCoreId() != ~0x0U) {
+				ExecutionNode *targetNode = Scheduler::getCoreEN(oldThread->getLockedCoreId());
+
+				if (targetNode != nullptr) {
+					schedulerPtr->enqueueThread(oldThread, targetNode);
+				} else {
+					schedulerPtr->enqueueThread(oldThread);
+				}
+			} else {
+				schedulerPtr->enqueueThread(oldThread);
+			}*/
+
+			schedulerPtr->enqueueThread(oldThread);
+		}
+
+		if (oldThread != nullptr and reinterpret_cast<ThreadContext *>(oldThread->getContext())->threadTssIopb != nullptr) {
 			this->oldThreadWasIopb = true;
 		}
 
 		// Get new thread
 
-		if (schedulerPtr->readyThreadList.getSize() > 0) {
-			this->currentThread = schedulerPtr->readyThreadList.removeFirstEntry();
+		const bool prevCoreIF = this->coreLock.lock();
+		Thread *nextThread = this->getNextThread();
+		this->coreLock.unlock(prevCoreIF);
 
-			this->currentThread->value->setState(ThreadState::RUNNING);
-		} else {
-			LinkedListEntry<Thread> *selectedEntry = nullptr;
-			usize selectedQueueClass = 0;
-			const usize preferredQueueClass = this->preferLockedQueues ? 1 : 0;
-			bool hasRunnableQueue = false;
-			bool hasQueueWithCredit = false;
-
-			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-				const bool hasGlobalQueue = schedulerPtr->queues[priority].getSize() > 0;
-				const bool hasLockedQueue = this->lockedThreadQueues[priority].getSize() > 0;
-
-				if (hasGlobalQueue || hasLockedQueue) {
-					hasRunnableQueue = true;
-
-					if (this->priorityCredits[priority] > 0) {
-						hasQueueWithCredit = true;
-					}
-				} else {
-					this->priorityCredits[priority] = 0;
-				}
-			}
-
-			if (hasRunnableQueue && !hasQueueWithCredit) {
-				for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-					if (schedulerPtr->queues[priority].getSize() > 0 || this->lockedThreadQueues[priority].getSize() > 0) {
-						this->priorityCredits[priority] = priorityWeights[priority];
-					} else {
-						this->priorityCredits[priority] = 0;
-					}
-				}
-			}
-
-			for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-				if (this->priorityCredits[priority] == 0) {
-					continue;
-				}
-
-				for (usize classOffset = 0; classOffset < 2; ++classOffset) {
-					const usize queueClass = (preferredQueueClass + classOffset) % 2;
-					LinkedList<Thread> &currQueue = queueClass == 0 ? schedulerPtr->queues[priority] : this->lockedThreadQueues[priority];
-
-					if (currQueue.getSize() > 0) {
-						selectedEntry = currQueue.removeFirstEntry();
-						selectedQueueClass = queueClass;
-						this->priorityCredits[priority]--;
-
-						break;
-					}
-				}
-
-				if (selectedEntry != nullptr) {
-					break;
-				}
-			}
-
-			if (selectedEntry == nullptr) {
-				if (hasRunnableQueue) {
-					for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-						for (usize classOffset = 0; classOffset < 2; ++classOffset) {
-							const usize queueClass = (preferredQueueClass + classOffset) % 2;
-							LinkedList<Thread> &currQueue = queueClass == 0 ? schedulerPtr->queues[priority] : this->lockedThreadQueues[priority];
-
-							if (currQueue.getSize() > 0) {
-								selectedEntry = currQueue.removeFirstEntry();
-								selectedQueueClass = queueClass;
-								this->priorityCredits[priority] = priorityWeights[priority] - 1;
-
-								break;
-							}
-						}
-
-						if (selectedEntry != nullptr) {
-							break;
-						}
-					}
-				} else {
-					selectedEntry = this->idleThread;
-				}
-			}
-
-			if (selectedEntry != nullptr and selectedEntry != this->idleThread) {
-				this->preferLockedQueues = (selectedQueueClass == 1);
-			}
-
-			this->currentThread = selectedEntry;
-
-			this->currentThread->next = nullptr;
-			this->currentThread->prev = nullptr;
-		}
+		this->currentThread->value = nextThread;
+		this->currentThread->next = nullptr;
+		this->currentThread->prev = nullptr;
+		this->currentThread->value->setState(ThreadState::RUNNING);
+		this->currentThread->value->lastScheduledNs = now;
 
 		/*if (oldEntry != this->currentThread && oldEntry != nullptr) {
 			//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
@@ -468,8 +357,8 @@ namespace kernel::common::threading {
 
 		if (cpuManager->getBootstrapCpu()->cpuId == cpuId) {
 			destCore = cpuManager->getBootstrapCpu();
-		} else if (cpuManager->getCoreList() != nullptr) {
-			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+		} else if (cpuManager->getCoreList() != nullptr && cpuManager->getCoreAmount() > 1) {
+			for (u64 i = 0; i < cpuManager->getCoreAmount() - 1; i++) {
 				if (cpuManager->getCoreList()[i].cpuCore.cpuId == cpuId) {
 					destCore = &cpuManager->getCoreList()[i].cpuCore;
 					break;

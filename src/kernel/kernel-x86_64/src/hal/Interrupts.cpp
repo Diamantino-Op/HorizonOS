@@ -37,11 +37,7 @@ namespace kernel::x86_64::hal {
 
 			Scheduler::isDisabled = false;
 		} else if (frame->intNo < 32) {
-			if (frame->cs == (Selector::USER_CODE64 * 8 | 3) or frame->cs == (Selector::USER_CODE32 * 8 | 3)) {
-				userPanic(frame);
-			} else {
-				kernelPanic(frame);
-			}
+			kernelPanic(frame);
 
 			if ((frame->cs & 0x3) == 3) {
 				deliverPendingSignal(frame);
@@ -181,32 +177,9 @@ namespace kernel::x86_64::hal {
 
 		terminal->unlock(prevIF);
 
-		Scheduler::isDisabled = false;
+		//Scheduler::isDisabled = false;
 
 		Asm::lhlt();
-	}
-
-	void Interrupts::userPanic(Frame *frame) {
-		Terminal *terminal = CommonMain::getTerminal();
-
-		const bool prevIF = terminal->lock();
-
-		u64 offset = 0;
-
-		terminal->printfBoth(true, "\033[0;31m┌──────────────────────────[ Userland Panic ]───────────────────────────");
-		terminal->printfBoth(true, "\033[0;31m│");
-		terminal->printfBoth(true, "\033[0;31m│   Cause: %s", faultMessages[frame->intNo]);
-		terminal->printfBoth(true, "\033[0;31m│");
-		terminal->printfBoth(true, "\033[0;31m│   Registers:");
-		terminal->printfBoth(true, "\033[0;31m│   int: 0x%.16lx", frame->intNo);
-		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
-		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
-		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);
-		terminal->printfBoth(true, "\033[0;31m│   rsp: 0x%.16lx", frame->rsp);
-		terminal->printfBoth(true, "\033[0;31m│");
-		terminal->printfBoth(true, "\033[0;31m└──────────────────────────────────────────────────────────────────────");
-
-		terminal->unlock(prevIF);
 	}
 
 	void Interrupts::backtrace(const usize rbp, bool userMode) {
@@ -257,3 +230,21 @@ namespace kernel::x86_64::hal {
 	}
 }
 
+using namespace kernel::x86_64::hal;
+using namespace kernel::common;
+
+extern "C" void __assert_fail(const char *assertion, const char *file, unsigned int line, const char *function) {
+	Asm::cli();
+
+	Terminal *terminal = CommonMain::getTerminal();
+
+	Scheduler::isDisabled = true;
+
+	const bool prevIF = terminal->lock();
+
+	terminal->printfBoth(true, "\033[0;31mAssertion failed: %s\nFile: %s\nLine: %u\nFunction: %s", assertion, file, line, function);
+
+	terminal->unlock(prevIF);
+
+	Asm::lhlt();
+}

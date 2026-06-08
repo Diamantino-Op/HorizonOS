@@ -13,6 +13,61 @@ namespace kernel::common::threading {
 
 	bool Scheduler::isDisabled = false;
 
+	namespace {
+		constexpr u64 unlockedCoreId = ~0x0U;
+
+		auto selectTargetExecutionNode(Thread *thread) -> ExecutionNode * {
+			if (thread == nullptr) {
+				return Scheduler::getCurrentExecutionNode();
+			}
+
+			if (thread->getLockedCoreId() != unlockedCoreId) {
+				ExecutionNode *lockedNode = Scheduler::getCoreEN(thread->getLockedCoreId());
+
+				if (lockedNode != nullptr) {
+					return lockedNode;
+				}
+
+				thread->setLockedCoreId(unlockedCoreId);
+			}
+
+			ExecutionNode *bestNode = Scheduler::getCurrentExecutionNode();
+
+			if (bestNode == nullptr) {
+				return nullptr;
+			}
+
+			usize bestSize = bestNode->uleQueue.size();
+			auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
+			const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
+
+			const auto considerNode = [&bestNode, &bestSize](ExecutionNode *node) -> void {
+				if (node == nullptr) {
+					return;
+				}
+
+				const usize size = node->uleQueue.size();
+
+				if (size < bestSize) {
+					bestNode = node;
+					bestSize = size;
+				}
+			};
+
+			if (cpuManager->getBootstrapCpu() != nullptr) {
+				considerNode(&cpuManager->getBootstrapCpu()->executionNode);
+			}
+
+			if (cpuManager->getCoreList() != nullptr && cpuManager->getCoreAmount() > 1) {
+				for (u64 i = 0; i < cpuManager->getCoreAmount() - 1; i++) {
+					considerNode(&cpuManager->getCoreList()[i].cpuCore.executionNode);
+				}
+			}
+
+			return bestNode;
+		}
+	}
+
 	// Threads
 
 	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os), lockedCoreId(~0x0U) {
@@ -170,6 +225,44 @@ namespace kernel::common::threading {
 		return this->pendingWakeup;
 	}
 
+	void Thread::setQueuedExecutionNode(ExecutionNode *node) {
+		this->queuedExecutionNode = node;
+	}
+
+	ExecutionNode *Thread::getQueuedExecutionNode() const {
+		return this->queuedExecutionNode;
+	}
+
+	void Thread::setQueued(const bool val) {
+		this->queued = val;
+	}
+
+	bool Thread::isQueued() const {
+		return this->queued;
+	}
+
+	u8 Thread::computeInteractiveScore() const {
+		if (sleepTime + runTime == 0) {
+			return 50;
+		}
+
+		return static_cast<u8>((sleepTime * 100) / (sleepTime + runTime));
+	}
+
+	// TODO
+	void Thread::recomputeDynPriority() {
+		const u64 total = this->runTime + this->sleepTime;
+
+		if (total == 0) {
+			this->dynPriority = 128; return;
+		}
+
+		// score: 0 = fully CPU-bound (high dynPriority = low urgency)
+		//        255 = fully interactive (low dynPriority = high urgency)
+		const u8 score = static_cast<u8>((this->sleepTime * 255) / total);
+		this->dynPriority = 255 - score; // invert: interactive → small key → runs first
+	}
+
 	// Process
 
 	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
@@ -216,7 +309,7 @@ namespace kernel::common::threading {
 		return this->processContextKernel;
 	}
 
-	LinkedListEntry<Thread> *Process::	addThread(Thread *entry) {
+	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
 		return this->threadList.addStart(entry);
 	}
 
@@ -229,6 +322,10 @@ namespace kernel::common::threading {
 	}
 
 	// Execution Node
+
+	ExecutionNode::ExecutionNode() {
+		this->uleQueue.init(this);
+	}
 
 	void ExecutionNode::init() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
@@ -244,7 +341,8 @@ namespace kernel::common::threading {
 		this->idleThread = new LinkedListEntry<Thread>();
 		this->idleThread->value = newThread;
 
-		this->currentThread = this->idleThread;
+		this->currentThread = new LinkedListEntry<Thread>();
+		this->currentThread->value = newThread;
 	}
 
 	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
@@ -257,6 +355,50 @@ namespace kernel::common::threading {
 
 	LinkedListEntry<Thread> *ExecutionNode::getIdleThread() const {
 		return this->idleThread;
+	}
+
+	Thread* ExecutionNode::getNextThread() {
+		Thread *next = this->uleQueue.dequeueMin();
+
+		if (next == nullptr) {
+			next = this->idleThread->value;
+		}
+
+		return next;
+	}
+
+	void ExecutionNode::enqueueThread(Thread *thread, const bool waking) {
+		if (thread == nullptr || (this->idleThread != nullptr && thread == this->idleThread->value)) {
+			return;
+		}
+
+		const bool prevCoreIF = this->coreLock.lock();
+
+		thread->recomputeDynPriority();
+
+		if (waking) {
+			this->uleQueue.enqueueWaking(thread, thread->dynPriority);
+		} else {
+			this->uleQueue.enqueue(thread, thread->dynPriority);
+		}
+
+		this->coreLock.unlock(prevCoreIF);
+	}
+
+	bool ExecutionNode::removeThread(Thread *thread) {
+		if (thread == nullptr) {
+			return false;
+		}
+
+		const bool prevCoreIF = this->coreLock.lock();
+		const bool removed = this->uleQueue.remove(thread);
+		this->coreLock.unlock(prevCoreIF);
+
+		return removed;
+	}
+
+	bool ExecutionNode::hasRunnableThreads() const {
+		return !this->uleQueue.isEmpty();
 	}
 
 	bool ExecutionNode::isDisabled() const {
@@ -356,45 +498,25 @@ namespace kernel::common::threading {
 	}
 
 	Thread *Scheduler::getThread(const Process *process, const u16 tid) {
-		const bool prevIF = this->schedLock.lock();
+		if (process == nullptr) {
+			return nullptr;
+		}
 
-		for (auto &currEntry : this->queues[process->getPriority()]) {
+		for (auto &currEntry : process->threadList) {
 			if (currEntry.getId() == tid) {
-				this->schedLock.unlock(prevIF);
-
 				return &currEntry;
 			}
 		}
-
-		this->schedLock.unlock(prevIF);
 
 		return nullptr;
 	}
 
 	Thread *Scheduler::getThread(const u16 tid) {
-		Thread *currThread = this->getCurrentExecutionNode()->getCurrentThread()->value;
-
-		if (currThread->getId() == tid) {
-			return currThread;
-		}
-
-		for (LinkedList<Thread>& currQueue : this->queues) {
-			for (auto &currEntry : currQueue) {
+		for (auto &process : this->processList) {
+			for (auto &currEntry : process.threadList) {
 				if (currEntry.getId() == tid) {
 					return &currEntry;
 				}
-			}
-		}
-
-		for (auto &currEntry : this->sleepingThreadList) {
-			if (currEntry.getId() == tid) {
-				return &currEntry;
-			}
-		}
-
-		for (auto &currEntry : this->blockedThreadList) {
-			if (currEntry.getId() == tid) {
-				return &currEntry;
 			}
 		}
 
@@ -434,15 +556,8 @@ namespace kernel::common::threading {
 
 		const bool prevIF = this->schedLock.lock();
 
-		process->addThread(newThread);
-
-		LinkedListEntry<Thread> *entry = nullptr;
-
-		if (isUser) {
-			entry = this->readyThreadList.addStart(newThread);
-		} else {
-			entry = this->readyThreadList.addEnd(newThread);
-		}
+		LinkedListEntry<Thread> *entry = process->addThread(newThread);
+		this->enqueueThread(newThread);
 
 		this->schedLock.unlock(prevIF);
 
@@ -511,8 +626,16 @@ namespace kernel::common::threading {
 	}
 
 	bool Scheduler::removeThread(Thread *thread) {
-		if (this->queues[thread->getParent()->getPriority()].remove(thread, false)) {
-			return true;
+		if (thread == nullptr) {
+			return false;
+		}
+
+		if (thread->isQueued()) {
+			ExecutionNode *node = thread->getQueuedExecutionNode();
+
+			if (node != nullptr && node->removeThread(thread)) {
+				return true;
+			}
 		}
 
 		if (this->sleepingThreadList.remove(thread, false)) {
@@ -523,7 +646,58 @@ namespace kernel::common::threading {
 			return true;
 		}
 
-		return this->readyThreadList.remove(thread, false);
+		return false;
+	}
+
+	void Scheduler::enqueueThread(Thread *thread, const bool waking) {
+		if (thread == nullptr) {
+			return;
+		}
+
+		if (thread->isQueued()) {
+			this->removeThread(thread);
+		}
+
+		ExecutionNode *target = selectTargetExecutionNode(thread);
+
+		if (target == nullptr) {
+			return;
+		}
+
+		thread->setState(ThreadState::READY);
+		target->enqueueThread(thread, waking);
+	}
+
+	void Scheduler::enqueueThread(Thread *thread, ExecutionNode *target, const bool waking) {
+		if (thread == nullptr || target == nullptr) {
+			return;
+		}
+
+		if (thread->isQueued()) {
+			this->removeThread(thread);
+		}
+
+		thread->setState(ThreadState::READY);
+		target->enqueueThread(thread, waking);
+	}
+
+	bool Scheduler::hasRunnableThreads() {
+		auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
+		const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
+
+		if (cpuManager->getBootstrapCpu() != nullptr && cpuManager->getBootstrapCpu()->executionNode.hasRunnableThreads()) {
+			return true;
+		}
+
+		if (cpuManager->getCoreList() != nullptr && cpuManager->getCoreAmount() > 1) {
+			for (u64 i = 0; i < cpuManager->getCoreAmount() - 1; i++) {
+				if (cpuManager->getCoreList()[i].cpuCore.executionNode.hasRunnableThreads()) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	void Scheduler::sleepThread(const u16 threadId, const u64 ns) {
@@ -535,13 +709,14 @@ namespace kernel::common::threading {
 			return;
 		}
 
-		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
+		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		thread->setSleepNs(now + ns);
 
 		//CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
+		this->removeThread(thread);
 		thread->setState(ThreadState::BLOCKED);
-
-		this->queues[thread->getParent()->getPriority()].remove(thread, false);
+		thread->lastScheduledNs = now;
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
@@ -559,13 +734,14 @@ namespace kernel::common::threading {
 	void Scheduler::sleepThread(Thread *thread, const u64 ns) {
 		const bool prevIF = this->schedLock.lock();
 
-		thread->setSleepNs(CommonMain::getInstance()->getClocks()->getMainClock()->getNs() + ns);
+		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+		thread->setSleepNs(now + ns);
 
 		//CommonMain::getTerminal()->debug("Sleep Ns: %llu for thread: %u", "Scheduler", thread->getSleepNs(), thread->getId());
 
+		this->removeThread(thread);
 		thread->setState(ThreadState::BLOCKED);
-
-		this->queues[thread->getParent()->getPriority()].remove(thread, false);
+		thread->lastScheduledNs = now;
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
@@ -615,11 +791,9 @@ namespace kernel::common::threading {
 
 		//CommonMain::getTerminal()->debug("Blocking thread: thread: %u", "Scheduler", thread->getId());
 
+		this->removeThread(thread);
 		thread->setState(ThreadState::BLOCKED);
-
-		if (!this->queues[thread->getParent()->getPriority()].remove(thread, false) and thread->getSleepNs() > 0) {
-			this->sleepingThreadList.remove(thread, false);
-		}
+		thread->lastScheduledNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
 
@@ -666,13 +840,10 @@ namespace kernel::common::threading {
 			thread->setWaitingPort(0);
 
 			if (thread->getSleepNs() == 0) {
+				(void) top;
 				thread->setState(ThreadState::RUNNING);
 
-				if (top) {
-					this->queues[thread->getParent()->getPriority()].addStart(thread, false);
-				} else {
-					this->queues[thread->getParent()->getPriority()].addEnd(thread, false);
-				}
+				this->enqueueThread(thread, true);
 			} else {
 				if (!this->sleepingThreadList.contains(thread)) {
 					this->sleepingThreadList.addStart(thread, false);
@@ -706,25 +877,16 @@ namespace kernel::common::threading {
 				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
 					//CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
 
-					currEntry.setState(ThreadState::RUNNING);
-
-					currEntry.setSleepNs(0);
-
 					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
 
-					if (currEntry.getLockedCoreId() == ~0x0U) {
-						schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
-					} else {
-						ExecutionNode *node = getCoreEN(currEntry.getLockedCoreId());
+					currEntry.setState(ThreadState::RUNNING);
+					currEntry.setSleepNs(0);
 
-						if (node == nullptr) {
-							schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+					const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+					currEntry.sleepTime += now - currEntry.lastScheduledNs;
+					currEntry.recomputeDynPriority();
 
-							currEntry.setLockedCoreId(~0x0U);
-						} else {
-							node->lockedThreadQueues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
-						}
-					}
+					schedulerPtr->enqueueThread(&currEntry, true);
 				}
 			}
 
@@ -732,28 +894,6 @@ namespace kernel::common::threading {
 		}
 
 		schedulerPtr->getSchedLock()->unlock(prevIF);
-	}
-
-	bool Scheduler::hasThreads() const {
-		const bool prevIF = const_cast<TicketSpinLock &>(this->schedLock).lock();
-
-		if (this->readyThreadList.getSize() > 0) {
-			const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
-
-			return true;
-		}
-
-		for (auto &currEntry : this->queues) {
-			if (currEntry.getSize() > 0) {
-				const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
-
-				return true;
-			}
-		}
-
-		const_cast<TicketSpinLock &>(this->schedLock).unlock(prevIF);
-
-		return false;
 	}
 
 	TicketSpinLock *Scheduler::getSchedLock() {
@@ -765,6 +905,26 @@ namespace kernel::common::threading {
 	    Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 	    auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
 	    const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
+		const auto dumpUleQueue = [term](const UleRunQueue &queue) {
+			bstree_node_t *node = queue.tree.root != nullptr ? bstree_minimum(queue.tree.root) : nullptr;
+
+			while (node != nullptr) {
+				const Thread *thread = container_of(node, &Thread::bstNode);
+
+				term->warnNoLock("      TID=%u PID=%u state=%u dynPrio=%u schedKey=%lu waitingPort=%lu pendingWakeup=%u lockedCore=%lu",
+					"SchedDump",
+					thread->getId(),
+					thread->getParent()->getId(),
+					static_cast<u32>(thread->getState()),
+					static_cast<u32>(thread->dynPriority),
+					thread->schedKey,
+					thread->getWaitingPort(),
+					static_cast<u32>(thread->getPendingWakeup()),
+					thread->getLockedCoreId());
+
+				node = bstree_successor(node);
+			}
+		};
 
 	    term->warnNoLock("=== SCHEDULER DEBUG DUMP ===", "SchedDump");
 
@@ -790,27 +950,9 @@ namespace kernel::common::threading {
 	            term->warnNoLock("  Core CPU=%u (BSP): no current thread", "SchedDump", bsp->cpuId);
 	        }
 
-	    	// BSP locked thread queues
-	    	for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-	    		const auto &lq = bsp->executionNode.lockedThreadQueues[priority];
-
-	    		if (lq.getSize() == 0) {
-	    			continue;
-	    		}
-
-	    		term->warnNoLock("    LockedQueue[%lu] size=%lu (BSP CPU=%u):",
-					"SchedDump", priority, lq.getSize(), bsp->cpuId);
-
-	    		for (const auto &t : lq) {
-	    			term->warnNoLock("      TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
-						"SchedDump",
-						t.getId(),
-						t.getParent()->getId(),
-						static_cast<u32>(t.getState()),
-						t.getWaitingPort(),
-						static_cast<u32>(t.getPendingWakeup()));
-	    		}
-	    	}
+	    	term->warnNoLock("    ULEQueue size=%lu (BSP CPU=%u):",
+				"SchedDump", bsp->executionNode.uleQueue.size(), bsp->cpuId);
+			dumpUleQueue(bsp->executionNode.uleQueue);
 	    }
 
 	    // AP cores
@@ -833,48 +975,9 @@ namespace kernel::common::threading {
 	                term->warnNoLock("  Core CPU=%u (AP %lu): no current thread", "SchedDump", core->cpuId, i);
 	            }
 
-	        	// AP locked thread queues
-	        	for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-	        		const auto &lq = core->executionNode.lockedThreadQueues[priority];
-
-	        		if (lq.getSize() == 0) {
-	        			continue;
-	        		}
-
-	        		term->warnNoLock("    LockedQueue[%lu] size=%lu (AP CPU=%u):",
-						"SchedDump", priority, lq.getSize(), core->cpuId);
-
-	        		for (const auto &t : lq) {
-	        			term->warnNoLock("      TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
-							"SchedDump",
-							t.getId(),
-							t.getParent()->getId(),
-							static_cast<u32>(t.getState()),
-							t.getWaitingPort(),
-							static_cast<u32>(t.getPendingWakeup()));
-	        		}
-	        	}
-	        }
-	    }
-
-	    // ── Run queues ────────────────────────────────────────────────────────────
-	    for (usize priority = 0; priority < ProcessPriority::COUNT; ++priority) {
-	        auto &q = schedulerPtr->queues[priority];
-
-	        if (q.getSize() == 0) {
-	            continue;
-	        }
-
-	        term->warnNoLock("  RunQueue[%lu] size=%lu:", "SchedDump", priority, q.getSize());
-
-	        for (const auto &t : q) {
-	            term->warnNoLock("    TID=%u PID=%u state=%u waitingPort=%lu pendingWakeup=%u",
-	                "SchedDump",
-	                t.getId(),
-	                t.getParent()->getId(),
-	                static_cast<u32>(t.getState()),
-	                t.getWaitingPort(),
-	                static_cast<u32>(t.getPendingWakeup()));
+	        	term->warnNoLock("    ULEQueue size=%lu (AP CPU=%u):",
+					"SchedDump", core->executionNode.uleQueue.size(), core->cpuId);
+				dumpUleQueue(core->executionNode.uleQueue);
 	        }
 	    }
 
@@ -897,13 +1000,6 @@ namespace kernel::common::threading {
 	    for (const auto &t : schedulerPtr->sleepingThreadList) {
 	        term->warnNoLock("    TID=%u PID=%u sleepNs=%lu", "SchedDump",
 	            t.getId(), t.getParent()->getId(), t.getSleepNs());
-	    }
-
-	    // ── Ready list ────────────────────────────────────────────────────────────
-	    term->warnNoLock("  ReadyList size=%lu:", "SchedDump", schedulerPtr->readyThreadList.getSize());
-
-	    for (const auto &t : schedulerPtr->readyThreadList) {
-	        term->warnNoLock("    TID=%u PID=%u", "SchedDump", t.getId(), t.getParent()->getId());
 	    }
 
 	    // ── Port messaging ────────────────────────────────────────────────────────

@@ -311,32 +311,8 @@ namespace kernel::common::hal {
 
 		const bool prevIF = sched->getSchedLock()->lock();
 
-		for (const auto &thread : sched->sleepingThreadList) {
-			if (thread.getId() == tid) {
-				sched->getSchedLock()->unlock(prevIF);
-
-				if (ret != nullptr) {
-					*ret = 1;
-				}
-
-				return 0;
-			}
-		}
-
-		for (const auto &thread : sched->blockedThreadList) {
-			if (thread.getId() == tid) {
-				sched->getSchedLock()->unlock(prevIF);
-
-				if (ret != nullptr) {
-					*ret = 1;
-				}
-
-				return 0;
-			}
-		}
-
-		for (auto &queue : sched->queues) {
-			for (const auto &thread : queue) {
+		for (const auto &process : sched->processList) {
+			for (const auto &thread : process.threadList) {
 				if (thread.getId() == tid) {
 					sched->getSchedLock()->unlock(prevIF);
 

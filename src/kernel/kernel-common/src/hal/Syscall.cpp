@@ -242,7 +242,7 @@ namespace kernel::common::hal {
 				CommonMain::getTerminal()->debug("Unblocking thread: %lu", "Watchdog", currEntry.getId());
 
 				schedulerPtr->blockedThreadList.remove(&currEntry, false);
-				schedulerPtr->queues[currEntry.getParent()->getPriority()].addEnd(&currEntry);
+				schedulerPtr->enqueueThread(&currEntry, true);
 			}
 
 			it = nextIt;
@@ -540,7 +540,7 @@ namespace kernel::common::hal {
 
 		const bool prevIF = scheduler->getSchedLock()->lock();
 		process->addThread(newThread);
-		scheduler->readyThreadList.addStart(newThread);
+		scheduler->enqueueThread(newThread);
 		scheduler->getSchedLock()->unlock(prevIF);
 
 		if (ret != nullptr) {
@@ -878,7 +878,7 @@ namespace kernel::common::hal {
 						scheduler->blockedThreadList.remove(waitThread, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
-						scheduler->queues[waitThread->getParent()->getPriority()].addEnd(waitThread);
+						scheduler->enqueueThread(waitThread, true);
 						woken++;
 					}
 				}
@@ -921,7 +921,7 @@ namespace kernel::common::hal {
 						scheduler->blockedThreadList.remove(waitThread, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
-						scheduler->queues[waitThread->getParent()->getPriority()].addEnd(waitThread);
+						scheduler->enqueueThread(waitThread, true);
 						woken++;
 					}
 				}
@@ -1296,13 +1296,17 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
+		ExecutionNode *targetNode = Scheduler::getCoreEN(cpuId);
+
+		if (targetNode == nullptr) {
+			return EINVAL;
+		}
+
 		thread->setLockedCoreId(cpuId);
 
-		const bool prevIF = scheduler->getSchedLock()->lock();
-
-		scheduler->removeThread(thread);
-
-		scheduler->getSchedLock()->unlock(prevIF);
+		if (targetNode == Scheduler::getCurrentExecutionNode()) {
+			return 0;
+		}
 
 		ExecutionNode::reSchedule();
 

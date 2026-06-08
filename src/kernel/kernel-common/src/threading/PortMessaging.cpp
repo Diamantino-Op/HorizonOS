@@ -528,7 +528,7 @@ namespace kernel::common::threading {
 
 	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
 
-	        scheduler->queues[currThread->getParent()->getPriority()].remove(currThread, false);
+	        scheduler->removeThread(currThread);
 
 	        if (!isCurrentThread) {
 	            scheduler->blockedThreadList.addStart(currThread);
