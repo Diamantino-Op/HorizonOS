@@ -2,7 +2,6 @@
 #include "Pci.hpp"
 
 #include <cstdio>
-#include <string>
 #include <vector>
 #include <unistd.h>
 
@@ -12,47 +11,49 @@
 using namespace std;
 
 namespace {
+	auto onlineCpuCount() -> uint64_t {
+	    const long count = sysconf(_SC_NPROCESSORS_ONLN);
 
-uint64_t onlineCpuCount() {
-    const long count = sysconf(_SC_NPROCESSORS_ONLN);
+	    if (count <= 0) {
+	        return 1;
+	    }
 
-    if (count <= 0) {
-        return 1;
-    }
+	    return static_cast<uint64_t>(count);
+	}
 
-    return static_cast<uint64_t>(count);
+	auto allocateIntVectorForAnyCpu(uint8_t *vectorOut, uint64_t *destCpuOut, const uint64_t port) -> bool {
+	    const uint64_t cpuCount = onlineCpuCount();
+
+	    for (uint64_t cpuIndex = 0; cpuIndex < cpuCount; ++cpuIndex) {
+	        if (allocIntVec(vectorOut, port, cpuIndex) == 0 and *vectorOut != 0) {
+	        	*destCpuOut = cpuIndex;
+
+	            return true;
+	        }
+	    }
+
+	    return false;
+	}
+
+	auto allocateIntVectorForLapic(uint8_t *vectorOut, uint64_t lapicId, const uint64_t port) -> bool {
+		return allocIntVec(vectorOut, port, lapicId, true) == 0 and *vectorOut != 0;
+	}
+
+	void freeAllocatedVector(const uint8_t vector, const uint64_t destCpu, uint64_t lapicId) {
+		const bool isLapic = lapicId != 1000000;
+
+	    freeIntVec(vector, isLapic ? lapicId : destCpu, isLapic);
+	}
 }
-
-bool allocateIntVectorForAnyCpu(uint8_t *vectorOut, uint64_t *destCpuOut, int port) {
-    const uint64_t cpuCount = onlineCpuCount();
-
-    for (uint64_t cpuIndex = 0; cpuIndex < cpuCount; ++cpuIndex) {
-        if (allocIntVec(vectorOut, static_cast<uint64_t>(port), cpuIndex) == 0 && *vectorOut != 0) {
-            if (destCpuOut) {
-                *destCpuOut = cpuIndex;
-            }
-
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void freeAllocatedVector(uint8_t vector, uint64_t destCpu) {
-    freeIntVec(vector, destCpu);
-}
-
-} // namespace
 
 // ─── MsiManager ──────────────────────────────────────────────────────────────
 
-MsiManager &MsiManager::instance() {
+auto MsiManager::instance() -> MsiManager & {
     static MsiManager inst;
     return inst;
 }
 
-uint8_t MsiManager::allocVectors(int count, int notifyPort) {
+auto MsiManager::allocVectors(const int count, const uint64_t notifyPort, const uint64_t lapicId) -> uint8_t {
     const scoped_lock lock(m_lock);
 
     if (count <= 0) {
@@ -64,32 +65,33 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
 
     for (int i = 0; i < count; ++i) {
         uint8_t vector = 0;
-        uint64_t destCpu = 0;
+        uint64_t destCpu = lapicId != 1000000 ? lapicId : 0;
 
-        if (!allocateIntVectorForAnyCpu(&vector, &destCpu, notifyPort)) {
-            printf("PCI/MSI: allocIntVec failed after allocating %zu vector(s)", allocatedVectors.size());
-        	fflush(stdout);
+    	if ((lapicId == 1000000 and not allocateIntVectorForAnyCpu(&vector, &destCpu, notifyPort)) or (lapicId != 1000000 and not allocateIntVectorForLapic(&vector, lapicId, notifyPort))) {
+    		printf("PCI/MSI: allocIntVec failed after allocating %zu vector(s)", allocatedVectors.size());
+    		fflush(stdout);
 
-            for (const uint8_t allocatedVector : allocatedVectors) {
-                const auto allocatedIt = m_vectors.find(allocatedVector);
+    		for (const uint8_t allocatedVector : allocatedVectors) {
+    			const auto allocatedIt = m_vectors.find(allocatedVector);
 
-                if (allocatedIt != m_vectors.end()) {
-                    freeAllocatedVector(allocatedIt->second.vector, allocatedIt->second.destCpu);
-                    m_vectors.erase(allocatedIt);
-                }
+    			if (allocatedIt != m_vectors.end()) {
+    				freeAllocatedVector(allocatedIt->second.vector, allocatedIt->second.destCpu, lapicId);
+    				m_vectors.erase(allocatedIt);
+    			}
 
-            }
+    		}
 
-            if (!allocatedVectors.empty()) {
-                m_allocationBatches.erase(allocatedVectors.front());
-            }
+    		if (!allocatedVectors.empty()) {
+    			m_allocationBatches.erase(allocatedVectors.front());
+    		}
 
-            return 0;
-        }
+    		return 0;
+    	}
 
         AllocatedVector allocatedVector{};
         allocatedVector.vector = vector;
         allocatedVector.destCpu = destCpu;
+    	allocatedVector.isLapic = lapicId != 1000000;
         allocatedVector.notifyPort = notifyPort;
 
         m_vectors[vector] = allocatedVector;
@@ -101,14 +103,14 @@ uint8_t MsiManager::allocVectors(int count, int notifyPort) {
     return allocatedVectors.front();
 }
 
-void MsiManager::freeVectors(uint8_t base, int count) {
+void MsiManager::freeVectors(const uint8_t base, const int count) {
     const scoped_lock lock(m_lock);
 
     if (count <= 0) {
         return;
     }
 
-    auto batchIt = m_allocationBatches.find(base);
+	const auto batchIt = m_allocationBatches.find(base);
 
     if (batchIt != m_allocationBatches.end()) {
         for (const uint8_t vectorValue : batchIt->second) {
@@ -118,7 +120,7 @@ void MsiManager::freeVectors(uint8_t base, int count) {
                 continue;
             }
 
-            freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu);
+            freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu, vectorIt->second.isLapic ? vectorIt->second.destCpu : 1000000);
             m_vectors.erase(vectorIt);
         }
 
@@ -126,59 +128,32 @@ void MsiManager::freeVectors(uint8_t base, int count) {
         return;
     }
 
-    auto vectorIt = m_vectors.find(base);
+	const auto vectorIt = m_vectors.find(base);
 
     if (vectorIt == m_vectors.end()) {
         return;
     }
 
-    freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu);
+    freeAllocatedVector(vectorIt->second.vector, vectorIt->second.destCpu, vectorIt->second.isLapic ? vectorIt->second.destCpu : 1000000);
     m_vectors.erase(vectorIt);
-}
-
-// TODO
-void MsiManager::dispatch(uint8_t vector) {
-    // Called from kernel IRQ context — keep it short.
-    const scoped_lock lock(m_lock);
-
-    auto vectorIt = m_vectors.find(vector);
-    if (vectorIt == m_vectors.end()) { return; }
-
-    const int port = vectorIt->second.notifyPort;
-
-    if (port <= 0) {
-	    return;
-    }
-
-    // Post "irq;<vector>" to the driver service.
-    auto *msg   = new hos_msg();
-    string body = "irq;" + to_string(vector);
-
-    msg->port   = port;
-    msg->buffer = static_cast<void *>(body.data());
-    msg->length = body.size();
-
-    send_horizonos_message(pciPort, port, msg);
-
-    delete msg;
 }
 
 // ─── Capability walker ────────────────────────────────────────────────────────
 
-uint8_t pciFindCapability(uint8_t bus, uint8_t dev, uint8_t func, uint8_t capId) {
+auto pciFindCapability(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint8_t capId) -> uint8_t {
     // Capability list starts at offset 0x34 (pointer to first entry).
     // Only valid if Status register (0x06) bit 4 = Capabilities List.
     const uint16_t status = pciConfigRead16(bus, dev, func, 0x06);
 
-    if (!(status & (1u << 4))) {
+    if (not static_cast<bool>(status & (1U << 4))) {
 	    return 0;
     }
 
-    uint8_t ptr = pciConfigRead8(bus, dev, func, 0x34) & 0xFCu;
+    uint8_t ptr = pciConfigRead8(bus, dev, func, 0x34) & 0xFCU;
 
     for (int depth = 0; depth < 48 && ptr >= 0x40; ++depth) {
         const uint8_t id   = pciConfigRead8(bus, dev, func, ptr);
-        const uint8_t next = pciConfigRead8(bus, dev, func, ptr + 1u) & 0xFCu;
+        const uint8_t next = pciConfigRead8(bus, dev, func, ptr + 1U) & 0xFCU;
 
         if (id == capId) {
 	        return ptr;
@@ -196,7 +171,7 @@ uint8_t pciFindCapability(uint8_t bus, uint8_t dev, uint8_t func, uint8_t capId)
 
 // ─── MSI ──────────────────────────────────────────────────────────────────────
 
-uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
+auto msiEnable(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint64_t notifyPort, const uint64_t lapicID) -> uint8_t {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSI);
 
     if (cap == 0) {
@@ -213,14 +188,14 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
     pciConfigWrite16(bus, dev, func, cap + MSI_OFF_CTRL, ctrl);
 
     // Allocate one vector.
-    const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort);
+    const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort, lapicID);
 
     if (vector == 0) {
 	    return 0;
     }
 
     // Build address and data fields.
-    const uint32_t address = MSI_ADDRESS_BASE; // dest = APIC id 0
+    const uint32_t address = MSI_ADDRESS_BASE | (static_cast<uint32_t>(lapicID) << 12);
     const uint32_t data    = MSI_DATA_EDGE_ASSERT | vector;
 
     const bool is64bit = (ctrl & MSI_CTRL_64BIT) != 0;
@@ -244,7 +219,7 @@ uint8_t msiEnable(uint8_t bus, uint8_t dev, uint8_t func, int notifyPort) {
     return vector;
 }
 
-void msiDisable(uint8_t bus, uint8_t dev, uint8_t func) {
+void msiDisable(const uint8_t bus, const uint8_t dev, const uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSI);
 	
     if (cap == 0) {
@@ -259,23 +234,23 @@ void msiDisable(uint8_t bus, uint8_t dev, uint8_t func) {
 // ─── MSI-X ───────────────────────────────────────────────────────────────────
 
 // Returns the virtual address of the MSI-X table mapped via mmap_phys.
-static volatile MsixEntry *msixTablePtr(uint8_t bus, uint8_t dev, uint8_t func, uint8_t cap) {
+static auto msixTablePtr(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint8_t cap) -> volatile MsixEntry * {
     const uint32_t tableWord = pciConfigRead32(bus, dev, func, cap + MSIX_OFF_TABLE);
-    const uint8_t  bir       = static_cast<uint8_t>(tableWord & 0x7u);
-    const uint32_t tableOff  = tableWord & ~0x7u;
+    const auto     bir       = static_cast<uint8_t>(tableWord & 0x7U);
+    const uint32_t tableOff  = tableWord & ~0x7U;
 
     // BIR selects which BAR contains the table.
-    const uint8_t  barReg    = 0x10u + bir * 4u;
+    const uint8_t  barReg    = 0x10U + (bir * 4U);
     const uint32_t barLo     = pciConfigRead32(bus, dev, func, barReg);
 
     uint64_t barPhys;
 
-    if ((barLo & 0x6u) == 0x4u) {
+    if ((barLo & 0x6U) == 0x4U) {
         // 64-bit BAR
-        const uint32_t barHi = pciConfigRead32(bus, dev, func, barReg + 4u);
-        barPhys = (static_cast<uint64_t>(barHi) << 32) | (barLo & ~0xFu);
+        const uint32_t barHi = pciConfigRead32(bus, dev, func, barReg + 4U);
+        barPhys = (static_cast<uint64_t>(barHi) << 32) | (barLo & ~0xFU);
     } else {
-        barPhys = barLo & ~0xFu;
+        barPhys = barLo & ~0xFU;
     }
 
     const uint64_t tablePhys = barPhys + tableOff;
@@ -295,7 +270,7 @@ static volatile MsixEntry *msixTablePtr(uint8_t bus, uint8_t dev, uint8_t func, 
     return reinterpret_cast<volatile MsixEntry *>(virt);
 }
 
-uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIndex, int notifyPort) {
+auto msixEnableEntry(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t tableIndex, const uint64_t notifyPort, const uint64_t lapicID) -> uint8_t {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
 
     if (cap == 0) {
@@ -306,21 +281,24 @@ uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIn
     }
 
     volatile MsixEntry *table = msixTablePtr(bus, dev, func, cap);
-    if (!table) { return 0; }
+
+    if (table == nullptr) {
+	    return 0;
+    }
 
     // Mask the entry while we program it (vector ctrl bit 0).
-    table[tableIndex].vectorCtrl = 1u;
+    table[tableIndex].vectorCtrl = 1U;
 
-    const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort);
+    const uint8_t vector = MsiManager::instance().allocVectors(1, notifyPort, lapicID);
     if (vector == 0) { return 0; }
 
-    const uint32_t data    = MSI_DATA_EDGE_ASSERT | vector;
-    const uint32_t address = MSI_ADDRESS_BASE;
+    const uint32_t data        = MSI_DATA_EDGE_ASSERT | vector;
+	const uint32_t address     = MSI_ADDRESS_BASE | (static_cast<uint32_t>(lapicID) << 12);
 
     table[tableIndex].addrLo     = address;
     table[tableIndex].addrHi     = 0;
     table[tableIndex].data       = data;
-    table[tableIndex].vectorCtrl = 0u; // unmask
+    table[tableIndex].vectorCtrl = 0U; // unmask
 
     printf("PCI/MSI-X: Entry %u on %02x:%02x.%x vector=0x%02x", tableIndex, bus, dev, func, vector);
 	fflush(stdout);
@@ -328,7 +306,7 @@ uint8_t msixEnableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIn
     return vector;
 }
 
-void msixDisableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableIndex, uint8_t vector) {
+void msixDisableEntry(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t tableIndex, const uint8_t vector) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
 
     if (cap == 0) {
@@ -337,14 +315,14 @@ void msixDisableEntry(uint8_t bus, uint8_t dev, uint8_t func, uint16_t tableInde
 
     volatile MsixEntry *table = msixTablePtr(bus, dev, func, cap);
 
-    if (table) {
-        table[tableIndex].vectorCtrl = 1u; // mask
+    if (table != nullptr) {
+        table[tableIndex].vectorCtrl = 1U; // mask
     }
 
     MsiManager::instance().freeVectors(vector, 1);
 }
 
-void msixGlobalEnable(uint8_t bus, uint8_t dev, uint8_t func) {
+void msixGlobalEnable(const uint8_t bus, const uint8_t dev, const uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
 
     if (cap == 0) {
@@ -359,7 +337,7 @@ void msixGlobalEnable(uint8_t bus, uint8_t dev, uint8_t func) {
     pciConfigWrite16(bus, dev, func, cap + MSIX_OFF_CTRL, ctrl);
 }
 
-void msixGlobalDisable(uint8_t bus, uint8_t dev, uint8_t func) {
+void msixGlobalDisable(const uint8_t bus, const uint8_t dev, const uint8_t func) {
     const uint8_t cap = pciFindCapability(bus, dev, func, PCI_CAP_ID_MSIX);
 
     if (cap == 0) {

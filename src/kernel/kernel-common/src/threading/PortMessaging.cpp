@@ -526,7 +526,7 @@ namespace kernel::common::threading {
 	        currThread->setState(ThreadState::BLOCKED);
 	        currThread->setWaitingPort(port);
 
-	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread()->value == currThread;
+	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread() == currThread;
 
 	        scheduler->removeThread(currThread);
 

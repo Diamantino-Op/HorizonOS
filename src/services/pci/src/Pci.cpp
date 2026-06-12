@@ -10,15 +10,9 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <array>
-#include <thread>
-#include <unistd.h>
 #include <mutex>
 
 using namespace std;
-
-extern uint64_t pciPort;
-extern uint64_t uacpiPort;
 
 // ─── Global ECAM table ───────────────────────────────────────────────────────
 vector<McfgSegment> g_ecamSegments;
@@ -26,19 +20,19 @@ mutex               g_ecamMutex;
 
 // ─── ECAM helpers ────────────────────────────────────────────────────────────
 
-bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t endBus) {
+auto addEcamSegment(const uint64_t physBase, const uint16_t seg, const uint8_t startBus, const uint8_t endBus) -> bool {
     // Each bus needs 256 devices × 8 functions × 4 KiB = 1 MiB.
-    const size_t busCount = static_cast<size_t>(endBus - startBus + 1);
-    const size_t mapSize  = busCount * 256u * 8u * 4096u;
+    const auto   busCount = static_cast<size_t>(endBus - startBus + 1);
+    const size_t mapSize  = busCount * 256U * 8U * 4096U;
 
     uint64_t virt = 0;
-    if (mmap_phys(physBase, mapSize, &virt) != 0) {
+    if (mmap_phys(physBase, mapSize, &virt, false) != 0) {
         printf("PCI: ECAM mmap_phys failed for segment %u (base=%lx)\n", seg, physBase);
 
         return false;
     }
 
-    scoped_lock lock(g_ecamMutex);
+    const scoped_lock lock(g_ecamMutex);
     g_ecamSegments.push_back({
         physBase,
         seg,
@@ -55,15 +49,15 @@ bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t e
 }
 
 // Returns a pointer to the 4 KiB config space for a BDF, or nullptr.
-void *ecamDeviceBase(uint8_t bus, uint8_t dev, uint8_t func) {
-    scoped_lock lock(g_ecamMutex);
+auto ecamDeviceBase(const uint8_t bus, const uint8_t dev, const uint8_t func) -> void * {
+    const scoped_lock lock(g_ecamMutex);
 
     for (const auto &seg : g_ecamSegments) {
         if (bus < seg.startBus || bus > seg.endBus) {
             continue;
         }
 
-        if (!seg.mappedBase) {
+        if (seg.mappedBase == nullptr) {
             continue;
         }
 
@@ -79,35 +73,36 @@ void *ecamDeviceBase(uint8_t bus, uint8_t dev, uint8_t func) {
 
 // ─── Legacy port-I/O helpers ─────────────────────────────────────────────────
 
-static uint32_t legacyRead32(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset) {
-    const uint32_t address = (1u << 31)
+static auto legacyRead32(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint8_t offset) -> uint32_t {
+    const uint32_t address = (1U << 31)
                            | (static_cast<uint32_t>(bus)  << 16)
                            | (static_cast<uint32_t>(dev)  << 11)
                            | (static_cast<uint32_t>(func) <<  8)
-                           | (offset & 0xFCu);
+                           | (offset & 0xFCU);
 
     outl(address, PCI_CONFIG_ADDRESS);
+
     return inl(PCI_CONFIG_DATA);
 }
 
-static void legacyWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint8_t offset, uint32_t value) {
-    const uint32_t address = (1u << 31)
+static void legacyWrite32(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint8_t offset, const uint32_t value) {
+    const uint32_t address = (1U << 31)
                            | (static_cast<uint32_t>(bus)  << 16)
                            | (static_cast<uint32_t>(dev)  << 11)
                            | (static_cast<uint32_t>(func) <<  8)
-                           | (offset & 0xFCu);
+                           | (offset & 0xFCU);
 
     outl(address, PCI_CONFIG_ADDRESS);
-    outl(value,   PCI_CONFIG_DATA);
+    outl(value, PCI_CONFIG_DATA);
 }
 
 // ─── Unified config-space accessors ──────────────────────────────────────────
 // Offset is uint16_t so PCIe extended config space (0x100–0xFFF) is reachable.
 
-uint32_t pciConfigRead32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) {
+auto pciConfigRead32(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset) -> uint32_t {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         uint32_t val;
 
         memcpy(&val, static_cast<uint8_t *>(base) + offset, 4);
@@ -119,10 +114,10 @@ uint32_t pciConfigRead32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset
     return legacyRead32(bus, dev, func, static_cast<uint8_t>(offset));
 }
 
-uint16_t pciConfigRead16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) {
+auto pciConfigRead16(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset) -> uint16_t {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         uint16_t val;
 
         memcpy(&val, static_cast<uint8_t *>(base) + offset, 2);
@@ -130,27 +125,27 @@ uint16_t pciConfigRead16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset
         return val;
     }
 
-    const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+    const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU));
 
-    return static_cast<uint16_t>((dword >> ((offset & 2u) * 8u)) & 0xFFFFu);
+    return static_cast<uint16_t>((dword >> ((offset & 2U) * 8U)) & 0xFFFFU);
 }
 
-uint8_t pciConfigRead8(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) {
+auto pciConfigRead8(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset) -> uint8_t {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         return *(static_cast<uint8_t *>(base) + offset);
     }
 
-    const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+    const uint32_t dword = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU));
 
-    return static_cast<uint8_t>((dword >> ((offset & 3u) * 8u)) & 0xFFu);
+    return static_cast<uint8_t>((dword >> ((offset & 3U) * 8U)) & 0xFFU);
 }
 
-void pciConfigWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint32_t value) {
+void pciConfigWrite32(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset, const uint32_t value) {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         memcpy(static_cast<uint8_t *>(base) + offset, &value, 4);
 
         return;
@@ -159,45 +154,48 @@ void pciConfigWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, u
     legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset), value);
 }
 
-void pciConfigWrite16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint16_t value) {
+void pciConfigWrite16(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset, const uint16_t value) {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         memcpy(static_cast<uint8_t *>(base) + offset, &value, 2);
 
         return;
     }
 
     // Legacy: read-modify-write on the containing dword.
-    uint32_t cur = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
+    uint32_t cur = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU));
 
-    const uint32_t shift = (offset & 2u) * 8u;
+    const uint32_t shift = (offset & 2U) * 8U;
 
-    cur &= ~(0xFFFFu << shift);
+    cur &= ~(0xFFFFU << shift);
     cur |= static_cast<uint32_t>(value) << shift;
 
-    legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu), cur);
+    legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU), cur);
 }
 
-void pciConfigWrite8(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint8_t value) {
+void pciConfigWrite8(const uint8_t bus, const uint8_t dev, const uint8_t func, const uint16_t offset, const uint8_t value) {
     void *base = ecamDeviceBase(bus, dev, func);
 
-    if (base) {
+    if (base != nullptr) {
         *(static_cast<uint8_t *>(base) + offset) = value;
 
         return;
     }
 
-    uint32_t cur = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu));
-    const uint32_t shift = (offset & 3u) * 8u;
-    cur &= ~(0xFFu << shift);
+    uint32_t cur = legacyRead32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU));
+
+    const uint32_t shift = (offset & 3U) * 8U;
+
+    cur &= ~(0xFFU << shift);
     cur |= static_cast<uint32_t>(value) << shift;
-    legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCu), cur);
+
+    legacyWrite32(bus, dev, func, static_cast<uint8_t>(offset & 0xFCU), cur);
 }
 
 // ─── Bus enumeration ─────────────────────────────────────────────────────────
 
-static void checkFunction(uint8_t bus, uint8_t dev, uint8_t func, vector<PciDevice> &devices) {
+static void checkFunction(const uint8_t bus, const uint8_t dev, const uint8_t func, vector<PciDevice> &devices) {
     const uint32_t id = pciConfigRead32(bus, dev, func, 0x00);
 
     if ((id & 0xFFFF) == 0xFFFF) {
@@ -205,25 +203,28 @@ static void checkFunction(uint8_t bus, uint8_t dev, uint8_t func, vector<PciDevi
     }
 
     PciDevice d{};
+
     d.bus      = bus;
     d.device   = dev;
     d.function = func;
-    d.vendorId = static_cast<uint16_t>(id & 0xFFFFu);
-    d.deviceId = static_cast<uint16_t>(id >> 16u);
+    d.vendorId = static_cast<uint16_t>(id & 0xFFFFU);
+    d.deviceId = static_cast<uint16_t>(id >> 16U);
     d.isPcie   = (ecamDeviceBase(bus, dev, func) != nullptr);
 
     const uint32_t classRev = pciConfigRead32(bus, dev, func, 0x08);
-    d.classCode = static_cast<uint8_t>(classRev >> 24u);
-    d.subclass  = static_cast<uint8_t>((classRev >> 16u) & 0xFFu);
-    d.progIf    = static_cast<uint8_t>((classRev >>  8u) & 0xFFu);
+
+    d.classCode = static_cast<uint8_t>(classRev >> 24U);
+    d.subclass  = static_cast<uint8_t>((classRev >> 16U) & 0xFFU);
+    d.progIf    = static_cast<uint8_t>((classRev >>  8U) & 0xFFU);
 
     const uint32_t hdrType = pciConfigRead32(bus, dev, func, 0x0C);
-    d.headerType = static_cast<uint8_t>((hdrType >> 16u) & 0xFFu);
+
+    d.headerType = static_cast<uint8_t>((hdrType >> 16U) & 0xFFU);
 
     devices.push_back(d);
 }
 
-static void checkDevice(uint8_t bus, uint8_t dev,vector<PciDevice> &devices,vector<bool> &visitedBuses) {
+static void checkDevice(const uint8_t bus, const uint8_t dev, vector<PciDevice> &devices, vector<bool> &visitedBuses) {
 	const uint32_t id = pciConfigRead32(bus, dev, 0, 0x00);
 
 	if ((id & 0xFFFF) == 0xFFFF) {
@@ -232,11 +233,11 @@ static void checkDevice(uint8_t bus, uint8_t dev,vector<PciDevice> &devices,vect
 
 	checkFunction(bus, dev, 0, devices);
 
-	// Read headerType directly — before any more checkFunction calls push
+	// Read headerType directly - before anymore checkFunction calls push
 	// onto `devices` and invalidate any .back() reference.
 	const uint8_t headerType = pciConfigRead8(bus, dev, 0, 0x0E);
 
-	if (headerType & 0x80u) {
+	if (static_cast<bool>(headerType & 0x80U)) {
 		for (uint8_t func = 1; func < 8; ++func) {
 			const uint32_t fid = pciConfigRead32(bus, dev, func, 0x00);
 
@@ -250,10 +251,10 @@ static void checkDevice(uint8_t bus, uint8_t dev,vector<PciDevice> &devices,vect
 	const uint8_t subclass  = pciConfigRead8(bus, dev, 0, 0x0A);
 	const uint8_t progIf    = pciConfigRead8(bus, dev, 0, 0x09);
 
-	if (classCode == 0x06 && subclass == 0x04 && progIf != 0x01) {
+	if (classCode == 0x06 and subclass == 0x04 and progIf != 0x01) {
 		const uint8_t secondaryBus = pciConfigRead8(bus, dev, 0, 0x19);
 
-		if (secondaryBus != 0 && secondaryBus != bus && !visitedBuses[secondaryBus]) {
+		if (secondaryBus != 0 and secondaryBus != bus and !visitedBuses[secondaryBus]) {
 			visitedBuses[secondaryBus] = true;
 
 			for (uint8_t subDev = 0; subDev < 32; ++subDev) {
@@ -285,7 +286,7 @@ void enumeratePci(vector<PciDevice> &devices) {
     ioperm(PCI_CONFIG_ADDRESS, 8, 0);
 }
 
-PciBridgeType getPciBridgeType(uint8_t classCode, uint8_t subclass) {
+auto getPciBridgeType(const uint8_t classCode, const uint8_t subclass) -> PciBridgeType {
 	if (classCode != 0x06) {
 		return PciBridgeType::None;
 	}
@@ -305,13 +306,15 @@ PciBridgeType getPciBridgeType(uint8_t classCode, uint8_t subclass) {
 	}
 }
 
-bool isPciBridge(uint8_t classCode, uint8_t subclass) {
+auto isPciBridge(const uint8_t classCode, const uint8_t subclass) -> bool {
+	(void) subclass;
+
 	return classCode == 0x06;
 }
 
 // ─── Message loop ────────────────────────────────────────────────────────────
 
-void *handleSearchDevice(void *devicesArr) {
+auto handleSearchDevice(void *devicesArr) -> void * {
 	const auto *devices = static_cast<vector<PciDevice> *>(devicesArr);
 
 	printf("PCI: Search Device message loop started!");
@@ -381,8 +384,8 @@ void *handleSearchDevice(void *devicesArr) {
 	}
 }
 
-void *handlePciRead(void *arg) {
-	(void)arg;
+auto handlePciRead(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Read message loop started!");
 	fflush(stdout);
@@ -442,8 +445,8 @@ void *handlePciRead(void *arg) {
 	}
 }
 
-void *handlePciWrite(void *arg) {
-	(void)arg;
+auto handlePciWrite(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Write message loop started!");
 	fflush(stdout);
@@ -490,8 +493,8 @@ void *handlePciWrite(void *arg) {
 	}
 }
 
-void *handleMsiAlloc(void *arg) {
-	(void)arg;
+auto handleMsiAlloc(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msi Alloc message loop started!");
 	fflush(stdout);
@@ -529,14 +532,14 @@ void *handleMsiAlloc(void *arg) {
 
 		sendMsg.port = recvMsg.src_port;
 
-		sendData.vec = msiEnable(recvData.bus, recvData.dev, recvData.func, recvData.port);
+		sendData.vec = msiEnable(recvData.bus, recvData.dev, recvData.func, recvData.port, recvData.lapicId);
 
 		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
-void *handleMsiFree(void *arg) {
-	(void)arg;
+auto handleMsiFree(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msi Free message loop started!");
 	fflush(stdout);
@@ -566,8 +569,8 @@ void *handleMsiFree(void *arg) {
 	}
 }
 
-void *handleMsixAlloc(void *arg) {
-	(void)arg;
+auto handleMsixAlloc(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msix Alloc message loop started!");
 	fflush(stdout);
@@ -608,14 +611,14 @@ void *handleMsixAlloc(void *arg) {
 
 		// Ensure global MSI-X enable is set after all desired entries are
 		// programmed.  The caller should send msix_global_enable when done.
-		sendData.vec = msixEnableEntry(recvData.bus, recvData.dev, recvData.func, recvData.idx, recvData.port);
+		sendData.vec = msixEnableEntry(recvData.bus, recvData.dev, recvData.func, recvData.idx, recvData.port, recvData.lapicId);
 
 		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
-void *handleMsixFree(void *arg) {
-	(void)arg;
+auto handleMsixFree(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msix Free message loop started!");
 	fflush(stdout);
@@ -645,11 +648,18 @@ void *handleMsixFree(void *arg) {
 	}
 }
 
-void *handleMsixGlobalEnable(void *arg) {
-	(void)arg;
+auto handleMsixGlobalEnable(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msix Global Enable message loop started!");
 	fflush(stdout);
+
+	// Send
+
+	auto sendMsg = hos_msg();
+
+	sendMsg.type = PCI_MSIX_GLOBAL_ENABLE_REPLY_MSG_TYPE;
+	sendMsg.length = 0;
 
 	// Recv
 
@@ -673,14 +683,25 @@ void *handleMsixGlobalEnable(void *arg) {
 		}
 
 		msixGlobalEnable(recvData.bus, recvData.dev, recvData.func);
+
+		sendMsg.port = recvMsg.src_port;
+
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }
 
-void *handleMsixGlobalDisable(void *arg) {
-	(void)arg;
+auto handleMsixGlobalDisable(void *arg) -> void * {
+	(void) arg;
 
 	printf("PCI: Msix Global Disable message loop started!");
 	fflush(stdout);
+
+	// Send
+
+	auto sendMsg = hos_msg();
+
+	sendMsg.type = PCI_MSIX_GLOBAL_DISABLE_REPLY_MSG_TYPE;
+	sendMsg.length = 0;
 
 	// Recv
 
@@ -704,5 +725,9 @@ void *handleMsixGlobalDisable(void *arg) {
 		}
 
 		msixGlobalDisable(recvData.bus, recvData.dev, recvData.func);
+
+		sendMsg.port = recvMsg.src_port;
+
+		send_horizonos_message(pciPort, recvMsg.src_port, &sendMsg);
 	}
 }

@@ -381,9 +381,9 @@ namespace kernel::common::threading {
 
     	u128 schedule(u64 oldRsp);
 
-    	void setCurrentThread(LinkedListEntry<Thread> *thread);
-    	LinkedListEntry<Thread> *getCurrentThread() const;
-    	LinkedListEntry<Thread> *getIdleThread() const;
+    	void setCurrentThread(Thread *thread);
+    	Thread *getCurrentThread() const;
+    	Thread *getIdleThread() const;
 
     	Thread* getNextThread();
     	void enqueueThread(Thread *thread, bool waking = false);
@@ -409,8 +409,8 @@ namespace kernel::common::threading {
         bool pendingSchedUnlock {};
         bool pendingSchedUnlockIF {};
 
-        LinkedListEntry<Thread> *idleThread {};
-        LinkedListEntry<Thread> *currentThread {};
+        Thread *idleThread {};
+        Thread *currentThread {};
 
     	bool oldThreadWasIopb {};
 
@@ -544,7 +544,7 @@ namespace kernel::common::threading {
 
     	void enqueueThread(Thread *thread, bool waking = false);
     	void enqueueThread(Thread *thread, ExecutionNode *target, bool waking = false);
-    	bool hasRunnableThreads();
+    	auto hasRunnableThreads() -> bool;
 
 		/**
 		 *  Create a new context for a thread with the specified parameters.
@@ -554,20 +554,20 @@ namespace kernel::common::threading {
 		 *
 		 *  @return The address of the created context.
 		 */
-		u64 *createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0, u64 userRsp = 0);
+		auto createContext(Thread *thread, Process *process, bool isUser, u64 rip, u64 rsp = 0, u64 userRsp = 0) -> u64 *;
 
-    	static ExecutionNode *getCoreEN(u64 cpuId);
+    	static auto getCoreEN(u64 cpuId) -> ExecutionNode *;
 
     	static void sleepTick();
 
     	static void timerReSchedule();
-    	static u32 intReSchedule(u64 *);
+    	static auto intReSchedule(u64 *) -> u32;
 
-    	TicketSpinLock *getSchedLock();
+    	auto getSchedLock() -> TicketSpinLock *;
 
-    	static Thread *getCurrentThread();
+    	static auto getCurrentThread() -> Thread *;
 
-    	static ExecutionNode *getCurrentExecutionNode();
+    	static auto getCurrentExecutionNode() -> ExecutionNode *;
 
     	void reaperThreadArch(const LinkedListEntry<Thread> *thread);
     	void reaperProcessArch(Process *process);

@@ -17,7 +17,7 @@ using namespace kernel::common::uacpi;
 
 // Kernel API
 
-uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
+auto uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) -> uacpi_status {
 	if (outRsdpAddress == nullptr) {
 		return UACPI_STATUS_INTERNAL_ERROR;
 	}
@@ -32,7 +32,7 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 	return UACPI_STATUS_OK;
 }
 
-void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
+auto uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) -> void * {
 	const u64 alignedAddr = alignDown<u64>(addr, pageSize);
 	if (len == 0 || len > ~0ULL - addr) {
 		return nullptr;
@@ -52,7 +52,7 @@ void *uacpi_kernel_map(uacpi_phys_addr addr, uacpi_size len) {
 	return reinterpret_cast<u64 *>(addr + hhdmBase);
 }
 
-void uacpi_kernel_unmap(void *addr, uacpi_size len) {
+void uacpi_kernel_unmap(void *addr, const uacpi_size len) {
 	const u64 realAddr = reinterpret_cast<u64>(addr);
 	const u64 alignedAddr = alignDown<u64>(realAddr, pageSize);
 	const u64 offset = realAddr - alignedAddr;
@@ -63,7 +63,7 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	}
 }
 
-void uacpi_kernel_log(uacpi_log_level level, const uacpi_char* str) {
+void uacpi_kernel_log(const uacpi_log_level level, const uacpi_char* str) {
 	Terminal* terminal = CommonMain::getTerminal();
 
 	switch (level) {
@@ -123,7 +123,7 @@ namespace kernel::common::uacpi {
 		const auto madtStart = reinterpret_cast<uPtr>(this->madt->entries);
 		const auto madtEnd = reinterpret_cast<uPtr>(this->madt) + this->madt->hdr.length;
 
-		auto currMadt = reinterpret_cast<acpi_entry_hdr *>(madtStart);
+		const auto *currMadt = reinterpret_cast<acpi_entry_hdr *>(madtStart);
 
 		for (uPtr entry = madtStart; entry < madtEnd; entry += currMadt->length, currMadt = reinterpret_cast<acpi_entry_hdr *>(entry)) {
 			switch (currMadt->type) {

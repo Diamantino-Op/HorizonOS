@@ -25,11 +25,11 @@ namespace kernel::common::hal {
 		terminal->info("New main clock: %s", "Clock", this->mainClock->name);
 	}
 
-	Clock *Clocks::getMainClock() const {
+	auto Clocks::getMainClock() const -> Clock * {
 		return mainClock;
 	}
 
-	bool Clocks::stallNs(const u64 ns) {
+	auto Clocks::stallNs(const u64 ns) const -> bool {
 		if (mainClock == nullptr) {
 			return false;
 		}
@@ -51,51 +51,18 @@ namespace kernel::common::hal {
 		while (mainClock->getNs() < end) {}
 	}
 
-	u32 Clocks::timerTick(u64 *) {
-		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
+	void CoreClock::resetSchedulerTimer() {
+		const Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
 
-		auto it = clocksPtr->handlers.begin();
-		const auto end = clocksPtr->handlers.end();
-
-		while (it != end) {
-			auto &currEntry = *it;
-			auto nextIt = it;
-			++nextIt;
-
-			if (currEntry.nextCall <= clocksPtr->getMainClock()->getNs()) {
-				currEntry.nextCall = clocksPtr->getMainClock()->getNs() + currEntry.timeout;
-
-				currEntry.fun();
-			}
-
-			it = nextIt;
-		}
-
-		if (clocksPtr->schedulerHandler.nextCall <= clocksPtr->getMainClock()->getNs()) {
-			clocksPtr->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + clocksPtr->schedulerHandler.timeout;
-
-			clocksPtr->schedulerHandler.fun();
-		} else {
-			finishTimerTick();
-		}
-
-		return 1;
+		this->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + this->schedulerHandler.timeout;
 	}
 
-	void Clocks::resetSchedulerTimer() {
-		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
-
-		clocksPtr->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + clocksPtr->schedulerHandler.timeout;
-	}
-
-	void Clocks::addTimerHandle(const HandlerFun fun, const u64 timeout) {
-		Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
-
+	void CoreClock::addTimerHandle(const HandlerFun fun, const u64 timeout) {
 		auto *newHandler = new TimerHandler();
 		
 		newHandler->fun = fun;
 		newHandler->timeout = timeout;
 
-		clocksPtr->handlers.addEnd(newHandler);
+		this->handlers.addEnd(newHandler);
 	}
 }

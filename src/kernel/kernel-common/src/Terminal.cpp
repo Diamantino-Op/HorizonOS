@@ -17,6 +17,7 @@
 #include "memory/MainMemory.hpp"
 
 #include "CommonMain.hpp"
+#include "Time.hpp"
 
 namespace kernel::common {
 	using namespace memory;
@@ -348,28 +349,32 @@ namespace kernel::common {
 				continue;
 			}
 
-			if (terminal->msgQueue.pop(message)) {
-				switch (message.type) {
-					case MessageType::DEBUG:
-						terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+			if (not terminal->msgQueue.pop(message)) {
+				CommonMain::getInstance()->getScheduler()->sleepThread(Scheduler::getCurrentThread(), TimeUtils::msToNs(10));
 
-						break;
+				continue;
+			}
 
-					case MessageType::INFO:
-						terminal->printf(true, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+			switch (message.type) {
+				case MessageType::DEBUG:
+					terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
 
-						break;
+					break;
 
-					case MessageType::WARN:
-						terminal->printf(true, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+				case MessageType::INFO:
+					terminal->printf(true, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
 
-						break;
+					break;
 
-					case MessageType::ERROR:
-						terminal->printfBoth(true, "[    \o{33}[0;31merror    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+				case MessageType::WARN:
+					terminal->printf(true, "[   \o{33}[0;33mwarning   \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
 
-						break;
-				}
+					break;
+
+				case MessageType::ERROR:
+					terminal->printfBoth(true, "[    \o{33}[0;31merror    \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+
+					break;
 			}
 		}
 	}

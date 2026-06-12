@@ -13,6 +13,15 @@ constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
 constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
+constexpr uint64_t PCI_MSIX_ALLOC_MSG_TYPE = 0x80;
+constexpr uint64_t PCI_MSIX_ALLOC_REPLY_MSG_TYPE = 0x90;
+constexpr uint64_t PCI_MSIX_FREE_MSG_TYPE = 0xA0;
+constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE = 0xB0;
+constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_REPLY_MSG_TYPE = 0xB1;
+constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE = 0xC0;
+constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_REPLY_MSG_TYPE = 0xC1;
+
+constexpr uint64_t IRQ_RECEIVE_MSG_TYPE      = 0x1000;
 
 constexpr uint64_t NVME_READ_MSG_BASE        = 0x10000;
 constexpr uint64_t NVME_WRITE_MSG_BASE       = 0x20000;
@@ -93,8 +102,48 @@ struct NvmeFlushReplyMsgData {
 	bool success {};
 };
 
+struct PciMsixAllocMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t idx {};
+	uint64_t port {};
+	uint64_t lapicId {};
+};
+
+struct PciMsixAllocReplyMsgData {
+	uint8_t vec {};
+};
+
+struct PciMsixFreeMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint16_t idx {};
+	uint8_t vec {};
+};
+
+struct PciMsixGlobalEnableMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
+
+struct PciMsixGlobalDisableMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
+
+struct IrqReceiveData {
+	uint64_t irqNum {};
+	uint64_t cpuId {};
+	bool isIrq {};
+};
+
 struct CoreStruct {
 	uint64_t cpuId {};
+	uint64_t apicId {};
 	uint64_t coreSlot {};
 	uint64_t nvmePort {};
 	vector<PciDevice> *nvmeDevices {};
@@ -138,46 +187,46 @@ enum class StatusCodeType : uint8_t {
 };
 
 struct CommandDword {
-	std::uint32_t raw {};
+	uint32_t raw {};
 
-	[[nodiscard]] constexpr uint8_t opCode() const noexcept {
-		return static_cast<uint8_t>(raw & 0xFFu);
+	constexpr auto opCode() const noexcept -> uint8_t {
+		return static_cast<uint8_t>(raw & 0xFFU);
 	}
 
-	constexpr void setOpCode(uint8_t value) noexcept {
-		raw = (raw & ~0xFFu) | static_cast<std::uint32_t>(value);
+	constexpr void setOpCode(const uint8_t value) noexcept {
+		raw = (raw & ~0xFFU) | static_cast<uint32_t>(value);
 	}
 
-	[[nodiscard]] constexpr FuseType fuse() const noexcept {
-		return static_cast<FuseType>((raw >> 8) & 0x3u);
+	constexpr auto fuse() const noexcept -> FuseType {
+		return static_cast<FuseType>((raw >> 8) & 0x3U);
 	}
 
 	constexpr void setFuse(FuseType value) noexcept {
-		raw = (raw & ~(0x3u << 8)) | (static_cast<std::uint32_t>(value) << 8);
+		raw = (raw & ~(0x3U << 8)) | (static_cast<uint32_t>(value) << 8);
 	}
 
-	[[nodiscard]] constexpr uint8_t reserved() const noexcept {
-		return static_cast<uint8_t>((raw >> 10) & 0xFu);
+	constexpr auto reserved() const noexcept -> uint8_t {
+		return static_cast<uint8_t>((raw >> 10) & 0xFU);
 	}
 
-	constexpr void setReserved(uint8_t value) noexcept {
-		raw = (raw & ~(0xFu << 10)) | ((static_cast<uint32_t>(value) & 0xFu) << 10);
+	constexpr void setReserved(const uint8_t value) noexcept {
+		raw = (raw & ~(0xFU << 10)) | ((static_cast<uint32_t>(value) & 0xFU) << 10);
 	}
 
-	[[nodiscard]] constexpr PSDTType psdt() const noexcept {
-		return static_cast<PSDTType>((raw >> 14) & 0x3u);
+	constexpr auto psdt() const noexcept -> PSDTType {
+		return static_cast<PSDTType>((raw >> 14) & 0x3U);
 	}
 
 	constexpr void setPsdt(PSDTType value) noexcept {
-		raw = (raw & ~(0x3u << 14)) | (static_cast<uint32_t>(value) << 14);
+		raw = (raw & ~(0x3U << 14)) | (static_cast<uint32_t>(value) << 14);
 	}
 
-	[[nodiscard]] constexpr uint16_t cid() const noexcept {
-		return static_cast<uint16_t>((raw >> 16) & 0xFFFFu);
+	constexpr auto cid() const noexcept -> uint16_t {
+		return static_cast<uint16_t>((raw >> 16) & 0xFFFFU);
 	}
 
-	constexpr void setCid(uint16_t value) noexcept {
-		raw = (raw & 0xFFFFu) | (static_cast<uint32_t>(value) << 16);
+	constexpr void setCid(const uint16_t value) noexcept {
+		raw = (raw & 0xFFFFU) | (static_cast<uint32_t>(value) << 16);
 	}
 };
 
@@ -346,6 +395,8 @@ struct IoQueuePair {
 	uint32_t         cqHead { 0 };
 	uint8_t          cqPhase { 1 };
 	uint16_t         queueId { 0 };   // NVMe queue ID (1-based, admin = 0)
+	uint64_t	     completionPort { 0 }; // MSI-X vector's notify port for this queue
+	uint8_t		     msixVector { 0 }; // MSI-X vector index assigned to this queue
 	bool             valid { false };
 };
 
@@ -365,11 +416,16 @@ public:
 	auto read(uint32_t namespaceId, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, uint64_t coreSlot) noexcept -> bool;
 	auto write(uint32_t namespaceId, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, uint64_t coreSlot) noexcept -> bool;
 	auto flush(uint32_t namespaceId, uint64_t coreSlot) noexcept -> bool;
-	auto createIoQueueForCore(uint64_t coreSlot, uint16_t queueId) noexcept -> bool;
+	auto createIoQueueForCore(uint64_t coreSlot, uint16_t queueId, uint64_t lapicId) noexcept -> bool;
 	auto submitIoCommand(IoQueuePair& queue, const Command &command, CompletionEntry &result) const noexcept -> bool;
 	auto getNamespaceCount() const noexcept -> uint32_t;
 	auto getActiveNamespaces(vector<uint32_t> &nsIDs) noexcept -> bool;
 	void shutdown() noexcept;
+
+	void msixGlobalEnable() const noexcept;
+	void msixGlobalDisable() const noexcept;
+	auto msixAllocVector(uint16_t tableIndex, uint64_t notifyPort, uint64_t lapicId = 1000000) const noexcept -> uint8_t;
+	void msixFreeVector(uint16_t tableIndex, uint8_t vec) const noexcept;
 
 private:
 	static auto buildChainedPrpList(const uint64_t* pagePhysArray, uint32_t pageCount, uint64_t& prp1, uint64_t& prp2, vector<PrpListPage>& prpListPages) noexcept -> bool;
@@ -398,6 +454,9 @@ private:
 	
 	vector<IoQueuePair> ioQueues;
 	uint32_t maxTransferBlocks { 0 };
+
+	uint64_t adminCompletionPort { 0 };
+	uint8_t adminMsixVector { 0 };
 };
 
 auto pciRead32(uint64_t nvmePort, uint64_t pciPort, uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) -> uint32_t;

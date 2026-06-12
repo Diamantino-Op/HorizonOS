@@ -15,12 +15,15 @@ namespace kernel::common::hal {
 	using namespace threading;
 
 	namespace {
+		constexpr u64 unlockedAffinityCpuId = ~0x0U;
+		constexpr usize affinityBitsPerByte = 8;
+
 		auto isMappedAddress(const AllocContext *ctx, const u64 addr) -> bool {
-			return ctx != nullptr and ctx->pageMap.getPhysAddress(addr) != 0;
+			return ctx->pageMap.getPhysAddress(addr) != 0;
 		}
 
-		auto findThreadById(Scheduler *scheduler, const u64 pid, const u64 tid) -> Thread * {
-			if (scheduler == nullptr or pid == 0 or tid == 0) {
+		auto findThreadById(const Scheduler *scheduler, const u64 pid, const u64 tid) -> Thread * {
+			if (scheduler == nullptr) {
 				return nullptr;
 			}
 
@@ -60,23 +63,19 @@ namespace kernel::common::hal {
 		}
 
 		auto timespecToNs(const Timespec *ts, u64 *ns) -> int {
-			if (ts == nullptr || ns == nullptr) {
-				return EFAULT;
-			}
-
 			if (ts->tv_sec < 0 || ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L) {
 				return EINVAL;
 			}
 
 			const u64 sec = static_cast<u64>(ts->tv_sec);
 			const u64 nsec = static_cast<u64>(ts->tv_nsec);
-			const u64 maxValue = ~0ULL;
+			constexpr u64 maxValue = ~0ULL;
 
 			if (sec > (maxValue - nsec) / 1000000000ULL) {
 				return EINVAL;
 			}
 
-			*ns = sec * 1000000000ULL + nsec;
+			*ns = (sec * 1000000000ULL) + nsec;
 			return 0;
 		}
 
@@ -146,7 +145,7 @@ namespace kernel::common::hal {
 		}
 
 		auto copyToUser(const AllocContext *ctx, const u64 userPtr, const void *sourcePtr, const usize size) -> int {
-			if (ctx == nullptr or sourcePtr == nullptr or userPtr == 0 or size == 0) {
+			if (ctx == nullptr or userPtr == 0) {
 				return EFAULT;
 			}
 
@@ -154,11 +153,12 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			const auto *sourceBytes = reinterpret_cast<const u8 *>(sourcePtr);
+			const auto *sourceBytes = static_cast<const u8 *>(sourcePtr);
 			auto *hhdmBytes = reinterpret_cast<u8 *>(CommonMain::getCurrentHhdm());
 
 			for (usize offset = 0; offset < size; offset++) {
 				const u64 physAddr = ctx->pageMap.getPhysAddress(userPtr + offset);
+
 				if (physAddr == 0) {
 					return EFAULT;
 				}
@@ -167,6 +167,138 @@ namespace kernel::common::hal {
 			}
 
 			return 0;
+		}
+
+		auto copyFromUser(const AllocContext *ctx, void *destPtr, const u64 userPtr, const usize size) -> int {
+			if (ctx == nullptr or userPtr == 0) {
+				return EFAULT;
+			}
+
+			if (!isValidUserRange(ctx, userPtr, size)) {
+				return EFAULT;
+			}
+
+			auto *destBytes = static_cast<u8 *>(destPtr);
+			const auto *hhdmBytes = reinterpret_cast<const u8 *>(CommonMain::getCurrentHhdm());
+
+			for (usize offset = 0; offset < size; offset++) {
+				const u64 physAddr = ctx->pageMap.getPhysAddress(userPtr + offset);
+
+				if (physAddr == 0) {
+					return EFAULT;
+				}
+
+				destBytes[offset] = hhdmBytes[physAddr];
+			}
+
+			return 0;
+		}
+
+		auto writeUserByte(const AllocContext *ctx, const u64 userPtr, const u8 byte) -> int {
+			return copyToUser(ctx, userPtr, &byte, sizeof(byte));
+		}
+
+		auto readUserByte(const AllocContext *ctx, const u64 userPtr, u8 *byte) -> int {
+			return copyFromUser(ctx, byte, userPtr, sizeof(*byte));
+		}
+
+		auto setUserCpuMaskBit(const AllocContext *ctx, const u64 mask, const usize cpuSetSize, const u64 cpuId) -> int {
+			const usize byteOffset = cpuId / affinityBitsPerByte;
+
+			if (byteOffset >= cpuSetSize) {
+				return EINVAL;
+			}
+
+			u8 byte = 0;
+
+			const int err = readUserByte(ctx, mask + byteOffset, &byte);
+
+			if (err != 0) {
+				return err;
+			}
+
+			byte |= static_cast<u8>(1U << (cpuId % affinityBitsPerByte));
+
+			return writeUserByte(ctx, mask + byteOffset, byte);
+		}
+
+		auto getUserCpuMaskBit(const AllocContext *ctx, const u64 mask, const usize cpuSetSize, const u64 cpuId, bool *isSet) -> int {
+			const usize byteOffset = cpuId / affinityBitsPerByte;
+
+			if (byteOffset >= cpuSetSize) {
+				return EINVAL;
+			}
+
+			u8 byte = 0;
+			const int err = readUserByte(ctx, mask + byteOffset, &byte);
+			if (err != 0) {
+				return err;
+			}
+
+			*isSet = (byte & static_cast<u8>(1U << (cpuId % affinityBitsPerByte))) != 0;
+
+			return 0;
+		}
+
+		auto getOnlineCpuInfo(u64 *onlineCount, u64 *maxCpuId) -> int {
+			if (mpRequest.response == nullptr) {
+				return EFAULT;
+			}
+
+			*onlineCount = 0;
+			*maxCpuId = 0;
+
+			for (u64 i = 0; i < mpRequest.response->cpu_count; i++) {
+				const limine_mp_info *cpuInfo = mpRequest.response->cpus[i];
+
+				if (cpuInfo == nullptr) {
+					continue;
+				}
+
+				const u64 cpuId = cpuInfo->processor_id;
+
+				if (Scheduler::getCoreEN(cpuId) == nullptr) {
+					continue;
+				}
+
+				(*onlineCount)++;
+
+				if (cpuId > *maxCpuId) {
+					*maxCpuId = cpuId;
+				}
+			}
+
+			return *onlineCount == 0 ? EFAULT : 0;
+		}
+
+		auto findAffinityTarget(Scheduler *scheduler, const u64 tidPid) -> Thread * {
+			if (scheduler == nullptr) {
+				return nullptr;
+			}
+
+			if (tidPid == 0) {
+				return Scheduler::getCurrentThread();
+			}
+
+			if (tidPid > 0xffff) {
+				return nullptr;
+			}
+
+			if (Thread *thread = scheduler->getThread(static_cast<u16>(tidPid))) {
+				return thread;
+			}
+
+			for (auto &process : scheduler->processList) {
+				if (process.getId() != static_cast<u16>(tidPid)) {
+					continue;
+				}
+
+				const LinkedListEntry<Thread> *firstThread = process.threadList.getFirst();
+
+				return firstThread != nullptr ? firstThread->value : nullptr;
+			}
+
+			return nullptr;
 		}
 	}
 
@@ -213,21 +345,21 @@ namespace kernel::common::hal {
 		horizonSyscalls[34] = &syscallFreeIntVec;
 		horizonSyscalls[35] = &syscallAllocGsi;
 		horizonSyscalls[36] = &syscallFreeGsi;
-		horizonSyscalls[37] = &syscallLockToCore;
-		horizonSyscalls[38] = &syscallGetCpuCount;
-		horizonSyscalls[39] = &syscallGetCpuIDs;
-		horizonSyscalls[40] = &syscallAllocPhysPage;
+		horizonSyscalls[37] = &syscallGetCpuIDs;
+		horizonSyscalls[38] = &syscallAllocPhysPage;
+		horizonSyscalls[39] = &syscallGetAffinity;
+		horizonSyscalls[40] = &syscallSetAffinity;
 
 		initArch();
 	}
 
-	u32 SyscallManager::portWatchdog(u64 *) {
+	auto SyscallManager::portWatchdog(u64 */*unused*/) -> u32 {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
 
 		auto it  = schedulerPtr->blockedThreadList.begin();
-		auto end = schedulerPtr->blockedThreadList.end();
+		const auto end = schedulerPtr->blockedThreadList.end();
 
 		while (it != end) {
 			auto &currEntry = *it;
@@ -253,7 +385,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallPrint(long *, const u64 message, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallPrint(long */*unused*/, const u64 message, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		const u16 tid = Scheduler::getCurrentThread()->getId();
 
 		CommonMain::getTerminal()->info("Thread %u: %s", "User", tid, reinterpret_cast<char *>(message));
@@ -263,7 +395,9 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMMap(long *ret, const u64 hint, const u64 size, const u64 prot, const u64 flags, u64 fd, const u64 offset) {
+	auto SyscallManager::syscallMMap(long *ret, const u64 hint, const u64 size, const u64 prot, const u64 flags, u64 fd, const u64 offset) -> u64 {
+		(void) fd;
+
 		// TODO: implement fd and offset
 
 		if (size == 0) {
@@ -284,7 +418,7 @@ namespace kernel::common::hal {
 			return EEXIST;
 		}
 
-		if (flags & MAP_ANON && offset != 0) {
+		if (static_cast<bool>(flags & MAP_ANON) and offset != 0) {
 			*ret = MAP_FAILED;
 
 			return EINVAL;
@@ -302,7 +436,7 @@ namespace kernel::common::hal {
 				return ENOMEM;
 			}
 
-			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), (prot & 0b11) | 0b101, false, not(prot & PROT_EXEC));
+			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), (prot & 0b11) | 0b101, false, not static_cast<bool>(prot & PROT_EXEC));
 
 			if (i > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
 				Scheduler::getCurrentThread()->getParent()->topmostMappedPage = i;
@@ -314,7 +448,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMUnmap(long *, const u64 addr, const u64 size, const u64 freePage, u64, u64, u64) {
+	auto SyscallManager::syscallMUnmap(long */*unused*/, const u64 addr, const u64 size, const u64 freePage, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (size == 0 or addr == 0) {
 			return EINVAL;
 		}
@@ -331,13 +465,13 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallGetTID(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		*ret = Scheduler::getCurrentThread()->getId();
 
 		return 0;
 	}
 
-	u64 SyscallManager::syscallArchCtl(long *ret, const u64 operation, const u64 pointer, u64, u64, u64, u64) {
+	auto SyscallManager::syscallArchCtl(long *ret, const u64 operation, const u64 pointer, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		//CommonMain::getTerminal()->debug("Arch specific syscall called with params: %lu 0x%.16lx", "Syscall Manager", operation, pointer);
 
 		switch (operation) {
@@ -350,11 +484,11 @@ namespace kernel::common::hal {
 				break;
 
 			case ARCH_CTL_GET_GSBASE:
-				*ret = getGsBase();
+				*ret = static_cast<long>(getGsBase());
 				break;
 
 			case ARCH_CTL_GET_FSBASE:
-				*ret = getFsBase();
+				*ret = static_cast<long>(getFsBase());
 				break;
 
 			default:
@@ -364,7 +498,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallExit(long *, u64 status, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallExit(long */*unused*/, const u64 status, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		CommonMain::getTerminal()->debug("Process %lu exited with status code: %lu", "Syscall", Scheduler::getCurrentThread()->getParent()->getId(), status);
 		CommonMain::getTerminal()->info("Process %lu exited with status code: %lu", "Syscall", Scheduler::getCurrentThread()->getParent()->getId(), status);
 
@@ -373,16 +507,8 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallClockGet(long *ret, const u64 clock, const u64 secs, const u64 nanos, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallClockGet(long */*unused*/, const u64 clock, const u64 secs, const u64 nanos, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (!clockIdSupported(clock)) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
@@ -390,48 +516,29 @@ namespace kernel::common::hal {
 		const int err = getCurrentClockNs(&clockNs);
 
 		if (err != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return err;
 		}
 
 		*reinterpret_cast<long *>(secs) = static_cast<long>(clockNs / nanosecondsPerSecond);
 		*reinterpret_cast<long *>(nanos) = static_cast<long>(clockNs % nanosecondsPerSecond);
 
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSysInfo(long *ret, const u64 info, u64, u64, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallSysInfo(long */*unused*/, const u64 info, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *commonMain = CommonMain::getInstance();
 		auto *scheduler = commonMain != nullptr ? commonMain->getScheduler() : nullptr;
 		const Thread *thread = Scheduler::getCurrentThread();
 		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
 
-		if (!isValidUserRange(ctx, info, sizeof(KernelSysInfo))) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
+		if (not isValidUserRange(ctx, info, sizeof(KernelSysInfo))) {
 			return EFAULT;
 		}
 
 		u64 uptimeNs = 0;
 		const int clockErr = getCurrentClockNs(&uptimeNs);
-		if (clockErr != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
 
+		if (clockErr != 0) {
 			return clockErr;
 		}
 
@@ -441,53 +548,34 @@ namespace kernel::common::hal {
 		kernelInfo.loads[0] = 0;
 		kernelInfo.loads[1] = 0;
 		kernelInfo.loads[2] = 0;
-		kernelInfo.totalram = getUsableMemoryBytes();
-		kernelInfo.freeram = commonMain != nullptr && commonMain->getPMM() != nullptr ? commonMain->getPMM()->getFreeMemory() : 0;
-		kernelInfo.sharedram = 0;
-		kernelInfo.bufferram = 0;
-		kernelInfo.totalswap = 0;
-		kernelInfo.freeswap = 0;
+		kernelInfo.totalRam = getUsableMemoryBytes();
+		kernelInfo.freeRam = commonMain != nullptr && commonMain->getPMM() != nullptr ? commonMain->getPMM()->getFreeMemory() : 0;
+		kernelInfo.sharedRam = 0;
+		kernelInfo.bufferRam = 0;
+		kernelInfo.totalSwap = 0;
+		kernelInfo.freeSwap = 0;
 		kernelInfo.procs = countProcesses(scheduler);
-		kernelInfo.totalhigh = 0;
-		kernelInfo.freehigh = 0;
-		kernelInfo.mem_unit = 1;
+		kernelInfo.totalHigh = 0;
+		kernelInfo.freeHigh = 0;
+		kernelInfo.memUnit = 1;
 
 		const int copyErr = copyToUser(ctx, info, &kernelInfo, sizeof(kernelInfo));
+
 		if (copyErr != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return copyErr;
-		}
-
-		if (ret != nullptr) {
-			*ret = 0;
 		}
 
 		return 0;
 	}
 
-	u64 SyscallManager::syscallKillThread(long *ret, u64 pid, u64 tid, u64 sig, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
-		if (sig == 0 || sig > signalActionCount || pid == 0 || tid == 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
+	auto SyscallManager::syscallKillThread(long */*unused*/, const u64 pid, const u64 tid, const u64 sig, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		if (sig == 0 or sig > signalActionCount or pid == 0 or tid == 0) {
 			return EINVAL;
 		}
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 
 		if (scheduler == nullptr) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EFAULT;
 		}
 
@@ -496,10 +584,6 @@ namespace kernel::common::hal {
 
 		if (target == nullptr) {
 			scheduler->getSchedLock()->unlock(schedPrevIF);
-
-			if (ret != nullptr) {
-				*ret = -1;
-			}
 
 			return ESRCH;
 		}
@@ -510,17 +594,15 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallPause(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallPause(long */*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallThreadExit(long *, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallThreadExit(long */*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, u64, u64, u64, u64) {
-		// TODO: Check
-
+	auto SyscallManager::syscallNewThread(long *ret, const u64 entryFun, const u64 stack, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		//CommonMain::getTerminal()->debug("New Thread: Stack: 0x%.16lx", "Syscall Manager", stack);
 
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
@@ -550,7 +632,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSendMsg(long *ret, const u64 sendPort, const u64 port, const u64 msgHdr, u64, u64, u64) {
+	auto SyscallManager::syscallSendMsg(long *ret, const u64 sendPort, const u64 port, const u64 msgHdr, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		auto *thread = Scheduler::getCurrentThread();
@@ -612,10 +694,10 @@ namespace kernel::common::hal {
 		}
 	}
 
-	u64 SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, const u64 options, u64, u64, u64) {
+	auto SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, const u64 options, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
-		auto *scheduler = CommonMain::getInstance()->getScheduler();
-		auto *thread = Scheduler::getCurrentThread();
+		const auto *scheduler = CommonMain::getInstance()->getScheduler();
+		const auto *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or hdr == nullptr) {
 			return EFAULT;
@@ -662,7 +744,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallRegisterPort(long *ret, const u64 preferredPort, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallRegisterPort(long *ret, const u64 preferredPort, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -670,25 +752,17 @@ namespace kernel::common::hal {
 		if (preferredPort == 0) {
 			*ret = static_cast<long>(PortMessaging::getNewPort());
 		} else {
-			*ret = preferredPort;
+			*ret = static_cast<long>(preferredPort);
 		}
 
 		return PortMessaging::registerPort(*ret);
 	}
 
-	u64 SyscallManager::syscallFutex(long *ret, const u64 pointer, const u64 type, const u64 expected, const u64 time, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallFutex(long */*unused*/, const u64 pointer, const u64 type, const u64 expected, const u64 time, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
 
 		if (thread == nullptr or thread->getParent() == nullptr) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EFAULT;
 		}
 
@@ -699,28 +773,16 @@ namespace kernel::common::hal {
 		switch (futexOp) {
 			case FUTEX_WAIT: {
 				if (time != 0) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EINVAL;
 				}
 
 				if (!isValidFutexPointer(ctx, pointer)) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EFAULT;
 				}
 
 				const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
 
 				if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EAGAIN;
 				}
 
@@ -729,19 +791,11 @@ namespace kernel::common::hal {
 				if (!isValidFutexPointer(ctx, pointer)) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
 
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EFAULT;
 				}
 
 				if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					if (ret != nullptr) {
-						*ret = -1;
-					}
 
 					return EAGAIN;
 				}
@@ -749,18 +803,14 @@ namespace kernel::common::hal {
 				if (!Futex::addWaiter(pointer, thread->getId())) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
 
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return ENOMEM;
 				}
 
 				thread->setState(ThreadState::BLOCKED);
 				scheduler->removeThread(thread);
 
-				const LinkedListEntry<Thread> *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
-				const bool shouldReschedule = currentEntry != nullptr && currentEntry->value == thread;
+				const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
+				const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
 
 				scheduler->blockedThreadList.addStart(thread);
 
@@ -768,10 +818,6 @@ namespace kernel::common::hal {
 
 				if (shouldReschedule) {
 					ExecutionNode::reSchedule();
-				}
-
-				if (ret != nullptr) {
-					*ret = 0;
 				}
 
 				return 0;
@@ -779,20 +825,12 @@ namespace kernel::common::hal {
 
 			case FUTEX_WAIT_BITSET: {
 				if (!isValidFutexPointer(ctx, pointer)) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EFAULT;
 				}
 
 				const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
 
 				if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EAGAIN;
 				}
 
@@ -801,19 +839,11 @@ namespace kernel::common::hal {
 				if (!isValidFutexPointer(ctx, pointer)) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
 
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EFAULT;
 				}
 
 				if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					if (ret != nullptr) {
-						*ret = -1;
-					}
 
 					return EAGAIN;
 				}
@@ -821,18 +851,14 @@ namespace kernel::common::hal {
 				if (!Futex::addWaiter(pointer, thread->getId())) {
 					scheduler->getSchedLock()->unlock(schedPrevIF);
 
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return ENOMEM;
 				}
 
 				thread->setState(ThreadState::BLOCKED);
 				scheduler->removeThread(thread);
 
-				const LinkedListEntry<Thread> *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
-				const bool shouldReschedule = currentEntry != nullptr && currentEntry->value == thread;
+				const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
+				const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
 
 				scheduler->blockedThreadList.addStart(thread);
 
@@ -842,27 +868,15 @@ namespace kernel::common::hal {
 					ExecutionNode::reSchedule();
 				}
 
-				if (ret != nullptr) {
-					*ret = 0;
-				}
-
 				return 0;
 			}
 
 			case FUTEX_WAKE: {
 				if (time != 0) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EINVAL;
 				}
 
 				if (expected == 0) {
-					if (ret != nullptr) {
-						*ret = 0;
-					}
-
 					return 0;
 				}
 
@@ -884,28 +898,16 @@ namespace kernel::common::hal {
 				}
 
 				scheduler->getSchedLock()->unlock(schedPrevIF);
-
-				if (ret != nullptr) {
-					*ret = static_cast<long>(woken);
-				}
 
 				return 0;
 			}
 
 			case FUTEX_WAKE_BITSET: {
 				if (time != 0) {
-					if (ret != nullptr) {
-						*ret = -1;
-					}
-
 					return EINVAL;
 				}
 
 				if (expected == 0) {
-					if (ret != nullptr) {
-						*ret = 0;
-					}
-
 					return 0;
 				}
 
@@ -928,43 +930,23 @@ namespace kernel::common::hal {
 
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 
-				if (ret != nullptr) {
-					*ret = static_cast<long>(woken);
-				}
-
 				return 0;
 			}
 
 			default:
-				if (ret != nullptr) {
-					*ret = -1;
-				}
-
 				return EINVAL;
 		}
 	}
 
-	u64 SyscallManager::syscallSigaction(long *ret, const u64 sig, const u64 action, const u64 oldAction, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallSigaction(long */*unused*/, const u64 sig, const u64 action, const u64 oldAction, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		const Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EFAULT;
 		}
 
 		if (sig == 0 || sig > signalActionCount) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
@@ -972,10 +954,6 @@ namespace kernel::common::hal {
 		constexpr u64 sigStop = 19;
 
 		if (action != 0 && (sig == sigKill || sig == sigStop)) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
@@ -983,25 +961,17 @@ namespace kernel::common::hal {
 
 		if (!isValidUserRange(ctx, action, action != 0 ? sizeof(SignalAction) : 0)) {
 			if (action != 0) {
-				if (ret != nullptr) {
-					*ret = -1;
-				}
-
 				return EFAULT;
 			}
 		}
 
 		if (!isValidUserRange(ctx, oldAction, oldAction != 0 ? sizeof(SignalAction) : 0)) {
 			if (oldAction != 0) {
-				if (ret != nullptr) {
-					*ret = -1;
-				}
-
 				return EFAULT;
 			}
 		}
 
-		SignalAction newActionCopy {};
+		SignalAction newActionCopy;
 
 		if (action != 0) {
 			newActionCopy = *reinterpret_cast<const SignalAction *>(action);
@@ -1020,19 +990,15 @@ namespace kernel::common::hal {
 
 		scheduler->getSchedLock()->unlock(schedPrevIF);
 
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallSigreturn(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
 
-		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		const Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
@@ -1056,47 +1022,27 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMProtect(long *ret, const u64 pointer, const u64 size, const u64 prot, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallMProtect(long */*unused*/, const u64 pointer, const u64 size, const u64 prot, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		//CommonMain::getTerminal()->debug("Memprotect: Prot: %lu, Size: %lu, Addr: 0x%.16lx", "Syscall Manager", prot, size, pointer);
 
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		const Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EFAULT;
 		}
 
 		if (pointer == 0 || size == 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
 		constexpr u64 supportedProt = PROT_NONE | PROT_READ | PROT_WRITE | PROT_EXEC;
 		if ((prot & ~supportedProt) != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
 		const u64 end = pointer + size - 1;
 		if (end < pointer) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EINVAL;
 		}
 
@@ -1109,10 +1055,6 @@ namespace kernel::common::hal {
 			if (ctx->pageMap.getPhysAddress(addr) == 0) {
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 
-				if (ret != nullptr) {
-					*ret = -1;
-				}
-
 				return EFAULT;
 			}
 		}
@@ -1121,77 +1063,53 @@ namespace kernel::common::hal {
 			if (!ctx->pageMap.protectPage(addr, static_cast<u8>(prot))) {
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 
-				if (ret != nullptr) {
-					*ret = -1;
-				}
-
 				return EFAULT;
 			}
 		}
 
 		scheduler->getSchedLock()->unlock(schedPrevIF);
 
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
 		return 0;
 	}
 
-	u64 SyscallManager::syscallNanoSleep(long *ret, const u64 secs, const u64 nanos, u64, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallNanoSleep(long */*unused*/, const u64 secs, const u64 nanos, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr || thread == nullptr || thread->getParent() == nullptr) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return EFAULT;
 		}
 
-		const Timespec ts = {
+		const Timespec timeSpec = {
 			.tv_sec = static_cast<long>(secs),
 			.tv_nsec = static_cast<long>(nanos)
 		};
 
 		u64 sleepNs = 0;
-		const int err = timespecToNs(&ts, &sleepNs);
+		const int err = timespecToNs(&timeSpec, &sleepNs);
 		if (err != 0) {
-			if (ret != nullptr) {
-				*ret = -1;
-			}
-
 			return err;
 		}
 
 		if (sleepNs == 0) {
-			if (ret != nullptr) {
-				*ret = 0;
-			}
-
 			return 0;
 		}
 
 		scheduler->sleepThread(thread, sleepNs);
 
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
 		return 0;
 	}
 
-	u64 SyscallManager::syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallIsaTTY(long */*unused*/, const u64 fd, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		(void) fd;
+
 		// TODO: Unstub
 		return 0;
 	}
 
-	u64 SyscallManager::syscallKill(long *ret, const u64 pid, u64 signal, u64, u64, u64, u64) {
+	auto SyscallManager::syscallKill(long */*unused*/, const u64 pid, const u64 signal, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		(void) signal;
+
 		Scheduler *sched = CommonMain::getInstance()->getScheduler();
 
 		sched->killProcess(sched->getProcess(pid));
@@ -1199,13 +1117,13 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallGetPID(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		*ret = Scheduler::getCurrentThread()->getParent()->getId();
 
 		return 0;
 	}
 
-	u64 SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, const u64 isHhdm, u64, u64, u64) {
+	auto SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, const u64 isHhdm, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1268,7 +1186,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallGetRsdp(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1284,8 +1202,8 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64) {
-		auto *scheduler = CommonMain::getInstance()->getScheduler();
+	auto SyscallManager::syscallLockToCore(long */*unused*/, const u64 cpuId, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		const auto *scheduler = CommonMain::getInstance()->getScheduler();
 		Thread *thread = Scheduler::getCurrentThread();
 
 		if (scheduler == nullptr or thread == nullptr) {
@@ -1296,7 +1214,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		ExecutionNode *targetNode = Scheduler::getCoreEN(cpuId);
+		const ExecutionNode *targetNode = Scheduler::getCoreEN(cpuId);
 
 		if (targetNode == nullptr) {
 			return EINVAL;
@@ -1313,24 +1231,8 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallGetCpuCount(long *ret, u64, u64, u64, u64, u64, u64) {
-		if (ret == nullptr) {
-			return EINVAL;
-		}
-
-		if (mpRequest.response == nullptr) {
-			*ret = 0;
-
-			return EFAULT;
-		}
-
-		*ret = static_cast<long>(mpRequest.response->cpu_count);
-
-		return 0;
-	}
-
-	u64 SyscallManager::syscallGetCpuIDs(long *, const u64 cpuIdOutArray, const u64 cpuCount, u64, u64, u64, u64) {
-		const auto cpuIdArr = reinterpret_cast<u64 *>(cpuIdOutArray);
+	auto SyscallManager::syscallGetCpuIDs(long */*unused*/, const u64 cpuIdOutArray, const u64 cpuCount, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		auto *cpuIdArr = reinterpret_cast<HosCpuInfo *>(cpuIdOutArray);
 
 		if (cpuIdArr == nullptr) {
 			return EINVAL;
@@ -1345,13 +1247,14 @@ namespace kernel::common::hal {
 		}
 
 		for (u64 i = 0; i < cpuCount; i++) {
-			cpuIdArr[i] = mpRequest.response->cpus[i]->processor_id;
+			cpuIdArr[i].cpuId = mpRequest.response->cpus[i]->processor_id;
+			cpuIdArr[i].apicId = mpRequest.response->cpus[i]->lapic_id;
 		}
 
 		return 0;
 	}
 
-	u64 SyscallManager::syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallAllocPhysPage(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1363,6 +1266,195 @@ namespace kernel::common::hal {
 		}
 
 		*ret = reinterpret_cast<long>(page);
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallGetAffinity(long */*unused*/, const u64 tidPid, const u64 cpuSetSize, const u64 mask, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		if (cpuSetSize == 0) {
+			return EINVAL;
+		}
+
+		const Thread *currentThread = Scheduler::getCurrentThread();
+
+		if (currentThread == nullptr or currentThread->getParent() == nullptr) {
+			return EFAULT;
+		}
+
+		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
+
+		if (!isValidUserRange(ctx, mask, cpuSetSize)) {
+			return EFAULT;
+		}
+
+		u64 onlineCpuCount = 0;
+		u64 maxCpuId = 0;
+
+		int err = getOnlineCpuInfo(&onlineCpuCount, &maxCpuId);
+
+		if (err != 0) {
+			return err;
+		}
+
+		if (maxCpuId / affinityBitsPerByte >= cpuSetSize) {
+			return EINVAL;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+
+		if (scheduler == nullptr) {
+			return EFAULT;
+		}
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		const Thread *targetThread = findAffinityTarget(scheduler, tidPid);
+
+		if (targetThread == nullptr) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+
+			return ESRCH;
+		}
+
+		const u64 lockedCoreId = targetThread->getLockedCoreId();
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
+		for (usize i = 0; i < cpuSetSize; i++) {
+			err = writeUserByte(ctx, mask + i, 0);
+
+			if (err != 0) {
+				return err;
+			}
+		}
+
+		if (lockedCoreId != unlockedAffinityCpuId) {
+			return setUserCpuMaskBit(ctx, mask, cpuSetSize, lockedCoreId);
+		}
+
+		for (u64 i = 0; i < mpRequest.response->cpu_count; i++) {
+			const limine_mp_info *cpuInfo = mpRequest.response->cpus[i];
+			if (cpuInfo == nullptr) {
+				continue;
+			}
+
+			const u64 cpuId = cpuInfo->processor_id;
+			if (Scheduler::getCoreEN(cpuId) == nullptr) {
+				continue;
+			}
+
+			err = setUserCpuMaskBit(ctx, mask, cpuSetSize, cpuId);
+			if (err != 0) {
+				return err;
+			}
+		}
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallSetAffinity(long */*unused*/, const u64 tidPid, const u64 cpuSetSize, const u64 mask, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		if (cpuSetSize == 0) {
+			return EINVAL;
+		}
+
+		const Thread *currentThread = Scheduler::getCurrentThread();
+
+		if (currentThread == nullptr or currentThread->getParent() == nullptr) {
+			return EFAULT;
+		}
+
+		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
+
+		if (!isValidUserRange(ctx, mask, cpuSetSize)) {
+			return EFAULT;
+		}
+
+		u64 onlineCpuCount = 0;
+		u64 maxCpuId = 0;
+
+		int err = getOnlineCpuInfo(&onlineCpuCount, &maxCpuId);
+
+		if (err != 0) {
+			return err;
+		}
+
+		if (maxCpuId / affinityBitsPerByte >= cpuSetSize) {
+			return EINVAL;
+		}
+
+		u64 selectedOnlineCpuCount = 0;
+		u64 selectedCpuId = 0;
+
+		for (u64 i = 0; i < mpRequest.response->cpu_count; i++) {
+			const limine_mp_info *cpuInfo = mpRequest.response->cpus[i];
+
+			if (cpuInfo == nullptr) {
+				continue;
+			}
+
+			const u64 cpuId = cpuInfo->processor_id;
+
+			if (Scheduler::getCoreEN(cpuId) == nullptr) {
+				continue;
+			}
+
+			bool isSet = false;
+			err = getUserCpuMaskBit(ctx, mask, cpuSetSize, cpuId, &isSet);
+
+			if (err != 0) {
+				return err;
+			}
+
+			if (!isSet) {
+				continue;
+			}
+
+			if (selectedOnlineCpuCount == 0) {
+				selectedCpuId = cpuId;
+			}
+
+			selectedOnlineCpuCount++;
+		}
+
+		if (selectedOnlineCpuCount == 0) {
+			return EINVAL;
+		}
+
+		const bool unlockAffinity = selectedOnlineCpuCount == onlineCpuCount;
+
+		if (!unlockAffinity && selectedOnlineCpuCount != 1) {
+			return EINVAL;
+		}
+
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+
+		if (scheduler == nullptr) {
+			return EFAULT;
+		}
+
+		const u64 newLockedCoreId = unlockAffinity ? unlockedAffinityCpuId : selectedCpuId;
+		bool shouldReschedule = false;
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		Thread *targetThread = findAffinityTarget(scheduler, tidPid);
+
+		if (targetThread == nullptr) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+
+			return ESRCH;
+		}
+
+		targetThread->setLockedCoreId(newLockedCoreId);
+
+		if (targetThread->isQueued()) {
+			scheduler->enqueueThread(targetThread);
+		}
+
+		shouldReschedule = targetThread == currentThread and newLockedCoreId != unlockedAffinityCpuId and Scheduler::getCoreEN(newLockedCoreId) != Scheduler::getCurrentExecutionNode();
+
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
+		if (shouldReschedule) {
+			ExecutionNode::reSchedule();
+		}
 
 		return 0;
 	}

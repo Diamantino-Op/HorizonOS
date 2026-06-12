@@ -45,7 +45,7 @@ namespace kernel::x86_64::hal {
 			if (freq != 0) {
 				this->calibrated = true;
 			}
-		} else if (const CalibratorFun calibrator = CommonMain::getInstance()->getClocks()->getCalibrator(); calibrator != nullptr) {
+		} else if (const CalibratorFun calibrator = Clocks::getCalibrator(); calibrator != nullptr) {
 			constexpr u64 times = 3;
 
 			for (u64 i = 0; i < times; i++) {

@@ -10,6 +10,9 @@
 #include <cstring>
 #include <string>
 
+extern uint64_t nvmePort;
+extern uint64_t pciPort;
+
 namespace {
 	auto nvmeTrimString(const char* inStr, const size_t len) noexcept -> string {
 		const string str(inStr, len);
@@ -22,11 +25,6 @@ namespace {
 auto NvmeDriver::coreHandler(void *ctx) -> void * {
 	const auto *coreStruct = static_cast<CoreStruct *>(ctx);
 
-	printf("NVMe: Core handler started for core %lu with ID %ld", coreStruct->coreSlot, coreStruct->cpuId);
-	fflush(stdout);
-
-    lockToCore(coreStruct->cpuId);
-
 	printf("NVMe: Core %lu locked to CPU ID %ld. (From %d)", coreStruct->coreSlot, coreStruct->cpuId, sched_getcpu());
 	fflush(stdout);
 
@@ -35,7 +33,7 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
     const uint64_t flushType = NVME_FLUSH_MSG_BASE + coreStruct->cpuId;
 
     auto filterOpts = filter_options();
-    filterOpts.whiteListTypes = new uint64_t[3]{ readType, writeType, flushType };
+    filterOpts.whiteListTypes = new uint64_t[3]{ readType, writeType, flushType }; // TODO: Crashes here
     filterOpts.whiteListCount = 3;
 
     // Use the largest possible message struct as the receive buffer
@@ -207,6 +205,28 @@ auto NvmeDriver::initializeAdminQueues() noexcept -> bool {
 
 	this->doorbellStride = 4U << ((mmioRead64(mmioBase, 0x00) >> 32) & 0xFU);
 
+	this->msixGlobalEnable();
+
+	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&this->adminCompletionPort));
+
+	if (registerResult == 0) {
+		printf("NVMe: Successfully registered AdminCQ port!");
+		fflush(stdout);
+	} else {
+		printf("NVMe: Failed to register AdminCQ port: %d", registerResult);
+		fflush(stdout);
+
+		return false;
+	}
+
+	this->adminMsixVector = this->msixAllocVector(0, this->adminCompletionPort);
+	// tableIndex 0 = admin queue vector
+
+	if (adminMsixVector == 0) {
+		printf("NVMe: MSI-X alloc failed for admin queue");
+		fflush(stdout);
+	}
+
 	return true;
 }
 
@@ -219,27 +239,53 @@ auto NvmeDriver::submitAdminCommand(const Command &command, CompletionEntry &res
 	adminSQTail = (adminSQTail + 1) % adminQDepth;
 	mmioWrite32(mmioBase, 0x1000, adminSQTail); // Admin SQ Tail Doorbell
 
-	for (int i = 0; i < 100000; ++i) {
-		const CompletionEntry& cqe = adminCQ[adminCQHead];
+	if (this->adminMsixVector != 0) {
+		auto wakeMsg = hos_msg();
+		auto recvData = IrqReceiveData();
+		auto filter  = filter_options();
 
-		if (cqe.status.phase == adminCQPhase) {
-			result = cqe;
+		filter.whiteListTypes = new uint64_t[1]{ IRQ_RECEIVE_MSG_TYPE };
+		filter.whiteListCount = 1;
 
-			adminCQHead = (adminCQHead + 1) % adminQDepth;
+		wakeMsg.buffer = &recvData;
+		wakeMsg.length = sizeof(IrqReceiveData);
 
-			if (adminCQHead == 0) {
-				adminCQPhase ^= 1U;
+		const int ret = receive_horizonos_message(this->adminCompletionPort, &wakeMsg, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		if (ret != 0) {
+			return false;
+		}
+	} else {
+		bool found = false;
+
+		for (int i = 0; i < 100000; ++i) {
+			if (adminCQ[adminCQHead].status.phase == adminCQPhase) {
+				found = true;
+				break;
 			}
-
-			mmioWrite32(mmioBase, 0x1000 + this->doorbellStride, adminCQHead);
-
-			return result.status.statusCode == 0;
+			usleep(10000);
 		}
 
-		usleep(10000);
+		if (!found) {
+			return false;
+		}
 	}
 
-	return false;
+	// ── Consume the completion entry (same for both paths) ───────────────
+	result = adminCQ[adminCQHead];
+
+	adminCQHead = (adminCQHead + 1) % adminQDepth;
+
+	if (adminCQHead == 0) {
+		adminCQPhase ^= 1U;
+	}
+
+	// Ring Admin CQ Head Doorbell
+	mmioWrite32(mmioBase, 0x1000 + doorbellStride, adminCQHead);
+
+	return result.status.statusCode == 0;
 }
 
 auto NvmeDriver::identifyController() noexcept -> bool {
@@ -513,10 +559,25 @@ void NvmeDriver::freePrpListPages(vector<PrpListPage> &pages) noexcept {
 	pages.clear();
 }
 
-auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t queueId) noexcept -> bool {
+auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t queueId, const uint64_t lapicId) noexcept -> bool {
     IoQueuePair pair {};
     pair.queueId = queueId;
     pair.depth   = 64;
+
+	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&pair.completionPort));
+
+	if (registerResult == 0) {
+		printf("NVMe: Successfully registered IOCQ %u port!", queueId);
+		fflush(stdout);
+	} else {
+		printf("NVMe: Failed to register IOCQ %u port: %d", queueId, registerResult);
+		fflush(stdout);
+
+		return false;
+	}
+
+	// TODO: Free this if fail
+	pair.msixVector = this->msixAllocVector(queueId, pair.completionPort, lapicId);
 
     // Allocate CQ
     uint64_t cqVirt = 0;
@@ -552,7 +613,8 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     cqCmd.dptrLow   = pair.cqPhys;
     cqCmd.dptrHigh  = 0;
     cqCmd.cdw10.raw = (queueId & 0xFFFFU) | (((pair.depth - 1) & 0xFFFFU) << 16);
-    cqCmd.cdw11.raw = 0x1U;  // PC=1, no interrupts
+	//cqCmd.cdw11.raw = 0x1U;
+	cqCmd.cdw11.raw = 0x3U | (static_cast<uint32_t>(pair.msixVector) << 16); // bits[1:0] = PC | IEN, bits[31:16] = IV (interrupt vector index)
 
     CompletionEntry cqe {};
 
@@ -602,26 +664,54 @@ auto NvmeDriver::submitIoCommand(IoQueuePair &queue, const Command& command, Com
 	// SQ Tail doorbell: 0x1000 + (2 * qid) * stride
 	mmioWrite32(mmioBase, 0x1000 + ((2U * queue.queueId) * doorbellStride), queue.sqTail);
 
-	for (int i = 0; i < 100000; ++i) {
-		const CompletionEntry& cqe = queue.cq[queue.cqHead];
+	if (queue.msixVector != 0) {
+		auto wakeMsg = hos_msg();
+		auto recvData = IrqReceiveData();
+		auto filter  = filter_options();
 
-		if ((cqe.status.phase & 0x1U) == queue.cqPhase) {
-			result = cqe;
-			queue.cqHead = (queue.cqHead + 1) % queue.depth;
+		filter.whiteListTypes = new uint64_t[1]{ IRQ_RECEIVE_MSG_TYPE };
+		filter.whiteListCount = 1;
 
-			if (queue.cqHead == 0) {
-				queue.cqPhase ^= 1U;
+		wakeMsg.buffer = &recvData;
+		wakeMsg.length = sizeof(IrqReceiveData);
+
+		const int ret = receive_horizonos_message(queue.completionPort, &wakeMsg, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		if (ret != 0) {
+			return false;
+		}
+	} else {
+		// ── Polling fallback ─────────────────────────────────────────────
+		bool found = false;
+
+		for (int i = 0; i < 100000; ++i) {
+			if ((queue.cq[queue.cqHead].status.phase & 0x1U) == queue.cqPhase) {
+				found = true;
+				break;
 			}
-
-			// CQ Head doorbell: 0x1000 + (2 * qid + 1) * stride
-			mmioWrite32(mmioBase, 0x1000 + (((2U * queue.queueId) + 1U) * doorbellStride), queue.cqHead);
-
-			return (cqe.status.statusCode == 0);
+			usleep(10);
 		}
 
-		usleep(10);
+		if (!found) {
+			return false;
+		}
 	}
-	return false;
+
+	// ── Consume the CQE (same for both paths) ────────────────────────────
+	result = queue.cq[queue.cqHead];
+
+	queue.cqHead = (queue.cqHead + 1) % queue.depth;
+
+	if (queue.cqHead == 0) {
+		queue.cqPhase ^= 1U;
+	}
+
+	// Ring CQ Head doorbell: 0x1000 + (2 * qid + 1) * stride
+	mmioWrite32(mmioBase, 0x1000 + (((2U * queue.queueId) + 1U) * doorbellStride), queue.cqHead);
+
+	return result.status.statusCode == 0;
 }
 
 void NvmeDriver::shutdown() noexcept {
@@ -720,6 +810,121 @@ void NvmeDriver::shutdown() noexcept {
 
     printf("NVMe: Controller shutdown complete");
     fflush(stdout);
+}
+
+void NvmeDriver::msixGlobalEnable() const noexcept {
+	auto sendMsg   = hos_msg();
+	auto enableData = PciMsixGlobalEnableMsgData {
+		.bus  = device->bus,
+		.dev  = device->device,
+		.func = device->function
+	};
+
+	sendMsg.type   = PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE;
+	sendMsg.port   = pciPort;
+	sendMsg.buffer = &enableData;
+	sendMsg.length = sizeof(PciMsixGlobalEnableMsgData);
+
+	send_horizonos_message(nvmePort, pciPort, &sendMsg);
+
+	// Recv
+
+	auto recvMsg   = hos_msg();
+
+	recvMsg.length = 0;
+
+	auto filterOptions           = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_ENABLE_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	receive_horizonos_message(nvmePort, &recvMsg, &filterOptions);
+
+	delete[] filterOptions.whiteListTypes;
+}
+
+void NvmeDriver::msixGlobalDisable() const noexcept {
+	auto sendMsg   = hos_msg();
+	auto disableData = PciMsixGlobalDisableMsgData {
+		.bus  = device->bus,
+		.dev  = device->device,
+		.func = device->function
+	};
+
+	sendMsg.type   = PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE;
+	sendMsg.port   = pciPort;
+	sendMsg.buffer = &disableData;
+	sendMsg.length = sizeof(PciMsixGlobalDisableMsgData);
+
+	send_horizonos_message(nvmePort, pciPort, &sendMsg);
+
+	// Recv
+
+	auto recvMsg   = hos_msg();
+
+	recvMsg.length = 0;
+
+	auto filterOptions           = filter_options();
+
+	filterOptions.whiteListTypes = new uint64_t[1]{ PCI_MSIX_GLOBAL_DISABLE_REPLY_MSG_TYPE };
+	filterOptions.whiteListCount = 1;
+
+	receive_horizonos_message(nvmePort, &recvMsg, &filterOptions);
+
+	delete[] filterOptions.whiteListTypes;
+}
+
+auto NvmeDriver::msixAllocVector(const uint16_t tableIndex, const uint64_t notifyPort, const uint64_t lapicId) const noexcept -> uint8_t {
+	auto sendMsg   = hos_msg();
+	auto allocData = PciMsixAllocMsgData {
+		.bus  = device->bus,
+		.dev  = device->device,
+		.func = device->function,
+		.idx  = tableIndex,
+		.port = notifyPort,
+		.lapicId = lapicId
+	};
+
+	sendMsg.type   = PCI_MSIX_ALLOC_MSG_TYPE;
+	sendMsg.port   = pciPort;
+	sendMsg.buffer = &allocData;
+	sendMsg.length = sizeof(PciMsixAllocMsgData);
+
+	send_horizonos_message(nvmePort, pciPort, &sendMsg);
+
+	auto recvMsg   = hos_msg();
+	auto replyData = PciMsixAllocReplyMsgData {};
+
+	recvMsg.buffer = &replyData;
+	recvMsg.length = sizeof(PciMsixAllocReplyMsgData);
+
+	auto filter           = filter_options();
+	filter.whiteListTypes = new uint64_t[1]{ PCI_MSIX_ALLOC_REPLY_MSG_TYPE };
+	filter.whiteListCount = 1;
+
+	receive_horizonos_message(nvmePort, &recvMsg, &filter);
+
+	delete[] filter.whiteListTypes;
+
+	return replyData.vec;
+}
+
+void NvmeDriver::msixFreeVector(const uint16_t tableIndex, const uint8_t vec) const noexcept {
+	auto sendMsg  = hos_msg();
+	auto freeData = PciMsixFreeMsgData {
+		.bus = device->bus,
+		.dev = device->device,
+		.func = device->function,
+		.idx = tableIndex,
+		.vec = vec
+	};
+
+	sendMsg.type   = PCI_MSIX_FREE_MSG_TYPE;
+	sendMsg.port   = pciPort;
+	sendMsg.buffer = &freeData;
+	sendMsg.length = sizeof(PciMsixFreeMsgData);
+
+	send_horizonos_message(nvmePort, pciPort, &sendMsg);
 }
 
 auto NvmeDriver::getNamespaceCount() const noexcept -> uint32_t {

@@ -4,7 +4,6 @@
 #include "Main.hpp"
 #include "utils/CpuId.hpp"
 #include "utils/Asm.hpp"
-#include "Math.hpp"
 
 extern limine_mp_request mpRequest;
 
@@ -21,7 +20,7 @@ namespace kernel::x86_64::hal {
 			this->brand = CpuId::getBrand();
 			this->vendor = CpuId::getVendor();
 
-			this->hasX2Apic = mpRequest.response->flags & LIMINE_MP_RESPONSE_X86_64_X2APIC;
+			this->hasX2Apic = static_cast<bool>(mpRequest.response->flags & LIMINE_MP_RESPONSE_X86_64_X2APIC);
 
 			terminal->info("Brand: %.48s", "Cpu", this->brand);
 			terminal->info("Vendor: %.12s", "Cpu", this->vendor);
@@ -29,23 +28,23 @@ namespace kernel::x86_64::hal {
 			terminal->info("Cores: %u", "Cpu", this->coreAmount);
 
 			terminal->debug("Features:", "Cpu");
-			terminal->debug("	X2Apic: %u", "Cpu", this->hasX2Apic);
-			terminal->debug("	XSave: %u", "Cpu", CpuId::hasXSave());
+			terminal->debug("	X2Apic: %u", "Cpu", static_cast<u8>(this->hasX2Apic));
+			terminal->debug("	XSave: %u", "Cpu", static_cast<u8>(CpuId::hasXSave()));
 			terminal->debug("	XSave Size: %u", "Cpu", CpuId::getXSaveSize());
-			terminal->debug("	Avx: %u", "Cpu", CpuId::hasAvx());
-			terminal->debug("	Avx 512: %u", "Cpu", CpuId::hasAvx512());
+			terminal->debug("	Avx: %u", "Cpu", static_cast<u8>(CpuId::hasAvx()));
+			terminal->debug("	Avx 512: %u", "Cpu", static_cast<u8>(CpuId::hasAvx512()));
 		}
 	}
 
-	u64 CpuManager::getCoreAmount() const {
+	auto CpuManager::getCoreAmount() const -> u64 {
 		return this->coreAmount;
 	}
 
-	CoreKernel *CpuManager::getCoreList() const {
+	auto CpuManager::getCoreList() const -> CoreKernel * {
 		return this->cpuList;
 	}
 
-	CpuCore *CpuManager::getBootstrapCpu() const {
+	auto CpuManager::getBootstrapCpu() const -> CpuCore * {
 		return this->bootstrapCpu;
 	}
 
@@ -130,6 +129,7 @@ namespace kernel::x86_64::hal {
 				this->bootstrapCpu->apic.setIsX2Apic(this->hasX2Apic);
 				this->bootstrapCpu->cpuArrId = 0;
 				this->bootstrapCpu->cpuId = mpRequest.response->cpus[i]->processor_id;
+				this->bootstrapCpu->lapicId = mpRequest.response->cpus[i]->lapic_id;
 				this->bootstrapCpu->tssManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getTssManager();
 				this->bootstrapCpu->gdtManager = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getGdtManager();
 				this->bootstrapCpu->interruptAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getInterruptAllocator();
@@ -158,6 +158,7 @@ namespace kernel::x86_64::hal {
 				this->cpuList[j].cpuCore.apic.setIsX2Apic(this->hasX2Apic);
 				this->cpuList[j].cpuCore.cpuArrId = j + 1;
 				this->cpuList[j].cpuCore.cpuId = mpRequest.response->cpus[i]->processor_id;
+				this->cpuList[j].cpuCore.lapicId = mpRequest.response->cpus[i]->lapic_id;
 				this->cpuList[j].cpuCore.tssManager = this->cpuList[j].getTssManager();
 				this->cpuList[j].cpuCore.gdtManager = this->cpuList[j].getGdtManager();
 				this->cpuList[j].cpuCore.interruptAllocator = this->cpuList[j].getInterruptAllocator();
@@ -177,7 +178,7 @@ namespace kernel::x86_64::hal {
 		Asm::wrmsr(KGSBAS, corePtr);
 	}
 
-	CpuCore *CpuManager::getCurrentCore() {
+	auto CpuManager::getCurrentCore() -> CpuCore * {
 		return reinterpret_cast<CpuCore *>(Asm::rdmsr(KGSBAS));
 	}
 
@@ -189,7 +190,7 @@ namespace kernel::x86_64::hal {
 	void bootCore(const limine_mp_info *info) {
 		CommonMain::getInstance()->getKernelAllocContextHHDM()->pageMap.load();
 
-		const auto coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
+		auto *coreKernel = reinterpret_cast<CoreKernel *>(info->extra_argument);
 
 		CpuManager::setCorePointer(&coreKernel->cpuCore);
 

@@ -30,7 +30,7 @@ namespace kernel::common::threading {
 
 	// TODO: Move to non arch
 	void Scheduler::initArch() {
-		Clocks::addTimerHandle(sleepTick, TimeUtils::msToNs(10));
+		CpuManager::getCurrentCore()->coreClock.addTimerHandle(&sleepTick, TimeUtils::msToNs(10));
 	}
 
 	Thread *Scheduler::getCurrentThread() {
@@ -38,7 +38,7 @@ namespace kernel::common::threading {
 			return nullptr;
 		}
 
-		return CpuManager::getCurrentCore()->executionNode.getCurrentThread()->value;
+		return CpuManager::getCurrentCore()->executionNode.getCurrentThread();
 	}
 
 	void Scheduler::timerReSchedule() {
@@ -47,7 +47,7 @@ namespace kernel::common::threading {
 		switchContextAsm();
 	}
 
-	u32 Scheduler::intReSchedule(u64 *) {
+	auto Scheduler::intReSchedule(u64 *) -> u32 {
 		Interrupts::sendEOI();
 
 		switchContextAsm();
@@ -56,9 +56,9 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::reSchedule() {
-		Clocks::resetSchedulerTimer();
+		CpuManager::getCurrentCore()->coreClock.resetSchedulerTimer();
 
-		CpuManager::getCurrentCore()->apic.ipi(0, Dest::SELF, CpuManager::getCurrentCore()->schedInt);
+		switchContextAsm();
 	}
 
 	extern "C" u64 checkDisabled() {
@@ -70,7 +70,7 @@ namespace kernel::common::threading {
 			return 1;
 		}
 
-		if (currentThread == currentNode.getIdleThread()->value) {
+		if (currentThread == currentNode.getIdleThread()) {
 			return 0;
 		}
 
@@ -118,7 +118,7 @@ namespace kernel::common::threading {
 
 		// Save the old thread state
 
-		Thread *oldThread = this->currentThread->value;
+		Thread *oldThread = this->currentThread;
 
 		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
 
@@ -126,7 +126,7 @@ namespace kernel::common::threading {
 
 		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-		if (oldThread != this->idleThread->value && oldThread->lastScheduledNs != 0 && oldThread->getState() == ThreadState::RUNNING) {
+		if (oldThread != this->idleThread && oldThread->lastScheduledNs != 0 && oldThread->getState() == ThreadState::RUNNING) {
 			oldThread->runTime += now - oldThread->lastScheduledNs;
 			oldThread->recomputeDynPriority();
 		}
@@ -148,35 +148,11 @@ namespace kernel::common::threading {
 				oldThread->setSleepNs(0);
 				oldThread->setState(ThreadState::RUNNING);
 
-				/*if (oldThread->getLockedCoreId() != ~0x0U) {
-					ExecutionNode *targetNode = Scheduler::getCoreEN(oldThread->getLockedCoreId());
-
-					if (targetNode != nullptr) {
-						schedulerPtr->enqueueThread(oldThread, targetNode, true);
-					} else {
-						schedulerPtr->enqueueThread(oldThread, true);
-					}
-				} else {
-					schedulerPtr->enqueueThread(oldThread, true);
-				}*/
-
 				schedulerPtr->enqueueThread(oldThread, true);
 			} else if (!schedulerPtr->blockedThreadList.contains(oldThread)) {
 				schedulerPtr->blockedThreadList.addEnd(oldThread);
 			}
-		} else if (oldThread != this->idleThread->value) {
-			/*if (oldThread->getLockedCoreId() != ~0x0U) {
-				ExecutionNode *targetNode = Scheduler::getCoreEN(oldThread->getLockedCoreId());
-
-				if (targetNode != nullptr) {
-					schedulerPtr->enqueueThread(oldThread, targetNode);
-				} else {
-					schedulerPtr->enqueueThread(oldThread);
-				}
-			} else {
-				schedulerPtr->enqueueThread(oldThread);
-			}*/
-
+		} else if (oldThread != this->idleThread) {
 			schedulerPtr->enqueueThread(oldThread);
 		}
 
@@ -190,19 +166,17 @@ namespace kernel::common::threading {
 		Thread *nextThread = this->getNextThread();
 		this->coreLock.unlock(prevCoreIF);
 
-		this->currentThread->value = nextThread;
-		this->currentThread->next = nullptr;
-		this->currentThread->prev = nullptr;
-		this->currentThread->value->setState(ThreadState::RUNNING);
-		this->currentThread->value->lastScheduledNs = now;
+		this->currentThread = nextThread;
+		this->currentThread->setState(ThreadState::RUNNING);
+		this->currentThread->lastScheduledNs = now;
 
 		/*if (oldEntry != this->currentThread && oldEntry != nullptr) {
 			//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
 		}*/
 
-		const u128 hi = static_cast<u128>(this->currentThread->value->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
+		const u128 hi = static_cast<u128>(this->currentThread->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
-		return hi | *this->currentThread->value->getStackPointer();
+		return hi | *this->currentThread->getStackPointer();
 	}
 
 	void ExecutionNode::finishScheduleSwitch() {
@@ -219,16 +193,16 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::loadNewThread() {
-		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->value->getContext());
+		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->getContext());
 
 		ctx->load();
 
 		CpuCore *core = CpuManager::getCurrentCore();
 
-		core->kernelStack = this->currentThread->value->getSyscallStackPointer();
+		core->kernelStack = this->currentThread->getSyscallStackPointer();
 
 		if (ctx->threadTssIopb != nullptr) {
-			ctx->updateTssPtrs(this->currentThread->value->getKStackPointer());
+			ctx->updateTssPtrs(this->currentThread->getKStackPointer());
 
 			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 
@@ -242,7 +216,7 @@ namespace kernel::common::threading {
 				TssManager::updateTss();
 			}
 
-			core->tssManager->getTss()->rsp[0] = this->currentThread->value->getKStackPointer();
+			core->tssManager->getTss()->rsp[0] = this->currentThread->getKStackPointer();
 		}
 	}
 

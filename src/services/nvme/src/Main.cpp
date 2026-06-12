@@ -21,48 +21,50 @@ constexpr uint64_t PCI_SEARCH_DEVICE_MSG_TYPE = 0xD0;
 constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_START_MSG_TYPE = 0xE0;
 constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_MSG_TYPE = 0xF0;
 
-// Name max 16 chars
-struct RegisterMsgData {
-	uint16_t ownerPid {};
-	uint16_t tid {};
-	char name[16] {};
-	size_t nameLength {};
-	uint16_t versionMajor {};
-	uint16_t versionMinor {};
-	uint16_t versionPatch {};
-};
+namespace {
+	// Name max 16 chars
+	struct RegisterMsgData {
+		uint16_t ownerPid {};
+		uint16_t tid {};
+		char name[16] {};
+		size_t nameLength {};
+		uint16_t versionMajor {};
+		uint16_t versionMinor {};
+		uint16_t versionPatch {};
+	};
 
-struct GetMsgData {
-	char name[16] {};
-	size_t nameLength {};
-};
+	struct GetMsgData {
+		char name[16] {};
+		size_t nameLength {};
+	};
 
-struct CheckMsgData {
-	char name[16] {};
-	size_t nameLength {};
-};
+	struct CheckMsgData {
+		char name[16] {};
+		size_t nameLength {};
+	};
 
-struct RegisterReplyMsgData {
-	bool success {};
-};
+	struct RegisterReplyMsgData {
+		bool success {};
+	};
 
-struct CheckReplyMsgData {
-	bool exists {};
-};
+	struct CheckReplyMsgData {
+		bool exists {};
+	};
 
-struct GetReplyMsgData {
-	uint64_t port {};
-	uint16_t tid {};
-	uint16_t versionMajor {};
-	uint16_t versionMinor {};
-	uint16_t versionPatch {};
-};
+	struct GetReplyMsgData {
+		uint64_t port {};
+		uint16_t tid {};
+		uint16_t versionMajor {};
+		uint16_t versionMinor {};
+		uint16_t versionPatch {};
+	};
 
-struct PciSearchDeviceMsgData {
-	uint8_t pciClass {};
-	uint8_t pciSubclass {};
-	uint8_t pciProg {};
-};
+	struct PciSearchDeviceMsgData {
+		uint8_t pciClass {};
+		uint8_t pciSubclass {};
+		uint8_t pciProg {};
+	};
+}
 
 uint64_t nvmePort = 0;
 uint64_t pciPort = 0;
@@ -497,18 +499,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	vector<pthread_t> coreThreads {};
 
 	{
-		uint64_t cpuCount = 0;
+		const long cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
 
-		const int getErr = getCpuCount(&cpuCount);
-
-		if (getErr != 0 or cpuCount == 0) {
-			printf("NVMe: No CPUs found: %d!", getErr);
+		if (cpuCount < 0) {
+			printf("NVMe: Error getting online Cpus: %ld!", cpuCount);
 			fflush(stdout);
 
 			return 1;
 		}
 
-		auto *cpuIds = new uint64_t[cpuCount];
+		auto *cpuIds = new HosCpuInfo[cpuCount];
 
 		const int getIDsErr = getCpuIds(cpuIds, cpuCount);
 
@@ -522,11 +522,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		printf("NVMe: CPUs: %lu", cpuCount);
 		fflush(stdout);
 
-		for (uint64_t i = 0; i < cpuCount; ++i) {
+		for (long i = 0; i < cpuCount; ++i) {
 			for (size_t c = 0; c < controllerDrivers.size(); ++c) {
-				const auto queueId = static_cast<uint16_t>(c * cpuCount + i + 1);
+				const auto queueId = static_cast<uint16_t>((c * cpuCount) + i + 1);
 
-				if (not controllerDrivers[c].createIoQueueForCore(i, queueId)) {
+				if (not controllerDrivers[c].createIoQueueForCore(i, queueId, cpuIds[i].apicId)) {
 					printf("NVMe: Failed to create I/O queue for core %lu, ctrl %zu", i, c);
 					fflush(stdout);
 				}
@@ -534,28 +534,42 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		}
 
 		pthread_attr_t threadAttr;
+		cpu_set_t set;
 
 		pthread_attr_init(&threadAttr);
 		pthread_attr_setstacksize(&threadAttr, 0x8000); // 32 KB stack
 
-		for (uint64_t i = 0; i < cpuCount; ++i) {
-			printf("NVMe: Cpu %lu with ID %ld", i, cpuIds[i]);
+		for (long i = 0; i < cpuCount; ++i) {
+			printf("NVMe: Cpu %lu with ID %ld, lapic ID: %ld", i, cpuIds[i].cpuId, cpuIds[i].apicId);
 			fflush(stdout);
 
 			auto *coreStruct = new CoreStruct();
 
-			coreStruct->cpuId = cpuIds[i];
+			coreStruct->cpuId = cpuIds[i].cpuId;
+			coreStruct->apicId = cpuIds[i].apicId;
 			coreStruct->coreSlot  = i;
 			coreStruct->nvmePort  = nvmePort;
 			coreStruct->nvmeDevices = &nvmeDevices;
 			coreStruct->controllerDrivers = &controllerDrivers;
+
+			CPU_ZERO(&set);
+			CPU_SET(cpuIds[i].cpuId, &set);
 
 			pthread_t coreThread;
 
 			const int coreResult = pthread_create(&coreThread, &threadAttr, NvmeDriver::coreHandler, coreStruct);
 
 			if (coreResult != 0) {
-				printf("NVMe: Failed to create core handler thread for core: %lu!", cpuIds[i]);
+				printf("NVMe: Failed to create core handler thread for core: %lu!", cpuIds[i].cpuId);
+				fflush(stdout);
+
+				return 1;
+			}
+
+			const int affResult = pthread_setaffinity_np(coreThread, sizeof(set), &set);
+
+			if (affResult != 0) {
+				printf("NVMe: Failed to set thread affinity for core: %lu!", cpuIds[i].cpuId);
 				fflush(stdout);
 
 				return 1;

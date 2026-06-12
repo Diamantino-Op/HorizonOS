@@ -63,17 +63,17 @@ namespace kernel::common::hal {
 
 	struct KernelSysInfo {
 		long uptime;
-		unsigned long loads[3];
-		unsigned long totalram;
-		unsigned long freeram;
-		unsigned long sharedram;
-		unsigned long bufferram;
-		unsigned long totalswap;
-		unsigned long freeswap;
-		unsigned short procs;
-		unsigned long totalhigh;
-		unsigned long freehigh;
-		unsigned int mem_unit;
+		u64 loads[3];
+		u64 totalRam;
+		u64 freeRam;
+		u64 sharedRam;
+		u64 bufferRam;
+		u64 totalSwap;
+		u64 freeSwap;
+		u16 procs;
+		u64 totalHigh;
+		u64 freeHigh;
+		u32 memUnit;
 	};
 
 	struct Timespec {
@@ -113,63 +113,69 @@ namespace kernel::common::hal {
 		bool isIrq {};
 	};
 
+	struct HosCpuInfo {
+		u64 cpuId;
+		u64 apicId;
+	};
+
     class SyscallManager {
     public:
         static void init();
     	static void initArch();
 
     	// HorizonOS / Linux syscalls
-		static u64 syscallPrint(long *, u64 message, u64, u64, u64, u64, u64);
-    	static u64 syscallMMap(long *ret, u64 hint, u64 size, u64 prot, u64 flags, u64 fd, u64 offset);
-    	static u64 syscallMUnmap(long *, u64 addr, u64 size, u64 freePage, u64, u64, u64);
-    	static u64 syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallArchCtl(long *ret, u64 operation, u64 pointer, u64, u64, u64, u64);
-    	static u64 syscallExit(long *, u64 status, u64, u64, u64, u64, u64);
-    	static u64 syscallClockGet(long *ret, u64 clock, u64 secs, u64 nanos, u64, u64, u64);
-    	static u64 syscallSysInfo(long *ret, u64 info, u64, u64, u64, u64, u64);
-    	static u64 syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallKillThread(long *ret, u64 pid, u64 tid, u64 sig, u64, u64, u64);
-    	static u64 syscallPause(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallThreadExit(long *, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64);
-    	static u64 syscallSendMsg(long *ret, u64 sendPort, u64 port, u64 msgHdr, u64, u64, u64);
-    	static u64 syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64 options, u64, u64, u64);
-    	static u64 syscallRegisterPort(long *ret, u64 preferredPort, u64, u64, u64, u64, u64);
-    	static u64 syscallIsThreadAlive(long *ret, u64 tid, u64, u64, u64, u64, u64);
-    	static u64 syscallFutex(long *ret, u64 pointer, u64 type, u64 expected, u64 time, u64, u64);
-        static u64 syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallSigaction(long *ret, u64 sig, u64 action, u64 oldAction, u64, u64, u64);
-    	static u64 syscallMProtect(long *ret, u64 pointer, u64 size, u64 prot, u64, u64, u64);
-    	static u64 syscallNanoSleep(long *ret, u64 secs, u64 nanos, u64, u64, u64, u64);
-    	static u64 syscallIsaTTY(long *ret, u64 fd, u64, u64, u64, u64, u64);
-    	static u64 syscallIoPerm(long *ret, u64 from, u64 num, u64 state, u64, u64, u64);
-    	static u64 syscallIoPl(long *ret, u64 level, u64, u64, u64, u64, u64);
-    	static u64 syscallKill(long *ret, u64 pid, u64 signal, u64, u64, u64, u64);
-    	static u64 syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64 isHhdm, u64, u64, u64);
-    	static u64 syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallInstallIRQHandler(long *ret, u64 irq, u64 port, u64, u64, u64, u64);
-    	static u64 syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64);
-    	static u64 syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallSetIntStatus(long *ret, u64 status, u64, u64, u64, u64, u64);
-    	static u64 syscallAllocIntVec(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64);
-    	static u64 syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64, u64, u64, u64);
-    	static u64 syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64);
-    	static u64 syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64);
-    	static u64 syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64);
-    	static u64 syscallGetCpuCount(long *ret, u64, u64, u64, u64, u64, u64);
-    	static u64 syscallGetCpuIDs(long *, u64 cpuIdOutArray, u64 cpuCount, u64, u64, u64, u64);
-    	static u64 syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64);
+		static auto syscallPrint(long *, u64 message, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallMMap(long *ret, u64 hint, u64 size, u64 prot, u64 flags, u64 fd, u64 offset) -> u64;
+    	static auto syscallMUnmap(long *, u64 addr, u64 size, u64 freePage, u64, u64, u64) -> u64;
+    	static auto syscallGetTID(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallArchCtl(long *ret, u64 operation, u64 pointer, u64, u64, u64, u64) -> u64;
+    	static auto syscallExit(long *, u64 status, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallClockGet(long *, u64 clock, u64 secs, u64 nanos, u64, u64, u64) -> u64;
+    	static auto syscallSysInfo(long *, u64 info, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallKillThread(long *, u64 pid, u64 tid, u64 sig, u64, u64, u64) -> u64;
+    	static auto syscallPause(long *, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallThreadExit(long *, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallNewThread(long *ret, u64 entryFun, u64 stack, u64, u64, u64, u64) -> u64;
+    	static auto syscallSendMsg(long *ret, u64 sendPort, u64 port, u64 msgHdr, u64, u64, u64) -> u64;
+    	static auto syscallRecvMsg(long *ret, u64 port, u64 msgHdr, u64 options, u64, u64, u64) -> u64;
+    	static auto syscallRegisterPort(long *ret, u64 preferredPort, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallIsThreadAlive(long *, u64 tid, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallFutex(long *, u64 pointer, u64 type, u64 expected, u64 time, u64, u64) -> u64;
+        static auto syscallSigreturn(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallSigaction(long *, u64 sig, u64 action, u64 oldAction, u64, u64, u64) -> u64;
+    	static auto syscallMProtect(long *, u64 pointer, u64 size, u64 prot, u64, u64, u64) -> u64;
+    	static auto syscallNanoSleep(long *, u64 secs, u64 nanos, u64, u64, u64, u64) -> u64;
+    	static auto syscallIsaTTY(long *, u64 fd, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallIoPerm(long *, u64 from, u64 num, u64 state, u64, u64, u64) -> u64;
+    	static auto syscallIoPl(long *, u64 level, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallKill(long *, u64 pid, u64 signal, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64 isHhdm, u64, u64, u64) -> u64;
+    	static auto syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallInstallIRQHandler(long *ret, u64 irq, u64 port, u64, u64, u64, u64) -> u64;
+    	static auto syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallSetIntStatus(long *ret, u64 status, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallAllocIntVec(long *ret, u64 port, u64 destCpu, u64 isLapic, u64, u64, u64) -> u64;
+    	static auto syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64 isLapic, u64, u64, u64) -> u64;
+    	static auto syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64 isLapic, u64, u64, u64) -> u64;
+    	static auto syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64 isLapic, u64, u64, u64) -> u64;
+    	static auto syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetCpuIDs(long *, u64 cpuIdOutArray, u64 cpuCount, u64, u64, u64, u64) -> u64;
+    	static auto syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
+    	static auto syscallSetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
 
     private:
     	static void setGsBase(u64 gsBase);
     	static void setFsBase(u64 fsBase);
-    	static u64 getGsBase();
-    	static u64 getFsBase();
+    	static auto getGsBase() -> u64;
+    	static auto getFsBase() -> u64;
 
-    	static u32 userIrqHandler(u64 *ctx);
+    	static auto userIrqHandler(u64 *ctx) -> u32;
 
-    	static u32 portWatchdog(u64 *);
+    	static auto portWatchdog(u64 *) -> u32;
 
     public:
     	static LinkedList<IrqRegistration> irqRegistrations;

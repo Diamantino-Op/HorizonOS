@@ -75,28 +75,6 @@ namespace kernel::common::hal {
 			thread->setSignalFrame(signalFrame);
 		}
 
-		auto restoreFrame(const SignalContext &signalFrame, Frame *frame) -> void {
-			frame->rax = signalFrame.rax;
-			frame->rbx = signalFrame.rbx;
-			frame->rcx = signalFrame.rcx;
-			frame->rdx = signalFrame.rdx;
-			frame->rsi = signalFrame.rsi;
-			frame->rdi = signalFrame.rdi;
-			frame->r8 = signalFrame.r8;
-			frame->r9 = signalFrame.r9;
-			frame->r10 = signalFrame.r10;
-			frame->r11 = signalFrame.r11;
-			frame->r12 = signalFrame.r12;
-			frame->r13 = signalFrame.r13;
-			frame->r14 = signalFrame.r14;
-			frame->r15 = signalFrame.r15;
-			frame->rip = signalFrame.rip;
-			frame->rFlags = signalFrame.rFlags;
-			frame->rsp = signalFrame.rsp;
-			frame->cs = signalFrame.cs;
-			frame->ss = signalFrame.ss;
-		}
-
 		auto restoreRegs(const SignalContext &signalFrame, SyscallRegs *regs) -> void {
 			regs->rax = signalFrame.rax;
 			regs->rbx = signalFrame.rbx;
@@ -215,7 +193,6 @@ namespace kernel::common::hal {
 		Asm::wrmsr(Msrs::STAR, star);
 		Asm::wrmsr(Msrs::LSTAR, reinterpret_cast<u64>(&syscallHandler));
 		Asm::wrmsr(Msrs::FMASK, static_cast<u32>(~0x2));
-		//Asm::wrmsr(Msrs::FMASK, 0x200 | 0x400);
 
 		u64 efer = Asm::rdmsr(Msrs::EFER);
 
@@ -224,33 +201,10 @@ namespace kernel::common::hal {
 		// efer |= (1 << 15); // TCE
 
 		Asm::wrmsr(Msrs::EFER, efer);
-
-		/*const Hpet *hpet = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getHpet();
-		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
-
-		if (hpet->getMaxTimers() >= 2) {
-			const u64 watchdogTicks = (10 * hpet->getFrequency()) / 1000; // 10ms
-
-			const u32 watchdogGsi = irqAllocator->allocGsi(0, static_cast<u16>(IOApicFlags::MASKED), IOApicDelivery::FIXED, portWatchdog, nullptr);
-
-			if (watchdogGsi < 100000000) {
-				hpet->write(Hpet::getTimerRegister(1), ((watchdogGsi & ACPI_HPET_NUMBER_OF_COMPARATORS_MASK) << 9) | (1 << 2) | (1 << 3));
-				hpet->write(Hpet::getComparatorRegister(1), hpet->read() + watchdogTicks);
-				hpet->write(Hpet::getComparatorRegister(1), watchdogTicks);
-
-				irqAllocator->unmask(watchdogGsi);
-
-				CommonMain::getTerminal()->debug("Port watchdog armed (10ms, HPET timer 1)", "Syscalls");
-			} else {
-				CommonMain::getTerminal()->debug("Port watchdog GSI alloc failed, skipping", "Syscalls");
-			}
-		} else {
-			CommonMain::getTerminal()->debug("Only 1 HPET timer, port watchdog skipped", "Syscalls");
-		}*/
 	}
 
-	u32 SyscallManager::userIrqHandler(u64 *ctx) {
-		const auto *irq = reinterpret_cast<IrqRegistration *>(ctx);
+	auto SyscallManager::userIrqHandler(u64 *ctx) -> u32 {
+		const auto *irq = reinterpret_cast<const IrqRegistration *>(ctx);
 
 		auto notifyMsg = MessageHeader();
 
@@ -279,15 +233,15 @@ namespace kernel::common::hal {
 		Asm::wrmsr(Msrs::FSBAS, fsBase);
 	}
 
-	u64 SyscallManager::getGsBase() {
+	auto SyscallManager::getGsBase() -> u64 {
 		return Asm::rdmsr(Msrs::UGSBAS);
 	}
 
-	u64 SyscallManager::getFsBase() {
+	auto SyscallManager::getFsBase() -> u64 {
 		return Asm::rdmsr(Msrs::FSBAS);
 	}
 
-	u64 SyscallManager::syscallGetCpu(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallGetCpu(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -298,7 +252,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallIsThreadAlive(long *ret, const u64 tid, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallIsThreadAlive(long *ret, const u64 tid, u64, u64, u64, u64, u64) -> u64 {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -331,9 +285,9 @@ namespace kernel::common::hal {
 		const CpuManager *cpuManager = kernel->getCpuManager();
 		const CpuCore *bspCore = cpuManager->getBootstrapCpu();
 
-		const LinkedListEntry<Thread> *bspEntry = bspCore->executionNode.getCurrentThread();
+		const Thread *bspEntry = bspCore->executionNode.getCurrentThread();
 
-		if (bspEntry != nullptr and bspEntry->value != nullptr and bspEntry->value->getId() == tid) {
+		if (bspEntry != nullptr and bspEntry->getId() == tid) {
 			if (ret != nullptr) {
 				*ret = 1;
 			}
@@ -347,9 +301,9 @@ namespace kernel::common::hal {
 		if (coreList != nullptr and cores > 1) {
 			for (u64 i = 0; i < cores - 1; i++) {
 				const CpuCore *core = &coreList[i].cpuCore;
-				const LinkedListEntry<Thread> *entry = core->executionNode.getCurrentThread();
+				const Thread *entry = core->executionNode.getCurrentThread();
 
-				if (entry != nullptr and entry->value != nullptr and entry->value->getId() == tid) {
+				if (entry != nullptr and entry->getId() == tid) {
 					if (ret != nullptr) {
 						*ret = 1;
 					}
@@ -362,11 +316,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallIoPerm(long *ret, const u64 from, const u64 num, const u64 state, u64, u64, u64) {
-		if (ret != nullptr) {
-			*ret = 0;
-		}
-
+	auto SyscallManager::syscallIoPerm(long */*unused*/, const u64 from, const u64 num, const u64 state, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (from > 0xFFFF or num == 0 or from + num > 0x10000) {
 			return EINVAL;
 		}
@@ -422,7 +372,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallIoPl(long *ret, const u64 level, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallIoPl(long *ret, const u64 level, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -467,7 +417,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallInstallIRQHandler(long *ret, const u64 irq, const u64 port, u64, u64, u64, u64) {
+	auto SyscallManager::syscallInstallIRQHandler(long */*unused*/, const u64 irq, const u64 port, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
 
 		auto *registration = new IrqRegistration();
@@ -491,7 +441,7 @@ namespace kernel::common::hal {
 		return UACPI_STATUS_OK;
 	}
 
-	u64 SyscallManager::syscallUninstallIRQHandler(long *ret, const u64 irq, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallUninstallIRQHandler(long */*unused*/, const u64 irq, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
 
 		IrqRegistration *selected = nullptr;
@@ -526,13 +476,13 @@ namespace kernel::common::hal {
 		return UACPI_STATUS_OK;
 	}
 
-	u64 SyscallManager::syscallGetIRQMode(long *ret, u64, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallGetIRQMode(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		*ret = CpuManager::getCurrentCore()->apic.isInitialized() ?  1 : 0;
 
 		return 0;
 	}
 
-	u64 SyscallManager::syscallSetIntStatus(long *ret, const u64 status, u64, u64, u64, u64, u64) {
+	auto SyscallManager::syscallSetIntStatus(long *ret, const u64 status, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret != nullptr) {
 			*ret = 0;
 		}
@@ -547,7 +497,7 @@ namespace kernel::common::hal {
 	}
 
 	// TODO: destCpu is currently passed as CPU ID, so it might not work like this
-	u64 SyscallManager::syscallAllocIntVec(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64) {
+	auto SyscallManager::syscallAllocIntVec(long *ret, const u64 port, const u64 destCpu, const u64 isLapic, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
@@ -557,14 +507,26 @@ namespace kernel::common::hal {
 
 		const CpuCore *destCore = nullptr;
 
-		if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
-			destCore = cpuManager->getBootstrapCpu();
+		if (static_cast<bool>(isLapic)) {
+			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
+				destCore = cpuManager->getBootstrapCpu();
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
+						destCore = &cpuManager->getCoreList()[i].cpuCore;
+						break;
+					}
+				}
+			}
 		} else {
-			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-				if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
-					destCore = &cpuManager->getCoreList()[i].cpuCore;
-
-					break;
+			if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
+				destCore = cpuManager->getBootstrapCpu();
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
+						destCore = &cpuManager->getCoreList()[i].cpuCore;
+						break;
+					}
 				}
 			}
 		}
@@ -578,7 +540,7 @@ namespace kernel::common::hal {
 		registration->port = port;
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
-			delete registration;
+			irqRegistrations.remove(registration);
 
 			return EFAULT;
 		}
@@ -597,7 +559,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallFreeIntVec(long *, u64 vec, u64 destCpu, u64, u64, u64, u64) {
+	auto SyscallManager::syscallFreeIntVec(long */*unused*/, const u64 vec, const u64 destCpu, const u64 isLapic, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
@@ -607,13 +569,26 @@ namespace kernel::common::hal {
 
 		const CpuCore *destCore = nullptr;
 
-		if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
-			destCore = cpuManager->getBootstrapCpu();
+		if (static_cast<bool>(isLapic)) {
+			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
+				destCore = cpuManager->getBootstrapCpu();
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
+						destCore = &cpuManager->getCoreList()[i].cpuCore;
+						break;
+					}
+				}
+			}
 		} else {
-			for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-				if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
-					destCore = &cpuManager->getCoreList()[i].cpuCore;
-					break;
+			if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
+				destCore = cpuManager->getBootstrapCpu();
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
+						destCore = &cpuManager->getCoreList()[i].cpuCore;
+						break;
+					}
 				}
 			}
 		}
@@ -622,23 +597,58 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
+		auto it = irqRegistrations.begin();
+		const auto end = irqRegistrations.end();
+
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
+			if (currEntry.irq == vec and not currEntry.isIrq) {
+				irqRegistrations.remove(&currEntry);
+
+				break;
+			}
+
+			it = nextIt;
+		}
+
 		return 0;
 	}
 
-	u64 SyscallManager::syscallAllocGsi(long *ret, u64 port, u64 destCpu, u64, u64, u64, u64) {
-		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+	auto SyscallManager::syscallAllocGsi(long *ret, const u64 port, const u64 destCpu, const u64 isLapic, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		IrqAllocator *irqAllocator = kernel->getIrqAllocator();
+		const CpuManager *cpuManager = kernel->getCpuManager();
+
+		uint64_t gsiDestCpu = destCpu;
+
+		if (static_cast<bool>(isLapic)) {
+			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
+				gsiDestCpu = cpuManager->getBootstrapCpu()->cpuId;
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
+						gsiDestCpu = cpuManager->getCoreList()[i].cpuCore.cpuId;
+
+						break;
+					}
+				}
+			}
+		}
 
 		auto *registration = new IrqRegistration();
 
 		registration->port = port;
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
-			delete registration;
+			irqRegistrations.remove(registration);
 
 			return EFAULT;
 		}
 
-		const u64 gsi = irqAllocator->allocGsi(destCpu, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
+		const u64 gsi = irqAllocator->allocGsi(gsiDestCpu, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
 
 		registration->irq = gsi;
 		registration->isIrq = true;
@@ -652,11 +662,46 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	u64 SyscallManager::syscallFreeGsi(long *, u64 gsi, u64 destCpu, u64, u64, u64, u64) {
-		IrqAllocator *irqAllocator = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getIrqAllocator();
+	auto SyscallManager::syscallFreeGsi(long */*unused*/, const u64 gsi, const u64 destCpu, const u64 isLapic, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
+		IrqAllocator *irqAllocator = kernel->getIrqAllocator();
+		const CpuManager *cpuManager = kernel->getCpuManager();
 
-		if (not irqAllocator->freeIrq(gsi, destCpu)) {
+		uint64_t gsiDestCpu = destCpu;
+
+		if (static_cast<bool>(isLapic)) {
+			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
+				gsiDestCpu = cpuManager->getBootstrapCpu()->cpuId;
+			} else {
+				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
+					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
+						gsiDestCpu = cpuManager->getCoreList()[i].cpuCore.cpuId;
+
+						break;
+					}
+				}
+			}
+		}
+
+		if (not irqAllocator->freeIrq(gsi, gsiDestCpu)) {
 			return EFAULT;
+		}
+
+		auto it = irqRegistrations.begin();
+		const auto end = irqRegistrations.end();
+
+		while (it != end) {
+			auto &currEntry = *it;
+			auto nextIt = it;
+			++nextIt;
+
+			if (currEntry.irq == gsi and currEntry.isIrq) {
+				irqRegistrations.remove(&currEntry);
+
+				break;
+			}
+
+			it = nextIt;
 		}
 
 		return 0;
@@ -682,9 +727,9 @@ namespace kernel::x86_64::hal {
 	}
 
 	void callSyscall(SyscallRegs *regs) {
-		if (regs->rax == 38 or regs->rax == 39) {
+		/*if (regs->rax == 38 or regs->rax == 39) {
 			CommonMain::getTerminal()->debug("Syscall: %lu", "Syscalls", regs->rax);
-		}
+		}*/
 
 		Thread *thread = Scheduler::getCurrentThread();
 

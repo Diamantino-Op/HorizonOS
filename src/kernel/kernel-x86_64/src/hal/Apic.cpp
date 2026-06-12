@@ -91,7 +91,7 @@ namespace kernel::x86_64::hal {
 
 			this->calibrated = true;
 		} else {
-			const CalibratorFun calibrator = CommonMain::getInstance()->getClocks()->getCalibrator();
+			const CalibratorFun calibrator = Clocks::getCalibrator();
 
 			if (calibrator == nullptr) {
 				CommonMain::getTerminal()->error("Could not calibrate timer!", "Apic");

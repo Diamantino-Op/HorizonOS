@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <pthread.h>
+#include <string>
 #include <unistd.h>
 #include <vector>
 
@@ -15,7 +16,7 @@ uint64_t pciPort = 0;
 uint64_t uacpiPort = 0;
 uint64_t uacpiTid = 0;
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	// ── 1. Register port ───────────────────────────────────────────────────
     if (const int r = register_horizonos_port(reinterpret_cast<long *>(&pciPort)); r != 0) {
         printf("PCI: Failed to register port: %d", r);

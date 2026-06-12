@@ -3,9 +3,7 @@
 
 #include <cstdint>
 #include <vector>
-#include <string>
 #include <mutex>
-#include <sys/mman.h>
 
 // ─── Port assignments ─────────────────────────────────────────────────────────
 constexpr int REGISTRY_PORT = 1;
@@ -35,7 +33,9 @@ constexpr uint64_t PCI_MSIX_ALLOC_MSG_TYPE = 0x80;
 constexpr uint64_t PCI_MSIX_ALLOC_REPLY_MSG_TYPE = 0x90;
 constexpr uint64_t PCI_MSIX_FREE_MSG_TYPE = 0xA0;
 constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_MSG_TYPE = 0xB0;
+constexpr uint64_t PCI_MSIX_GLOBAL_ENABLE_REPLY_MSG_TYPE = 0xB1;
 constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_MSG_TYPE = 0xC0;
+constexpr uint64_t PCI_MSIX_GLOBAL_DISABLE_REPLY_MSG_TYPE = 0xC1;
 constexpr uint64_t PCI_SEARCH_DEVICE_MSG_TYPE = 0xD0;
 constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_START_MSG_TYPE = 0xE0;
 constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_MSG_TYPE = 0xF0;
@@ -113,6 +113,7 @@ struct PciMsiAllocMsgData {
 	uint8_t dev {};
 	uint8_t func {};
 	uint64_t port {};
+	uint64_t lapicId {};
 };
 
 struct PciMsiAllocReplyMsgData {
@@ -131,6 +132,7 @@ struct PciMsixAllocMsgData {
 	uint8_t func {};
 	uint16_t idx {};
 	uint64_t port {};
+	uint64_t lapicId {};
 };
 
 struct PciMsixAllocReplyMsgData {
@@ -195,7 +197,7 @@ enum class PciBridgeType {
 	None,
 	HostBridge,       // 06:00
 	IsaBridge,        // 06:01
-	PciToPciBridge,   // 06:04  — introduces a secondary bus
+	PciToPciBridge,   // 06:04 - introduces a secondary bus
 	OtherBridge,      // 06:xx
 };
 
@@ -205,15 +207,15 @@ extern std::vector<McfgSegment> g_ecamSegments;
 extern std::mutex               g_ecamMutex;
 
 // ─── ECAM helper: returns the mapped pointer for a BDF, or nullptr ────────────
-void *ecamDeviceBase(uint8_t bus, uint8_t dev, uint8_t func);
+auto ecamDeviceBase(uint8_t bus, uint8_t dev, uint8_t func) -> void *;
 
 // Register an ECAM segment parsed from MCFG (maps it via mmap_phys).
-bool addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t endBus);
+auto addEcamSegment(uint64_t physBase, uint16_t seg, uint8_t startBus, uint8_t endBus) -> bool;
 
 // ─── Config-space accessors (ECAM preferred, legacy fallback) ─────────────────
-uint32_t pciConfigRead32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
-uint16_t pciConfigRead16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
-uint8_t  pciConfigRead8 (uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset);
+auto pciConfigRead32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) -> uint32_t;
+auto pciConfigRead16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) -> uint16_t;
+auto pciConfigRead8 (uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset) -> uint8_t;
 
 void pciConfigWrite32(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint32_t value);
 void pciConfigWrite16(uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, uint16_t value);
@@ -222,19 +224,19 @@ void pciConfigWrite8 (uint8_t bus, uint8_t dev, uint8_t func, uint16_t offset, u
 // ─── Bus enumeration ──────────────────────────────────────────────────────────
 void enumeratePci(std::vector<PciDevice> &devices);
 
-PciBridgeType getPciBridgeType(uint8_t classCode, uint8_t subclass);
+auto getPciBridgeType(uint8_t classCode, uint8_t subclass) -> PciBridgeType;
 
-bool isPciBridge(uint8_t classCode, uint8_t subclass);
+auto isPciBridge(uint8_t classCode, uint8_t subclass) -> bool;
 
 // ─── Message loop (runs on a dedicated pthread) ───────────────────────────────
-[[noreturn]] void *handleSearchDevice(void *devicesArr);
-[[noreturn]] void *handlePciRead(void *arg);
-[[noreturn]] void *handlePciWrite(void *arg);
-[[noreturn]] void *handleMsiAlloc(void *arg);
-[[noreturn]] void *handleMsiFree(void *arg);
-[[noreturn]] void *handleMsixAlloc(void *arg);
-[[noreturn]] void *handleMsixFree(void *arg);
-[[noreturn]] void *handleMsixGlobalEnable(void *arg);
-[[noreturn]] void *handleMsixGlobalDisable(void *arg);
+[[noreturn]] auto handleSearchDevice(void *devicesArr) -> void *;
+[[noreturn]] auto handlePciRead(void *arg) -> void *;
+[[noreturn]] auto handlePciWrite(void *arg) -> void *;
+[[noreturn]] auto handleMsiAlloc(void *arg) -> void *;
+[[noreturn]] auto handleMsiFree(void *arg) -> void *;
+[[noreturn]] auto handleMsixAlloc(void *arg) -> void *;
+[[noreturn]] auto handleMsixFree(void *arg) -> void *;
+[[noreturn]] auto handleMsixGlobalEnable(void *arg) -> void *;
+[[noreturn]] auto handleMsixGlobalDisable(void *arg) -> void *;
 
 #endif

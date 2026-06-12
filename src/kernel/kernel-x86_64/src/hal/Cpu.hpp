@@ -31,6 +31,7 @@ namespace kernel::x86_64::hal {
         Apic apic {};
         Tsc tsc {};
         ExecutionNode executionNode {};
+    	CoreClock coreClock {};
 
         TssManager *tssManager {};
     	GdtManager *gdtManager {};
@@ -38,6 +39,7 @@ namespace kernel::x86_64::hal {
 
     	u32 cpuArrId {};
         u32 cpuId {};
+    	u32 lapicId {};
 
         i64 offset {};
 
@@ -62,11 +64,11 @@ namespace kernel::x86_64::hal {
 
         void startMultithread();
 
-        u64 getCoreAmount() const;
+        auto getCoreAmount() const -> u64;
 
-        CoreKernel *getCoreList() const;
+        auto getCoreList() const -> CoreKernel *;
 
-        CpuCore *getBootstrapCpu() const;
+        auto getBootstrapCpu() const -> CpuCore *;
 
         static void initSimd();
 
@@ -76,7 +78,7 @@ namespace kernel::x86_64::hal {
 
         static void setCorePointer(CpuCore *core);
 
-        __attribute__((no_instrument_function)) static CpuCore *getCurrentCore();
+        __attribute__((no_instrument_function)) static auto getCurrentCore() -> CpuCore *;
 
     private:
         void initCore(u64 coreId, u64 listIndex) const;

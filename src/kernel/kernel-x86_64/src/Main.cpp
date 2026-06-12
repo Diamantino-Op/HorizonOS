@@ -9,14 +9,18 @@
 
 #include "limine.h"
 
+// ReSharper disable CppDeclaratorNeverUsed
+
 __attribute__((used, section(".limine_requests_start")))
-static volatile u64 limineRequestsEndMarker[] = LIMINE_REQUESTS_START_MARKER;
+static volatile u64 limineRequestsEndMarker[] = LIMINE_REQUESTS_START_MARKER; // NOLINT(*-use-anonymous-namespace, *-avoid-c-arrays)
 
 __attribute__((used, section(".limine_requests_end")))
-static volatile u64 limineRequestsStartMarker[] = LIMINE_REQUESTS_END_MARKER;
+static volatile u64 limineRequestsStartMarker[] = LIMINE_REQUESTS_END_MARKER; // NOLINT(*-use-anonymous-namespace, *-avoid-c-arrays)
 
 __attribute__((used, section(".limine_requests")))
-static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(6);
+static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(6); // NOLINT(*-use-anonymous-namespace, *-avoid-c-arrays)
+
+// ReSharper enable CppDeclaratorNeverUsed
 
 extern limine_framebuffer_request framebufferRequest;
 extern limine_module_request moduleRequest;
@@ -130,7 +134,7 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.startBootCore();
 
-		terminal.debug("Is running under a VM: %u", "HorizonOS", CpuId::isHypervisor());
+		terminal.debug("Is running under a VM: %u", "HorizonOS", static_cast<u8>(CpuId::isHypervisor()));
 		terminal.debug("Kvm Base: 0x%.8lx", "HorizonOS", CpuId::getKvmBase());
 
 		CpuManager::initSimd();
@@ -189,8 +193,8 @@ namespace kernel::x86_64 {
 
 		this->idtManager.addEntry(clockInt, interruptTable[clockInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
-		this->clocks.schedulerHandler.fun = &Scheduler::timerReSchedule;
-		this->clocks.schedulerHandler.timeout = TimeUtils::msToNs(50);
+		CpuManager::getCurrentCore()->coreClock.schedulerHandler.fun = &Scheduler::timerReSchedule;
+		CpuManager::getCurrentCore()->coreClock.schedulerHandler.timeout = TimeUtils::msToNs(50);
 
 		terminal.info("Clocks setup... OK", "HorizonOS");
 
@@ -290,47 +294,47 @@ namespace kernel::x86_64 {
 		terminal.info("Shutting down...", "HorizonOS");
 	}
 
-	GdtManager *Kernel::getGdtManager() {
+	auto Kernel::getGdtManager() -> GdtManager * {
 		return &this->gdtManager;
 	}
 
-	TssManager *Kernel::getTssManager() {
+	auto Kernel::getTssManager() -> TssManager * {
 		return &this->tssManager;
 	}
 
-	IdtManager *Kernel::getIdtManager() {
+	auto Kernel::getIdtManager() -> IdtManager * {
 		return &this->idtManager;
 	}
 
-	IrqAllocator *Kernel::getIrqAllocator() {
+	auto Kernel::getIrqAllocator() -> IrqAllocator * {
 		return &this->irqAllocator;
 	}
 
-	InterruptAllocator *Kernel::getInterruptAllocator() {
+	auto Kernel::getInterruptAllocator() -> InterruptAllocator * {
 		return &this->interruptAllocator;
 	}
 
-	DualPIC *Kernel::getDualPic() {
+	auto Kernel::getDualPic() -> DualPIC * {
 		return &this->dualPic;
 	}
 
-	PIT *Kernel::getPIT() {
+	auto Kernel::getPIT() -> PIT * {
 		return &this->pit;
 	}
 
-	KvmClock *Kernel::getKvmClock() {
+	auto Kernel::getKvmClock() -> KvmClock * {
 		return &this->kvmClock;
 	}
 
-	Hpet *Kernel::getHpet() {
+	auto Kernel::getHpet() -> Hpet * {
 		return &this->hpet;
 	}
 
-	CpuManager *Kernel::getCpuManager() {
+	auto Kernel::getCpuManager() -> CpuManager * {
 		return &this->cpuManager;
 	}
 
-	IOApicManager *Kernel::getIOApicManager() {
+	auto Kernel::getIOApicManager() -> IOApicManager * {
 		return &this->ioApicManager;
 	}
 
@@ -357,6 +361,9 @@ namespace kernel::x86_64 {
 
 		CpuManager::initSimd();
 
+		CpuManager::getCurrentCore()->coreClock.schedulerHandler.fun = &Scheduler::timerReSchedule;
+		CpuManager::getCurrentCore()->coreClock.schedulerHandler.timeout = TimeUtils::msToNs(50);
+
 		CpuManager::getCurrentCore()->executionNode.init();
 
 		this->cpuCore.tsc.init();
@@ -367,6 +374,7 @@ namespace kernel::x86_64 {
 
 		Asm::sti();
 
+		// TODO: schedInt prob not needed
 		CpuManager::getCurrentCore()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 		const u8 clockInt = this->interruptAllocator.allocInt(&Clocks::timerTick, nullptr);
 
@@ -380,15 +388,15 @@ namespace kernel::x86_64 {
 		Asm::lhlt();
 	}
 
-	TssManager *CoreKernel::getTssManager() {
+	auto CoreKernel::getTssManager() -> TssManager * {
 		return &this->coreTssManager;
 	}
 
-	GdtManager *CoreKernel::getGdtManager() {
+	auto CoreKernel::getGdtManager() -> GdtManager * {
 		return &this->coreGdtManager;
 	}
 
-	InterruptAllocator *CoreKernel::getInterruptAllocator() {
+	auto CoreKernel::getInterruptAllocator() -> InterruptAllocator * {
 		return &this->interruptAllocator;
 	}
 }

@@ -30,18 +30,18 @@ namespace kernel::common::hal {
 
         void registerClock(Clock *clock);
 
-        Clock *getMainClock() const;
+        auto getMainClock() const -> Clock *;
 
-        bool stallNs(u64 ns);
+        auto stallNs(u64 ns) const -> bool;
 
-        CalibratorFun getCalibrator();
+        static auto getCalibrator() -> CalibratorFun;
 
     private:
     	static void finishTimerTick();
 
         static void calibrate(u64 ms);
 
-        void archPause();
+        static void archPause();
 
         Clock *mainClock { nullptr };
 
@@ -50,15 +50,19 @@ namespace kernel::common::hal {
         u8 currClockIndex {};
 
     public:
-    	static void addTimerHandle(HandlerFun fun, u64 timeout);
+    	static auto timerTick(u64 *) -> u32;
 
-    	static u32 timerTick(u64 *);
-
-    	static void resetSchedulerTimer();
-
-    	LinkedList<TimerHandler> handlers {};
-    	TimerHandler schedulerHandler {};
     };
+
+	class CoreClock {
+	public:
+		void addTimerHandle(HandlerFun fun, u64 timeout);
+
+		void resetSchedulerTimer();
+
+		LinkedList<TimerHandler> handlers {};
+		TimerHandler schedulerHandler {};
+	};
 }
 
 #endif

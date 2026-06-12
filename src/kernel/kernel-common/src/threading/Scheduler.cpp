@@ -338,22 +338,19 @@ namespace kernel::common::threading {
 
 		schedulerPtr->getProcess(0)->addThread(newThread);
 
-		this->idleThread = new LinkedListEntry<Thread>();
-		this->idleThread->value = newThread;
-
-		this->currentThread = new LinkedListEntry<Thread>();
-		this->currentThread->value = newThread;
+		this->idleThread = newThread;
+		this->currentThread = newThread;
 	}
 
-	void ExecutionNode::setCurrentThread(LinkedListEntry<Thread> *thread) {
+	void ExecutionNode::setCurrentThread(Thread *thread) {
 		this->currentThread = thread;
 	}
 
-	LinkedListEntry<Thread> *ExecutionNode::getCurrentThread() const {
+	Thread *ExecutionNode::getCurrentThread() const {
 		return this->currentThread;
 	}
 
-	LinkedListEntry<Thread> *ExecutionNode::getIdleThread() const {
+	Thread *ExecutionNode::getIdleThread() const {
 		return this->idleThread;
 	}
 
@@ -361,14 +358,14 @@ namespace kernel::common::threading {
 		Thread *next = this->uleQueue.dequeueMin();
 
 		if (next == nullptr) {
-			next = this->idleThread->value;
+			next = this->idleThread;
 		}
 
 		return next;
 	}
 
 	void ExecutionNode::enqueueThread(Thread *thread, const bool waking) {
-		if (thread == nullptr || (this->idleThread != nullptr && thread == this->idleThread->value)) {
+		if (thread == nullptr or (this->idleThread != nullptr and thread == this->idleThread)) {
 			return;
 		}
 
@@ -606,7 +603,7 @@ namespace kernel::common::threading {
 			thread->getParent()->removeThread(thread);
 		}
 
-		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!shouldReschedule) {
 			if (this->removeThread(thread)) {
@@ -718,7 +715,7 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::BLOCKED);
 		thread->lastScheduledNs = now;
 
-		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!this->sleepingThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
@@ -743,7 +740,7 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::BLOCKED);
 		thread->lastScheduledNs = now;
 
-		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!this->sleepingThreadList.contains(thread)) {
 			this->sleepingThreadList.addStart(thread);
@@ -795,7 +792,7 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::BLOCKED);
 		thread->lastScheduledNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread()->value == thread;
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		//if (!shouldReschedule) {
 			this->blockedThreadList.addStart(thread);
@@ -902,10 +899,10 @@ namespace kernel::common::threading {
 
 	void Scheduler::debugDump() {
 	    auto *term = CommonMain::getTerminal();
-	    Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
+		const Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 	    auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
 	    const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
-		const auto dumpUleQueue = [term](const UleRunQueue &queue) {
+		const auto dumpUleQueue = [term](const UleRunQueue &queue) -> void {
 			bstree_node_t *node = queue.tree.root != nullptr ? bstree_minimum(queue.tree.root) : nullptr;
 
 			while (node != nullptr) {
@@ -937,15 +934,15 @@ namespace kernel::common::threading {
 	    if (bsp != nullptr) {
 	        const auto *bspThread = bsp->executionNode.getCurrentThread();
 
-	        if (bspThread != nullptr && bspThread->value != nullptr) {
+	        if (bspThread != nullptr && bspThread != nullptr) {
 	            term->warnNoLock("  Core CPU=%u (BSP): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
 	                "SchedDump",
 	                bsp->cpuId,
-	                bspThread->value->getId(),
-	                bspThread->value->getParent()->getId(),
-	                static_cast<u32>(bspThread->value->getState()),
-	                static_cast<u32>(bspThread->value->getPendingWakeup()),
-	                bspThread->value->getWaitingPort());
+	                bspThread->getId(),
+	                bspThread->getParent()->getId(),
+	                static_cast<u32>(bspThread->getState()),
+	                static_cast<u32>(bspThread->getPendingWakeup()),
+	                bspThread->getWaitingPort());
 	        } else {
 	            term->warnNoLock("  Core CPU=%u (BSP): no current thread", "SchedDump", bsp->cpuId);
 	        }
@@ -961,16 +958,16 @@ namespace kernel::common::threading {
 	            const x86_64::CpuCore *core = &cpuManager->getCoreList()[i].cpuCore;
 	            const auto *coreThread = core->executionNode.getCurrentThread();
 
-	            if (coreThread != nullptr && coreThread->value != nullptr) {
+	            if (coreThread != nullptr && coreThread != nullptr) {
 	                term->warnNoLock("  Core CPU=%u (AP %lu): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
 	                    "SchedDump",
 	                    core->cpuId,
 	                    i,
-	                    coreThread->value->getId(),
-	                    coreThread->value->getParent()->getId(),
-	                    static_cast<u32>(coreThread->value->getState()),
-	                    static_cast<u32>(coreThread->value->getPendingWakeup()),
-	                    coreThread->value->getWaitingPort());
+	                    coreThread->getId(),
+	                    coreThread->getParent()->getId(),
+	                    static_cast<u32>(coreThread->getState()),
+	                    static_cast<u32>(coreThread->getPendingWakeup()),
+	                    coreThread->getWaitingPort());
 	            } else {
 	                term->warnNoLock("  Core CPU=%u (AP %lu): no current thread", "SchedDump", core->cpuId, i);
 	            }
