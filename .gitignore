@@ -2,24 +2,24 @@
 /out/
 /.idea/
 /build/
-/deps/llvm/
-/deps/ovmf/
-/deps/nanoprintf/
-/deps/linux_kernel/
-/deps/linux-headers-*
 Token.txt
 .fuse_*
 .wraplock
 
 /deps/chdrs
 /deps/cxxhdrs
+/deps/doxygen-awesome-css
 /deps/flanterm
 /deps/limine
 /deps/limine_protocol
+/deps/linux-headers-x86_64
 /deps/llvm
+/deps/nanoprintf
+/deps/ovmf
 /deps/uacpi
 
 /libs/sysroot
 /libc/mlibc
 /libc/tcmalloc
 /toolchain
+/docs

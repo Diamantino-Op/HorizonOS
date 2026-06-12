@@ -33,7 +33,7 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
     const uint64_t flushType = NVME_FLUSH_MSG_BASE + coreStruct->cpuId;
 
     auto filterOpts = filter_options();
-    filterOpts.whiteListTypes = new uint64_t[3]{ readType, writeType, flushType }; // TODO: Crashes here
+    filterOpts.whiteListTypes = new uint64_t[3]{ readType, writeType, flushType };
     filterOpts.whiteListCount = 3;
 
     // Use the largest possible message struct as the receive buffer
@@ -597,10 +597,20 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     uint64_t sqVirt = 0;
 
     if (allocPhysPage(&pair.sqPhys) != 0) {
+    	if (pair.msixVector != 0) {
+			this->msixFreeVector(queueId, pair.msixVector);
+		}
+
     	return false;
     }
 
     if (mmap_phys(pair.sqPhys, pair.depth * sizeof(Command), &sqVirt, false) != 0) {
+
+
+    	if (pair.msixVector != 0) {
+    		this->msixFreeVector(queueId, pair.msixVector);
+    	}
+
     	return false;
     }
 
@@ -613,8 +623,12 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     cqCmd.dptrLow   = pair.cqPhys;
     cqCmd.dptrHigh  = 0;
     cqCmd.cdw10.raw = (queueId & 0xFFFFU) | (((pair.depth - 1) & 0xFFFFU) << 16);
-	//cqCmd.cdw11.raw = 0x1U;
-	cqCmd.cdw11.raw = 0x3U | (static_cast<uint32_t>(pair.msixVector) << 16); // bits[1:0] = PC | IEN, bits[31:16] = IV (interrupt vector index)
+
+	if (pair.msixVector != 0) {
+		cqCmd.cdw11.raw = 0x3U | (static_cast<uint32_t>(pair.msixVector) << 16); // bits[1:0] = PC | IEN, bits[31:16] = IV (interrupt vector index)
+	} else {
+		cqCmd.cdw11.raw = 0x1U;
+	}
 
     CompletionEntry cqe {};
 
