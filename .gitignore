@@ -19,7 +19,7 @@ Token.txt
 /deps/uacpi
 
 /libs/sysroot
-/libc/mlibc
-/libc/tcmalloc
+/libs/mlibc
+/libs/tcmalloc
 /toolchain
 /docs
