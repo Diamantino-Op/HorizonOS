@@ -347,8 +347,9 @@ namespace kernel::common::hal {
 		horizonSyscalls[36] = &syscallFreeGsi;
 		horizonSyscalls[37] = &syscallGetCpuIDs;
 		horizonSyscalls[38] = &syscallAllocPhysPage;
-		horizonSyscalls[39] = &syscallGetAffinity;
-		horizonSyscalls[40] = &syscallSetAffinity;
+		horizonSyscalls[39] = &syscallFreePhysPage;
+		horizonSyscalls[40] = &syscallGetAffinity;
+		horizonSyscalls[41] = &syscallSetAffinity;
 
 		initArch();
 	}
@@ -1266,6 +1267,16 @@ namespace kernel::common::hal {
 		}
 
 		*ret = reinterpret_cast<long>(page);
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallFreePhysPage(long */*unused*/, const u64 pageAddr, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		if (pageAddr == 0) {
+			return EINVAL;
+		}
+
+		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(pageAddr + CommonMain::getCurrentHhdm()), 1);
 
 		return 0;
 	}

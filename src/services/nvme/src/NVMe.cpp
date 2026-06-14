@@ -174,6 +174,8 @@ auto NvmeDriver::initializeAdminQueues() noexcept -> bool {
 	}
 
 	if (allocPhysPage(&adminCQPhys) != 0) {
+		freePhysPage(adminSQPhys);
+
 		return false;
 	}
 
@@ -184,10 +186,16 @@ auto NvmeDriver::initializeAdminQueues() noexcept -> bool {
 	const uint64_t adminCQSize = this->adminQDepth * sizeof(CompletionEntry);
 
 	if (mmap_phys(adminSQPhys, adminSQSize, &adminSQVirt, false) != 0) {
+		freePhysPage(adminCQPhys);
+		freePhysPage(adminSQPhys);
+
 		return false;
 	}
 
 	if (mmap_phys(adminCQPhys, adminCQSize, &adminCQVirt, false) != 0) {
+		munmap(reinterpret_cast<void*>(adminSQVirt), adminSQSize);
+		freePhysPage(adminCQPhys);
+
 		return false;
 	}
 
@@ -265,6 +273,7 @@ auto NvmeDriver::submitAdminCommand(const Command &command, CompletionEntry &res
 				found = true;
 				break;
 			}
+
 			usleep(10000);
 		}
 
@@ -564,6 +573,7 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     pair.queueId = queueId;
     pair.depth   = 64;
 
+	// TODO: Free port
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&pair.completionPort));
 
 	if (registerResult == 0) {
@@ -576,17 +586,26 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
 		return false;
 	}
 
-	// TODO: Free this if fail
 	pair.msixVector = this->msixAllocVector(queueId, pair.completionPort, lapicId);
 
     // Allocate CQ
     uint64_t cqVirt = 0;
 
     if (allocPhysPage(&pair.cqPhys) != 0) {
+    	if (pair.msixVector != 0) {
+    		this->msixFreeVector(queueId, pair.msixVector);
+    	}
+
     	return false;
     }
 
     if (mmap_phys(pair.cqPhys, pair.depth * sizeof(CompletionEntry), &cqVirt, false) != 0) {
+    	if (pair.msixVector != 0) {
+    		this->msixFreeVector(queueId, pair.msixVector);
+    	}
+
+    	freePhysPage(pair.cqPhys);
+
     	return false;
     }
 
@@ -605,11 +624,12 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     }
 
     if (mmap_phys(pair.sqPhys, pair.depth * sizeof(Command), &sqVirt, false) != 0) {
-
-
     	if (pair.msixVector != 0) {
     		this->msixFreeVector(queueId, pair.msixVector);
     	}
+
+    	freePhysPage(pair.sqPhys);
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
 
     	return false;
     }
@@ -632,7 +652,14 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
 
     CompletionEntry cqe {};
 
-    if (!submitAdminCommand(cqCmd, cqe)) {
+    if (not submitAdminCommand(cqCmd, cqe)) {
+    	if (pair.msixVector != 0) {
+    		this->msixFreeVector(queueId, pair.msixVector);
+    	}
+
+    	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
+
     	return false;
     }
 
@@ -644,7 +671,14 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     sqCmd.cdw10.raw = (queueId & 0xFFFFU) | (((pair.depth - 1) & 0xFFFFU) << 16);
     sqCmd.cdw11.raw = 0x1U | ((queueId & 0xFFFFU) << 16);  // PC=1, CQID=queueId
 
-    if (!submitAdminCommand(sqCmd, cqe)) {
+    if (not submitAdminCommand(sqCmd, cqe)) {
+    	if (pair.msixVector != 0) {
+    		this->msixFreeVector(queueId, pair.msixVector);
+    	}
+
+    	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
+
     	return false;
     }
 

@@ -57,7 +57,7 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 40;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 41;
+	constexpr u64 horizonSyscallAmount = 42;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
 
@@ -164,6 +164,7 @@ namespace kernel::common::hal {
     	static auto syscallLockToCore(long *, u64 cpuId, u64, u64, u64, u64, u64) -> u64;
     	static auto syscallGetCpuIDs(long *, u64 cpuIdOutArray, u64 cpuCount, u64, u64, u64, u64) -> u64;
     	static auto syscallAllocPhysPage(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallFreePhysPage(long *, u64 pageAddr, u64, u64, u64, u64, u64) -> u64;
     	static auto syscallGetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
     	static auto syscallSetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
 
