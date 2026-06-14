@@ -225,6 +225,9 @@ namespace kernel::common::threading {
 	}
 
 	u64 *Scheduler::createContext(Thread *thread, Process *process, const bool isUser, const u64 rip, const u64 rsp, const u64 userRsp) {
+		const bool prevIF = Asm::intsEnabled();
+		Asm::cli();
+
 		const u64 currPageMap = Asm::readCr3();
 
 		process->getProcessContextKernel()->pageMap.load();
@@ -289,6 +292,10 @@ namespace kernel::common::threading {
 		}
 
 		Asm::writeCr3(currPageMap);
+
+		if (prevIF) {
+			Asm::sti();
+		}
 
 		return reinterpret_cast<u64 *>(context);
 	}
@@ -368,12 +375,14 @@ namespace kernel::x86_64::threading {
 
 			if (this->isUser) {
 				const u64 startPage = alignDown<u64>(this->userStackPointer, pageSize);
-				const u64 endPage = alignUp<u64>(this->userStackPointer + threadCtxStackSize, pageSize);
+				const u64 endPage = alignUp<u64>(this->userStackPointer + threadUserStackSize, pageSize);
 
-				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-					CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(addr), 1);
+				if (this->userStackPointer != 0) {
+					for (u64 addr = startPage; addr < endPage; addr += pageSize) {
+						CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(addr), 1);
 
-					process->getProcessContext()->pageMap.unMapPage(addr);
+						process->getProcessContext()->pageMap.unMapPage(addr);
+					}
 				}
 			}
 		}

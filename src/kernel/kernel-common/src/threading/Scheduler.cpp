@@ -37,16 +37,24 @@ namespace kernel::common::threading {
 				return nullptr;
 			}
 
-			usize bestSize = bestNode->uleQueue.size();
+			const auto queueSize = [](ExecutionNode *node) -> usize {
+				const bool prevIF = node->coreLock.lock();
+				const usize size = node->uleQueue.size();
+				node->coreLock.unlock(prevIF);
+
+				return size;
+			};
+
+			usize bestSize = queueSize(bestNode);
 			auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
 			const x86_64::CpuManager *cpuManager = kernel->getCpuManager();
 
-			const auto considerNode = [&bestNode, &bestSize](ExecutionNode *node) -> void {
+			const auto considerNode = [&bestNode, &bestSize, &queueSize](ExecutionNode *node) -> void {
 				if (node == nullptr) {
 					return;
 				}
 
-				const usize size = node->uleQueue.size();
+				const usize size = queueSize(node);
 
 				if (size < bestSize) {
 					bestNode = node;
@@ -84,7 +92,7 @@ namespace kernel::common::threading {
 		TIDAllocator::freeTID(this->id);
 
 		if (this->syscallStackPointer != 0) {
-			VirtualAllocator::free(this->parent->getProcessContext(), reinterpret_cast<u64 *>(this->syscallStackPointer));
+			VirtualAllocator::free(this->parent->getProcessContext(), reinterpret_cast<u64 *>(this->syscallStackPointer - threadCtxStackSize));
 		}
 
 		if (this->context != nullptr) {
