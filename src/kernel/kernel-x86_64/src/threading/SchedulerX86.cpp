@@ -398,7 +398,10 @@ namespace kernel::x86_64::threading {
 		this->ownsKernelStack = ownsKernelStack;
 		this->process = proc;
 
-		this->originalSimdSave = VirtualAllocator::alloc(proc->getProcessContext(), CpuId::getXSaveSize() + 64);
+		const u64 simdSaveAllocSize = CpuId::getXSaveSize() + 64;
+
+		this->originalSimdSave = VirtualAllocator::alloc(proc->getProcessContext(), simdSaveAllocSize);
+		memset(this->originalSimdSave, 0, simdSaveAllocSize);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
