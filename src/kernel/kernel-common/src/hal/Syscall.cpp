@@ -1143,6 +1143,7 @@ namespace kernel::common::hal {
 		}
 
 		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);
+		const u64 pageOffset = physAddr - alignedAddr;
 
 		if (len > ~0ULL - physAddr) {
 			return EINVAL;
@@ -1159,7 +1160,7 @@ namespace kernel::common::hal {
 		if (static_cast<bool>(isHhdm)) {
 			retAddr = physAddr + hhdmBase;
 		} else {
-			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
+			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize + pageOffset;
 		}
 
 		for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
@@ -1272,11 +1273,11 @@ namespace kernel::common::hal {
 	}
 
 	auto SyscallManager::syscallFreePhysPage(long */*unused*/, const u64 pageAddr, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
-		if (pageAddr == 0) {
+		if (pageAddr == 0 || (pageAddr & (pageSize - 1)) != 0) {
 			return EINVAL;
 		}
 
-		CommonMain::getInstance()->getPMM()->freePages(reinterpret_cast<u64 *>(pageAddr + CommonMain::getCurrentHhdm()), 1);
+		CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(pageAddr), 1);
 
 		return 0;
 	}

@@ -2,6 +2,7 @@
 
 #include "CommonMain.hpp"
 #include "MainMemory.hpp"
+#include "Math.hpp"
 
 #include "limine.h"
 
@@ -16,14 +17,26 @@ namespace kernel::common::memory {
 		if (memMapRequest.response != nullptr) {
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
 				if (const limine_memmap_entry *entry = memMapRequest.response->entries[i]; entry->type == LIMINE_MEMMAP_USABLE) {
-					auto *currEntry = reinterpret_cast<PmmListEntry *>(entry->base + CommonMain::getCurrentHhdm());
+					if (entry->length == 0 || entry->base > ~0ULL - entry->length) {
+						continue;
+					}
+
+					const u64 base = alignUp<u64>(entry->base, pageSize);
+					const u64 end = alignDown<u64>(entry->base + entry->length, pageSize);
+
+					if (end <= base) {
+						continue;
+					}
+
+					auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
 
 					terminal->debug("Found Usable entry: 0x%.16lx, limine: 0x%.16lx", "PMM", currEntry, entry);
 
-					currEntry->count = entry->length / pageSize;
+					currEntry->count = (end - base) / pageSize;
 
 					terminal->debug("New Usable entry found: Base: 0x%.16lx, Size: %llu", "PMM", currEntry, currEntry->count * pageSize);
 
+					currEntry->prev = nullptr;
 					currEntry->next = this->listPtr;
 
 					if (this->listPtr != nullptr) {
@@ -37,6 +50,10 @@ namespace kernel::common::memory {
 	}
 
 	u64 *PhysicalMemoryManager::allocPages(const usize pageAmount, const bool useHhdm) {
+		if (pageAmount == 0) {
+			return nullptr;
+		}
+
 		const bool prevIF = this->pmmSpinLock.lock();
 
 		PmmListEntry *currEntry = this->listPtr;
@@ -48,38 +65,28 @@ namespace kernel::common::memory {
 				if (currEntry->count == pageAmount) {
 					if (currEntry->prev != nullptr) {
 						currEntry->prev->next = currEntry->next;
+					} else {
+						this->listPtr = currEntry->next;
 					}
 
 					if (currEntry->next != nullptr) {
 						currEntry->next->prev = currEntry->prev;
 					}
-
-					if (currEntry->prev) {
-						this->listPtr = currEntry->prev;
-					} else {
-						this->listPtr = currEntry->next;
-					}
 				} else {
-					const auto newAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(currEntry) + (pageAmount * pageSize));
+					auto *newEntry = reinterpret_cast<PmmListEntry *>(reinterpret_cast<u64>(currEntry) + (pageAmount * pageSize));
 
-					memcpy(newAddress, currEntry, sizeof(PmmListEntry));
+					memcpy(newEntry, currEntry, sizeof(PmmListEntry));
 
-					if (this->listPtr == currEntry) {
-						this->listPtr = reinterpret_cast<PmmListEntry *>(newAddress);
+					newEntry->count -= pageAmount;
 
-						this->listPtr->count -= pageAmount;
+					if (newEntry->prev != nullptr) {
+						newEntry->prev->next = newEntry;
 					} else {
-						currEntry = reinterpret_cast<PmmListEntry *>(newAddress);
+						this->listPtr = newEntry;
+					}
 
-						currEntry->count -= pageAmount;
-
-						if (currEntry->prev != nullptr) {
-							currEntry->prev->next = currEntry;
-						}
-
-						if (currEntry->next != nullptr) {
-							currEntry->next->prev = currEntry;
-						}
+					if (newEntry->next != nullptr) {
+						newEntry->next->prev = newEntry;
 					}
 				}
 
@@ -109,18 +116,31 @@ namespace kernel::common::memory {
 	}
 
 	void PhysicalMemoryManager::freePagesCtx(const AllocContext *ctx, u64 *virtAddress, const usize pageAmount) {
-		this->freePagesPhys(reinterpret_cast<u64 *>(ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(virtAddress))), pageAmount);
+		const u64 phys = ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(virtAddress));
+
+		if (phys == 0) {
+			return;
+		}
+
+		this->freePagesPhys(reinterpret_cast<u64 *>(alignDown<u64>(phys, pageSize)), pageAmount);
 	}
 
 	void PhysicalMemoryManager::freePagesPhys(u64 *physAddress, const usize pageAmount) {
+		const u64 phys = reinterpret_cast<u64>(physAddress);
+
+		if (phys == 0 || pageAmount == 0 || (phys & (pageSize - 1)) != 0) {
+			return;
+		}
+
 		const bool prevIF = this->pmmSpinLock.lock();
 
-		auto *currEntry = reinterpret_cast<PmmListEntry *>(physAddress + CommonMain::getCurrentHhdm());
+		auto *currEntry = reinterpret_cast<PmmListEntry *>(phys + CommonMain::getCurrentHhdm());
 
 		memset(currEntry, 0, pageAmount * pageSize);
 
 		currEntry->count = pageAmount;
 
+		currEntry->prev = nullptr;
 		currEntry->next = this->listPtr;
 
 		if (this->listPtr != nullptr) {

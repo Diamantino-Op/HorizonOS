@@ -131,7 +131,7 @@ namespace kernel::common::memory {
 		auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
 		if (lvl1Table->entries[lvl1].present) {
 			if (freePage) {
-				const u64 physAddr = (lvl1Table->entries[lvl1].address << 12) + (vAddr & 0xFFF);
+				const u64 physAddr = lvl1Table->entries[lvl1].address << 12;
 				const bool hadAddr = lvl1Table->entries[lvl1].address != 0;
 
 				memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));

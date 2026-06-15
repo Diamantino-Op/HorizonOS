@@ -11,10 +11,22 @@ namespace kernel::x86_64::hal {
         static void out32(u32 data, u16 address);
         static void out64(u64 data, u16 address);
 
+    	static void outd8(u8 data, u16 address);
+    	static void outd16(u16 data, u16 address);
+    	static void outd32(u32 data, u16 address);
+    	static void outd64(u64 data, u16 address);
+
         static u8 in8(u16 address);
         static u16 in16(u16 address);
         static u32 in32(u16 address);
         static u64 in64(u16 address);
+
+    	static u8 ind8(u16 address);
+    	static u16 ind16(u16 address);
+    	static u32 ind32(u16 address);
+    	static u64 ind64(u16 address);
+
+    	static void ioWait();
     };
 }
 

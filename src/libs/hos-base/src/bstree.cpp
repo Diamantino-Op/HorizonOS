@@ -1,4 +1,5 @@
-// Code edited from EvalynGoemer's bstree.c
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Evalyn Goemer & EvalynOS Contributors
 
 #include "bstree.hpp"
 

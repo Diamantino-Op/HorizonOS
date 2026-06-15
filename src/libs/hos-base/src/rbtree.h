@@ -1,4 +1,5 @@
-// Code edited from EvalynGoemer's rbtree.h
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Evalyn Goemer & EvalynOS Contributors
 
 #ifndef LIB_HOS_BASE_RBTREE_HPP
 #define LIB_HOS_BASE_RBTREE_HPP

@@ -2,6 +2,7 @@
 .extern callSyscall
 syscallHandler:
     cli
+    cld
 
     #swapgs
 
@@ -11,6 +12,12 @@ syscallHandler:
     push gs:[0x8]
 
     swapgs
+
+    push rax
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    pop rax
 
     push r15
     push r14
@@ -35,6 +42,10 @@ syscallHandler:
 
     cli
 
+    mov ax, 0x20 | 3
+    mov ds, ax
+    mov es, ax
+
     pop rax
     pop rbx
     pop rcx
@@ -54,6 +65,5 @@ syscallHandler:
     pop rsp
 
     swapgs
-    sti
 
     sysretq

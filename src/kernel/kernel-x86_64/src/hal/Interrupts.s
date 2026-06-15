@@ -11,6 +11,12 @@ interruptCommon:
 
 handleInterrupt:
     push rax
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    pop rax
+
+    push rax
     push rbx
     push rcx
     push rdx
@@ -48,8 +54,23 @@ handleInterrupt:
     add rsp, 16
 
     test byte ptr [rsp + 8], 3
-    jz .exitInterrupt
+    jz .returnKernel
+
+    push rax
+    mov ax, 0x20 | 3
+    mov ds, ax
+    mov es, ax
+    pop rax
+
     swapgs
+    jmp .exitInterrupt
+
+.returnKernel:
+    push rax
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    pop rax
 
 .exitInterrupt:
     iretq

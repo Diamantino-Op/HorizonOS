@@ -513,12 +513,17 @@ auto NvmeDriver::buildChainedPrpList(const uint64_t *pagePhysArray, const uint32
         PrpListPage listPage {};
 
         if (allocPhysPage(&listPage.phys) != 0) {
+        	freePrpListPages(prpListPages);
+
         	return false;
         }
 
         uint64_t virtAddr = 0;
 
         if (mmap_phys(listPage.phys, 0x1000, &virtAddr, false) != 0) {
+        	freePhysPage(listPage.phys);
+        	freePrpListPages(prpListPages);
+
         	return false;
         }
 
@@ -620,6 +625,8 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
 			this->msixFreeVector(queueId, pair.msixVector);
 		}
 
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
+
     	return false;
     }
 
@@ -629,7 +636,7 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     	}
 
     	freePhysPage(pair.sqPhys);
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
 
     	return false;
     }
@@ -658,7 +665,7 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     	}
 
     	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
 
     	return false;
     }
@@ -677,7 +684,7 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     	}
 
     	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(Command));
+    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
 
     	return false;
     }
@@ -844,6 +851,7 @@ void NvmeDriver::shutdown() noexcept {
         munmap(reinterpret_cast<uint64_t *>(dataVirt), 0x1000);
 
         dataVirt = 0;
+        dataPhys = 0;
     }
 
     namespaces.clear();

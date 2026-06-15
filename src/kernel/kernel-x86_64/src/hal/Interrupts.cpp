@@ -153,6 +153,15 @@ namespace kernel::x86_64::hal {
 		}
 
 		u64 offset = 0;
+		u16 ds = 0;
+		u16 es = 0;
+		u16 fs = 0;
+		u16 gs = 0;
+
+		asm volatile("mov %%ds, %0" : "=rm"(ds));
+		asm volatile("mov %%es, %0" : "=rm"(es));
+		asm volatile("mov %%fs, %0" : "=rm"(fs));
+		asm volatile("mov %%gs, %0" : "=rm"(gs));
 
 		terminal->printfBoth(true, "\033[0;31m┌──────────────────────────[ Kernel Panic ]───────────────────────────");
 		terminal->printfBoth(true, "\033[0;31m│");
@@ -163,8 +172,14 @@ namespace kernel::x86_64::hal {
 		terminal->printfBoth(true, "\033[0;31m│   int: %u, lastInt: %u, schedInt: %u, cpuId: %lu", frame->intNo, CpuManager::getCurrentCore()->lastInt, CpuManager::getCurrentCore()->schedInt, CpuManager::getCurrentCore()->cpuId);
 		terminal->printfBoth(true, "\033[0;31m│   err: 0x%.16lx", frame->errNo);
 		terminal->printfBoth(true, "\033[0;31m│   rip: 0x%.16lx (%s)", frame->rip, Profiler::findSymbol(frame->rip, &offset));
+		terminal->printfBoth(true, "\033[0;31m│   rax: 0x%.16lx, rbx: 0x%.16lx, rcx: 0x%.16lx, rdx: 0x%.16lx", frame->rax, frame->rbx, frame->rcx, frame->rdx);
+		terminal->printfBoth(true, "\033[0;31m│   rsi: 0x%.16lx, rdi: 0x%.16lx, r8:  0x%.16lx, r9:  0x%.16lx", frame->rsi, frame->rdi, frame->r8, frame->r9);
+		terminal->printfBoth(true, "\033[0;31m│   r10: 0x%.16lx, r11: 0x%.16lx, r12: 0x%.16lx, r13: 0x%.16lx", frame->r10, frame->r11, frame->r12, frame->r13);
+		terminal->printfBoth(true, "\033[0;31m│   r14: 0x%.16lx, r15: 0x%.16lx", frame->r14, frame->r15);
 		terminal->printfBoth(true, "\033[0;31m│   rbp: 0x%.16lx", frame->rbp);
 		terminal->printfBoth(true, "\033[0;31m│   rsp: 0x%.16lx", frame->rsp);
+		terminal->printfBoth(true, "\033[0;31m│   cs:  0x%.16lx, ss:  0x%.16lx, rflags: 0x%.16lx", frame->cs, frame->ss, frame->rFlags);
+		terminal->printfBoth(true, "\033[0;31m│   ds:  0x%.4x, es:  0x%.4x, fs:  0x%.4x, gs:  0x%.4x", ds, es, fs, gs);
 		terminal->printfBoth(true, "\033[0;31m│   cr2: 0x%.16lx", Asm::readCr2());
 		terminal->printfBoth(true, "\033[0;31m│   cr3: 0x%.16lx", Asm::readCr3());
 		terminal->printfBoth(true, "\033[0;31m│   UGS: 0x%.16lx", Asm::rdmsr(UGSBAS));

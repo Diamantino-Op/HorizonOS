@@ -18,6 +18,8 @@
 
 #include "CommonMain.hpp"
 #include "Time.hpp"
+#include "hal/IOPort.hpp"
+#include "hal/Serial.hpp"
 
 namespace kernel::common {
 	using namespace memory;
@@ -55,6 +57,10 @@ namespace kernel::common {
 	 		0,
 	 		0,
 	 		0);
+
+		const int ret = Serial::setupEarlySerial(0x3F8, true);
+
+		x86_64::hal::IOPort::out8('a' + static_cast<char>(ret), 0x3F8);
 	}
 
 	bool Terminal::lock() {
@@ -84,7 +90,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::putChar(int c, void *) {
-		constexpr u16 com1Port = 0x3F8;
+		constexpr u16 com1Port = 0x2F8;
 
 	 	if (flantermCtx != nullptr) {
 	 		flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
@@ -95,25 +101,29 @@ namespace kernel::common {
 	}
 
 	void Terminal::putCharE9(int c, void *) {
-		constexpr u16 e9Port = 0xe9;
+		/*constexpr u16 e9Port = 0xe9;
 
 		// TODO: Only x86_64
-		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
+		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));*/
+
+		Serial::serialSend(&Serial::earlyconSerial, static_cast<char>(c));
 	}
 
 	void Terminal::putCharBoth(int c, void *) {
-		constexpr u16 e9Port = 0xe9;
+		//constexpr u16 e9Port = 0xe9;
 
 		if (flantermCtx != nullptr) {
 			flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 		}
 
 		// TODO: Only x86_64
-		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
+		//asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(e9Port));
+
+		Serial::serialSend(&Serial::earlyconSerial, static_cast<char>(c));
 	}
 
 	void Terminal::putCharCOM2(int c, void *ctx) {
-		constexpr u16 com2Port = 0x2F8;
+		constexpr u16 com2Port = 0x3E8;
 
 		// TODO: Only x86_64
 		asm volatile ("outb %0, %1" : : "a"(static_cast<char>(c)), "d"(com2Port));
