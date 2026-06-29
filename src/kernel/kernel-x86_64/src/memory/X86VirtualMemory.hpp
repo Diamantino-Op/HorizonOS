@@ -5,6 +5,15 @@
 
 #include "memory/VirtualMemory.hpp"
 
+#define IA32_PAT 0x277
+
+#define PAT_TYPE_UC   0x00
+#define PAT_TYPE_WC   0x01
+#define PAT_TYPE_WT   0x04
+#define PAT_TYPE_WP   0x05
+#define PAT_TYPE_WB   0x06
+#define PAT_TYPE_UCM  0x07
+
 namespace kernel::x86_64::memory {
 	using namespace common::memory;
 

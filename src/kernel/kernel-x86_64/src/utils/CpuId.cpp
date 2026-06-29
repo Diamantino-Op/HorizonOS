@@ -108,4 +108,10 @@ namespace kernel::x86_64::utils {
 
 		return res.ecx;
 	}
+
+	bool CpuId::hasPAT() {
+		const CpuIdResult res = get(0x01, 0x00);
+
+		return res.edx & (1 << 16);
+	}
 }

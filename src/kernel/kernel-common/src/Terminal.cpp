@@ -250,14 +250,23 @@ namespace kernel::common {
 		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
-			this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+			/*this->printfE9(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
 
 			va_list val;
 			va_start(val, id);
 			npf_vpprintf(putCharE9, nullptr, format, val);
 			va_end(val);
 
-			this->printfE9(true, "\033[0m");
+			this->printfE9(true, "\033[0m");*/
+
+			this->printfBoth(false, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);
+
+			va_list val;
+			va_start(val, id);
+			npf_vpprintf(putCharBoth, nullptr, format, val);
+			va_end(val);
+
+			this->printfBoth(true, "\033[0m");
 
 			this->unlock(prevIF);
 		}
@@ -367,7 +376,8 @@ namespace kernel::common {
 
 			switch (message.type) {
 				case MessageType::DEBUG:
-					terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+					//terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+					terminal->printfBoth(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
 
 					break;
 

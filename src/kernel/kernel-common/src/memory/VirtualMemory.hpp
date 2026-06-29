@@ -67,8 +67,12 @@ namespace kernel::common::memory {
 
         u64 getVirtualKernelAddr() const;
 
+    	static void initPAT();
+
     private:
         void init();
+
+    	static u64 patEntry(u8 index, u8 type);
 
         u64 kernelAddrPhys {};
         u64 kernelAddrVirt {};

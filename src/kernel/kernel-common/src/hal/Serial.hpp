@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Evalyn Goemer & EvalynOS Contributors
+// https://git.evalyngoemer.com/evalynOS/evalynOS/src/branch/main/kernel/src/drivers/16550uart.h
 
 #ifndef KERNEL_COMMON_SERIAL_HPP
 #define KERNEL_COMMON_SERIAL_HPP
@@ -85,10 +86,6 @@ namespace kernel::common::hal {
 		static void serialSend(SerialCtx* ctx, char c);
 
 		static SerialCtx earlyconSerial;
-
-	private:
-		static volatile u8 serialBufferIndex;
-		static volatile char serialBuffer[256];
 	};
 }
 

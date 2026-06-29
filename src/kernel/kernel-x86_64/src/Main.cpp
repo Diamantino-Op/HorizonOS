@@ -108,6 +108,8 @@ namespace kernel::x86_64 {
 
 		terminal.info("Allocator Context created...", "HorizonOS");
 
+		VirtualMemoryManager::initPAT();
+
 		// Virtual Memory
 		this->virtualMemoryManager = VirtualMemoryManager(this->stackTop);
 
@@ -341,6 +343,8 @@ namespace kernel::x86_64 {
 	// Multicore
 
 	void CoreKernel::init() {
+		VirtualMemoryManager::initPAT();
+		
 		auto *commonKernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		Terminal* terminal = CommonMain::getTerminal();
 

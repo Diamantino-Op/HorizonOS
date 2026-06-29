@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Evalyn Goemer & EvalynOS Contributors
+// https://git.evalyngoemer.com/evalynOS/evalynOS/src/branch/main/kernel/src/drivers/16550uart.c
 
 #include "hal/Serial.hpp"
 
@@ -10,14 +11,12 @@ namespace kernel::common::hal {
 	using namespace utils;
 
 	SerialCtx Serial::earlyconSerial {};
-	volatile u8 Serial::serialBufferIndex {};
-	volatile char Serial::serialBuffer[256] {};
 
 	namespace {
 		void serialWriteReg(const SerialCtx *ctx, const u8 reg, u8 data) {
 #ifdef __x86_64__
 			if (ctx->portIO) {
-				x86_64::hal::IOPort::outd8(ctx->addr + reg, data);
+				x86_64::hal::IOPort::outd8(data, static_cast<u16>(ctx->addr + reg));
 			} else {
 				MMIO::write(ctx->addr + reg, data, sizeof(u8));
 			}

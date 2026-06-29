@@ -180,7 +180,8 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                 output: [
                                     'name_registry.sym',
                                     'uacpi.sym',
-                                    'pci.sym'
+                                    'pci.sym',
+                                    'nvme.sym'
                                 ],
                                 input: [
                                     name_registry_exe,
@@ -199,7 +200,9 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                 ],
                                 depends: [
                                     name_registry_exe,
-                                    uacpi_exe
+                                    uacpi_exe,
+                                    pci_exe,
+                                    nvme_exe
                                 ]
 )
 
@@ -249,7 +252,7 @@ install_apps = custom_target('install_apps',
     ],
     depends: [
         hello_world_exe,
-        create_services_sym_file,
+        #create_services_sym_file,
         name_registry_exe,
         uacpi_exe,
         pci_exe,

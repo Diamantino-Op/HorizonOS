@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Evalyn Goemer & EvalynOS Contributors
+// https://git.evalyngoemer.com/evalynOS/evalynOS/src/branch/main/kernel/src/utils/dstruct/bstree.h
 
 #ifndef LIB_HOS_BASE_BSTREE_HPP
 #define LIB_HOS_BASE_BSTREE_HPP

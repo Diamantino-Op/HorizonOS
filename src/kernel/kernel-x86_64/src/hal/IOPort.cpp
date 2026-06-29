@@ -102,6 +102,6 @@ namespace kernel::x86_64::hal {
 	}
 
 	void IOPort::ioWait() {
-		out8(0x80, 0);
+		out8(0, 0x80);
 	}
 }

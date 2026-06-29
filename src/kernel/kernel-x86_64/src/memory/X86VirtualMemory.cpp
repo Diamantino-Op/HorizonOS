@@ -4,6 +4,7 @@
 #include "hal/Syscall.hpp"
 #include "memory/MainMemory.hpp"
 #include "utils/Asm.hpp"
+#include "utils/CpuId.hpp"
 
 extern limine_paging_mode_request pagingModeRequest;
 
@@ -20,6 +21,24 @@ namespace kernel::common::memory {
 		terminal->debug("Current HHDM Offset: %lp", "VMM", CommonMain::getCurrentHhdm());
 
 		this->init();
+	}
+
+	void VirtualMemoryManager::initPAT() {
+		Terminal* terminal = CommonMain::getTerminal();
+
+		if (not CpuId::hasPAT()) {
+			terminal->warn("PAT not supported!", "VMM");
+
+			return;
+		}
+
+		const u64 pat = patEntry(0, PAT_TYPE_WB) | patEntry(1, PAT_TYPE_WC) | patEntry(2, PAT_TYPE_UCM) | patEntry(3, PAT_TYPE_UC) | patEntry(4, PAT_TYPE_WB) | patEntry(5, PAT_TYPE_WT) | patEntry(6, PAT_TYPE_UCM) | patEntry(7, PAT_TYPE_UC);
+
+		Asm::wrmsr(IA32_PAT, pat);
+	}
+
+	auto VirtualMemoryManager::patEntry(const u8 index, const u8 type) -> u64 {
+		return (static_cast<u64>(type)) << (index * 8);
 	}
 
 	void PageMap::init(u64 *newPageTable, const u64 newPhysPageTable, AllocContext *ctx, const bool newIsKernel) {
