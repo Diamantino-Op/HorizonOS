@@ -26,7 +26,7 @@ auto addEcamSegment(const uint64_t physBase, const uint16_t seg, const uint8_t s
     const size_t mapSize  = busCount * 256U * 8U * 4096U;
 
     uint64_t virt = 0;
-    if (mmap_phys(physBase, mapSize, &virt, false) != 0) {
+    if (mmap_phys(physBase, mapSize, &virt, false, MMapCacheMode::MAP_CACHE_UC) != 0) {
         printf("PCI: ECAM mmap_phys failed for segment %u (base=%lx)\n", seg, physBase);
 
         return false;

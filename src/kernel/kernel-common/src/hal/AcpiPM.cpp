@@ -88,7 +88,7 @@ namespace kernel::common::hal {
 			if (this->timerBlockMapped == nullptr) {
 				this->timerBlockMapped = reinterpret_cast<u32 *>(timerBlock.address + CommonMain::getCurrentHhdm());
 
-				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(reinterpret_cast<u64>(this->timerBlockMapped), timerBlock.address, 0b00000011, true, false);
+				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(reinterpret_cast<u64>(this->timerBlockMapped), timerBlock.address, 0b00000011, true, false, PageCacheMode::Uncacheable);
 
 				if (this->timerBlockMapped == nullptr) {
 					return false;

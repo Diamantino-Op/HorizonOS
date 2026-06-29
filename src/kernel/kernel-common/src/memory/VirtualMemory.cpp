@@ -6,6 +6,7 @@
 
 #include "limine.h"
 
+extern limine_framebuffer_request framebufferRequest;
 extern limine_executable_address_request kernelAddressRequest;
 extern limine_memmap_request memMapRequest;
 
@@ -18,6 +19,22 @@ namespace kernel::common::memory {
 		PageMap *currentPageMap = &CommonMain::getInstance()->getKernelAllocContext()->pageMap;
 
 		terminal->debug("Main page table allocated at: 0x%.16lx", "VMM", currentPageMap->getPageTable());
+
+		if (framebufferRequest.response != nullptr) {
+			for (u64 fbId = 0; fbId < framebufferRequest.response->framebuffer_count; fbId++) {
+				const limine_framebuffer *fb = framebufferRequest.response->framebuffers[fbId];
+
+				const u64 framebufferStartAligned = alignDown<u64>(reinterpret_cast<u64>(fb->address), pageSize);
+				const u64 framebufferEndAligned = alignUp<u64>(reinterpret_cast<u64>(fb->address) + (fb->pitch * fb->height), pageSize);
+
+				for (u64 i = framebufferStartAligned; i < framebufferEndAligned; i += pageSize) {
+					currentPageMap->mapPage(i, i - this->kernelAddrVirt + this->kernelAddrPhys, 0b00000001, true, false);
+				}
+
+				terminal->debug("Framebuffer %lu mapped: Start: 0x%.16lx, End: 0x%.16lx", "VMM", fbId, framebufferStartAligned, framebufferEndAligned);
+			}
+		}
+
 		terminal->debug("Kernel Stack Top Address: 0x%.16lx", "VMM", this->kernelStackTop);
 
 		if (kernelAddressRequest.response != nullptr) {

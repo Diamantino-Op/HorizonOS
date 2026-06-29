@@ -45,7 +45,7 @@ auto uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) -> void 
 	for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
 		const u64 virtAddr = i + hhdmBase;
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(virtAddr, i, 0b00000011, false, false);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(virtAddr, i, 0b00000011, false, false, PageCacheMode::Uncacheable);
 		kernel::x86_64::utils::Asm::invalidatePage(virtAddr);
 	}
 

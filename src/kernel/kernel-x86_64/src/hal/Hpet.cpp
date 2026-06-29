@@ -34,7 +34,7 @@ namespace kernel::x86_64::hal {
 		terminal->debug("	Phys: 0x%.16lx", "Hpet", this->physAddr);
 		terminal->debug("	Virt: 0x%.16lx", "Hpet", this->virtAddr);
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->virtAddr, this->physAddr, 0b00000011, true, false); // TODO: Maybe use MMIO flags
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->virtAddr, this->physAddr, 0b00000011, true, false, PageCacheMode::Uncacheable);
 
 		const u64 cap = read(regCap);
 

@@ -342,7 +342,7 @@ namespace kernel::common::memory {
 				targetEntry = &lvl2Table->entries[lvl2];
 			} else {
 				auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
-				
+
 				if (!lvl1Table->entries[lvl1].present) {
 					return false;
 				}

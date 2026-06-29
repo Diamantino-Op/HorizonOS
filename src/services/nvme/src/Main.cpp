@@ -415,7 +415,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		    // 4. Map MMIO
 		    uint64_t mmioVirt = 0;
-		    if (mmap_phys(barPhys, barSize, &mmioVirt, false) != 0) {
+		    if (mmap_phys(barPhys, barSize, &mmioVirt, false, MMapCacheMode::MAP_CACHE_UC) != 0) {
 		    	pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
 
 		        printf("NVMe: Failed to map BAR0 for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);

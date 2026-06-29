@@ -413,13 +413,19 @@ namespace kernel::common::hal {
 
 		if (addr == 0) {
 			addr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
-		} else if (ctx->pageMap.getPhysAddress(addr) == 0) {
+		} else if (ctx->pageMap.getPhysAddress(addr) != 0) {
 			*ret = MAP_FAILED;
 
 			return EEXIST;
 		}
 
 		if (static_cast<bool>(flags & MAP_ANON) and offset != 0) {
+			*ret = MAP_FAILED;
+
+			return EINVAL;
+		}
+
+		if (size > ~0ULL - addr || addr + size > ~0ULL - (pageSize - 1)) {
 			*ret = MAP_FAILED;
 
 			return EINVAL;
@@ -1150,6 +1156,10 @@ namespace kernel::common::hal {
 		}
 
 		const u64 endAddr = physAddr + len;
+		if (endAddr > ~0ULL - (pageSize - 1)) {
+			return EINVAL;
+		}
+
 		const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
 		const u64 hhdmBase = CommonMain::getCurrentHhdm();
 		auto cacheMode = PageCacheMode::WriteBack;
@@ -1196,34 +1206,32 @@ namespace kernel::common::hal {
 
 			const u64 remaining = roundedLen - i;
 			u64 mappingSize = pageSize;
+			bool mapped = false;
+
+			const auto tryMapHuge = [&](const u64 hugeSize) {
+				if (!kernelCtx->pageMap.mapHugePage(virtAddr, i, hugeSize, 0b00000111, false, false, cacheMode)) {
+					return false;
+				}
+
+				if (!processCtx->pageMap.mapHugePage(virtAddr, i, hugeSize, 0b00000111, false, false, cacheMode)) {
+					kernelCtx->pageMap.unMapPage(virtAddr, false);
+					return false;
+				}
+
+				mappingSize = hugeSize;
+				mapped = true;
+				return true;
+			};
 
 			if (remaining >= hugePageSize1GiB && (i & (hugePageSize1GiB - 1)) == 0 && (virtAddr & (hugePageSize1GiB - 1)) == 0) {
-				const bool kernelMapped = kernelCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize1GiB, 0b00000111, false, false, cacheMode);
-				const bool processMapped = processCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize1GiB, 0b00000111, false, false, cacheMode);
+				tryMapHuge(hugePageSize1GiB);
+			}
 
-				if (!kernelMapped || !processMapped) {
-					if (kernelMapped) {
-						kernelCtx->pageMap.unMapPage(virtAddr, false);
-					}
+			if (!mapped && remaining >= hugePageSize2MiB && (i & (hugePageSize2MiB - 1)) == 0 && (virtAddr & (hugePageSize2MiB - 1)) == 0) {
+				tryMapHuge(hugePageSize2MiB);
+			}
 
-					return EEXIST;
-				}
-
-				mappingSize = hugePageSize1GiB;
-			} else if (remaining >= hugePageSize2MiB && (i & (hugePageSize2MiB - 1)) == 0 && (virtAddr & (hugePageSize2MiB - 1)) == 0) {
-				const bool kernelMapped = kernelCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize2MiB, 0b00000111, false, false, cacheMode);
-				const bool processMapped = processCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize2MiB, 0b00000111, false, false, cacheMode);
-
-				if (!kernelMapped || !processMapped) {
-					if (kernelMapped) {
-						kernelCtx->pageMap.unMapPage(virtAddr, false);
-					}
-
-					return EEXIST;
-				}
-
-				mappingSize = hugePageSize2MiB;
-			} else {
+			if (!mapped) {
 				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
 				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
 			}

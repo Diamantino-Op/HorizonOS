@@ -53,7 +53,7 @@ namespace kernel::x86_64::hal {
 				terminal->debug("	Phys: 0x%.16lx", "Apic", this->physMmio);
 				terminal->debug("	Virt: 0x%.16lx", "Apic", this->mmio);
 
-				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, this->physMmio, 0b00000011, true, false); // TODO: Maybe use MMIO flags
+				CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, this->physMmio, 0b00000011, true, false, PageCacheMode::Uncacheable);
 			} else {
 				this->mmio = sharedLapicMmio;
 
@@ -249,7 +249,7 @@ namespace kernel::x86_64::hal {
 		terminal->debug("	Phys: 0x%.16lx", "IOApic", physMmio);
 		terminal->debug("	Virt: 0x%.16lx", "IOApic", this->mmio);
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, physMmio, 0b00000011, true, false); // TODO: Maybe use MMIO flags
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(this->mmio, physMmio, 0b00000011, true, false, PageCacheMode::Uncacheable);
 
 		this->redirects = ((this->read(0x01) >> 16) & 0xFF) + 1;
 
