@@ -13,6 +13,18 @@ namespace kernel::common::memory {
 	using namespace x86_64::memory;
 	using namespace x86_64::utils;
 
+	namespace {
+		constexpr u64 pageEntryAddrMask = 0x000FFFFFFFFFF000;
+		constexpr u64 pageEntryWriteThrough = 1ULL << 3;
+		constexpr u64 pageEntryCacheDisabled = 1ULL << 4;
+		constexpr u64 pageEntryPat4KiB = 1ULL << 7;
+		constexpr u64 pageEntryPatHuge = 1ULL << 12;
+
+		bool isAligned(const u64 value, const u64 alignment) {
+			return (value & (alignment - 1)) == 0;
+		}
+	}
+
 	void VirtualMemoryManager::archInit() {
 		Terminal* terminal = CommonMain::getTerminal();
 
@@ -81,7 +93,7 @@ namespace kernel::common::memory {
 		Asm::writeCr3(this->physPageTable);
 	}
 
-	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec) {
+	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -92,13 +104,28 @@ namespace kernel::common::memory {
 
 		if (this->isLevel5Paging) {
 			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, global, noExec));
+			if (lvl5Table == nullptr) {
+				return;
+			}
+
 			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(lvl5Table), lvl4, flags, global, noExec));
 		} else {
 			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl4, flags, global, noExec));
 		}
 
+		if (pdpt == nullptr) {
+			return;
+		}
+
 		auto *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, global, noExec));
+		if (pd == nullptr) {
+			return;
+		}
+
 		auto *pt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pd), lvl2, flags, global, noExec));
+		if (pt == nullptr) {
+			return;
+		}
 
 		pt->entries[lvl1].executeDisable = noExec;
 		pt->entries[lvl1].global = global;
@@ -106,14 +133,75 @@ namespace kernel::common::memory {
 		this->setPageFlags(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), flags);
 
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
+		this->setPageCacheMode(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), cacheMode, false);
 
 		if (not isKernel) {
 			this->pageTree.insert(vAddr, 1, reinterpret_cast<u64 *>(this->allocCtx), allocateRBTreeNode);
 		}
 	}
 
-	// TODO: Free pages
-	void PageMap::unMapPage(const u64 vAddr, bool freePage) {
+	bool PageMap::mapHugePage(const u64 vAddr, const u64 pAddr, const u64 hugeSize, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
+		if ((hugeSize != hugePageSize2MiB and hugeSize != hugePageSize1GiB) or not isAligned(vAddr, hugeSize) or not isAligned(pAddr, hugeSize)) {
+			return false;
+		}
+
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
+		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
+		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
+		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
+
+		PageTable *pdpt = nullptr;
+
+		if (this->isLevel5Paging) {
+			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, global, noExec));
+			if (lvl5Table == nullptr) {
+				return false;
+			}
+
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(lvl5Table), lvl4, flags, global, noExec));
+		} else {
+			pdpt = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl4, flags, global, noExec));
+		}
+
+		if (pdpt == nullptr) {
+			return false;
+		}
+
+		PageEntry *targetEntry = nullptr;
+
+		if (hugeSize == hugePageSize1GiB) {
+			targetEntry = &pdpt->entries[lvl3];
+		} else {
+			auto *pd = reinterpret_cast<PageTable *>(getOrCreatePageTable(reinterpret_cast<uPtr *>(pdpt), lvl3, flags, global, noExec));
+
+			if (pd == nullptr) {
+				return false;
+			}
+
+			targetEntry = &pd->entries[lvl2];
+		}
+
+		if (targetEntry->present) {
+			return false;
+		}
+
+		targetEntry->executeDisable = noExec;
+		targetEntry->global = global;
+
+		this->setPageFlags(reinterpret_cast<uPtr *>(targetEntry), flags);
+
+		targetEntry->size = 1;
+		targetEntry->address = (pAddr >> 12) & 0xFFFFFFFFFF;
+		this->setPageCacheMode(reinterpret_cast<uPtr *>(targetEntry), cacheMode, true);
+
+		if (not isKernel) {
+			this->pageTree.insert(vAddr, hugeSize / pageSize, reinterpret_cast<u64 *>(this->allocCtx), allocateRBTreeNode);
+		}
+
+		return true;
+	}
+
+	void PageMap::unMapPage(const u64 vAddr, const bool freePage) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -137,20 +225,60 @@ namespace kernel::common::memory {
 			return;
 		}
 
-		const auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + CommonMain::getCurrentHhdm());
+		auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + CommonMain::getCurrentHhdm());
 		if (!lvl3Table->entries[lvl3].present) {
 			return;
 		}
 
-		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
+		if (lvl3Table->entries[lvl3].size) {
+			if (freePage) {
+				const u64 physAddr = getEntryPhysAddress(&lvl3Table->entries[lvl3], true);
+
+				memset(&lvl3Table->entries[lvl3], 0, sizeof(lvl3Table->entries[lvl3]));
+
+				if (physAddr != 0) {
+					CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(physAddr), hugePageSize1GiB / pageSize);
+				}
+			} else {
+				memset(&lvl3Table->entries[lvl3], 0, sizeof(lvl3Table->entries[lvl3]));
+			}
+
+			if (not isKernel) {
+				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
+			}
+
+			return;
+		}
+
+		auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
 		if (!lvl2Table->entries[lvl2].present) {
+			return;
+		}
+
+		if (lvl2Table->entries[lvl2].size) {
+			if (freePage) {
+				const u64 physAddr = getEntryPhysAddress(&lvl2Table->entries[lvl2], true);
+
+				memset(&lvl2Table->entries[lvl2], 0, sizeof(lvl2Table->entries[lvl2]));
+
+				if (physAddr != 0) {
+					CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(physAddr), hugePageSize2MiB / pageSize);
+				}
+			} else {
+				memset(&lvl2Table->entries[lvl2], 0, sizeof(lvl2Table->entries[lvl2]));
+			}
+
+			if (not isKernel) {
+				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
+			}
+
 			return;
 		}
 
 		auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
 		if (lvl1Table->entries[lvl1].present) {
 			if (freePage) {
-				const u64 physAddr = lvl1Table->entries[lvl1].address << 12;
+				const u64 physAddr = getEntryPhysAddress(&lvl1Table->entries[lvl1], false);
 				const bool hadAddr = lvl1Table->entries[lvl1].address != 0;
 
 				memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
@@ -175,10 +303,11 @@ namespace kernel::common::memory {
 		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
 		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
 
-		PageTable *lvl4Table = nullptr;
+		const PageTable *lvl4Table = nullptr;
 
 		if (this->isLevel5Paging) {
 			auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
+
 			if (!lvl5Table->entries[lvl5].present) {
 				return false;
 			}
@@ -193,6 +322,7 @@ namespace kernel::common::memory {
 		}
 
 		auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + CommonMain::getCurrentHhdm());
+
 		if (!lvl3Table->entries[lvl3].present) {
 			return false;
 		}
@@ -203,6 +333,7 @@ namespace kernel::common::memory {
 			targetEntry = &lvl3Table->entries[lvl3];
 		} else {
 			auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
+
 			if (!lvl2Table->entries[lvl2].present) {
 				return false;
 			}
@@ -211,6 +342,7 @@ namespace kernel::common::memory {
 				targetEntry = &lvl2Table->entries[lvl2];
 			} else {
 				auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
+				
 				if (!lvl1Table->entries[lvl1].present) {
 					return false;
 				}
@@ -257,7 +389,7 @@ namespace kernel::common::memory {
 		}
 
 		if (lvl3Table->entries[lvl3].size) {
-			return (lvl3Table->entries[lvl3].address << 12) + (vAddr & 0x3FFFFFFF);
+			return getEntryPhysAddress(&lvl3Table->entries[lvl3], true) + (vAddr & (hugePageSize1GiB - 1));
 		}
 
 		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
@@ -266,7 +398,7 @@ namespace kernel::common::memory {
 		}
 
 		if (lvl2Table->entries[lvl2].size) {
-			return (lvl2Table->entries[lvl2].address << 12) + (vAddr & 0x1FFFFF);
+			return getEntryPhysAddress(&lvl2Table->entries[lvl2], true) + (vAddr & (hugePageSize2MiB - 1));
 		}
 
 		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
@@ -274,7 +406,7 @@ namespace kernel::common::memory {
 			return 0;
 		}
 
-		return (lvl1Table->entries[lvl1].address << 12) + (vAddr & 0xFFF);
+		return getEntryPhysAddress(&lvl1Table->entries[lvl1], false) + (vAddr & 0xFFF);
 	}
 
 	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
@@ -294,6 +426,10 @@ namespace kernel::common::memory {
 
 			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF;
 		} else {
+			if (parentTable->entries[index].size) {
+				return nullptr;
+			}
+
 			// TODO: Maybe add more flags
 			auto *pageEntry = &parentTable->entries[index];
             pageEntry->writeable |= (flags >> 1) & 1;
@@ -315,6 +451,41 @@ namespace kernel::common::memory {
 		pageEntry->accessed = (flags >> 5) & 1;
 		pageEntry->dirty = (flags >> 6) & 1;
 		pageEntry->size = (flags >> 7) & 1;
+	}
+
+	void PageMap::setPageCacheMode(u64 *pageAddr, const PageCacheMode cacheMode, const bool isHugePage) {
+		u64 cacheFlags = 0;
+
+		switch (cacheMode) {
+			case PageCacheMode::WriteBack:
+				cacheFlags = 0;
+				break;
+
+			case PageCacheMode::WriteCombining:
+				cacheFlags = pageEntryWriteThrough;
+				break;
+
+			case PageCacheMode::Uncacheable:
+				cacheFlags = pageEntryWriteThrough | pageEntryCacheDisabled;
+				break;
+
+			case PageCacheMode::WriteThrough:
+				cacheFlags = pageEntryWriteThrough | (isHugePage ? pageEntryPatHuge : pageEntryPat4KiB);
+				break;
+		}
+
+		const u64 patBit = isHugePage ? pageEntryPatHuge : pageEntryPat4KiB;
+		*pageAddr = (*pageAddr & ~(pageEntryWriteThrough | pageEntryCacheDisabled | patBit)) | cacheFlags;
+	}
+
+	u64 PageMap::getEntryPhysAddress(const void *entry, const bool isHugePage) {
+		u64 physAddr = *reinterpret_cast<const u64 *>(entry) & pageEntryAddrMask;
+
+		if (isHugePage) {
+			physAddr &= ~pageEntryPatHuge;
+		}
+
+		return physAddr;
 	}
 
 	u64 PageMap::getAddr() const {

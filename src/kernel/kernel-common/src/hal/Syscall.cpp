@@ -1124,7 +1124,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	auto SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, const u64 isHhdm, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+	auto SyscallManager::syscallMMapPhys(long *ret, const u64 physAddr, const u64 len, const u64 isHhdm, const u64 cacheModeRaw, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1152,6 +1152,28 @@ namespace kernel::common::hal {
 		const u64 endAddr = physAddr + len;
 		const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
 		const u64 hhdmBase = CommonMain::getCurrentHhdm();
+		auto cacheMode = PageCacheMode::WriteBack;
+
+		switch (cacheModeRaw) {
+			case MAP_CACHE_WB:
+				cacheMode = PageCacheMode::WriteBack;
+				break;
+
+			case MAP_CACHE_WC:
+				cacheMode = PageCacheMode::WriteCombining;
+				break;
+
+			case MAP_CACHE_UC:
+				cacheMode = PageCacheMode::Uncacheable;
+				break;
+
+			case MAP_CACHE_WT:
+				cacheMode = PageCacheMode::WriteThrough;
+				break;
+
+			default:
+				return EINVAL;
+		}
 
 		// TODO: Check if it should be used before re-mapping it
 
@@ -1163,24 +1185,56 @@ namespace kernel::common::hal {
 			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize + pageOffset;
 		}
 
-		for (u64 i = alignedAddr; i < roundedLen; i += pageSize) {
+		for (u64 i = alignedAddr; i < roundedLen;) {
+			u64 virtAddr = 0;
+
 			if (static_cast<bool>(isHhdm)) {
-				const u64 virtAddr = i + hhdmBase;
-
-				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
-				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
-
-				PageMap::invPg(virtAddr);
+				virtAddr = i + hhdmBase;
 			} else {
-				const u64 virtAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
-
-				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
-				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false);
-
-				if (virtAddr > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
-					Scheduler::getCurrentThread()->getParent()->topmostMappedPage = virtAddr;
-				}
+				virtAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
 			}
+
+			const u64 remaining = roundedLen - i;
+			u64 mappingSize = pageSize;
+
+			if (remaining >= hugePageSize1GiB && (i & (hugePageSize1GiB - 1)) == 0 && (virtAddr & (hugePageSize1GiB - 1)) == 0) {
+				const bool kernelMapped = kernelCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize1GiB, 0b00000111, false, false, cacheMode);
+				const bool processMapped = processCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize1GiB, 0b00000111, false, false, cacheMode);
+
+				if (!kernelMapped || !processMapped) {
+					if (kernelMapped) {
+						kernelCtx->pageMap.unMapPage(virtAddr, false);
+					}
+
+					return EEXIST;
+				}
+
+				mappingSize = hugePageSize1GiB;
+			} else if (remaining >= hugePageSize2MiB && (i & (hugePageSize2MiB - 1)) == 0 && (virtAddr & (hugePageSize2MiB - 1)) == 0) {
+				const bool kernelMapped = kernelCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize2MiB, 0b00000111, false, false, cacheMode);
+				const bool processMapped = processCtx->pageMap.mapHugePage(virtAddr, i, hugePageSize2MiB, 0b00000111, false, false, cacheMode);
+
+				if (!kernelMapped || !processMapped) {
+					if (kernelMapped) {
+						kernelCtx->pageMap.unMapPage(virtAddr, false);
+					}
+
+					return EEXIST;
+				}
+
+				mappingSize = hugePageSize2MiB;
+			} else {
+				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
+				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
+			}
+
+			if (static_cast<bool>(isHhdm)) {
+				PageMap::invPg(virtAddr);
+			} else if (virtAddr > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
+				Scheduler::getCurrentThread()->getParent()->topmostMappedPage = virtAddr + mappingSize - pageSize;
+			}
+
+			i += mappingSize;
 		}
 
 		*ret = static_cast<long>(retAddr);

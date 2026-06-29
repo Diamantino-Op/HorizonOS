@@ -13,6 +13,15 @@ extern char dataStart[], dataEnd[];
 
 namespace kernel::common::memory {
     constexpr u64 kernelStackSize = pageSize * 16; // 64 Kbit
+	constexpr u64 hugePageSize2MiB = 0x200000;
+	constexpr u64 hugePageSize1GiB = 0x40000000;
+
+	enum class PageCacheMode : u8 {
+		WriteBack,
+		WriteCombining,
+		Uncacheable,
+		WriteThrough
+	};
 
     struct AllocContext;
 
@@ -24,7 +33,9 @@ namespace kernel::common::memory {
 
         void load() const;
 
-        void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec);
+        void mapPage(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec, PageCacheMode cacheMode = PageCacheMode::WriteBack);
+
+		bool mapHugePage(u64 vAddr, u64 pAddr, u64 hugeSize, u8 flags, bool global, bool noExec, PageCacheMode cacheMode = PageCacheMode::WriteBack);
 
         void unMapPage(u64 vAddr, bool freePage = true);
 
@@ -43,7 +54,11 @@ namespace kernel::common::memory {
     	static void invPg(u64 page);
 
     private:
-        void setPageFlags(u64 * pageAddr, u8 flags);
+        void setPageFlags(u64 *pageAddr, u8 flags);
+
+		void setPageCacheMode(u64 *pageAddr, PageCacheMode cacheMode, bool isHugePage);
+
+		static u64 getEntryPhysAddress(const void *entry, bool isHugePage);
 
         u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
 
