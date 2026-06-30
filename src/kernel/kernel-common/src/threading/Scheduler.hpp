@@ -202,6 +202,10 @@ namespace kernel::common::threading {
 
     	u16 getId() const;
 
+#ifdef __x86_64__
+    	void updateTssPtrs(u64 rsp0) const;
+#endif
+
     private:
         u16 id {};
 
@@ -220,6 +224,10 @@ namespace kernel::common::threading {
 
     	u64 topmostMappedPage {};
         SignalAction signalActions[signalActionCount] {};
+
+#ifdef __x86_64__
+    	u64 *tssIopb {};
+#endif
     };
 
 	struct UleRunQueue {

@@ -282,7 +282,7 @@ namespace kernel::common::threading {
 		this->processContextKernel = ctkKern;
 	}
 
-	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), processContextOwned(false), priority(priority) {
+	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 	}
 
@@ -297,6 +297,11 @@ namespace kernel::common::threading {
 
 			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
 		}*/
+
+		if (this->tssIopb != nullptr) {
+			VirtualAllocator::free(this->processContext, this->tssIopb);
+			this->tssIopb = nullptr;
+		}
 
 		if (this->processContextOwned) {
 			VirtualAllocator::destroyContext(this->processContext);

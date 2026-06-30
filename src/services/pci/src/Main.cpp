@@ -274,8 +274,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciSearchDeviceThread;
 
-	if (pthread_create(&pciSearchDeviceThread, nullptr, handleSearchDevice, &devices) != 0) {
-		printf("PCI: Failed to create pci search device message loop thread");
+	const int searchErrVal = pthread_create(&pciSearchDeviceThread, nullptr, handleSearchDevice, &devices);
+
+	if (searchErrVal != 0) {
+		printf("PCI: Failed to create pci search device message loop thread: %d", searchErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -285,8 +287,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
     pthread_t pciReadThread;
 
-    if (pthread_create(&pciReadThread, nullptr, handlePciRead, nullptr) != 0) {
-        printf("PCI: Failed to create pci read message loop thread");
+	const int readErrVal = pthread_create(&pciReadThread, nullptr, handlePciRead, nullptr);
+
+    if (readErrVal != 0) {
+        printf("PCI: Failed to create pci read message loop thread: %d", readErrVal);
     	fflush(stdout);
 
         return 1;
@@ -296,8 +300,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciWriteThread;
 
-	if (pthread_create(&pciWriteThread, nullptr, handlePciWrite, nullptr) != 0) {
-		printf("PCI: Failed to create pci write message loop thread");
+	const int writeErrVal = pthread_create(&pciWriteThread, nullptr, handlePciWrite, nullptr);
+
+	if (writeErrVal != 0) {
+		printf("PCI: Failed to create pci write message loop thread: %d", writeErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -307,8 +313,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsiAllocThread;
 
-	if (pthread_create(&pciMsiAllocThread, nullptr, handleMsiAlloc, nullptr) != 0) {
-		printf("PCI: Failed to create pci msi alloc message loop thread");
+	const int msiAllocErrVal = pthread_create(&pciMsiAllocThread, nullptr, handleMsiAlloc, nullptr);
+
+	if (msiAllocErrVal != 0) {
+		printf("PCI: Failed to create pci msi alloc message loop thread: %d", msiAllocErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -318,8 +326,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsiFreeThread;
 
-	if (pthread_create(&pciMsiFreeThread, nullptr, handleMsiFree, nullptr) != 0) {
-		printf("PCI: Failed to create pci msi free message loop thread");
+	const int msiFreeErrVal = pthread_create(&pciMsiFreeThread, nullptr, handleMsiFree, nullptr);
+
+	if (msiFreeErrVal != 0) {
+		printf("PCI: Failed to create pci msi free message loop thread: %d", msiFreeErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -329,8 +339,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsixAllocThread;
 
-	if (pthread_create(&pciMsixAllocThread, nullptr, handleMsixAlloc, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix alloc message loop thread");
+	const int msixAllocErrVal = pthread_create(&pciMsixAllocThread, nullptr, handleMsixAlloc, nullptr);
+
+	if (msixAllocErrVal != 0) {
+		printf("PCI: Failed to create pci msix alloc message loop thread: %d", msixAllocErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -340,8 +352,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsixFreeThread;
 
-	if (pthread_create(&pciMsixFreeThread, nullptr, handleMsixFree, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix free message loop thread");
+	const int msixFreeErrVal = pthread_create(&pciMsixFreeThread, nullptr, handleMsixFree, nullptr);
+
+	if (msixFreeErrVal != 0) {
+		printf("PCI: Failed to create pci msix free message loop thread: %d", msixFreeErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -351,8 +365,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsixGlobalEnableThread;
 
-	if (pthread_create(&pciMsixGlobalEnableThread, nullptr, handleMsixGlobalEnable, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix gobal enable message loop thread");
+	const int msixGlobalEnableErrVal = pthread_create(&pciMsixGlobalEnableThread, nullptr, handleMsixGlobalEnable, nullptr);
+
+	if (msixGlobalEnableErrVal != 0) {
+		printf("PCI: Failed to create pci msix gobal enable message loop thread: %d", msixGlobalEnableErrVal);
 		fflush(stdout);
 
 		return 1;
@@ -362,8 +378,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 
 	pthread_t pciMsixGlobalDisableThread;
 
-	if (pthread_create(&pciMsixGlobalDisableThread, nullptr, handleMsixGlobalDisable, nullptr) != 0) {
-		printf("PCI: Failed to create pci msix gobal disable message loop thread");
+	const int msixGlobalDisableErrVal = pthread_create(&pciMsixGlobalDisableThread, nullptr, handleMsixGlobalDisable, nullptr);
+
+	if (msixGlobalDisableErrVal != 0) {
+		printf("PCI: Failed to create pci msix gobal disable message loop thread: %d", msixGlobalDisableErrVal);
 		fflush(stdout);
 
 		return 1;

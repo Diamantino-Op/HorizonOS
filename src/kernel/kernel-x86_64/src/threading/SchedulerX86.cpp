@@ -28,6 +28,16 @@ namespace kernel::common::threading {
 		threadContext->~ThreadContext();
 	}
 
+	void Process::updateTssPtrs(const u64 rsp0) const {
+		const Tss *tssPtrs = CpuManager::getCurrentCore()->tssManager->getTss();
+
+		reinterpret_cast<TssIopb *>(this->tssIopb)->rsp[0] = rsp0;
+
+		for (u8 i = 0; i < 7; i++) {
+			reinterpret_cast<TssIopb *>(this->tssIopb)->ist[i] = tssPtrs->ist[i];
+		}
+	}
+
 	// TODO: Move to non arch
 	void Scheduler::initArch() {
 		CpuManager::getCurrentCore()->coreClock.addTimerHandle(&sleepTick, TimeUtils::msToNs(10));
@@ -156,7 +166,7 @@ namespace kernel::common::threading {
 			schedulerPtr->enqueueThread(oldThread);
 		}
 
-		if (oldThread != nullptr and reinterpret_cast<ThreadContext *>(oldThread->getContext())->threadTssIopb != nullptr) {
+		if (oldThread->getParent()->tssIopb != nullptr) {
 			this->oldThreadWasIopb = true;
 		}
 
@@ -193,7 +203,7 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::loadNewThread() {
-		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->getContext());
+		const auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->getContext());
 
 		ctx->load();
 
@@ -201,10 +211,10 @@ namespace kernel::common::threading {
 
 		core->kernelStack = this->currentThread->getSyscallStackPointer();
 
-		if (ctx->threadTssIopb != nullptr) {
-			ctx->updateTssPtrs(this->currentThread->getKStackPointer());
+		if (this->currentThread->getParent()->tssIopb != nullptr) {
+			this->currentThread->getParent()->updateTssPtrs(this->currentThread->getKStackPointer());
 
-			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(reinterpret_cast<TssIopb *>(this->currentThread->getParent()->tssIopb));
 
 			TssManager::updateTss();
 		} else {
@@ -360,11 +370,6 @@ namespace kernel::x86_64::threading {
 
 	ThreadContext::~ThreadContext() {
 		if (this->process != nullptr) {
-			if (this->threadTssIopb != nullptr) {
-				VirtualAllocator::free(this->process->getProcessContext(), reinterpret_cast<u64 *>(this->threadTssIopb));
-				this->threadTssIopb = nullptr;
-			}
-
 			this->process->pridAllocator.freePRID(this->prid);
 
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
@@ -384,14 +389,13 @@ namespace kernel::x86_64::threading {
 		}
 	}
 
-	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
+	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace, const bool threadOwnsKernelStack) {
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
 		this->userFsBase = 0;
 		this->process = proc;
-		this->threadTssIopb = nullptr;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
-		this->ownsKernelStack = ownsKernelStack;
+		this->ownsKernelStack = threadOwnsKernelStack;
 		this->process = proc;
 
 		const u64 simdSaveAllocSize = CpuId::getXSaveSize() + 64;
@@ -429,16 +433,6 @@ namespace kernel::x86_64::threading {
 
 	bool ThreadContext::isUserspace() const {
 		return this->isUser;
-	}
-
-	void ThreadContext::updateTssPtrs(const u64 rsp0) {
-		const Tss *tssPtrs = CpuManager::getCurrentCore()->tssManager->getTss();
-
-		this->threadTssIopb->rsp[0] = rsp0;
-
-		for (u8 i = 0; i < 7; i++) {
-			this->threadTssIopb->ist[i] = tssPtrs->ist[i];
-		}
 	}
 }
 
