@@ -134,7 +134,9 @@ namespace kernel::common::hal {
 					continue;
 				}
 
-				seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
+				if (ctx->threadTssIopb != nullptr) {
+					seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
+				}
 			}
 		}
 
@@ -150,9 +152,7 @@ namespace kernel::common::hal {
 					continue;
 				}
 
-				if (ctx->threadTssIopb == nullptr) {
-					seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
-				} else {
+				if (ctx->threadTssIopb != nullptr) {
 					applyIopermRange(ctx->threadTssIopb, from, num, state);
 				}
 			}
