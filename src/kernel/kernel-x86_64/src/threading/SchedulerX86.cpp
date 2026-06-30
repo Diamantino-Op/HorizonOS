@@ -23,9 +23,9 @@ namespace kernel::common::threading {
 	}
 
 	void Thread::deleteThreadArch() const {
-		const ThreadContext *threadContext = reinterpret_cast<ThreadContext *>(this->context);
+		auto *threadContext = reinterpret_cast<ThreadContext *>(this->context);
 
-		delete threadContext;
+		threadContext->~ThreadContext();
 	}
 
 	// TODO: Move to non arch
@@ -368,10 +368,6 @@ namespace kernel::x86_64::threading {
 			this->process->pridAllocator.freePRID(this->prid);
 
 			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
-
-			if (this->ownsKernelStack) {
-				VirtualAllocator::free(process->getProcessContext(), reinterpret_cast<u64 *>(this->originalStackPointer));
-			}
 
 			if (this->isUser) {
 				const u64 startPage = alignDown<u64>(this->userStackPointer, pageSize);

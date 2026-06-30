@@ -273,7 +273,7 @@ namespace kernel::common::threading {
 
 	// Process
 
-	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), priority(priority) {
+	Process::Process(const ProcessPriority priority, const bool isUserspace) : isUserspace(isUserspace), processContextOwned(true), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 
 		auto [ctx, ctkKern] = VirtualAllocator::createProcessContext();
@@ -282,7 +282,7 @@ namespace kernel::common::threading {
 		this->processContextKernel = ctkKern;
 	}
 
-	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), priority(priority) {
+	Process::Process(const ProcessPriority priority, AllocContext *context) : processContext(context), processContextKernel(context), processContextOwned(false), priority(priority) {
 		this->id = PIDAllocator::allocPID();
 	}
 
@@ -298,7 +298,9 @@ namespace kernel::common::threading {
 			CommonMain::getInstance()->getScheduler()->killThread(newTmpEntry);
 		}*/
 
-		VirtualAllocator::destroyContext(this->processContext);
+		if (this->processContextOwned) {
+			VirtualAllocator::destroyContext(this->processContext);
+		}
 	}
 
 	void Process::setPriority(const ProcessPriority newPriority) {
@@ -315,6 +317,10 @@ namespace kernel::common::threading {
 
 	AllocContext *Process::getProcessContextKernel() const {
 		return this->processContextKernel;
+	}
+
+	bool Process::ownsProcessContext() const {
+		return this->processContextOwned;
 	}
 
 	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
@@ -451,7 +457,7 @@ namespace kernel::common::threading {
 			while (currProcessEntry != nullptr) {
 				const LinkedListEntry<Process> *tmpEntry = currProcessEntry->next;
 
-				if (currProcessEntry->value->threadList.getSize() == 0) {
+				if (currProcessEntry->value->ownsProcessContext() && currProcessEntry->value->threadList.getSize() == 0) {
 					Scheduler::getCurrentExecutionNode()->setDisabled(true);
 
 					scheduler->reaperProcessArch(currProcessEntry->value);
@@ -1013,4 +1019,3 @@ namespace kernel::common::threading {
 	    term->warnNoLock("=== END DUMP ===", "SchedDump");
 	}
 }
-

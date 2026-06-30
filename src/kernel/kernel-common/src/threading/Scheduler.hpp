@@ -192,11 +192,12 @@ namespace kernel::common::threading {
         void setPriority(ProcessPriority newPriority);
         ProcessPriority getPriority() const;
 
-    	AllocContext *getProcessContext() const;
+		AllocContext *getProcessContext() const;
 
-    	AllocContext *getProcessContextKernel() const;
+		AllocContext *getProcessContextKernel() const;
+		bool ownsProcessContext() const;
 
-    	LinkedListEntry<Thread> *addThread(Thread *entry);
+		LinkedListEntry<Thread> *addThread(Thread *entry);
     	void removeThread(Thread *entry);
 
     	u16 getId() const;
@@ -207,7 +208,8 @@ namespace kernel::common::threading {
     	bool isUserspace {};
 
         AllocContext *processContext {};
-    	AllocContext *processContextKernel {};
+		AllocContext *processContextKernel {};
+		bool processContextOwned {};
 
         ProcessPriority priority {};
 
