@@ -11,6 +11,54 @@ namespace kernel::x86_64::hal {
 	using namespace common;
 	using namespace utils;
 
+	namespace {
+		constexpr u64 minPlausibleTscFrequency = 100'000'000;
+		constexpr u64 maxPlausibleTscFrequency = 10'000'000'000;
+
+		bool plausibleTscFrequency(const u64 freq) {
+			return freq >= minPlausibleTscFrequency && freq <= maxPlausibleTscFrequency;
+		}
+
+		u64 cpuidTscFrequency() {
+			if (CpuId::get(0x00, 0).eax < 0x15) {
+				return 0;
+			}
+
+			const CpuIdResult res = CpuId::get(0x15, 0);
+
+			if (res.eax == 0 || res.ebx == 0 || res.ecx == 0) {
+				return 0;
+			}
+
+			return static_cast<u64>((static_cast<u128>(res.ecx) * res.ebx) / res.eax);
+		}
+
+		u64 measuredTscFrequency() {
+			const CalibratorFun calibrator = Clocks::getCalibrator();
+
+			if (calibrator == nullptr) {
+				return 0;
+			}
+
+			u64 freq = 0;
+			constexpr u64 times = 3;
+
+			for (u64 i = 0; i < times; i++) {
+				constexpr u64 millis = 50;
+
+				const u64 start = Tsc::read();
+
+				calibrator(millis);
+
+				const u64 end = Tsc::read();
+
+				freq += (end - start) * (1'000 / millis);
+			}
+
+			return freq / times;
+		}
+	}
+
 	bool Tsc::supported() {
 		return CpuId::get(0x80000007, 0).edx & (1 << 8);
 	}
@@ -35,34 +83,28 @@ namespace kernel::x86_64::hal {
 	void Tsc::calibrate() {
 		u64 freq = 0;
 
-		if (const CpuIdResult res = CpuId::get(0x15, 0); res.eax != 0 and res.ebx != 0 and res.ecx != 0) {
-			freq = res.ecx * res.ebx / res.eax;
-
-			this->calibrated = true;
-		} else if (reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->supported()) {
+		if (reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->supported()) {
 			freq = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getKvmClock()->tscFreq();
 
-			if (freq != 0) {
+			if (plausibleTscFrequency(freq)) {
 				this->calibrated = true;
 			}
-		} else if (const CalibratorFun calibrator = Clocks::getCalibrator(); calibrator != nullptr) {
-			constexpr u64 times = 3;
+		}
 
-			for (u64 i = 0; i < times; i++) {
-				constexpr u64 millis = 50;
+		if (!this->calibrated) {
+			freq = cpuidTscFrequency();
 
-				const u64 start = this->read();
-
-				calibrator(millis);
-
-				const u64 end = this->read();
-
-				freq += (end - start) * (1'000 / millis);
+			if (plausibleTscFrequency(freq)) {
+				this->calibrated = true;
 			}
+		}
 
-			freq /= times;
+		if (!this->calibrated) {
+			freq = measuredTscFrequency();
 
-			this->calibrated = true;
+			if (plausibleTscFrequency(freq)) {
+				this->calibrated = true;
+			}
 		}
 
 		if (this->calibrated) {

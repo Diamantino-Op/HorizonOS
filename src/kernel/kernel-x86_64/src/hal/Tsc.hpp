@@ -14,7 +14,7 @@ namespace kernel::x86_64::hal {
 
         static bool supported();
 
-        __attribute__((no_instrument_function)) u64 read();
+        __attribute__((no_instrument_function)) static u64 read();
         u64 getTimeNs();
 
         void calibrate();
