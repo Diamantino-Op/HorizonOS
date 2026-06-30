@@ -85,7 +85,70 @@ void processMcfg();
 
 extern void *handleIrqs(void *);
 
-bool waitForPciService() {
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&uacpiPort));
+
+	if (registerResult == 0) {
+		printf("uACPI: Successfully registered port!");
+		fflush(stdout);
+	} else {
+		printf("uACPI: Failed to register port: %d", registerResult);
+		fflush(stdout);
+
+		return 1;
+	}
+
+	{
+		// Send
+
+		auto newMsg = hos_msg();
+
+		auto registerData = RegisterMsgData();
+
+		registerData.ownerPid = getpid();
+		registerData.tid = static_cast<uint16_t>(gettid());
+		strncpy(registerData.name, string("uAcpi").c_str(), sizeof(registerData.name) - 1);
+		registerData.name[sizeof(registerData.name) - 1] = '\0';
+		registerData.nameLength = strlen(registerData.name) + 1;
+
+		newMsg.type = REGISTER_MSG_TYPE;
+		newMsg.port = 1;
+		newMsg.buffer = &registerData;
+		newMsg.length = sizeof(RegisterMsgData);
+
+		send_horizonos_message(uacpiPort, 1, &newMsg);
+
+		// Receive
+
+		auto recvMsg = hos_msg();
+
+		auto registerResData = RegisterReplyMsgData();
+
+		recvMsg.buffer = &registerResData;
+		recvMsg.length = sizeof(RegisterReplyMsgData);
+
+		auto filterOptions = filter_options();
+
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_REGISTER_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
+
+		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
+
+		if (srvRegisterResult == 0 and registerResData.success) {
+			printf("uACPI: Successfully registered service!");
+			fflush(stdout);
+		} else {
+			printf("uACPI: Failed to register service: %d", srvRegisterResult);
+			fflush(stdout);
+
+			delete[] filterOptions.whiteListTypes;
+
+			return 1;
+		}
+
+		delete[] filterOptions.whiteListTypes;
+	}
+
 	{
 		auto checkMsg = hos_msg();
 
@@ -173,73 +236,6 @@ bool waitForPciService() {
 		pciTid = getResData.tid;
 	}
 
-	return pciPort != 0;
-}
-
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
-	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&uacpiPort));
-
-	if (registerResult == 0) {
-		printf("uACPI: Successfully registered port!");
-		fflush(stdout);
-	} else {
-		printf("uACPI: Failed to register port: %d", registerResult);
-		fflush(stdout);
-
-		return 1;
-	}
-
-	{
-		// Send
-
-		auto newMsg = hos_msg();
-
-		auto registerData = RegisterMsgData();
-
-		registerData.ownerPid = getpid();
-		registerData.tid = static_cast<uint16_t>(gettid());
-		strncpy(registerData.name, string("uAcpi").c_str(), sizeof(registerData.name) - 1);
-		registerData.name[sizeof(registerData.name) - 1] = '\0';
-		registerData.nameLength = strlen(registerData.name) + 1;
-
-		newMsg.type = REGISTER_MSG_TYPE;
-		newMsg.port = 1;
-		newMsg.buffer = &registerData;
-		newMsg.length = sizeof(RegisterMsgData);
-
-		send_horizonos_message(uacpiPort, 1, &newMsg);
-
-		// Receive
-
-		auto recvMsg = hos_msg();
-
-		auto registerResData = RegisterReplyMsgData();
-
-		recvMsg.buffer = &registerResData;
-		recvMsg.length = sizeof(RegisterReplyMsgData);
-
-		auto filterOptions = filter_options();
-
-		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_REGISTER_MSG_TYPE };
-		filterOptions.whiteListCount = 1;
-
-		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvMsg, &filterOptions);
-
-		if (srvRegisterResult == 0 and registerResData.success) {
-			printf("uACPI: Successfully registered service!");
-			fflush(stdout);
-		} else {
-			printf("uACPI: Failed to register service: %d", srvRegisterResult);
-			fflush(stdout);
-
-			delete[] filterOptions.whiteListTypes;
-
-			return 1;
-		}
-
-		delete[] filterOptions.whiteListTypes;
-	}
-
 	pthread_t irqHandlerThread;
 
 	const int irqHandlerThreadResult = pthread_create(&irqHandlerThread, nullptr, handleIrqs, nullptr);
@@ -252,14 +248,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 
 	pthread_detach(irqHandlerThread);
-
-	//uacpi_context_set_log_level(UACPI_LOG_DEBUG);
-
-	if (!waitForPciService()) {
-		for (;;) {
-			usleep(10000);
-		}
-	}
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
