@@ -110,9 +110,9 @@ namespace kernel::common::threading {
         static PortEntry *findPortUnlocked(u64 port);
         static PortEntry *createPortUnlocked(u64 port);
 
-        // Deliver a wakeup to the first waiter that accepts `messageType`.
+        // Remove and return the first waiter that accepts `messageType`.
         // Must be called with entry->lock held but portLock released.
-        // Returns the thread ID that was unblocked (0 if none).
+        // Returns the thread ID that should be unblocked (0 if none).
         static u16 wakeOneWaiter(PortEntry *entry, u64 messageType);
 
         static TicketSpinLock portLock;

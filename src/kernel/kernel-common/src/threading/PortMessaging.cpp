@@ -111,25 +111,30 @@ namespace kernel::common::threading {
     }
 
     // =========================================================================
-    // Helper — wake the first matching waiter.
+    // Helper — remove the first matching waiter.
     // Called with entry->lock held; portLock must NOT be held.
-    // Returns the TID of the thread unblocked, or 0 if none.
+    // Returns the TID of the thread to unblock, or 0 if none.
     // =========================================================================
 
-	u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
-    	auto *waiterNode = entry->waiters.getFirst();
+    u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
+        auto *waiterNode = entry->waiters.getFirst();
 
-    	while (waiterNode != nullptr) {
-    		auto *waiter = waiterNode->value;
+        while (waiterNode != nullptr) {
+            auto *waiter = waiterNode->value;
 
-    		if (waiter != nullptr && waiter->accepts(messageType)) {
-    			// Return TID only — do NOT remove the waiter here.
-    			// The waiter thread will remove itself when it dequeues the message.
-    			return waiter->thread ? waiter->thread->getId() : 0;
-    		}
+            if (waiter != nullptr && waiter->accepts(messageType)) {
+                const u16 tid = waiter->thread ? waiter->thread->getId() : 0;
 
-    		waiterNode = waiterNode->next;
-    	}
+                if (entry->waiters.removeEntry(waiterNode, false)) {
+                    delete waiter;
+                    delete waiterNode;
+                }
+
+                return tid;
+            }
+
+            waiterNode = waiterNode->next;
+        }
 
     	return 0;
     }
@@ -251,14 +256,13 @@ namespace kernel::common::threading {
 
         // --- Wake a waiter (if any) ---
         // wakeOneWaiter removes the waiter node and returns the TID.
-        // We must not dereference any waiter pointer after this call.
         const u16 tidToWake = wakeOneWaiter(entry, hdr->type);
 
         entry->lock.unlock(prevEntryIF);
 
         // Unblock outside all locks so the scheduler can run freely.
         if (tidToWake != 0) {
-            CommonMain::getInstance()->getScheduler()->unblockThread(tidToWake, /*top=*/true, /*useLock=*/false);
+            CommonMain::getInstance()->getScheduler()->unblockThread(tidToWake, /*top=*/true);
         }
 
         return 0;

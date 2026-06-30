@@ -102,7 +102,7 @@ namespace kernel::x86_64::hal {
 	void Tsc::globalInit() {
 		this->clock = {
 			.name = "TSC",
-			.priority = 75,
+			.priority = 25, // TODO: Was 75
 			.getNs = &Tsc::getNs,
 		};
 

@@ -85,6 +85,97 @@ void processMcfg();
 
 extern void *handleIrqs(void *);
 
+bool waitForPciService() {
+	{
+		auto checkMsg = hos_msg();
+
+		auto checkData = CheckMsgData();
+
+		strncpy(checkData.name, string("PCI").c_str(), sizeof(checkData.name) - 1);
+		checkData.name[sizeof(checkData.name) - 1] = '\0';
+		checkData.nameLength = strlen(checkData.name) + 1;
+
+		checkMsg.type = CHECK_MSG_TYPE;
+		checkMsg.port = 1;
+		checkMsg.buffer = &checkData;
+		checkMsg.length = sizeof(CheckMsgData);
+
+		auto recvCheckMsg = hos_msg();
+
+		auto checkResData = CheckReplyMsgData();
+
+		recvCheckMsg.buffer = &checkResData;
+		recvCheckMsg.length = sizeof(CheckReplyMsgData);
+
+		auto filterOptions = filter_options();
+
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_CHECK_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
+
+		for (;;) {
+			send_horizonos_message(uacpiPort, 1, &checkMsg);
+
+			const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvCheckMsg, &filterOptions);
+
+			if (srvRegisterResult == 0 and checkResData.exists) {
+				break;
+			}
+
+			usleep(10000);
+		}
+
+		delete[] filterOptions.whiteListTypes;
+	}
+
+	{
+		auto getMsg = hos_msg();
+
+		auto getData = GetMsgData();
+
+		strncpy(getData.name, string("PCI").c_str(), sizeof(getData.name) - 1);
+		getData.name[sizeof(getData.name) - 1] = '\0';
+		getData.nameLength = strlen(getData.name) + 1;
+
+		getMsg.type = GET_MSG_TYPE;
+		getMsg.port = 1;
+		getMsg.buffer = &getData;
+		getMsg.length = sizeof(GetMsgData);
+
+		send_horizonos_message(uacpiPort, 1, &getMsg);
+
+		auto recvGetMsg = hos_msg();
+
+		auto getResData = GetReplyMsgData();
+
+		recvGetMsg.buffer = &getResData;
+		recvGetMsg.length = sizeof(GetReplyMsgData);
+
+		auto filterOptions = filter_options();
+
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_GET_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
+
+		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvGetMsg, &filterOptions);
+
+		delete[] filterOptions.whiteListTypes;
+
+		if (srvRegisterResult != 0) {
+			printf("uACPI: Failed to get PCI port!");
+			fflush(stdout);
+
+			return false;
+		}
+
+		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
+		fflush(stdout);
+
+		pciPort = getResData.port;
+		pciTid = getResData.tid;
+	}
+
+	return pciPort != 0;
+}
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&uacpiPort));
 
@@ -163,6 +254,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(irqHandlerThread);
 
 	//uacpi_context_set_log_level(UACPI_LOG_DEBUG);
+
+	if (!waitForPciService()) {
+		for (;;) {
+			usleep(10000);
+		}
+	}
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
@@ -293,103 +390,6 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
 }
 
 void processMcfg() {
-	{
-		// Send
-
-		auto checkMsg = hos_msg();
-
-		auto checkData = CheckMsgData();
-
-		strncpy(checkData.name, string("PCI").c_str(), sizeof(checkData.name) - 1);
-		checkData.name[sizeof(checkData.name) - 1] = '\0';
-		checkData.nameLength = strlen(checkData.name) + 1;
-
-		checkMsg.type = CHECK_MSG_TYPE;
-		checkMsg.port = 1;
-		checkMsg.buffer = &checkData;
-		checkMsg.length = sizeof(CheckMsgData);
-
-		// Reply
-
-		auto recvCheckMsg = hos_msg();
-
-		auto checkResData = CheckReplyMsgData();
-
-		recvCheckMsg.buffer = &checkResData;
-		recvCheckMsg.length = sizeof(CheckReplyMsgData);
-
-		auto filterOptions = filter_options();
-
-		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_CHECK_MSG_TYPE };
-		filterOptions.whiteListCount = 1;
-
-		for (;;) {
-			send_horizonos_message(uacpiPort, 1, &checkMsg);
-
-			const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvCheckMsg, &filterOptions);
-
-			if (srvRegisterResult == 0 and checkResData.exists) {
-				break;
-			}
-
-			usleep(10000);
-		}
-
-		delete[] filterOptions.whiteListTypes;
-	}
-
-	{
-		// Send
-
-		auto getMsg = hos_msg();
-
-		auto getData = GetMsgData();
-
-		strncpy(getData.name, string("PCI").c_str(), sizeof(getData.name) - 1);
-		getData.name[sizeof(getData.name) - 1] = '\0';
-		getData.nameLength = strlen(getData.name) + 1;
-
-		getMsg.type = GET_MSG_TYPE;
-		getMsg.port = 1;
-		getMsg.buffer = &getData;
-		getMsg.length = sizeof(GetMsgData);
-
-		send_horizonos_message(uacpiPort, 1, &getMsg);
-
-		// Reply
-
-		auto recvGetMsg = hos_msg();
-
-		auto getResData = GetReplyMsgData();
-
-		recvGetMsg.buffer = &getResData;
-		recvGetMsg.length = sizeof(GetReplyMsgData);
-
-		auto filterOptions = filter_options();
-
-		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_GET_MSG_TYPE };
-		filterOptions.whiteListCount = 1;
-
-		const int srvRegisterResult = receive_horizonos_message(uacpiPort, &recvGetMsg, &filterOptions);
-
-		if (srvRegisterResult != 0) {
-			printf("uACPI: Failed to get PCI port!");
-			fflush(stdout);
-
-			delete[] filterOptions.whiteListTypes;
-
-			return;
-		}
-
-		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
-		fflush(stdout);
-
-		pciPort = getResData.port;
-		pciTid = getResData.tid;
-
-		delete[] filterOptions.whiteListTypes;
-	}
-
 	if (pciPort == 0) {
 		printf("uACPI: Failed to get PCI port!");
 		fflush(stdout);
