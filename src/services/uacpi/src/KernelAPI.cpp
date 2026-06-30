@@ -53,6 +53,7 @@ struct PciWriteMsgData {
 
 struct IrqReceiveData {
 	uint64_t irqNum {};
+	uint64_t cpuId {};
 	bool isIrq {};
 };
 

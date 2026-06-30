@@ -363,6 +363,7 @@ auto handleSearchDevice(void *devicesArr) -> void * {
 
 		sendMsg.port = recvMsg.src_port;
 		sendStartMsg.port = recvMsg.src_port;
+		sendStartAmount = 0;
 
 		vector<PciDevice> matchedDevices {};
 
