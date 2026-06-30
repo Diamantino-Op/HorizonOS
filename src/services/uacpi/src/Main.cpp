@@ -1,6 +1,8 @@
 #include "abi-bits/hos_msg.h"
 #include "horizonos/generic.h"
 #include "pthread.h"
+#include "uacpi/acpi.h"
+#include "uacpi/context.h"
 #include "uacpi/event.h"
 #include "uacpi/internal/types.h"
 #include "uacpi/sleep.h"
@@ -159,6 +161,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 
 	pthread_detach(irqHandlerThread);
+
+	//uacpi_context_set_log_level(UACPI_LOG_DEBUG);
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
@@ -384,6 +388,15 @@ void processMcfg() {
 		pciTid = getResData.tid;
 
 		delete[] filterOptions.whiteListTypes;
+	}
+
+	if (pciPort == 0) {
+		printf("uACPI: Failed to get PCI port!");
+		fflush(stdout);
+
+		for (;;) {
+			usleep(10000);
+		}
 	}
 
 	{

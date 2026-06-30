@@ -69,12 +69,12 @@ namespace kernel::x86_64::hal {
 		// Enable APIC and set the spurious interrupt vector to 0xFF
 		this->write(ApicMsrs::LAPIC_SIV, (1 << 8) | 0xFF);
 
+		this->tscDeadline = Tsc::supported() and CpuId::get(0x01, 0).ecx & (1 << 24);
+
 		/*if (not isBsp) {
 			this->calibrateTimer();
 		}*/
 		this->calibrateTimer();
-
-		this->tscDeadline = Tsc::supported() and CpuId::get(0x01, 0).ecx & (1 << 24);
 
 		this->initialized = true;
 	}
@@ -86,41 +86,35 @@ namespace kernel::x86_64::hal {
 
 		u64 freq = 0;
 
-		if (const u32 ecx = CpuId::get(0x15, 0).ecx; ecx != 0) {
-			freq = ecx;
+		const CalibratorFun calibrator = Clocks::getCalibrator();
 
-			this->calibrated = true;
-		} else {
-			const CalibratorFun calibrator = Clocks::getCalibrator();
+		if (calibrator == nullptr) {
+			CommonMain::getTerminal()->error("Could not calibrate timer!", "Apic");
 
-			if (calibrator == nullptr) {
-				CommonMain::getTerminal()->error("Could not calibrate timer!", "Apic");
-
-				return;
-			}
-
-			this->write(ApicMsrs::LAPIC_TDC, 0b1011);
-
-			constexpr u64 times = 3;
-
-			for (u64 i = 0; i < times; i++) {
-				constexpr u64 millis = 50;
-
-				this->write(ApicMsrs::LAPIC_TIC, 0xFFFFFFFF);
-
-				calibrator(millis);
-
-				const u32 count = this->read(ApicMsrs::LAPIC_TCC);
-
-				this->write(ApicMsrs::LAPIC_TIC, 0);
-
-				freq += (0xFFFFFFFF - count) * 100;
-			}
-
-			freq /= times;
-
-			this->calibrated = true;
+			return;
 		}
+
+		this->write(ApicMsrs::LAPIC_TDC, 0b1011);
+
+		constexpr u64 times = 3;
+
+		for (u64 i = 0; i < times; i++) {
+			constexpr u64 millis = 50;
+
+			this->write(ApicMsrs::LAPIC_TIC, 0xFFFFFFFF);
+
+			calibrator(millis);
+
+			const u32 count = this->read(ApicMsrs::LAPIC_TCC);
+
+			this->write(ApicMsrs::LAPIC_TIC, 0);
+
+			freq += (0xFFFFFFFF - count) * (1'000 / millis);
+		}
+
+		freq /= times;
+
+		this->calibrated = true;
 
 		CommonMain::getTerminal()->debug("Timer frequency: %lu Hz", "Apic", freq);
 

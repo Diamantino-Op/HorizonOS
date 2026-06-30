@@ -695,7 +695,7 @@ namespace kernel::common::hal {
 				return result;
 			}
 
-			CommonMain::getTerminal()->debug("Send message retry %lu for port %lu", "Syscall Manager", retryAttempt + 1, port);
+			CommonMain::getTerminal()->debug("Send message retry %lu for port %lu (source: %lu)", "Syscall Manager", retryAttempt + 1, port, sendPort);
 
 			scheduler->sleepThread(thread, sendMessageRetrySleepMs * 1000000ULL);
 		}
