@@ -1,7 +1,7 @@
 [2J[001;001H[=3h[2J[001;001H[2J[001;001H[8;042;160t[2J[001;001H[2J[001;001H[8;056;240t[2J[001;001HBdsDxe: loading Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x2,0xFFFF,0x0)
 BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1F,0x2)/Sata(0x2,0xFFFF,0x0)
-[001;001H[001;001Ha[    [0;32mdebug    [0m] [1;30mGDT: [0;37mLoading GDT at address: 0xffff80007bf17058[0m
-[    [0;32mdebug    [0m] [1;30mIDT: [0;37mLoading IDT at address: 0xffff80007bf1a0cc[0m
+[001;001H[001;001Ha[    [0;32mdebug    [0m] [1;30mGDT: [0;37mLoading GDT at address: 0xffff80007bf18058[0m
+[    [0;32mdebug    [0m] [1;30mIDT: [0;37mLoading IDT at address: 0xffff80007bf1b0cc[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mFound Usable entry: 0xffff800000000000, limine: 0xffff80007a65f000[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mNew Usable entry found: Base: 0xffff800000000000, Size: 4096[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mFound Usable entry: 0xffff800000002000, limine: 0xffff80007a65f030[0m
@@ -23,22 +23,22 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mFound Usable entry: 0xffff80007a6dd000, limine: 0xffff80007a65f258[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mNew Usable entry found: Base: 0xffff80007a6dd000, Size: 25165824[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mFound Usable entry: 0xffff80007bf84000, limine: 0xffff80007a65f288[0m
-[    [0;32mdebug    [0m] [1;30mPMM: [0;37mNew Usable entry found: Base: 0xffff80007bf84000, Size: 41832448[0m
+[    [0;32mdebug    [0m] [1;30mPMM: [0;37mNew Usable entry found: Base: 0xffff80007bf84000, Size: 41828352[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mFound Usable entry: 0xffff800100000000, limine: 0xffff80007a65f3a8[0m
 [    [0;32mdebug    [0m] [1;30mPMM: [0;37mNew Usable entry found: Base: 0xffff800100000000, Size: 6442450944[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mCurrent Paging Mode: Level 4[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mCurrent HHDM Offset: ffff800000000000[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mMain page table allocated at: 0xffff800100001000[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mFramebuffer 0 mapped: Start: 0xffff800080000000, End: 0xffff8000807e9000[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37mKernel Stack Top Address: 0xffff80007bf1aff8[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37mKernel Stack Top Address: 0xffff80007bf1bff8[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mKernel Addresses:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Virtual Addresses: 0xffffffff80000000[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Physical Addresses: 0x000000007a24a000[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Physical Addresses: 0x000000007a249000[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mSections:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Limine: Start: 0xffffffff80000000, End: 0xffffffff80000230[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Text: Start: 0xffffffff80001000, End: 0xffffffff80090407[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Text: Start: 0xffffffff80001000, End: 0xffffffff80090747[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	RoData: Start: 0xffffffff80091000, End: 0xffffffff8009d208[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Data: Start: 0xffffffff8009e000, End: 0xffffffff80230a18[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Data: Start: 0xffffffff8009e000, End: 0xffffffff80230bd8[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mMemmap entries:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 0:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x0000000000000000, Size: 4096, Type: Usable[0m
@@ -81,11 +81,11 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 19:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a22b000, Size: 65536, Type: Executable and Modules[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 20:[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a23b000, Size: 61440, Type: Bootloader Reclaimable[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a23b000, Size: 57344, Type: Bootloader Reclaimable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 21:[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a24a000, Size: 2297856, Type: Executable and Modules[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a249000, Size: 2297856, Type: Executable and Modules[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 22:[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a47b000, Size: 1978368, Type: Bootloader Reclaimable[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a47a000, Size: 1982464, Type: Bootloader Reclaimable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 23:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007a65e000, Size: 4096, Type: Usable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 24:[0m
@@ -95,9 +95,9 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 26:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007bedd000, Size: 684032, Type: Bootloader Reclaimable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 27:[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007bf84000, Size: 41832448, Type: Usable[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007bf84000, Size: 41828352, Type: Usable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 28:[0m
-[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007e769000, Size: 18366464, Type: Bootloader Reclaimable[0m
+[    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007e768000, Size: 18370560, Type: Bootloader Reclaimable[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 29:[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37m	Start: 0x000000007f8ed000, Size: 2097152, Type: Unknown[0m
 [    [0;32mdebug    [0m] [1;30mVMM: [0;37mEntry 30:[0m
@@ -185,40 +185,36 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mTSC: [0;37mTSC calibrated![0m
 [    [0;32mdebug    [0m] [1;30mApic: [0;37mSupports X2Apic: 1[0m
 [    [0;32mdebug    [0m] [1;30mApic: [0;37mTSC deadline supported; calibrating LAPIC periodic timer too[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000061033 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1004476393 Hz[0m
 [    [0;32mdebug    [0m] [1;30mHorizonOS: [0;37mInit... OK[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered port![0m
 [    [0;32mdebug    [0m] [1;30mSyscall Manager: [0;37mSend message retry 1 for port 1 (source: 2)[0m
 [    [0;32mdebug    [0m] [1;30mSyscall Manager: [0;37mSend message retry 2 for port 1 (source: 2)[0m
 [    [0;32mdebug    [0m] [1;30mSyscall Manager: [0;37mSend message retry 3 for port 1 (source: 2)[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000046433 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000046433 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000046433 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000046433 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000024873 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000026726 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000025893 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000026900 Hz[0m
-[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000121520 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000044386 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000030673 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000047086 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000030673 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000030673 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000030673 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000047086 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000047086 Hz[0m
+[    [0;32mdebug    [0m] [1;30mApic: [0;37mTimer frequency: 1000030900 Hz[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered port![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered port![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 3: Name/Registry Service: Successfully registered port: 1![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered port![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Starting Name/Registry register message handler![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Service PCI registered on port 3![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Service uAcpi registered on port 4![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Service uAcpi registered on port 3![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Service PCI registered on port 4![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 17: Starting Name/Registry unregister message handler![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 18: Starting Name/Registry get message handler![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 19: Starting Name/Registry check message handler![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 4, TID: 4, Version: 0.0.0.[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 4), waiting for MCFG data...[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 16: Service NVMe registered on port 2![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered service![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 19: Starting Name/Registry check message handler![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 4, TID: 5, Version: 0.0.0.[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 4, TID: 5, Version: 0.0.0.[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Requesting PCI service to search for NVMe devices...[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mstarting uACPI, version 6.0.0[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 20: Starting uAcpi irq message handler![0m
@@ -231,14 +227,18 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mBGRT 0x000000007FB74000 00000038 v01 (INTEL  EDK2    )[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACS 0x000000007FBDD000 00000040[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1789 ops in 1ms (avg 1544568/s)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1789 ops in 0ms (avg 2047686/s)[0m
 [    [0;32mdebug    [0m] [1;30mIOApic: [0;37mRedirecting gsi 9 to vector 35[0m
 [    [0;32mdebug    [0m] [1;30mIrqAllocator: [0;37mAllocating IRQ: 9 to gsi: 9. Max GSIs: 25. GSI Base: 0[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 3, TID: 4, Version: 0.0.0.[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 3), waiting for MCFG data...[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI service ready, forwarding MCFG...[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=0 ecam=e0000000[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=128 ecam=e8000000[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e0000000 virt=7a8000 buses=0-255[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e8000000 virt=80829000 buses=128-255[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e8000000 virt=80827000 buses=128-255[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: All MCFG segments received (2 segment(s))[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating devices...[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating root complex seg=0 bus 00-ff[0m
@@ -258,17 +258,17 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI service will send 1 NVMe device(s).[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Received 1 NVMe device(s) from PCI service.[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 22: PCI: Read message loop started![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mnamespace initialization done in 619ms: 48 devices, 0 thermal zones[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37menabled 2 GPEs in block _GPE@[0->64][0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 23: PCI: Write message loop started![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: barPhys: 0x7000000000, barSize: 0x4000[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 24: PCI: Msi Alloc message loop started![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 25: PCI: Msi Free message loop started![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mnamespace initialization done in 607ms: 48 devices, 0 thermal zones[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37menabled 2 GPEs in block _GPE@[0->64][0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 26: PCI: Msix Alloc message loop started![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 27: PCI: Msix Free message loop started![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 28: PCI: Msix Global Enable message loop started![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 29: PCI: Msix Global Disable message loop started![0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: barPhys: 0x7000000000, barSize: 0x4000[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered AdminCQ port![0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 29: PCI: Msix Global Disable message loop started![0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 26: PCI/MSI-X: Entry 0 on 00:04.0 vector=0x24[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller model: QEMU NVMe Ctrl, serial: deadbeef, namespaces: 256[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Namespace 1 — 41943040 LBAs × 512 bytes = 20480 MB[0m
@@ -309,17 +309,18 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 1 with ID 1, lapic ID: 1[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 2 with ID 2, lapic ID: 2[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 3 with ID 3, lapic ID: 3[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 4 with ID 4, lapic ID: 4[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 33: NVMe: Core 1 locked to CPU ID 1. (From 1)NVMe: Core 3 locked to CPU ID 3. (From 3)[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 31: NVMe: Core 2 locked to CPU ID 2. (From 2)[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 30: NVMe: Core 0 locked to CPU ID 0. (From 0)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 31: NVMe: Core 1 locked to CPU ID 1. (From 1)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 32: NVMe: Core 2 locked to CPU ID 2. (From 2)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 4 with ID 4, lapic ID: 4[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 5 with ID 5, lapic ID: 5[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 6 with ID 6, lapic ID: 6[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 7 with ID 7, lapic ID: 7[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 8 with ID 8, lapic ID: 8[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 9 with ID 9, lapic ID: 9[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 34: NVMe: Core 4 locked to CPU ID 4. (From 4)[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 36: NVMe: Core 6 locked to CPU ID 6. (From 6)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 33: NVMe: Core 3 locked to CPU ID 3. (From 3)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 37: NVMe: Core 7 locked to CPU ID 7. (From 7)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 35: NVMe: Core 5 locked to CPU ID 5. (From 5)[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 9 with ID 9, lapic ID: 9[0m
+[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 36: NVMe: Core 9 locked to CPU ID 9. (From 9)NVMe: Core 6 locked to CPU ID 6. (From 6)[0m
 [    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 38: NVMe: Core 8 locked to CPU ID 8. (From 8)[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 35: NVMe: Core 7 locked to CPU ID 7. (From 7)NVMe: Core 5 locked to CPU ID 5. (From 5)[0m
-[    [0;32mdebug    [0m] [1;30mUser: [0;37mThread 39: NVMe: Core 9 locked to CPU ID 9. (From 9)[0m

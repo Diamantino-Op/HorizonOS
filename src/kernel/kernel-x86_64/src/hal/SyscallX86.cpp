@@ -719,6 +719,11 @@ namespace kernel::x86_64::hal {
 		long ret = 0;
 
 		// TODO: Check the compat OS
+		if (frame->rax >= horizonSyscallAmount || SyscallManager::horizonSyscalls[frame->rax] == nullptr) {
+			frame->rax = -ENOSYS;
+			return;
+		}
+
 		frame->rdx = SyscallManager::horizonSyscalls[frame->rax](&ret, frame->rdi, frame->rsi, frame->rdx, frame->r10, frame->r8, frame->r9);
 
 		frame->rax = ret;
@@ -747,6 +752,11 @@ namespace kernel::x86_64::hal {
 		long ret = 0;
 
 		// TODO: Check the compat OS
+		if (regs->rax >= horizonSyscallAmount || SyscallManager::horizonSyscalls[regs->rax] == nullptr) {
+			regs->rax = -ENOSYS;
+			return;
+		}
+
 		regs->rdx = SyscallManager::horizonSyscalls[regs->rax](&ret, regs->rdi, regs->rsi, regs->rdx, regs->r10, regs->r8, regs->r9);
 
 		regs->rax = ret;

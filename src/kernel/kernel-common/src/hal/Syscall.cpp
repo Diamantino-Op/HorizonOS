@@ -17,6 +17,7 @@ namespace kernel::common::hal {
 	namespace {
 		constexpr u64 unlockedAffinityCpuId = ~0x0U;
 		constexpr usize affinityBitsPerByte = 8;
+		constexpr usize maxPrintMessageLength = 1024;
 
 		auto isMappedAddress(const AllocContext *ctx, const u64 addr) -> bool {
 			return ctx->pageMap.getPhysAddress(addr) != 0;
@@ -388,9 +389,28 @@ namespace kernel::common::hal {
 
 	auto SyscallManager::syscallPrint(long */*unused*/, const u64 message, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		const u16 tid = Scheduler::getCurrentThread()->getId();
+		char userMessage[maxPrintMessageLength] {};
+		usize copiedLength = 0;
 
-		CommonMain::getTerminal()->info("Thread %u: %s", "User", tid, reinterpret_cast<char *>(message));
-		CommonMain::getTerminal()->debug("Thread %u: %s", "User", tid, reinterpret_cast<char *>(message));
+		for (; copiedLength < maxPrintMessageLength - 1; copiedLength++) {
+			u8 byte = 0;
+			const int err = readUserByte(Scheduler::getCurrentThread()->getParent()->getProcessContext(), message + copiedLength, &byte);
+
+			if (err != 0) {
+				return err;
+			}
+
+			userMessage[copiedLength] = static_cast<char>(byte);
+
+			if (byte == '\0') {
+				break;
+			}
+		}
+
+		userMessage[maxPrintMessageLength - 1] = '\0';
+
+		CommonMain::getTerminal()->info("Thread %u: %s", "User", tid, userMessage);
+		CommonMain::getTerminal()->debug("Thread %u: %s", "User", tid, userMessage);
 		//CommonMain::getTerminal()->printfBoth(true, "");
 
 		return 0;
