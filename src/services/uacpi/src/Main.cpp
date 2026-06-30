@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <sys/io.h>
 
 uacpi_interrupt_ret handlerPowerBtn(uacpi_handle ctx);
 
@@ -32,6 +33,8 @@ constexpr uint64_t PCI_READY_MSG_TYPE = 0x10;
 
 constexpr uint64_t MCFG_DONE_MSG_TYPE = 0x100;
 constexpr uint64_t MCFG_SEGMENT_MSG_TYPE = 0x200;
+
+constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
 
 // Name max 16 chars
 struct RegisterMsgData {
@@ -80,6 +83,7 @@ struct McfgSegmentMsgData {
 uint64_t uacpiPort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
+bool mcfgReady = false;
 
 void processMcfg();
 
@@ -226,7 +230,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			printf("uACPI: Failed to get PCI port!");
 			fflush(stdout);
 
-			return false;
+			return 1;
 		}
 
 		printf("uACPI: PCI info: Port: %lu, TID: %u, Version: %u.%u.%u.", getResData.port, getResData.tid, getResData.versionMajor, getResData.versionMinor, getResData.versionPatch);
@@ -248,6 +252,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 
 	pthread_detach(irqHandlerThread);
+
+	if (ioperm(PCI_CONFIG_ADDRESS, 8, 1) != 0) {
+		printf("uACPI: Failed to acquire PCI config I/O permissions!");
+		fflush(stdout);
+
+		return 1;
+	}
 
 	if (const uacpi_status ret = uacpi_initialize(0); uacpi_unlikely_error(ret)) {
 		printf("\o{33}[0;31muACPI: \o{33}[0;37mFailed to initialize: %s", uacpi_status_to_string(ret));
@@ -417,5 +428,7 @@ void processMcfg() {
 		doneMsg.length = 0;
 
 		send_horizonos_message(uacpiPort, pciPort, &doneMsg);
+
+		mcfgReady = true;
 	}
 }

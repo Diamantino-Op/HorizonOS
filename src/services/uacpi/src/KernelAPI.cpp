@@ -21,6 +21,7 @@ using namespace std;
 
 extern uint64_t uacpiPort;
 extern uint64_t pciPort;
+extern bool mcfgReady;
 
 constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
@@ -109,6 +110,34 @@ static void *workThreadFunc(void *arg) {
 struct PciHandle {
 	uacpi_pci_address address;
 };
+
+namespace {
+	constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
+	constexpr uint16_t PCI_CONFIG_DATA = 0xCFC;
+
+	uint32_t legacyPciAddress(const PciHandle *h, const uacpi_size offset) {
+		return (1U << 31)
+			| (static_cast<uint32_t>(h->address.bus) << 16)
+			| (static_cast<uint32_t>(h->address.device) << 11)
+			| (static_cast<uint32_t>(h->address.function) << 8)
+			| (static_cast<uint32_t>(offset) & 0xFCU);
+	}
+
+	uint32_t legacyPciRead32(const PciHandle *h, const uacpi_size offset) {
+		outl(legacyPciAddress(h, offset), PCI_CONFIG_ADDRESS);
+
+		return inl(PCI_CONFIG_DATA);
+	}
+
+	void legacyPciWrite32(const PciHandle *h, const uacpi_size offset, const uint32_t value) {
+		outl(legacyPciAddress(h, offset), PCI_CONFIG_ADDRESS);
+		outl(value, PCI_CONFIG_DATA);
+	}
+
+	bool useLocalPciConfig() {
+		return !mcfgReady || pciPort == 0;
+	}
+}
 
 uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 	if (!outRsdpAddress) {
@@ -213,6 +242,14 @@ uacpi_status uacpi_kernel_pci_read8(uacpi_handle device, uacpi_size offset, uacp
 
 	const auto *h = static_cast<PciHandle *>(device);
 
+	if (useLocalPciConfig()) {
+		const uint32_t dword = legacyPciRead32(h, offset);
+
+		*value = static_cast<uacpi_u8>((dword >> ((offset & 3U) * 8U)) & 0xFFU);
+
+		return UACPI_STATUS_OK;
+	}
+
 	// Send
 
 	auto sendMsg    = hos_msg();
@@ -273,6 +310,14 @@ uacpi_status uacpi_kernel_pci_read16(uacpi_handle device, uacpi_size offset, uac
 	}
 
 	const auto *h = static_cast<PciHandle *>(device);
+
+	if (useLocalPciConfig()) {
+		const uint32_t dword = legacyPciRead32(h, offset);
+
+		*value = static_cast<uacpi_u16>((dword >> ((offset & 2U) * 8U)) & 0xFFFFU);
+
+		return UACPI_STATUS_OK;
+	}
 
 	// Send
 
@@ -335,6 +380,12 @@ uacpi_status uacpi_kernel_pci_read32(uacpi_handle device, uacpi_size offset, uac
 
 	const auto *h = static_cast<PciHandle *>(device);
 
+	if (useLocalPciConfig()) {
+		*value = legacyPciRead32(h, offset);
+
+		return UACPI_STATUS_OK;
+	}
+
 	// Send
 
 	auto sendMsg    = hos_msg();
@@ -388,6 +439,18 @@ uacpi_status uacpi_kernel_pci_write8(uacpi_handle device, uacpi_size offset, uac
 
 	const auto *h = static_cast<PciHandle *>(device);
 
+	if (useLocalPciConfig()) {
+		uint32_t cur = legacyPciRead32(h, offset);
+		const uint32_t shift = (offset & 3U) * 8U;
+
+		cur &= ~(0xFFU << shift);
+		cur |= static_cast<uint32_t>(value) << shift;
+
+		legacyPciWrite32(h, offset, cur);
+
+		return UACPI_STATUS_OK;
+	}
+
 	auto sendMsg    = hos_msg();
 
 	auto sendData   = PciWriteMsgData();
@@ -435,6 +498,18 @@ uacpi_status uacpi_kernel_pci_write16(uacpi_handle device, uacpi_size offset, ua
 
 	const auto *h = static_cast<PciHandle *>(device);
 
+	if (useLocalPciConfig()) {
+		uint32_t cur = legacyPciRead32(h, offset);
+		const uint32_t shift = (offset & 2U) * 8U;
+
+		cur &= ~(0xFFFFU << shift);
+		cur |= static_cast<uint32_t>(value) << shift;
+
+		legacyPciWrite32(h, offset, cur);
+
+		return UACPI_STATUS_OK;
+	}
+
 	auto sendMsg    = hos_msg();
 
 	auto sendData   = PciWriteMsgData();
@@ -481,6 +556,12 @@ uacpi_status uacpi_kernel_pci_write32(uacpi_handle device, uacpi_size offset, ua
 	}
 
 	const auto *h = static_cast<PciHandle *>(device);
+
+	if (useLocalPciConfig()) {
+		legacyPciWrite32(h, offset, value);
+
+		return UACPI_STATUS_OK;
+	}
 
 	auto sendMsg    = hos_msg();
 
