@@ -17,6 +17,147 @@ namespace kernel::common::hal {
 	using namespace x86_64::threading;
 
 	namespace {
+		auto getThreadTss(Thread *thread) -> TssIopb * {
+			if (thread == nullptr || thread->getContext() == nullptr) {
+				return nullptr;
+			}
+
+			auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+
+			return ctx->threadTssIopb;
+		}
+
+		auto findProcessTssWithIopb(Process *process, const Thread *skipThread = nullptr) -> TssIopb * {
+			if (process == nullptr) {
+				return nullptr;
+			}
+
+			for (auto &thread : process->threadList) {
+				if (&thread == skipThread) {
+					continue;
+				}
+
+				if (TssIopb *threadTss = getThreadTss(&thread); threadTss != nullptr) {
+					return threadTss;
+				}
+			}
+
+			return nullptr;
+		}
+
+		auto ensureCurrentThreadTss(Thread *thread) -> TssIopb * {
+			if (thread == nullptr || thread->getParent() == nullptr) {
+				return nullptr;
+			}
+
+			auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+
+			if (ctx == nullptr) {
+				return nullptr;
+			}
+
+			if (ctx->threadTssIopb == nullptr) {
+				auto *threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+
+				if (threadTss == nullptr) {
+					return nullptr;
+				}
+
+				*threadTss = TssIopb();
+
+				if (const TssIopb *sourceTss = findProcessTssWithIopb(thread->getParent(), thread); sourceTss != nullptr) {
+					memcpy(threadTss->iopb, sourceTss->iopb, sizeof(threadTss->iopb));
+				}
+
+				ctx->threadTssIopb = threadTss;
+			}
+
+			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+
+			return ctx->threadTssIopb;
+		}
+
+		auto applyIopermRange(TssIopb *threadTss, const u64 from, const u64 num, const u64 state) -> void {
+			if (threadTss == nullptr) {
+				return;
+			}
+
+			for (u64 i = 0; i < num; i++) {
+				const u32 port = from + i;
+
+				if (port > 0xFFFF) {
+					break;
+				}
+
+				const u32 byteIdx = port / 8;
+				const u8 bitIdx  = port % 8;
+
+				if (state != 0) {
+					threadTss->iopb[byteIdx] &= ~(1U << bitIdx);
+				} else {
+					threadTss->iopb[byteIdx] |=  (1U << bitIdx);
+				}
+			}
+		}
+
+		auto seedThreadIopb(ThreadContext *ctx, AllocContext *processContext, const TssIopb *sourceTss) -> bool {
+			if (ctx == nullptr || processContext == nullptr || sourceTss == nullptr) {
+				return false;
+			}
+
+			if (ctx->threadTssIopb == nullptr) {
+				ctx->threadTssIopb = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(processContext, sizeof(TssIopb)));
+
+				if (ctx->threadTssIopb == nullptr) {
+					return false;
+				}
+
+				*ctx->threadTssIopb = TssIopb();
+			}
+
+			memcpy(ctx->threadTssIopb->iopb, sourceTss->iopb, sizeof(ctx->threadTssIopb->iopb));
+
+			return true;
+		}
+
+		auto propagateProcessIopb(Process *process, const TssIopb *sourceTss) -> void {
+			if (process == nullptr || sourceTss == nullptr) {
+				return;
+			}
+
+			for (auto &thread : process->threadList) {
+				auto *ctx = reinterpret_cast<ThreadContext *>(thread.getContext());
+
+				if (ctx == nullptr || ctx->threadTssIopb == sourceTss) {
+					continue;
+				}
+
+				seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
+			}
+		}
+
+		auto propagateProcessIopermRange(Process *process, const TssIopb *sourceTss, const u64 from, const u64 num, const u64 state) -> void {
+			if (process == nullptr || sourceTss == nullptr) {
+				return;
+			}
+
+			for (auto &thread : process->threadList) {
+				auto *ctx = reinterpret_cast<ThreadContext *>(thread.getContext());
+
+				if (ctx == nullptr || ctx->threadTssIopb == sourceTss) {
+					continue;
+				}
+
+				if (ctx->threadTssIopb == nullptr) {
+					seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
+				} else {
+					applyIopermRange(ctx->threadTssIopb, from, num, state);
+				}
+			}
+		}
+
 		auto isSignalIgnored(const u64 handler) -> bool {
 			return handler == 1;
 		}
@@ -321,7 +462,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const Thread *thread = Scheduler::getCurrentThread();
+		Thread *thread = Scheduler::getCurrentThread();
 
 		if (thread == nullptr) {
 			return EINVAL;
@@ -333,37 +474,15 @@ namespace kernel::common::hal {
 			return EPERM;
 		}*/
 
-		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
-		TssIopb *threadTss = ctx->threadTssIopb;
+		TssIopb *threadTss = ensureCurrentThreadTss(thread);
 
 		if (threadTss == nullptr) {
-			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
-
-			*threadTss = TssIopb();
-
-			ctx->threadTssIopb = threadTss;
-
-			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
-
-			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+			return ENOMEM;
 		}
 
-		for (u64 i = 0; i < num; i++) {
-			const u32 port = from + i;
+		applyIopermRange(threadTss, from, num, state);
 
-			if (port > 0xFFFF) {
-				break;
-			}
-
-			const u32 byteIdx = port / 8;
-			const u8 bitIdx  = port % 8;
-
-			if (state != 0) {
-				threadTss->iopb[byteIdx] &= ~(1U << bitIdx);
-			} else {
-				threadTss->iopb[byteIdx] |=  (1U << bitIdx);
-			}
-		}
+		propagateProcessIopermRange(thread->getParent(), threadTss, from, num, state);
 
 		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearBusy();
 
@@ -381,7 +500,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const Thread *thread = Scheduler::getCurrentThread();
+		Thread *thread = Scheduler::getCurrentThread();
 
 		if (thread == nullptr) {
 			return EINVAL;
@@ -393,22 +512,15 @@ namespace kernel::common::hal {
 			return EPERM;
 		}*/
 
-		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
-		TssIopb *threadTss = ctx->threadTssIopb;
+		TssIopb *threadTss = ensureCurrentThreadTss(thread);
 
 		if (threadTss == nullptr) {
-			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
-
-			*threadTss = TssIopb();
-
-			ctx->threadTssIopb = threadTss;
-
-			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
-
-			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+			return ENOMEM;
 		}
 
 		memset(threadTss->iopb, level == 3 ? 0 : 0xFF, sizeof(threadTss->iopb));
+
+		propagateProcessIopb(thread->getParent(), threadTss);
 
 		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearBusy();
 

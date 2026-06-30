@@ -16,6 +16,28 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
+	namespace {
+		auto findProcessTssWithIopb(Process *process) -> TssIopb * {
+			if (process == nullptr) {
+				return nullptr;
+			}
+
+			for (auto &thread : process->threadList) {
+				if (thread.getContext() == nullptr) {
+					continue;
+				}
+
+				auto *ctx = reinterpret_cast<ThreadContext *>(thread.getContext());
+
+				if (ctx->threadTssIopb != nullptr) {
+					return ctx->threadTssIopb;
+				}
+			}
+
+			return nullptr;
+		}
+	}
+
 	void idleThreadFun() {
 		for (;;) {
 			asm volatile ("pause" ::: "memory");
@@ -245,6 +267,15 @@ namespace kernel::common::threading {
 		*context = ThreadContext();
 
 		context->init(process, newRsp, isUser, rsp == 0);
+
+		if (const TssIopb *sourceTss = findProcessTssWithIopb(process); sourceTss != nullptr) {
+			context->threadTssIopb = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(TssIopb)));
+
+			if (context->threadTssIopb != nullptr) {
+				*context->threadTssIopb = TssIopb();
+				memcpy(context->threadTssIopb->iopb, sourceTss->iopb, sizeof(context->threadTssIopb->iopb));
+			}
+		}
 
 		context->prid = prid;
 
