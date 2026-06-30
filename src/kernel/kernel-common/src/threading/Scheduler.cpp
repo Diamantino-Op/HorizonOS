@@ -613,10 +613,6 @@ namespace kernel::common::threading {
 		PortMessaging::removeThread(thread);
 		Futex::removeThread(thread->getId());
 
-		if (thread->getParent() != nullptr) {
-			thread->getParent()->removeThread(thread);
-		}
-
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!shouldReschedule) {
