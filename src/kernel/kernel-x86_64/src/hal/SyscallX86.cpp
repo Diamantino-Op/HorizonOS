@@ -333,18 +333,19 @@ namespace kernel::common::hal {
 			return EPERM;
 		}*/
 
-		auto *processTss = reinterpret_cast<TssIopb *>(thread->getParent()->tssIopb);
+		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+		TssIopb *threadTss = ctx->threadTssIopb;
 
-		if (processTss == nullptr) {
-			processTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+		if (threadTss == nullptr) {
+			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
 
-			*processTss = TssIopb();
+			*threadTss = TssIopb();
 
-			thread->getParent()->tssIopb = reinterpret_cast<u64 *>(processTss);
+			ctx->threadTssIopb = threadTss;
 
-			thread->getParent()->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
 
-			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(processTss);
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 		}
 
 		for (u64 i = 0; i < num; i++) {
@@ -358,9 +359,9 @@ namespace kernel::common::hal {
 			const u8 bitIdx  = port % 8;
 
 			if (state != 0) {
-				processTss->iopb[byteIdx] &= ~(1U << bitIdx);
+				threadTss->iopb[byteIdx] &= ~(1U << bitIdx);
 			} else {
-				processTss->iopb[byteIdx] |=  (1U << bitIdx);
+				threadTss->iopb[byteIdx] |=  (1U << bitIdx);
 			}
 		}
 
@@ -392,21 +393,22 @@ namespace kernel::common::hal {
 			return EPERM;
 		}*/
 
-		auto *processTss = reinterpret_cast<TssIopb *>(thread->getParent()->tssIopb);
+		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+		TssIopb *threadTss = ctx->threadTssIopb;
 
-		if (processTss == nullptr) {
-			processTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+		if (threadTss == nullptr) {
+			threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
 
-			*processTss = TssIopb();
+			*threadTss = TssIopb();
 
-			thread->getParent()->tssIopb = reinterpret_cast<u64 *>(processTss);
+			ctx->threadTssIopb = threadTss;
 
-			thread->getParent()->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
 
-			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(processTss);
+			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 		}
 
-		memset(processTss->iopb, level == 3 ? 0 : 0xFF, sizeof(processTss->iopb));
+		memset(threadTss->iopb, level == 3 ? 0 : 0xFF, sizeof(threadTss->iopb));
 
 		CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry.clearBusy();
 

@@ -14,7 +14,7 @@ namespace kernel::x86_64::threading {
     public:
         ~ThreadContext();
 
-    	void init(Process *proc, u64 stackPointer, bool isUserspace, bool threadOwnsKernelStack);
+    	void init(Process *proc, u64 stackPointer, bool isUserspace, bool ownsKernelStack);
 
         u64 *getSimdSave() const;
 
@@ -22,6 +22,8 @@ namespace kernel::x86_64::threading {
         void load() const;
 
         bool isUserspace() const;
+
+    	void updateTssPtrs(u64 rsp0);
 
     private:
         u64 *originalSimdSave {};
@@ -40,6 +42,8 @@ namespace kernel::x86_64::threading {
     	u8 prid {};
 
     	u64 userStackPointer {};
+
+        TssIopb *threadTssIopb {};
     };
 
     extern "C" u64 checkDisabled();
