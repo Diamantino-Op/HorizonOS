@@ -45,8 +45,6 @@ namespace kernel::common::memory {
 
         u64 *getPageTable() const;
 
-        bool level5Paging() const;
-
         u64 getAddr() const;
 
         bool getIsKernel() const;
@@ -70,7 +68,6 @@ namespace kernel::common::memory {
         RBTree pageTree {};
         AllocContext *allocCtx {};
         bool isKernel {};
-        bool isLevel5Paging = false;
     };
 
     class VirtualMemoryManager {

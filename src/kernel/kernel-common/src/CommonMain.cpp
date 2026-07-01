@@ -3,13 +3,34 @@
 #include "threading/IDAllocator.hpp"
 
 extern limine_hhdm_request hhdmRequest;
+extern limine_rsdp_request rsdpRequest;
+extern limine_mp_request mpRequest;
 
 namespace kernel::common {
 	Terminal CommonMain::terminal;
 	CommonMain *CommonMain::instance;
+	u64 CommonMain::currentHhdm;
+	u64 CommonMain::currentRsdp;
+	u64 CommonMain::schedulingCoresRemaining;
 
 	void CommonMain::rootInit() {
 		instance = this;
+
+		if (hhdmRequest.response != nullptr) {
+			currentHhdm = hhdmRequest.response->offset;
+		} else {
+			currentHhdm = 0x0;
+		}
+
+		if (rsdpRequest.response != nullptr) {
+			currentRsdp = reinterpret_cast<u64>(rsdpRequest.response->address);
+		} else {
+			currentRsdp = 0x0;
+		}
+
+		if (mpRequest.response != nullptr) {
+			schedulingCoresRemaining = mpRequest.response->cpu_count;
+		}
 
 		PIDAllocator::init();
 		TIDAllocator::init();
@@ -36,11 +57,11 @@ namespace kernel::common {
 	}
 
 	u64 CommonMain::getCurrentHhdm() {
-		if (hhdmRequest.response != nullptr) {
-			return hhdmRequest.response->offset;
-		}
+		return currentHhdm;
+	}
 
-		return 0x0;
+	u64 CommonMain::getCurrentRsdp() {
+		return currentRsdp;
 	}
 
 	uPtr CommonMain::getStackTop() const {

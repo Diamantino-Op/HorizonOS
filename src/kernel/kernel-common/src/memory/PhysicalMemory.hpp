@@ -21,6 +21,8 @@ namespace kernel::common::memory {
 
         void init();
 
+    	void reclaimMemory();
+
         u64 *allocPages(usize pageAmount, bool useHhdm);
 
         void freePages(u64 *virtAddress, usize pageAmount);
@@ -31,9 +33,13 @@ namespace kernel::common::memory {
 
         u64 getFreeMemory() const;
 
+    	u64 getTotalMemory() const;
+
     private:
         PmmListEntry *listPtr {};
         TicketSpinLock pmmSpinLock {};
+
+    	u64 totalMemory {};
     };
 }
 

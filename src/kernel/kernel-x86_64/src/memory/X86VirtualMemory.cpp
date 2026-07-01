@@ -6,8 +6,6 @@
 #include "utils/Asm.hpp"
 #include "utils/CpuId.hpp"
 
-extern limine_paging_mode_request pagingModeRequest;
-
 namespace kernel::common::memory {
 	using namespace x86_64;
 	using namespace x86_64::memory;
@@ -59,17 +57,10 @@ namespace kernel::common::memory {
 
 		Terminal* terminal = CommonMain::getTerminal();
 
-		if (pagingModeRequest.response != nullptr) {
-			// 0 = Page Level 4, 1 = Page Level 5
-			if (pagingModeRequest.response->mode == 0) {
-				terminal->debug("Current Paging Mode: Level 4", "VMM");
-
-				this->isLevel5Paging = false;
-			} else if (pagingModeRequest.response->mode == 1) {
-				terminal->debug("Current Paging Mode: Level 5", "VMM");
-
-				this->isLevel5Paging = true;
-			}
+		if (VirtualAllocator::isPagingLvl5) {
+			terminal->debug("Current Paging Mode: Level 5", "VMM");
+		} else {
+			terminal->debug("Current Paging Mode: Level 4", "VMM");
 		}
 
 		this->physPageTable = newPhysPageTable;
@@ -102,7 +93,7 @@ namespace kernel::common::memory {
 
 		PageTable *pdpt = nullptr;
 
-		if (this->isLevel5Paging) {
+		if (VirtualAllocator::isPagingLvl5) {
 			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, global, noExec));
 			if (lvl5Table == nullptr) {
 				return;
@@ -152,7 +143,7 @@ namespace kernel::common::memory {
 
 		PageTable *pdpt = nullptr;
 
-		if (this->isLevel5Paging) {
+		if (VirtualAllocator::isPagingLvl5) {
 			auto *lvl5Table = reinterpret_cast<PageTable *>(getOrCreatePageTable(this->pageTable, lvl5, flags, global, noExec));
 			if (lvl5Table == nullptr) {
 				return false;
@@ -210,7 +201,7 @@ namespace kernel::common::memory {
 
 		const PageTable *lvl4Table = nullptr;
 
-		if (this->isLevel5Paging) {
+		if (VirtualAllocator::isPagingLvl5) {
 			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
 			if (!lvl5Table->entries[lvl5].present) {
 				return;
@@ -305,7 +296,7 @@ namespace kernel::common::memory {
 
 		const PageTable *lvl4Table = nullptr;
 
-		if (this->isLevel5Paging) {
+		if (VirtualAllocator::isPagingLvl5) {
 			auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
 
 			if (!lvl5Table->entries[lvl5].present) {
@@ -368,7 +359,7 @@ namespace kernel::common::memory {
 
 		const PageTable *lvl4Table = nullptr;
 
-		if (this->isLevel5Paging) {
+		if (VirtualAllocator::isPagingLvl5) {
 			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
 			if (!lvl5Table->entries[lvl5].present) {
 				return 0;

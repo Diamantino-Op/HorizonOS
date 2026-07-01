@@ -66,7 +66,7 @@ namespace kernel::common::memory {
 			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
 		}
 
-		freePageTableChildren(ctx->pageMap.getPageTable(), ctx->pageMap.level5Paging(), 0);
+		freePageTableChildren(ctx->pageMap.getPageTable(), isPagingLvl5, 0);
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 

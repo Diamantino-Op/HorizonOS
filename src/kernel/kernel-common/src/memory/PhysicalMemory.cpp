@@ -3,6 +3,7 @@
 #include "CommonMain.hpp"
 #include "MainMemory.hpp"
 #include "Math.hpp"
+#include "utils/LimineHelper.hpp"
 
 #include "limine.h"
 
@@ -44,6 +45,55 @@ namespace kernel::common::memory {
 					}
 
 					this->listPtr = currEntry;
+				}
+			}
+		}
+	}
+
+	void PhysicalMemoryManager::reclaimMemory() {
+		if (memMapRequest.response != nullptr) {
+			const auto addReclaimableRange = [this](const u64 base, const u64 end) -> void {
+				if (end <= base) {
+					return;
+				}
+
+				auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
+
+				currEntry->count = (end - base) / pageSize;
+
+				currEntry->prev = nullptr;
+				currEntry->next = this->listPtr;
+
+				if (this->listPtr != nullptr) {
+					this->listPtr->prev = currEntry;
+				}
+
+				this->listPtr = currEntry;
+			};
+
+			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
+				if (const limine_memmap_entry *entry = memMapRequest.response->entries[i]; entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
+					if (entry->length == 0 || entry->base > ~0ULL - entry->length) {
+						continue;
+					}
+
+					const u64 base = alignUp<u64>(entry->base, pageSize);
+					const u64 end = alignDown<u64>(entry->base + entry->length, pageSize);
+
+					if (end <= base) {
+						continue;
+					}
+
+					u64 reclaimableBase = base;
+
+					for (u64 page = base; page < end; page += pageSize) {
+						if (utils::doesPhysicalRangeOverlapLimineModuleOrMpResponse(page, pageSize)) {
+							addReclaimableRange(reclaimableBase, page);
+							reclaimableBase = page + pageSize;
+						}
+					}
+
+					addReclaimableRange(reclaimableBase, end);
 				}
 			}
 		}
@@ -165,4 +215,8 @@ namespace kernel::common::memory {
 
 		return totFreeMemory;
 	}
-}
+
+	u64 PhysicalMemoryManager::getTotalMemory() const {
+		return this->totalMemory;
+	}
+} // namespace kernel::common::memory

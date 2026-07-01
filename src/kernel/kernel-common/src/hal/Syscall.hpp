@@ -156,7 +156,7 @@ namespace kernel::common::hal {
     	static auto syscallIoPl(long *, u64 level, u64, u64, u64, u64, u64) -> u64;
     	static auto syscallKill(long *, u64 pid, u64 signal, u64, u64, u64, u64) -> u64;
     	static auto syscallGetPID(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
-		static auto syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64 isHhdm, u64 cacheMode, u64, u64) -> u64;
+		static auto syscallMMapPhys(long *ret, u64 physAddr, u64 len, u64 isHhdm, u64 cacheModeRaw, u64, u64) -> u64;
     	static auto syscallGetRsdp(long *ret, u64, u64, u64, u64, u64, u64) -> u64;
     	static auto syscallInstallIRQHandler(long *ret, u64 irq, u64 port, u64, u64, u64, u64) -> u64;
     	static auto syscallUninstallIRQHandler(long *ret, u64 irq, u64, u64, u64, u64, u64) -> u64;

@@ -31,6 +31,8 @@ namespace kernel::common {
 
         static u64 getCurrentHhdm();
 
+    	static u64 getCurrentRsdp();
+
         uPtr getStackTop() const;
 
         AllocContext *getKernelAllocContext() const;
@@ -57,6 +59,9 @@ namespace kernel::common {
 
         static Terminal terminal;
 
+    	static u64 currentHhdm;
+    	static u64 currentRsdp;
+
     	bool isInitFlag {};
 
         uPtr stackTop {};
@@ -77,6 +82,9 @@ namespace kernel::common {
     	AcpiPM acpiPM {};
 
     	Scheduler *scheduler {};
+
+    public:
+    	static u64 schedulingCoresRemaining;
     };
 
     class CommonCoreMain {

@@ -192,10 +192,6 @@ namespace kernel::common::memory {
 		return this->kernelAddrVirt;
 	}
 
-	bool PageMap::level5Paging() const {
-		return this->isLevel5Paging;
-	}
-
 	u64 *PageMap::getPageTable() const {
 		return this->pageTable;
 	}

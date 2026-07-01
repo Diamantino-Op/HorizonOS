@@ -87,6 +87,9 @@ namespace kernel::common::memory {
     	static void removeFreeList(AllocContext *ctx, MemoryBlock *block);
 
     	static bool areAdjacent(const MemoryBlock *left, const MemoryBlock *right);
+
+    public:
+    	static bool isPagingLvl5;
     };
 
     class VirtualPageAllocator {

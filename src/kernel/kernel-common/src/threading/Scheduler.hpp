@@ -416,6 +416,8 @@ namespace kernel::common::threading {
 
     	bool oldThreadWasIopb {};
 
+    	bool isScheduling {};
+
     public:
     	UleRunQueue uleQueue {};
     	TicketSpinLock coreLock {};

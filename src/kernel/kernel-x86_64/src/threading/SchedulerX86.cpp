@@ -102,6 +102,18 @@ namespace kernel::common::threading {
 	}
 
 	u128 ExecutionNode::schedule(const u64 oldRsp) {
+		if (not this->isScheduling) {
+			this->isScheduling = true;
+
+			const auto current = __atomic_load_n(&CommonMain::schedulingCoresRemaining, __ATOMIC_RELAXED);
+
+			__atomic_store_n(&CommonMain::schedulingCoresRemaining, current - 1, __ATOMIC_RELEASE);
+
+			if (current == 1) {
+				CommonMain::getInstance()->getPMM()->reclaimMemory();
+			}
+		}
+
 		if (this->currentThread == nullptr) {
 			CommonMain::getTerminal()->error("No current thread for EN: %lu", "Scheduler", CpuManager::getCurrentCore()->cpuId); // TODO: Use custom panic
 
@@ -156,7 +168,7 @@ namespace kernel::common::threading {
 			schedulerPtr->enqueueThread(oldThread);
 		}
 
-		if (oldThread != nullptr and reinterpret_cast<ThreadContext *>(oldThread->getContext())->threadTssIopb != nullptr) {
+		if (reinterpret_cast<ThreadContext *>(oldThread->getContext())->threadTssIopb != nullptr) {
 			this->oldThreadWasIopb = true;
 		}
 

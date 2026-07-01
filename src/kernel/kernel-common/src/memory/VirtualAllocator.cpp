@@ -9,8 +9,12 @@ extern limine_memmap_request memMapRequest;
 extern limine_paging_mode_request pagingModeRequest;
 
 namespace kernel::common::memory {
+	bool VirtualAllocator::isPagingLvl5;
+
 	// TODO: Change page flags to a class for multi arch
 	AllocContext *VirtualAllocator::createContext() {
+		isPagingLvl5 = pagingModeRequest.response != nullptr and pagingModeRequest.response->mode == 1;
+
 		AllocContext *ctx = nullptr;
 
 		const u64 kernelEnd = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
@@ -78,7 +82,7 @@ namespace kernel::common::memory {
 
 	//TODO: Check why no work without adding the &
 	u64 VirtualAllocator::getProcessAllocStart() {
-		if (pagingModeRequest.response != nullptr and pagingModeRequest.response->mode == 1) {
+		if (isPagingLvl5) {
 			return ((CommonMain::getCurrentHhdm() - 0x1000000000000) & ~0xfe00000000000000);
 		}
 

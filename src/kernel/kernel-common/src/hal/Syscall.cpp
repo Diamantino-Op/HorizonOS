@@ -7,9 +7,8 @@
 #include "hal/Cpu.hpp"
 #include "threading/PortMessaging.hpp"
 
-extern volatile limine_rsdp_request rsdpRequest;
-extern volatile limine_memmap_request memMapRequest;
-extern volatile limine_mp_request mpRequest;
+// TODO: Preserve
+extern limine_mp_request mpRequest;
 
 namespace kernel::common::hal {
 	using namespace threading;
@@ -126,23 +125,6 @@ namespace kernel::common::hal {
 
 			scheduler->getSchedLock()->unlock(schedPrevIF);
 			return count;
-		}
-
-		auto getUsableMemoryBytes() -> u64 {
-			if (memMapRequest.response == nullptr) {
-				return 0;
-			}
-
-			u64 total = 0;
-
-			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
-				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
-				if (entry != nullptr && entry->type == LIMINE_MEMMAP_USABLE) {
-					total += entry->length;
-				}
-			}
-
-			return total;
 		}
 
 		auto copyToUser(const AllocContext *ctx, const u64 userPtr, const void *sourcePtr, const usize size) -> int {
@@ -575,7 +557,7 @@ namespace kernel::common::hal {
 		kernelInfo.loads[0] = 0;
 		kernelInfo.loads[1] = 0;
 		kernelInfo.loads[2] = 0;
-		kernelInfo.totalRam = getUsableMemoryBytes();
+		kernelInfo.totalRam = CommonMain::getInstance()->getPMM()->getTotalMemory();
 		kernelInfo.freeRam = commonMain != nullptr && commonMain->getPMM() != nullptr ? commonMain->getPMM()->getFreeMemory() : 0;
 		kernelInfo.sharedRam = 0;
 		kernelInfo.bufferRam = 0;
@@ -1275,13 +1257,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		if (rsdpRequest.response == nullptr) {
-			*ret = 0;
-
-			return EFAULT;
-		}
-
-		*ret = static_cast<long>(reinterpret_cast<uacpi_phys_addr>(rsdpRequest.response->address) - CommonMain::getCurrentHhdm());
+		*ret = static_cast<long>(CommonMain::getCurrentRsdp() - CommonMain::getCurrentHhdm());
 
 		return 0;
 	}
