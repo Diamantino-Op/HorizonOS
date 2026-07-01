@@ -131,27 +131,30 @@ namespace kernel::common::threading {
 		// Save the old thread state
 
 		Thread *oldThread = this->currentThread;
+		const bool oldThreadIsUnstartedIdle = oldThread == this->idleThread && !this->idleThreadStarted;
 
 		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
 
-		oldThread->setStackPointer(oldRsp);
+		if (!oldThreadIsUnstartedIdle) {
+			oldThread->setStackPointer(oldRsp);
+		}
 
 		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
-		if (oldThread != this->idleThread && oldThread->lastScheduledNs != 0 && oldThread->getState() == ThreadState::RUNNING) {
+		if (!oldThreadIsUnstartedIdle && oldThread != this->idleThread && oldThread->lastScheduledNs != 0 && oldThread->getState() == ThreadState::RUNNING) {
 			oldThread->runTime += now - oldThread->lastScheduledNs;
 			oldThread->recomputeDynPriority();
 		}
 
-		if (oldThread->getState() == ThreadState::TERMINATED) {
+		if (!oldThreadIsUnstartedIdle && oldThread->getState() == ThreadState::TERMINATED) {
 			schedulerPtr->awaitingKillThreadList.addEnd(oldThread);
-		} else if (oldThread->getSleepNs() > 0) {
+		} else if (!oldThreadIsUnstartedIdle && oldThread->getSleepNs() > 0) {
 			oldThread->lastScheduledNs = now;
 
 			if (!schedulerPtr->sleepingThreadList.contains(oldThread)) {
 				schedulerPtr->sleepingThreadList.addEnd(oldThread);
 			}
-		} else if (oldThread->getState() == ThreadState::BLOCKED) {
+		} else if (!oldThreadIsUnstartedIdle && oldThread->getState() == ThreadState::BLOCKED) {
 			oldThread->lastScheduledNs = now;
 
 			if (oldThread->getPendingWakeup()) {
@@ -164,7 +167,7 @@ namespace kernel::common::threading {
 			} else if (!schedulerPtr->blockedThreadList.contains(oldThread)) {
 				schedulerPtr->blockedThreadList.addEnd(oldThread);
 			}
-		} else if (oldThread != this->idleThread) {
+		} else if (!oldThreadIsUnstartedIdle && oldThread != this->idleThread) {
 			schedulerPtr->enqueueThread(oldThread);
 		}
 
@@ -181,6 +184,10 @@ namespace kernel::common::threading {
 		this->currentThread = nextThread;
 		this->currentThread->setState(ThreadState::RUNNING);
 		this->currentThread->lastScheduledNs = now;
+
+		if (this->currentThread == this->idleThread) {
+			this->idleThreadStarted = true;
+		}
 
 		/*if (oldEntry != this->currentThread && oldEntry != nullptr) {
 			//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());

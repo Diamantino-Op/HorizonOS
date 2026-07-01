@@ -415,6 +415,7 @@ namespace kernel::common::threading {
         Thread *currentThread {};
 
     	bool oldThreadWasIopb {};
+    	bool idleThreadStarted {};
 
     	bool isScheduling {};
 
