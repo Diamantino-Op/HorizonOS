@@ -8,7 +8,7 @@ namespace kernel::common::memory {
 	using namespace x86_64::memory;
 	using namespace x86_64::utils;
 
-	void VirtualAllocator::freePageTableChildren(const u64 *tableAddr, const bool level5Paging, const u8 depth) {
+	void VirtualAllocator::freePageTableChildren(const u64 *tableAddr, const bool level5Paging, const u8 depth, const u64 skipPhysA, const u64 skipPhysB) {
 		const auto *table = reinterpret_cast<const PageTable *>(tableAddr);
 		const u8 leafTableDepth = level5Paging ? 4 : 3;
 
@@ -45,7 +45,15 @@ namespace kernel::common::memory {
 				continue;
 			}
 
-			freePageTableChildren(reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1);
+			if (depth == leafTableDepth - 1) {
+				if (entryPhysAddress != skipPhysA && entryPhysAddress != skipPhysB) {
+					CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(entryPhysAddress), 1);
+				}
+
+				continue;
+			}
+
+			freePageTableChildren(reinterpret_cast<u64 *>(entryPhysAddress + CommonMain::getCurrentHhdm()), level5Paging, depth + 1, skipPhysA, skipPhysB);
 
 			CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(entryPhysAddress), 1);
 		}
@@ -56,17 +64,10 @@ namespace kernel::common::memory {
 			return;
 		}
 
-		const u64 heapStart = reinterpret_cast<u64>(ctx->heapStart);
-		const u64 heapEnd = heapStart + ctx->heapSize;
-		const u64 heapFirstPage = heapStart & ~(pageSize - 1);
 		const u64 pageTablePhys = ctx->pageMap.getAddr();
 		const u64 ctxPhys = ctx->pageMap.getPhysAddress(reinterpret_cast<u64>(ctx));
 
-		for (u64 virtAddress = heapFirstPage + pageSize; virtAddress < heapEnd; virtAddress += pageSize) {
-			CommonMain::getInstance()->getPMM()->freePagesCtx(ctx, reinterpret_cast<u64 *>(virtAddress), 1);
-		}
-
-		freePageTableChildren(ctx->pageMap.getPageTable(), isPagingLvl5, 0);
+		freePageTableChildren(ctx->pageMap.getPageTable(), isPagingLvl5, 0, pageTablePhys, ctxPhys);
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.load();
 

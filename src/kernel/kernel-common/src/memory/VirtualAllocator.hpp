@@ -83,7 +83,7 @@ namespace kernel::common::memory {
     private:
         static u64 startCreateArch();
         static void endCreateArch(u64 value);
-        static void freePageTableChildren(const u64 *tableAddr, bool level5Paging, u8 depth);
+        static void freePageTableChildren(const u64 *tableAddr, bool level5Paging, u8 depth, u64 skipPhysA, u64 skipPhysB);
 
         static bool growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);

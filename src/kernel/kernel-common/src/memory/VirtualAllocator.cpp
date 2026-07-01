@@ -635,15 +635,16 @@ namespace kernel::common::memory {
 		}
 
 		if (currEntry->next != nullptr and not currEntry->next->isAllocated) {
-			currEntry->count += currEntry->next->count;
+			VpaListEntry *nextEntry = currEntry->next;
 
-			currEntry->next = currEntry->next->next;
+			currEntry->count += nextEntry->count;
+			currEntry->next = nextEntry->next;
 
 			if (currEntry->next != nullptr) {
 				currEntry->next->prev = currEntry;
 			}
 
-			delete currEntry->next;
+			delete nextEntry;
 		}
 	}
 }

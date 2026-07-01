@@ -238,6 +238,8 @@ namespace kernel::common::memory {
 				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 			}
 
+			Asm::invalidatePage(vAddr);
+
 			return;
 		}
 
@@ -263,6 +265,8 @@ namespace kernel::common::memory {
 				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 			}
 
+			Asm::invalidatePage(vAddr);
+
 			return;
 		}
 
@@ -285,6 +289,8 @@ namespace kernel::common::memory {
 		if (not isKernel) {
 			this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 		}
+
+		Asm::invalidatePage(vAddr);
 	}
 
 	bool PageMap::protectPage(const u64 vAddr, const u8 prot) {
@@ -346,6 +352,8 @@ namespace kernel::common::memory {
 		targetEntry->writeable = (prot & PROT_WRITE) != 0;
 		targetEntry->userAccess = 1;
 		targetEntry->executeDisable = (prot & PROT_EXEC) == 0;
+
+		Asm::invalidatePage(vAddr);
 
 		return true;
 	}
