@@ -63,6 +63,9 @@ namespace kernel::common {
         ExecutionNode *getCurrentCore();
 
     private:
+    	void enqueueMessage(const TermMsg &message);
+    	void wakeThread();
+
         static flanterm_context *flantermCtx;
 
         TicketSpinLock spinLock;
@@ -71,6 +74,7 @@ namespace kernel::common {
     	LFQueue<TermMsg, maxMessages> msgQueue;
 
     	bool isThreaded = false;
+    	u16 threadId {};
     };
 
 	void terminalThreadFunction();

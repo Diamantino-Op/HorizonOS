@@ -192,6 +192,33 @@ namespace kernel::common {
 		this->unlock(prevIF);
 	}
 
+	void Terminal::enqueueMessage(const TermMsg &message) {
+		if (this->msgQueue.push(message)) {
+			this->wakeThread();
+		}
+	}
+
+	void Terminal::wakeThread() {
+		const u16 tid = __atomic_load_n(&this->threadId, __ATOMIC_ACQUIRE);
+
+		if (tid == 0) {
+			return;
+		}
+
+		Thread *currentThread = Scheduler::getCurrentThread();
+
+		if (currentThread != nullptr && currentThread->getId() == tid) {
+			return;
+		}
+
+		CommonMain *main = CommonMain::getInstance();
+		Scheduler *scheduler = main != nullptr ? main->getScheduler() : nullptr;
+
+		if (scheduler != nullptr) {
+			scheduler->unblockThread(tid, true);
+		}
+	}
+
 	void Terminal::info(const char *format, const char *id, ...) {
 		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			TermMsg message {};
@@ -210,7 +237,7 @@ namespace kernel::common {
 
 			va_end(args);
 
-			this->msgQueue.push(message);
+			this->enqueueMessage(message);
 		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
@@ -246,7 +273,7 @@ namespace kernel::common {
 
 			va_end(args);
 
-			this->msgQueue.push(message);
+			this->enqueueMessage(message);
 		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
@@ -291,7 +318,7 @@ namespace kernel::common {
 
 			va_end(args);
 
-			this->msgQueue.push(message);
+			this->enqueueMessage(message);
 		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
@@ -337,7 +364,7 @@ namespace kernel::common {
 
 			va_end(args);
 
-			this->msgQueue.push(message);
+			this->enqueueMessage(message);
 		} else if (canPrint()) {
 			const bool prevIF = this->lock();
 
@@ -356,8 +383,10 @@ namespace kernel::common {
 
 	void terminalThreadFunction() {
 		Terminal *terminal = CommonMain::getTerminal();
+		Thread *thread = Scheduler::getCurrentThread();
 
 		terminal->msgQueue.init();
+		__atomic_store_n(&terminal->threadId, thread != nullptr ? thread->getId() : 0, __ATOMIC_RELEASE);
 		__atomic_store_n(&terminal->isThreaded, true, __ATOMIC_RELEASE);
 
 		for (;;) {

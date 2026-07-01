@@ -850,20 +850,15 @@ namespace kernel::common::threading {
 		//const bool prevIF = this->schedLock.lock();
 
 		const bool wasBlocked = this->blockedThreadList.remove(thread, false, false);
+		const bool wasSleeping = this->sleepingThreadList.remove(thread, false, false);
 
-		if (wasBlocked) {
+		if (wasBlocked || wasSleeping) {
 			thread->setWaitingPort(0);
+			thread->setSleepNs(0);
+			thread->setState(ThreadState::RUNNING);
 
-			if (thread->getSleepNs() == 0) {
-				(void) top;
-				thread->setState(ThreadState::RUNNING);
-
-				this->enqueueThread(thread, true);
-			} else {
-				if (!this->sleepingThreadList.contains(thread)) {
-					this->sleepingThreadList.addStart(thread, false);
-				}
-			}
+			(void) top;
+			this->enqueueThread(thread, true);
 		} else {
 			// Thread hasn't called blockThread yet — set the pending wakeup flag
 			// so that the upcoming blockThread() call returns immediately.
