@@ -71,7 +71,7 @@ namespace kernel::x86_64::hal {
         void calibrateTimer();
 
         void eoi();
-        void ipi(u8 id, Dest dsh, u8 vector);
+        void ipi(u8 id, Dest dsh, u8 vector, IOApicDelivery delivery = IOApicDelivery::FIXED);
         void arm(u64 ns, u8 vector, bool periodic);
 
         void setId(u32 apicId);

@@ -81,10 +81,10 @@ namespace kernel::x86_64 {
 
 		// Interrupts
 		for (u16 i = 32; i <= 255; i++) {
-			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 4, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
+			this->idtManager.addEntry(i, interruptTable[i], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 		}
 
-		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 3, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
+		this->idtManager.addEntry(0x80, interruptTable[0x80], Selector::USER_CODE32, 0, GateDPL::USER_DPL | GateType::INTERRUPT_GATE);
 
 		this->idtManager.loadIdt();
 

@@ -128,8 +128,8 @@ namespace kernel::x86_64::hal {
 		this->write(ApicMsrs::LAPIC_EOI, 0);
 	}
 
-	void Apic::ipi(const u8 id, const Dest dsh, const u8 vector) {
-		const auto flags = (static_cast<u32>(dsh) << 18) | vector;
+	void Apic::ipi(const u8 id, const Dest dsh, const u8 vector, const IOApicDelivery delivery) {
+		const auto flags = (static_cast<u32>(dsh) << 18) | static_cast<u32>(delivery) | vector;
 
 		if (not this->isX2Apic) {
 			write(ApicMsrs::LAPIC_ICRH, static_cast<u32>(id) << 24);

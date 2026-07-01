@@ -4,6 +4,8 @@
 #include "Types.hpp"
 
 namespace kernel::x86_64::hal {
+	constexpr u8 panicStopIpiVector = 0xFE;
+
     struct __attribute__((packed)) Frame {
         u64 r15;
         u64 r14;
@@ -76,6 +78,8 @@ namespace kernel::x86_64::hal {
         static void handlePageFault(Frame *frame);
 
         static void kernelPanic(Frame *frame);
+    	static void stopOtherCores();
+    	[[noreturn]] static void stopCurrentCore();
 
         static void backtrace(usize rbp);
         static void backtrace(usize rbp, bool userMode = false);

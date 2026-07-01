@@ -1,5 +1,6 @@
 #include "InterruptAllocator.hpp"
 
+#include "Interrupts.hpp"
 #include "Main.hpp"
 
 namespace kernel::x86_64::hal {
@@ -9,7 +10,7 @@ namespace kernel::x86_64::hal {
 		const bool prevIF = this->spinLock.lock();
 
 		for (u8 i = 0; i < 224; i++) {
-			if (this->handlers[i].fun == nullptr and (i + 32) != 0x80) {
+			if (this->handlers[i].fun == nullptr and (i + 32) != 0x80 and (i + 32) != panicStopIpiVector) {
 				this->handlers[i].fun = handler;
 				this->handlers[i].ctx = ctx;
 
@@ -40,7 +41,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	bool InterruptAllocator::allocSpecific(const u8 intNum, const HandlerFun handler, u64 *ctx) {
-		if (intNum < 32 or intNum > 255) {
+		if (intNum < 32 or intNum > 255 or intNum == 0x80 or intNum == panicStopIpiVector) {
 			return false;
 		}
 

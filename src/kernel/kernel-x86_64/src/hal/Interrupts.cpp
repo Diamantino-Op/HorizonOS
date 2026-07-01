@@ -10,6 +10,9 @@ namespace kernel::x86_64::hal {
 	using namespace utils;
 
 	constexpr usize maxBacktraceFrames = 64;
+	namespace {
+		bool stopIpiSent {};
+	}
 
 	extern "C" void handleInterruptAsm(const usize stackFrame) {
 		auto *frame = reinterpret_cast<Frame *>(stackFrame);
@@ -18,13 +21,19 @@ namespace kernel::x86_64::hal {
 	}
 
 	void Interrupts::handleInterrupt(Frame *frame) {
-		if (frame->intNo == 14) {
+		if (frame->intNo == panicStopIpiVector) {
+			stopCurrentCore();
+		} else if (frame->intNo == 14) {
 			handlePageFault(frame);
 
 			if ((frame->cs & 0x3) == 3) {
 				deliverPendingSignal(frame);
 			}
 		} else if (frame->intNo == 2) {
+			if (__atomic_load_n(&stopIpiSent, __ATOMIC_ACQUIRE)) {
+				stopCurrentCore();
+			}
+
 			Scheduler::isDisabled = true;
 
 			CommonMain::getTerminal()->warnNoLock("NMI", "Interrupts");
@@ -81,6 +90,33 @@ namespace kernel::x86_64::hal {
 		CpuManager::getCurrentCore()->apic.eoi();
 	}
 
+	void Interrupts::stopOtherCores() {
+		if (__atomic_exchange_n(&stopIpiSent, true, __ATOMIC_ACQ_REL)) {
+			return;
+		}
+
+		CpuCore *core = CpuManager::getCurrentCore();
+
+		if (core == nullptr || !core->apic.isInitialized()) {
+			return;
+		}
+
+		core->apic.ipi(0, Dest::ALL_NO_SELF, 2, IOApicDelivery::NMI);
+	}
+
+	[[noreturn]] void Interrupts::stopCurrentCore() {
+		Asm::cli();
+		Scheduler::isDisabled = true;
+
+		CpuCore *core = CpuManager::getCurrentCore();
+
+		if (core != nullptr && core->apic.isInitialized()) {
+			core->apic.eoi();
+		}
+
+		Asm::lhlt();
+	}
+
 	// TODO: Fix
 	void Interrupts::handlePageFault(Frame *frame) {
 		kernelPanic(frame); // Remove after fix
@@ -134,6 +170,7 @@ namespace kernel::x86_64::hal {
 
 	void Interrupts::kernelPanic(Frame *frame) {
 		Asm::cli();
+		stopOtherCores();
 
 		Terminal *terminal = CommonMain::getTerminal();
 
