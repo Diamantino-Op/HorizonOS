@@ -68,7 +68,7 @@ namespace kernel::common {
 			this->getCurrentCore()->setDisabled(true);
 		}*/
 
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			return false;
 		}
 
@@ -78,7 +78,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::unlock(const bool prevIF) {
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			return;
 		}
 
@@ -193,7 +193,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::info(const char *format, const char *id, ...) {
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			TermMsg message {};
 
 			message.type = MessageType::INFO;
@@ -229,7 +229,7 @@ namespace kernel::common {
 
 	void Terminal::debug(const char *format, const char *id, ...) {
 #ifdef HORIZON_DEBUG
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			TermMsg message {};
 
 			message.type = MessageType::DEBUG;
@@ -274,7 +274,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::warn(const char *format, const char *id, ...) {
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			TermMsg message {};
 
 			message.type = MessageType::WARN;
@@ -320,7 +320,7 @@ namespace kernel::common {
 	}
 
 	void Terminal::error(const char *format, const char *id, ...) {
-		if (this->isThreaded) {
+		if (__atomic_load_n(&this->isThreaded, __ATOMIC_ACQUIRE)) {
 			TermMsg message {};
 
 			message.type = MessageType::ERROR;
@@ -357,9 +357,8 @@ namespace kernel::common {
 	void terminalThreadFunction() {
 		Terminal *terminal = CommonMain::getTerminal();
 
-		terminal->isThreaded = true;
-
 		terminal->msgQueue.init();
+		__atomic_store_n(&terminal->isThreaded, true, __ATOMIC_RELEASE);
 
 		for (;;) {
 			TermMsg message {};

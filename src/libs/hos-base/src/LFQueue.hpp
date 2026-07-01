@@ -8,45 +8,72 @@ template <typename T, usize N>
 struct LFQueue {
 	static_assert((N & (N - 1)) == 0, "N must be power of two");
 
-	alignas(64) volatile usize head;
-	alignas(64) volatile usize tail;
-	T buf[N];
+	struct Cell {
+		alignas(64) usize sequence;
+		T value;
+	};
+
+	alignas(64) usize head;
+	alignas(64) usize tail;
+	Cell buf[N];
 
 	void init() {
 		__atomic_store_n(&head, 0, __ATOMIC_RELAXED);
 		__atomic_store_n(&tail, 0, __ATOMIC_RELAXED);
+
+		for (usize i = 0; i < N; ++i) {
+			__atomic_store_n(&buf[i].sequence, i, __ATOMIC_RELAXED);
+		}
 	}
 
 	bool push(const T& v) {
-		usize h, next;
-		do {
-			h = __atomic_load_n(&head, __ATOMIC_RELAXED);
-			next = (h + 1) & (N - 1);
-			usize t = __atomic_load_n(&tail, __ATOMIC_ACQUIRE);
+		Cell *cell;
+		usize pos = __atomic_load_n(&head, __ATOMIC_RELAXED);
 
-			if (next == t) {
+		for (;;) {
+			cell = &buf[pos & (N - 1)];
+			const usize sequence = __atomic_load_n(&cell->sequence, __ATOMIC_ACQUIRE);
+			const isize diff = static_cast<isize>(sequence) - static_cast<isize>(pos);
+
+			if (diff == 0) {
+				if (__atomic_compare_exchange_n(&head, &pos, pos + 1, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+					break;
+				}
+			} else if (diff < 0) {
 				return false;
+			} else {
+				pos = __atomic_load_n(&head, __ATOMIC_RELAXED);
 			}
+		}
 
-			buf[h] = v;
-		} while (!__atomic_compare_exchange_n(&head, &h, next, false, __ATOMIC_RELEASE, __ATOMIC_RELAXED));
+		cell->value = v;
+		__atomic_store_n(&cell->sequence, pos + 1, __ATOMIC_RELEASE);
 
 		return true;
 	}
 
 	bool pop(T& out) {
-		usize t = __atomic_load_n(&tail, __ATOMIC_RELAXED);
-		usize h = __atomic_load_n(&head, __ATOMIC_ACQUIRE);
+		Cell *cell;
+		usize pos = __atomic_load_n(&tail, __ATOMIC_RELAXED);
 
-		if (t == h) {
-			return false;
+		for (;;) {
+			cell = &buf[pos & (N - 1)];
+			const usize sequence = __atomic_load_n(&cell->sequence, __ATOMIC_ACQUIRE);
+			const isize diff = static_cast<isize>(sequence) - static_cast<isize>(pos + 1);
+
+			if (diff == 0) {
+				if (__atomic_compare_exchange_n(&tail, &pos, pos + 1, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+					break;
+				}
+			} else if (diff < 0) {
+				return false;
+			} else {
+				pos = __atomic_load_n(&tail, __ATOMIC_RELAXED);
+			}
 		}
 
-		out = *(reinterpret_cast<T*>(reinterpret_cast<char*>(buf) + t * sizeof(T)));
-
-		out = buf[t];
-
-		__atomic_store_n(&tail, (t + 1) & (N - 1), __ATOMIC_RELEASE);
+		out = cell->value;
+		__atomic_store_n(&cell->sequence, pos + N, __ATOMIC_RELEASE);
 
 		return true;
 	}

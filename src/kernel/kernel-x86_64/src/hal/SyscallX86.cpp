@@ -112,7 +112,7 @@ namespace kernel::common::hal {
 				ctx->threadTssIopb = threadTss;
 			}
 
-			ctx->updateTssPtrs(CpuManager::getCurrentCore()->tssManager->getTss()->rsp[0]);
+			ctx->updateTssPtrs(thread->getKStackPointer());
 
 			CpuManager::getCurrentCore()->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 

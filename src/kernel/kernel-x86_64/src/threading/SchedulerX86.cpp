@@ -217,11 +217,13 @@ namespace kernel::common::threading {
 			ctx->updateTssPtrs(this->currentThread->getKStackPointer());
 
 			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
+			core->gdtManager->getGdt()->tssEntry.clearBusy();
 
 			TssManager::updateTss();
 		} else {
 			if (this->oldThreadWasIopb) {
 				core->gdtManager->getGdt()->tssEntry = GdtTssEntry(core->tssManager->getTss());
+				core->gdtManager->getGdt()->tssEntry.clearBusy();
 
 				this->oldThreadWasIopb = false;
 
