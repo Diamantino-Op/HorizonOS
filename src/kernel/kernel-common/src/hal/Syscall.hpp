@@ -109,7 +109,9 @@ namespace kernel::common::hal {
 	struct IrqRegistration {
 		u64 irq;
 		u64 port;
+		u64 destCpu;
 		bool isIrq;
+		bool isLapicDest;
 	};
 
 	struct IrqReceiveData {

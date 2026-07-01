@@ -17,6 +17,46 @@ namespace kernel::common::hal {
 	using namespace x86_64::threading;
 
 	namespace {
+		auto findCoreByDestination(const CpuManager *cpuManager, const u64 destCpu, const bool isLapic) -> const CpuCore * {
+			if (cpuManager == nullptr || cpuManager->getBootstrapCpu() == nullptr) {
+				return nullptr;
+			}
+
+			const CpuCore *bootstrapCpu = cpuManager->getBootstrapCpu();
+
+			if ((isLapic && bootstrapCpu->lapicId == destCpu) || (!isLapic && bootstrapCpu->cpuId == destCpu)) {
+				return bootstrapCpu;
+			}
+
+			const CoreKernel *coreList = cpuManager->getCoreList();
+
+			if (coreList == nullptr || cpuManager->getCoreAmount() <= 1) {
+				return nullptr;
+			}
+
+			for (u64 i = 0; i < cpuManager->getCoreAmount() - 1; i++) {
+				const CpuCore *core = &coreList[i].cpuCore;
+
+				if ((isLapic && core->lapicId == destCpu) || (!isLapic && core->cpuId == destCpu)) {
+					return core;
+				}
+			}
+
+			return nullptr;
+		}
+
+		auto cpuIdFromLapicId(const CpuManager *cpuManager, const u64 lapicId, u64 *cpuId) -> bool {
+			const CpuCore *core = findCoreByDestination(cpuManager, lapicId, true);
+
+			if (core == nullptr || cpuId == nullptr) {
+				return false;
+			}
+
+			*cpuId = core->cpuId;
+
+			return true;
+		}
+
 		auto getThreadTss(Thread *thread) -> TssIopb * {
 			if (thread == nullptr || thread->getContext() == nullptr) {
 				return nullptr;
@@ -537,6 +577,8 @@ namespace kernel::common::hal {
 		registration->irq = irq;
 		registration->isIrq = true;
 		registration->port = port;
+		registration->destCpu = 0;
+		registration->isLapicDest = false;
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
 			delete registration;
@@ -547,6 +589,8 @@ namespace kernel::common::hal {
 		const u8 retInt = irqAllocator->allocateIrq(irq, 0, 0, IOApicDelivery::FIXED, &userIrqHandler, reinterpret_cast<u64 *>(registration));
 
 		if (retInt == 0) {
+			irqRegistrations.remove(registration);
+
 			return UACPI_STATUS_ALREADY_EXISTS;
 		}
 
@@ -608,40 +652,11 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	// TODO: destCpu is currently passed as CPU ID, so it might not work like this
 	auto SyscallManager::syscallAllocIntVec(long *ret, const u64 port, const u64 destCpu, const u64 isLapic, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
-		if (destCpu >= cpuManager->getCoreAmount()) {
-			return EFAULT;
-		}
-
-		const CpuCore *destCore = nullptr;
-
-		if (static_cast<bool>(isLapic)) {
-			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
-				destCore = cpuManager->getBootstrapCpu();
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
-						destCore = &cpuManager->getCoreList()[i].cpuCore;
-						break;
-					}
-				}
-			}
-		} else {
-			if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
-				destCore = cpuManager->getBootstrapCpu();
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
-						destCore = &cpuManager->getCoreList()[i].cpuCore;
-						break;
-					}
-				}
-			}
-		}
+		const CpuCore *destCore = findCoreByDestination(cpuManager, destCpu, static_cast<bool>(isLapic));
 
 		if (destCore == nullptr) {
 			return EFAULT;
@@ -650,9 +665,11 @@ namespace kernel::common::hal {
 		auto *registration = new IrqRegistration();
 
 		registration->port = port;
+		registration->destCpu = destCpu;
+		registration->isLapicDest = static_cast<bool>(isLapic);
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
-			irqRegistrations.remove(registration);
+			delete registration;
 
 			return EFAULT;
 		}
@@ -665,6 +682,8 @@ namespace kernel::common::hal {
 		*ret = static_cast<long>(intVec);
 
 		if (intVec == 0) {
+			irqRegistrations.remove(registration);
+
 			return EFAULT;
 		}
 
@@ -675,35 +694,7 @@ namespace kernel::common::hal {
 		auto *kernel = reinterpret_cast<Kernel *>(CommonMain::getInstance());
 		const CpuManager *cpuManager = kernel->getCpuManager();
 
-		if (destCpu >= cpuManager->getCoreAmount()) {
-			return EFAULT;
-		}
-
-		const CpuCore *destCore = nullptr;
-
-		if (static_cast<bool>(isLapic)) {
-			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
-				destCore = cpuManager->getBootstrapCpu();
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
-						destCore = &cpuManager->getCoreList()[i].cpuCore;
-						break;
-					}
-				}
-			}
-		} else {
-			if (cpuManager->getBootstrapCpu()->cpuId == destCpu) {
-				destCore = cpuManager->getBootstrapCpu();
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.cpuId == destCpu) {
-						destCore = &cpuManager->getCoreList()[i].cpuCore;
-						break;
-					}
-				}
-			}
-		}
+		const CpuCore *destCore = findCoreByDestination(cpuManager, destCpu, static_cast<bool>(isLapic));
 
 		if (destCore == nullptr or not destCore->interruptAllocator->freeInt(vec)) {
 			return EFAULT;
@@ -717,7 +708,7 @@ namespace kernel::common::hal {
 			auto nextIt = it;
 			++nextIt;
 
-			if (currEntry.irq == vec and not currEntry.isIrq) {
+			if (currEntry.irq == vec and not currEntry.isIrq and currEntry.destCpu == destCpu and currEntry.isLapicDest == static_cast<bool>(isLapic)) {
 				irqRegistrations.remove(&currEntry);
 
 				break;
@@ -737,25 +728,19 @@ namespace kernel::common::hal {
 		uint64_t gsiDestCpu = destCpu;
 
 		if (static_cast<bool>(isLapic)) {
-			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
-				gsiDestCpu = cpuManager->getBootstrapCpu()->cpuId;
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
-						gsiDestCpu = cpuManager->getCoreList()[i].cpuCore.cpuId;
-
-						break;
-					}
-				}
+			if (!cpuIdFromLapicId(cpuManager, destCpu, &gsiDestCpu)) {
+				return EFAULT;
 			}
 		}
 
 		auto *registration = new IrqRegistration();
 
 		registration->port = port;
+		registration->destCpu = destCpu;
+		registration->isLapicDest = static_cast<bool>(isLapic);
 
 		if (irqRegistrations.addStart(registration) == nullptr) {
-			irqRegistrations.remove(registration);
+			delete registration;
 
 			return EFAULT;
 		}
@@ -768,6 +753,8 @@ namespace kernel::common::hal {
 		*ret = static_cast<long>(gsi);
 
 		if (gsi == 1000000) {
+			irqRegistrations.remove(registration);
+
 			return EFAULT;
 		}
 
@@ -782,16 +769,8 @@ namespace kernel::common::hal {
 		uint64_t gsiDestCpu = destCpu;
 
 		if (static_cast<bool>(isLapic)) {
-			if (cpuManager->getBootstrapCpu()->lapicId == destCpu) {
-				gsiDestCpu = cpuManager->getBootstrapCpu()->cpuId;
-			} else {
-				for (u64 i = 0; i < cpuManager->getCoreAmount(); i++) {
-					if (cpuManager->getCoreList()[i].cpuCore.lapicId == destCpu) {
-						gsiDestCpu = cpuManager->getCoreList()[i].cpuCore.cpuId;
-
-						break;
-					}
-				}
+			if (!cpuIdFromLapicId(cpuManager, destCpu, &gsiDestCpu)) {
+				return EFAULT;
 			}
 		}
 
@@ -807,7 +786,7 @@ namespace kernel::common::hal {
 			auto nextIt = it;
 			++nextIt;
 
-			if (currEntry.irq == gsi and currEntry.isIrq) {
+			if (currEntry.irq == gsi and currEntry.isIrq and currEntry.destCpu == destCpu and currEntry.isLapicDest == static_cast<bool>(isLapic)) {
 				irqRegistrations.remove(&currEntry);
 
 				break;

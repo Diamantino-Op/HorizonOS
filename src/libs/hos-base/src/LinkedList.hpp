@@ -43,6 +43,9 @@ public:
     		prevIF = this->listLock.lock();
     	}
 
+        val->prev = nullptr;
+        val->next = nullptr;
+
         if (this->listStart != nullptr) {
             this->listStart->prev = val;
 
@@ -80,6 +83,9 @@ public:
     	if (useLock) {
     		prevIF = this->listLock.lock();
     	}
+
+        val->prev = nullptr;
+        val->next = nullptr;
 
         if (this->listEnd != nullptr) {
             this->listEnd->next = val;

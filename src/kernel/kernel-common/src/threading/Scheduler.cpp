@@ -385,6 +385,12 @@ namespace kernel::common::threading {
 
 		const bool prevCoreIF = this->coreLock.lock();
 
+		if (thread->isQueued()) {
+			this->coreLock.unlock(prevCoreIF);
+
+			return;
+		}
+
 		thread->recomputeDynPriority();
 
 		if (waking) {
