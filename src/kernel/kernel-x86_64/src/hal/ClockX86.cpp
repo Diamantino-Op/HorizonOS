@@ -35,8 +35,20 @@ namespace kernel::common::hal {
 	}
 
 	auto Clocks::timerTick(u64 */* unused */) -> u32 {
-		const Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
 		CpuCore *currentCore = CpuManager::getCurrentCore();
+		auto *main = CommonMain::getInstance();
+		const Clocks *clocksPtr = main != nullptr ? main->getClocks() : nullptr;
+		const Clock *mainClock = clocksPtr != nullptr ? clocksPtr->getMainClock() : nullptr;
+
+		if (currentCore == nullptr || mainClock == nullptr || mainClock->getNs == nullptr) {
+			if (currentCore != nullptr && currentCore->apic.isInitialized()) {
+				currentCore->apic.eoi();
+			}
+
+			return 1;
+		}
+
+		u64 now = mainClock->getNs();
 
 		auto it = currentCore->coreClock.handlers.begin();
 		const auto end = currentCore->coreClock.handlers.end();
@@ -46,19 +58,22 @@ namespace kernel::common::hal {
 			auto nextIt = it;
 			++nextIt;
 
-			if (currEntry.nextCall <= clocksPtr->getMainClock()->getNs()) {
-				currEntry.nextCall = clocksPtr->getMainClock()->getNs() + currEntry.timeout;
+			if (currEntry.fun != nullptr && currEntry.nextCall <= now) {
+				currEntry.nextCall = now + currEntry.timeout;
 
 				currEntry.fun();
+				now = mainClock->getNs();
 			}
 
 			it = nextIt;
 		}
 
-		if (currentCore->coreClock.schedulerHandler.nextCall <= clocksPtr->getMainClock()->getNs()) {
-			currentCore->coreClock.schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + currentCore->coreClock.schedulerHandler.timeout;
+		TimerHandler &schedulerHandler = currentCore->coreClock.schedulerHandler;
 
-			currentCore->coreClock.schedulerHandler.fun();
+		if (schedulerHandler.fun != nullptr && schedulerHandler.nextCall <= now) {
+			schedulerHandler.nextCall = now + schedulerHandler.timeout;
+
+			schedulerHandler.fun();
 		} else {
 			finishTimerTick();
 		}

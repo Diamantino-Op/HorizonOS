@@ -44,7 +44,13 @@ namespace kernel::common::hal {
 	}
 
 	void Clocks::calibrate(const u64 ms) {
-		const Clock *mainClock = CommonMain::getInstance()->getClocks()->getMainClock();
+		auto *main = CommonMain::getInstance();
+		const Clocks *clocksPtr = main != nullptr ? main->getClocks() : nullptr;
+		const Clock *mainClock = clocksPtr != nullptr ? clocksPtr->getMainClock() : nullptr;
+
+		if (mainClock == nullptr || mainClock->getNs == nullptr) {
+			return;
+		}
 
 		const u64 end = mainClock->getNs() + (ms * 1'000'000);
 
@@ -52,9 +58,15 @@ namespace kernel::common::hal {
 	}
 
 	void CoreClock::resetSchedulerTimer() {
-		const Clocks *clocksPtr = CommonMain::getInstance()->getClocks();
+		auto *main = CommonMain::getInstance();
+		const Clocks *clocksPtr = main != nullptr ? main->getClocks() : nullptr;
+		const Clock *mainClock = clocksPtr != nullptr ? clocksPtr->getMainClock() : nullptr;
 
-		this->schedulerHandler.nextCall = clocksPtr->getMainClock()->getNs() + this->schedulerHandler.timeout;
+		if (mainClock == nullptr || mainClock->getNs == nullptr) {
+			return;
+		}
+
+		this->schedulerHandler.nextCall = mainClock->getNs() + this->schedulerHandler.timeout;
 	}
 
 	void CoreClock::addTimerHandle(const HandlerFun fun, const u64 timeout) {

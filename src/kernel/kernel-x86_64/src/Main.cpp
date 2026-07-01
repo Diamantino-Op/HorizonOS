@@ -6,6 +6,7 @@
 #include "Time.hpp"
 #include "programs/Elf.hpp"
 #include "hal/Syscall.hpp"
+#include "memory/MainMemory.hpp"
 
 #include "limine.h"
 
@@ -25,10 +26,14 @@ static volatile u64 limineBaseRevision[] = LIMINE_BASE_REVISION(6); // NOLINT(*-
 extern limine_framebuffer_request framebufferRequest;
 extern limine_module_request moduleRequest;
 
-extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp) {
-    auto kernel = kernel::x86_64::Kernel(rsp);
+namespace {
+	alignas(kernel::x86_64::Kernel) u8 kernelStorage[sizeof(kernel::x86_64::Kernel)];
+}
 
-	kernel.init();
+extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp) {
+    auto *kernel = new (kernelStorage) kernel::x86_64::Kernel(rsp);
+
+	kernel->init();
 }
 
 namespace kernel::x86_64 {
