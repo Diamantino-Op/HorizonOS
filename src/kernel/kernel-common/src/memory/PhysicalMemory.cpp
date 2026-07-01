@@ -29,6 +29,8 @@ namespace kernel::common::memory {
 						continue;
 					}
 
+					this->totalMemory += end - base;
+
 					auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
 
 					terminal->debug("Found Usable entry: 0x%.16lx, limine: 0x%.16lx", "PMM", currEntry, entry);
@@ -51,6 +53,16 @@ namespace kernel::common::memory {
 	}
 
 	void PhysicalMemoryManager::reclaimMemory() {
+		const bool prevIF = this->pmmSpinLock.lock();
+
+		if (this->bootloaderMemoryReclaimed) {
+			this->pmmSpinLock.unlock(prevIF);
+
+			return;
+		}
+
+		this->bootloaderMemoryReclaimed = true;
+
 		if (memMapRequest.response != nullptr) {
 			const auto addReclaimableRange = [this](const u64 base, const u64 end) -> void {
 				if (end <= base) {
@@ -60,6 +72,7 @@ namespace kernel::common::memory {
 				auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
 
 				currEntry->count = (end - base) / pageSize;
+				this->totalMemory += currEntry->count * pageSize;
 
 				currEntry->prev = nullptr;
 				currEntry->next = this->listPtr;
@@ -97,6 +110,8 @@ namespace kernel::common::memory {
 				}
 			}
 		}
+
+		this->pmmSpinLock.unlock(prevIF);
 	}
 
 	u64 *PhysicalMemoryManager::allocPages(const usize pageAmount, const bool useHhdm) {

@@ -39,7 +39,8 @@ namespace kernel::common::memory {
         PmmListEntry *listPtr {};
         TicketSpinLock pmmSpinLock {};
 
-    	u64 totalMemory {};
+        u64 totalMemory {};
+        bool bootloaderMemoryReclaimed {};
     };
 }
 

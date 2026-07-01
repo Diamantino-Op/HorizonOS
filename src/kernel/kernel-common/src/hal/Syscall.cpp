@@ -1162,7 +1162,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const u64 roundedLen = alignUp<u64>(endAddr, pageSize);
+		const u64 alignedEnd = alignUp<u64>(endAddr, pageSize);
 		const u64 hhdmBase = CommonMain::getCurrentHhdm();
 		auto cacheMode = PageCacheMode::WriteBack;
 
@@ -1197,7 +1197,7 @@ namespace kernel::common::hal {
 			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize + pageOffset;
 		}
 
-		for (u64 i = alignedAddr; i < roundedLen;) {
+		for (u64 i = alignedAddr; i < alignedEnd;) {
 			u64 virtAddr = 0;
 
 			if (static_cast<bool>(isHhdm)) {
@@ -1206,7 +1206,7 @@ namespace kernel::common::hal {
 				virtAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
 			}
 
-			const u64 remaining = roundedLen - i;
+			const u64 remaining = alignedEnd - i;
 			u64 mappingSize = pageSize;
 			bool mapped = false;
 
