@@ -11,29 +11,132 @@ extern limine_paging_mode_request pagingModeRequest;
 namespace kernel::common::memory {
 	bool VirtualAllocator::isPagingLvl5;
 
+	namespace {
+		u64 getPhysicalMemoryEnd() {
+			u64 physicalEnd = 0;
+
+			if (memMapRequest.response == nullptr) {
+				return 0;
+			}
+
+			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
+				const limine_memmap_entry *entry = memMapRequest.response->entries[i];
+
+				if (entry == nullptr || entry->length == 0 || entry->base > ~0ULL - entry->length) {
+					continue;
+				}
+
+				const u64 end = alignUp<u64>(entry->base + entry->length, pageSize);
+
+				if (end > physicalEnd) {
+					physicalEnd = end;
+				}
+			}
+
+			return physicalEnd;
+		}
+
+		void addReservedHeapRange(AllocContext *ctx, const u64 base, const u64 end) {
+			if (end <= base) {
+				return;
+			}
+
+			ctx->heapReservedEnd = end;
+
+			if (ctx->heapReserveEnd == 0) {
+				ctx->heapCursor = base;
+				ctx->heapReserveEnd = end;
+
+				return;
+			}
+
+			ctx->heapSecondReserveStart = base;
+			ctx->heapSecondReserveEnd = end;
+		}
+
+		void initReservedKernelHeap(AllocContext *ctx) {
+			const u64 hhdm = CommonMain::getCurrentHhdm();
+			const u64 physicalEnd = getPhysicalMemoryEnd();
+			u64 cursor = alignUp<u64>(hhdm + physicalEnd, pageSize);
+			u64 remaining = kernelHeapReservedSize;
+			u64 kernelStart = reinterpret_cast<u64>(&limineStart);
+			u64 kernelEnd = reinterpret_cast<u64>(&limineEnd);
+			const u64 sectionStarts[] = {
+				reinterpret_cast<u64>(&textStart),
+				reinterpret_cast<u64>(&rodataStart),
+				reinterpret_cast<u64>(&dataStart),
+			};
+			const u64 sectionEnds[] = {
+				reinterpret_cast<u64>(&textEnd),
+				reinterpret_cast<u64>(&rodataEnd),
+				reinterpret_cast<u64>(&dataEnd),
+			};
+
+			for (usize i = 0; i < 3; i++) {
+				if (sectionStarts[i] < kernelStart) {
+					kernelStart = sectionStarts[i];
+				}
+
+				if (sectionEnds[i] > kernelEnd) {
+					kernelEnd = sectionEnds[i];
+				}
+			}
+
+			kernelStart = alignDown<u64>(kernelStart, pageSize);
+			kernelEnd = alignUp<u64>(kernelEnd, pageSize);
+
+			ctx->usesReservedHeap = true;
+
+			while (remaining != 0) {
+				if (cursor >= kernelStart && cursor < kernelEnd) {
+					cursor = kernelEnd;
+					continue;
+				}
+
+				if (cursor < kernelStart && kernelStart < cursor + remaining) {
+					const u64 rangeEnd = kernelStart;
+					const u64 rangeSize = rangeEnd - cursor;
+
+					addReservedHeapRange(ctx, cursor, rangeEnd);
+
+					remaining -= rangeSize;
+					cursor = kernelEnd;
+
+					continue;
+				}
+
+				addReservedHeapRange(ctx, cursor, cursor + remaining);
+				remaining = 0;
+			}
+		}
+	}
+
 	// TODO: Change page flags to a class for multi arch
 	AllocContext *VirtualAllocator::createContext() {
 		isPagingLvl5 = pagingModeRequest.response != nullptr and pagingModeRequest.response->mode == 1;
 
 		AllocContext *ctx = nullptr;
 
-		const u64 kernelEnd = alignUp<u64>(reinterpret_cast<u64>(&dataEnd), pageSize);
 		const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
 
 		ctx = reinterpret_cast<AllocContext *>(ctxPage);
+		initReservedKernelHeap(ctx);
+
+		const u64 ctxVirt = ctx->heapCursor;
 
 		ctx->isUserspace = false;
 		ctx->heapSize = pageSize - sizeof(AllocContext);
 		ctx->pageFlags = 0b00000011;
 
-		ctx->heapStart = reinterpret_cast<u64 *>(kernelEnd + sizeof(AllocContext));
+		ctx->heapStart = reinterpret_cast<u64 *>(ctxVirt + sizeof(AllocContext));
 		ctx->blocks = reinterpret_cast<MemoryBlock *>(ctx->heapStart);
+		ctx->heapCursor += pageSize;
 
 		u64 *newPageMap = CommonMain::getInstance()->getPMM()->allocPages(1, true);
 
 		ctx->pageMap.init(newPageMap, reinterpret_cast<u64>(newPageMap) - CommonMain::getCurrentHhdm(), ctx, true);
 
-		ctx->pageMap.mapPage(kernelEnd, ctxPage - CommonMain::getCurrentHhdm(), ctx->pageFlags, true, false);
+		ctx->pageMap.mapPage(ctxVirt, ctxPage - CommonMain::getCurrentHhdm(), ctx->pageFlags, true, false);
 
 		return ctx;
 	}
@@ -127,8 +230,10 @@ namespace kernel::common::memory {
 
 		allocStart:
 
-		if (ctx->freeSpace < alignedSize + sizeof(MemoryBlock)) {
-			growHeap(ctx, alignedSize + (sizeof(MemoryBlock) * 2), isUserAlloc);
+		if (ctx->freeSpace < alignedSize + sizeof(MemoryBlock) && !growHeap(ctx, alignedSize + (sizeof(MemoryBlock) * 2), isUserAlloc)) {
+			ctx->lock.unlock(prevIF);
+
+			return nullptr;
 		}
 
 		const usize startClass = getSizeClassIndex(alignedSize);
@@ -189,7 +294,11 @@ namespace kernel::common::memory {
 			return nullptr;
 		}
 
-		growHeap(ctx, alignedSize, isUserAlloc);
+		if (!growHeap(ctx, alignedSize, isUserAlloc)) {
+			ctx->lock.unlock(prevIF);
+
+			return nullptr;
+		}
 
 		goto allocStart;
 	}
@@ -264,11 +373,37 @@ namespace kernel::common::memory {
 		insertFreeList(ctx, block);
 	}
 
-	void VirtualAllocator::growHeap(AllocContext *ctx, const u64 minSize, const bool isUserAlloc) {
+	bool VirtualAllocator::growHeap(AllocContext *ctx, const u64 minSize, const bool isUserAlloc) {
 		const usize totalSize = minSize + sizeof(MemoryBlock);
-		const auto allocSize = alignUp<usize>(totalSize, pageSize);
+		auto allocSize = alignUp<usize>(totalSize, pageSize);
 
 		auto *baseAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize);
+
+		if (ctx->usesReservedHeap) {
+			while (ctx->heapCursor >= ctx->heapReserveEnd && ctx->heapSecondReserveStart != 0) {
+				ctx->heapCursor = ctx->heapSecondReserveStart;
+				ctx->heapReserveEnd = ctx->heapSecondReserveEnd;
+				ctx->heapSecondReserveStart = 0;
+				ctx->heapSecondReserveEnd = 0;
+			}
+
+			if (ctx->heapCursor >= ctx->heapReserveEnd) {
+				return false;
+			}
+
+			const u64 remainingReserved = ctx->heapReserveEnd - ctx->heapCursor;
+			if (remainingReserved < allocSize) {
+				allocSize = alignDown<usize>(remainingReserved, pageSize);
+
+				if (allocSize == 0) {
+					ctx->heapCursor = ctx->heapReserveEnd;
+
+					return growHeap(ctx, minSize, isUserAlloc);
+				}
+			}
+
+			baseAddress = reinterpret_cast<u64 *>(ctx->heapCursor);
+		}
 
 		for (usize offset = 0; offset < allocSize; offset += pageSize) {
 			const u64 *newPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
@@ -276,7 +411,7 @@ namespace kernel::common::memory {
 			if (newPage == nullptr) {
 				CommonMain::getTerminal()->error("Could not allocate a new page!", "VirtualAllocator");
 
-				return;
+				return false;
 			}
 
 			ctx->pageMap.mapPage(reinterpret_cast<u64>(baseAddress) + offset, reinterpret_cast<u64>(newPage), ctx->pageFlags | ((isUserAlloc & 0b1) << 2), ctx->pageMap.getIsKernel(), false);
@@ -303,10 +438,17 @@ namespace kernel::common::memory {
 			ctx->lastBlock = newBlock;
 		}
 
-		ctx->heapSize += allocSize;
+		if (ctx->usesReservedHeap) {
+			ctx->heapCursor += allocSize;
+		} else {
+			ctx->heapSize += allocSize;
+		}
+
 		ctx->freeSpace += newBlock->size;
 
 		defrag(ctx, newBlock);
+
+		return true;
 	}
 
 	void VirtualAllocator::shrinkHeap(AllocContext *ctx) {
@@ -407,16 +549,22 @@ namespace kernel::common::memory {
 	void VirtualPageAllocator::init(const u64 kernAddr) {
 		CommonMain::getTerminal()->debug("Heap size: %lu", "VirtualAllocator", CommonMain::getInstance()->getKernelAllocContext()->heapSize);
 
-		const limine_memmap_entry *lastEntry = memMapRequest.response->entries[memMapRequest.response->entry_count - 1];
+		const AllocContext *kernelCtx = CommonMain::getInstance()->getKernelAllocContext();
+		const u64 reserveEnd = alignUp<u64>(kernelCtx->heapReservedEnd, pageSize);
+		const u64 processAllocStart = VirtualAllocator::getProcessAllocStart();
 
-		CommonMain::getTerminal()->debug("Last entry addr: 0x%.16lx, end: 0x%.16lx", "VirtualAllocator", lastEntry->base, lastEntry->base + lastEntry->length);
+		CommonMain::getTerminal()->debug("Virtual allocator reserved end: 0x%.16lx", "VirtualAllocator", reserveEnd);
 		CommonMain::getTerminal()->debug("Kernel addr: 0x%.16lx", "VirtualAllocator", kernAddr);
 
 		this->vPagesListPtr = new VpaListEntry();
 
-		this->vPagesListPtr->base = lastEntry->base + lastEntry->length + pageSize + CommonMain::getCurrentHhdm();
+		this->vPagesListPtr->base = reserveEnd;
 
-		this->vPagesListPtr->count = alignDown<u64>(kernAddr - pageSize - this->vPagesListPtr->base, pageSize) / pageSize;
+		if (processAllocStart > this->vPagesListPtr->base) {
+			this->vPagesListPtr->count = alignDown<u64>(processAllocStart - this->vPagesListPtr->base, pageSize) / pageSize;
+		} else {
+			this->vPagesListPtr->count = kernelHeapReservedSize / pageSize;
+		}
 	}
 
 	u64 *VirtualPageAllocator::allocVPages(const u64 amount) const {

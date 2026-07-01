@@ -13,6 +13,7 @@ namespace kernel::common::memory {
 	constexpr u64 pageShift = 12;
 	constexpr usize hugePage1GCount = 512ULL * 512ULL;
 	constexpr usize hugePage2MCount = 512ULL;
+	constexpr usize kernelHeapReservedSize = 10ULL * 1024ULL * 1024ULL * 1024ULL;
 
 	constexpr usize SIZE_CLASS_COUNT = 9;
 	constexpr usize sizeClasses[SIZE_CLASS_COUNT] = {64, 128, 256, 512, 1024, 2048, 4096, 16384, SIZE_MAX};
@@ -34,8 +35,14 @@ namespace kernel::common::memory {
         u64 freeSpace {};
         MemoryBlock *blocks {};
         MemoryBlock *lastBlock {};
-    	MemoryBlock *freeLists[SIZE_CLASS_COUNT] {};
+        MemoryBlock *freeLists[SIZE_CLASS_COUNT] {};
         SimpleSpinLock lock {};
+        u64 heapReserveEnd {};
+        u64 heapSecondReserveStart {};
+        u64 heapSecondReserveEnd {};
+        u64 heapReservedEnd {};
+        u64 heapCursor {};
+        bool usesReservedHeap {};
 
         bool isUserspace {};
     };
@@ -78,7 +85,7 @@ namespace kernel::common::memory {
         static void endCreateArch(u64 value);
         static void freePageTableChildren(const u64 *tableAddr, bool level5Paging, u8 depth);
 
-        static void growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
+        static bool growHeap(AllocContext *ctx, u64 minSize, bool isUserAlloc);
         static void shrinkHeap(AllocContext *ctx);
 
     	static usize getSizeClassIndex(usize size);
