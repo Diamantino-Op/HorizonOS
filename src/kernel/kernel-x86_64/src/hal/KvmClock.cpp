@@ -38,6 +38,7 @@ namespace kernel::x86_64::hal {
 		return freq;
 	}
 
+	// TODO: Per core?
 	void KvmClock::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
@@ -102,7 +103,7 @@ namespace kernel::x86_64::hal {
 				continue;
 			}
 
-			auto tmpTime = static_cast<u128>(CpuManager::getCurrentCore()->tsc.read()) - static_cast<u128>(info.tscTimestamp);
+			auto tmpTime = static_cast<u128>(Tsc::read()) - static_cast<u128>(info.tscTimestamp);
 
 			if (info.tscShift >= 0) {
 				tmpTime <<= info.tscShift;

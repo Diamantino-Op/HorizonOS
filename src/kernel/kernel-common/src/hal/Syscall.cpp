@@ -627,6 +627,17 @@ namespace kernel::common::hal {
 		}
 
 		auto *newThread = new Thread(scheduler, process, entryFun, true, 0, stack);
+
+		if (newThread->getContext() == nullptr) {
+			delete newThread;
+
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return ENOMEM;
+		}
+
 		newThread->setState(ThreadState::READY);
 
 		const bool prevIF = scheduler->getSchedLock()->lock();

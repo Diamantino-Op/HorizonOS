@@ -40,7 +40,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mClock: [0;37mNew main clock: AcpiPM[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAcpiPM Clock Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mClocks setup... OK[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 66694[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 66842[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 1: /boot/HorizonOS/services/name_registry Size: 8388448[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 1 as ELF...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 2: /boot/HorizonOS/services/uacpi Size: 9118744[0m
@@ -56,47 +56,4 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mSyscalls Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAll Cpus initialized...[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered port![0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 4 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 9 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 5 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 3 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 6 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 2 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 8 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 7 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 1 initialized...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 3: Name/Registry Service: Successfully registered port: 1![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 15: Starting Name/Registry register message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 15: Service uAcpi registered on port 4![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 15: Service NVMe registered on port 2![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered service![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 15: Service PCI registered on port 3![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 16: Starting Name/Registry unregister message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 17: Starting Name/Registry get message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 18: Starting Name/Registry check message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 19: Starting uAcpi irq message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mstarting uACPI, version 6.0.0[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mXSDT 0x000000007FB7D0E8 00000054 v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mDSDT 0x000000007FB7A000 0000260D v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACP 0x000000007FB79000 000000F4 v03 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mAPIC 0x000000007FB78000 000000C0 v03 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mHPET 0x000000007FB77000 00000038 v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mMCFG 0x000000007FB76000 0000003C v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mBGRT 0x000000007FB74000 00000038 v01 (INTEL  EDK2    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACS 0x000000007FBDD000 00000040[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1799 ops in 4ms (avg 442462/s)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 3, TID: 5, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Requesting PCI service to search for NVMe devices...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 4, TID: 4, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 4), waiting for MCFG data...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI service ready, forwarding MCFG...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=0 ecam=e0000000[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=128 ecam=e8000000[0m

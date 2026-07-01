@@ -26,7 +26,13 @@ namespace kernel::common::threading {
 		freePIDs[++pidTop] = pid;
 	}
 
+	PRIDAllocator::PRIDAllocator() {
+		this->init();
+	}
+
 	void PRIDAllocator::init() {
+		this->pridTop = -1;
+
 		for (int i = maxProcThreads - 1; i >= 0; --i) {
 			this->freePRIDs[++this->pridTop] = i;
 		}
@@ -42,6 +48,10 @@ namespace kernel::common::threading {
 
 	void PRIDAllocator::freePRID(const u8 prid) {
 		if (prid >= maxProcThreads) {
+			return;
+		}
+
+		if (this->pridTop >= maxProcThreads - 1) {
 			return;
 		}
 

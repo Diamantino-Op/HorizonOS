@@ -89,17 +89,19 @@ namespace kernel::common::threading {
 	}
 
 	Thread::~Thread() {
+		AllocContext *ctx = CommonMain::getInstance()->getKernelAllocContext();
+
 		TIDAllocator::freeTID(this->id);
 
 		if (this->syscallStackPointer != 0) {
-			VirtualAllocator::free(this->parent->getProcessContext(), reinterpret_cast<u64 *>(this->syscallStackPointer - threadCtxStackSize));
+			VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(this->syscallStackPointer - threadCtxStackSize));
 		}
 
 		if (this->context != nullptr) {
 			this->deleteThreadArch();
 
 			if (this->parent != nullptr) {
-				VirtualAllocator::free(this->parent->getProcessContext(), this->context);
+				VirtualAllocator::free(ctx, this->context);
 			}
 		}
 	}

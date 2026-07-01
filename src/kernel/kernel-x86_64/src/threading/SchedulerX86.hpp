@@ -14,7 +14,7 @@ namespace kernel::x86_64::threading {
     public:
         ~ThreadContext();
 
-    	void init(Process *proc, u64 stackPointer, bool isUserspace, bool ownsKernelStack);
+    	void init(Process *proc, u64 stackPointer, bool isUserspace);
 
         u64 *getSimdSave() const;
 
@@ -34,7 +34,6 @@ namespace kernel::x86_64::threading {
     	u64 userFsBase {};
 
         u64 originalStackPointer {};
-        bool ownsKernelStack {};
 
         Process *process {};
 

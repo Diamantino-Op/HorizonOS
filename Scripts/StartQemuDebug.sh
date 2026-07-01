@@ -1,0 +1,3 @@
+#!/bin/bash
+
+qemu-system-x86_64 -cpu host,migratable=off,+hypervisor,+invtsc,+tsc-deadline -device pxb-pcie,bus=pcie.0,id=pcie.1,bus_nr=128 -device pcie-root-port,bus=pcie.1,id=rp0 -device qemu-xhci,id=xhci,bus=rp0 -device usb-kbd,id=usbkbd,bus=xhci.0 -device usb-mouse,id=usbmouse,bus=xhci.0 -smp 10 -M q35 -m 8G -accel kvm -drive if=pflash,unit=0,format=raw,file=/develop/HorizonOS/deps/ovmf/x86_64/OVMF.fd -cdrom /develop/HorizonOS/iso/out/HorizonOS-x86_64.iso -drive file=/develop/HorizonOS/disks/nvme_disk.qcow2,if=none,id=nvmewd0 -device nvme,serial=deadbeef,id=nvme0,bus=pcie.0 -device nvme-ns,drive=nvmewd0,bus=nvme0,nsid=1 -no-shutdown -no-reboot -serial stdio -serial file:Serial.txt -s --trace "pci_nvme*" -S

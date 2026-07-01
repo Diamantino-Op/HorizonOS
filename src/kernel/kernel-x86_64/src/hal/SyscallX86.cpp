@@ -97,7 +97,7 @@ namespace kernel::common::hal {
 			}
 
 			if (ctx->threadTssIopb == nullptr) {
-				auto *threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(thread->getParent()->getProcessContext(), sizeof(TssIopb)));
+				auto *threadTss = reinterpret_cast<TssIopb *>(VirtualAllocator::alloc(CommonMain::getInstance()->getKernelAllocContext(), sizeof(TssIopb)));
 
 				if (threadTss == nullptr) {
 					return nullptr;
@@ -175,7 +175,7 @@ namespace kernel::common::hal {
 				}
 
 				if (ctx->threadTssIopb != nullptr) {
-					seedThreadIopb(ctx, process->getProcessContext(), sourceTss);
+					seedThreadIopb(ctx, CommonMain::getInstance()->getKernelAllocContext(), sourceTss);
 				}
 			}
 		}

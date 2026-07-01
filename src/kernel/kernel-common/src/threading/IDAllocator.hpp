@@ -21,13 +21,15 @@ namespace kernel::common::threading {
 
 	class PRIDAllocator {
 	public:
+		PRIDAllocator();
+
 		void init();
 		u8 allocPRID();
 		void freePRID(u8 prid);
 
 	private:
-		u8 freePRIDs[maxThreads] {};
-		i32 pridTop {};
+		u8 freePRIDs[maxProcThreads] {};
+		i32 pridTop {-1};
 	};
 
     class TIDAllocator {

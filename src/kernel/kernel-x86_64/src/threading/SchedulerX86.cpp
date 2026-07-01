@@ -240,23 +240,25 @@ namespace kernel::common::threading {
 		const bool prevIF = Asm::intsEnabled();
 		Asm::cli();
 
-		const u64 currPageMap = Asm::readCr3();
+		//const u64 currPageMap = Asm::readCr3();
 
-		process->getProcessContextKernel()->pageMap.load();
+		//process->getProcessContextKernel()->pageMap.load();
+
+		AllocContext *ctx = CommonMain::getInstance()->getKernelAllocContext();
 
 		u64 newRsp = rsp;
 
 		const u8 prid = process->pridAllocator.allocPRID();
 
 		if (rsp == 0) {
-			newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize;
+			newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(ctx, threadCtxStackSize)) + threadCtxStackSize;
 		}
 
-		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(process->getProcessContext(), sizeof(ThreadContext)));
+		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(ctx, sizeof(ThreadContext)));
 
 		*context = ThreadContext();
 
-		context->init(process, newRsp, isUser, rsp == 0);
+		context->init(process, newRsp, isUser);
 
 		context->prid = prid;
 
@@ -264,11 +266,15 @@ namespace kernel::common::threading {
 		thread->setKStackPointer(newRsp);
 
 		if (isUser) {
-			thread->setSyscallStackPointer(reinterpret_cast<u64>(VirtualAllocator::alloc(process->getProcessContext(), threadCtxStackSize)) + threadCtxStackSize);
+			thread->setSyscallStackPointer(reinterpret_cast<u64>(VirtualAllocator::alloc(ctx, threadCtxStackSize)) + threadCtxStackSize);
 
 			u64 userStack = userRsp;
 
 			if (userRsp == 0) {
+				const u64 currPageMap = Asm::readCr3();
+
+				process->getProcessContextKernel()->pageMap.load();
+
 				const u64 startAddr = VirtualAllocator::getProcessAllocStart() - ((threadUserStackSize + pageSize) * (prid + 1));
 
 				const u64 startPage = alignDown<u64>(startAddr, pageSize);
@@ -292,6 +298,8 @@ namespace kernel::common::threading {
 				userStack = startPage + threadUserStackSize;
 
 				setUserStackAsm(&userStack);
+
+				Asm::writeCr3(currPageMap);
 			}
 
 			if (thread->is32Bit()) {
@@ -302,8 +310,6 @@ namespace kernel::common::threading {
 		} else {
 			setStackAsm(thread->getStackPointer(), rip);
 		}
-
-		Asm::writeCr3(currPageMap);
 
 		if (prevIF) {
 			Asm::sti();
@@ -373,13 +379,13 @@ namespace kernel::x86_64::threading {
 	ThreadContext::~ThreadContext() {
 		if (this->process != nullptr) {
 			if (this->threadTssIopb != nullptr) {
-				VirtualAllocator::free(this->process->getProcessContext(), reinterpret_cast<u64 *>(this->threadTssIopb));
+				VirtualAllocator::free(CommonMain::getInstance()->getKernelAllocContext(), reinterpret_cast<u64 *>(this->threadTssIopb));
 				this->threadTssIopb = nullptr;
 			}
 
 			this->process->pridAllocator.freePRID(this->prid);
 
-			VirtualAllocator::free(process->getProcessContext(), this->originalSimdSave);
+			VirtualAllocator::free(CommonMain::getInstance()->getKernelAllocContext(), this->originalSimdSave);
 
 			if (this->isUser) {
 				const u64 startPage = alignDown<u64>(this->userStackPointer, pageSize);
@@ -396,19 +402,18 @@ namespace kernel::x86_64::threading {
 		}
 	}
 
-	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace, const bool ownsKernelStack) {
+	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace) {
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
 		this->userFsBase = 0;
 		this->process = proc;
 		this->threadTssIopb = nullptr;
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
-		this->ownsKernelStack = ownsKernelStack;
 		this->process = proc;
 
 		const u64 simdSaveAllocSize = CpuId::getXSaveSize() + 64;
 
-		this->originalSimdSave = VirtualAllocator::alloc(proc->getProcessContext(), simdSaveAllocSize);
+		this->originalSimdSave = VirtualAllocator::alloc(CommonMain::getInstance()->getKernelAllocContext(), simdSaveAllocSize);
 		memset(this->originalSimdSave, 0, simdSaveAllocSize);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
