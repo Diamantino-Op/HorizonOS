@@ -56,7 +56,7 @@ namespace kernel::x86_64::hal {
 	}
 
 	IsrHandler *InterruptAllocator::getHandler(const u8 intNum) {
-		if (intNum < 32 or intNum >= 255) {
+		if (intNum < 32 or intNum > 255) {
 			return nullptr;
 		}
 

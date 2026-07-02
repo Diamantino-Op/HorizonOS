@@ -263,8 +263,6 @@ namespace kernel::x86_64 {
 
 		terminal.debug("Init... OK", "HorizonOS");
 
-		Asm::sti();
-
 		// Init uAcpi
 
 		//this->uAcpi.init();
@@ -279,14 +277,16 @@ namespace kernel::x86_64 {
 
 		this->cpuManager.startMultithread();
 
-		terminal.info("All Cpus initialized...", "HorizonOS");
-
 		this->cpuManager.getBootstrapCpu()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 
 		this->idtManager.addEntry(this->cpuManager.getBootstrapCpu()->schedInt, interruptTable[this->cpuManager.getBootstrapCpu()->schedInt], Selector::KERNEL_CODE, 0, GateDPL::KERNEL_DPL | GateType::INTERRUPT_GATE);
 
 		// Todo: make one shot and restart when thread goes to sleep
 		this->cpuManager.getBootstrapCpu()->apic.arm(TimeUtils::msToNs(10), clockInt, true);
+
+		Asm::sti();
+
+		terminal.info("All Cpus initialized...", "HorizonOS");
 
 		// this->shutdown();
 
@@ -381,8 +381,6 @@ namespace kernel::x86_64 {
 
 		this->cpuCore.printEnabled = false;
 
-		Asm::sti();
-
 		// TODO: schedInt prob not needed
 		CpuManager::getCurrentCore()->schedInt = this->interruptAllocator.allocInt(Scheduler::intReSchedule, nullptr);
 		const u8 clockInt = this->interruptAllocator.allocInt(&Clocks::timerTick, nullptr);
@@ -393,6 +391,8 @@ namespace kernel::x86_64 {
 		this->cpuCore.apic.arm(TimeUtils::msToNs(10), clockInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
+
+		Asm::sti();
 
 		Asm::lhlt();
 	}

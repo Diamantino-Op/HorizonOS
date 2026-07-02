@@ -533,10 +533,7 @@ namespace kernel::common::threading {
 	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread() == currThread;
 
 	        scheduler->removeThread(currThread);
-
-	        if (!isCurrentThread) {
-	            scheduler->blockedThreadList.addStart(currThread);
-	        }
+	        scheduler->blockedThreadList.addStart(currThread);
 
 	        // Release both locks together. entry->lock first (NoSti — keep IF
 	        // disabled), then schedLock with the original prevPortIF to finally
