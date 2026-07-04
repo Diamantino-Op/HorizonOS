@@ -958,8 +958,6 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::debugDump() {
-		return;
-
 	    auto *term = CommonMain::getTerminal();
 		const Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 	    auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());

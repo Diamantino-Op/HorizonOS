@@ -27,3 +27,15 @@ pci_exe = pci_proj.get_variable('pci_exe')
 nvme_proj = subproject('nvme', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 nvme_exe = nvme_proj.get_variable('nvme_exe')
+
+# Storage Manager Service
+
+storage_manager_proj = subproject('storage_manager', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+storage_manager_exe = storage_manager_proj.get_variable('storage_manager_exe')
+
+# Ext2 Service
+
+ext2_proj = subproject('ext2', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+ext2_exe = ext2_proj.get_variable('ext2_exe')
