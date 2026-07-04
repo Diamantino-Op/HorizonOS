@@ -125,10 +125,6 @@ namespace kernel::common::memory {
 
 		pt->entries[lvl1].address = (pAddr >> 12) & 0xFFFFFFFFFF;
 		this->setPageCacheMode(reinterpret_cast<uPtr *>(&pt->entries[lvl1]), cacheMode, false);
-
-		if (not isKernel) {
-			this->pageTree.insert(vAddr, 1, reinterpret_cast<u64 *>(this->allocCtx), allocateRBTreeNode);
-		}
 	}
 
 	bool PageMap::mapHugePage(const u64 vAddr, const u64 pAddr, const u64 hugeSize, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
@@ -185,10 +181,6 @@ namespace kernel::common::memory {
 		targetEntry->address = (pAddr >> 12) & 0xFFFFFFFFFF;
 		this->setPageCacheMode(reinterpret_cast<uPtr *>(targetEntry), cacheMode, true);
 
-		if (not isKernel) {
-			this->pageTree.insert(vAddr, hugeSize / pageSize, reinterpret_cast<u64 *>(this->allocCtx), allocateRBTreeNode);
-		}
-
 		return true;
 	}
 
@@ -234,10 +226,6 @@ namespace kernel::common::memory {
 				memset(&lvl3Table->entries[lvl3], 0, sizeof(lvl3Table->entries[lvl3]));
 			}
 
-			if (not isKernel) {
-				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
-			}
-
 			Asm::invalidatePage(vAddr);
 
 			return;
@@ -261,10 +249,6 @@ namespace kernel::common::memory {
 				memset(&lvl2Table->entries[lvl2], 0, sizeof(lvl2Table->entries[lvl2]));
 			}
 
-			if (not isKernel) {
-				this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
-			}
-
 			Asm::invalidatePage(vAddr);
 
 			return;
@@ -284,10 +268,6 @@ namespace kernel::common::memory {
 			} else {
 				memset(&lvl1Table->entries[lvl1], 0, sizeof(lvl1Table->entries[lvl1]));
 			}
-		}
-
-		if (not isKernel) {
-			this->pageTree.remove(vAddr, reinterpret_cast<u64 *>(this->allocCtx), deleteRBTreeNode);
 		}
 
 		Asm::invalidatePage(vAddr);

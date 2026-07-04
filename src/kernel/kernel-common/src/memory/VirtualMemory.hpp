@@ -2,7 +2,6 @@
 #define KERNEL_COMMON_VIRTUALMEMORY_HPP
 
 #include "Types.hpp"
-#include "RBTree.hpp"
 
 #include "PhysicalMemory.hpp"
 
@@ -60,12 +59,8 @@ namespace kernel::common::memory {
 
         u64* getOrCreatePageTable(u64* parent, u16 index, u8 flags, bool global, bool noExec);
 
-        static RBTreeNode *allocateRBTreeNode(u64 data, u64 extraData, u64 *extraArgs);
-        static void deleteRBTreeNode(RBTreeNode *node, u64 *extraArgs);
-
         u64* pageTable {};
         u64 physPageTable {};
-        RBTree pageTree {};
         AllocContext *allocCtx {};
         bool isKernel {};
     };
