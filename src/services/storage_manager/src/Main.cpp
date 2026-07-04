@@ -81,6 +81,7 @@ namespace {
 	vector<BlockDevice> blockDevices;
 	vector<FsHandler> fsHandlers;
 	mutex storageMutex;
+	mutex nvmeRequestMutex;
 
 	auto validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
 		if (length == 0 or length > maxLength or name[length - 1] != '\0') {
@@ -221,6 +222,8 @@ namespace {
 	}
 
 	auto nvmeRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+		scoped_lock requestLock(nvmeRequestMutex);
+
 		auto data = NvmeReadMsgData();
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
@@ -234,7 +237,12 @@ namespace {
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
+		printf("Storage: Sending NVMe read for %s ctrl=%u nsid=%u lba=%lu pages=%u type=%lu.", device.name.c_str(), device.controllerId, device.nsid, lba, pageCount, msg.type);
+		fflush(stdout);
+
 		if (send_horizonos_message(storagePort, device.driverPort, &msg) != 0) {
+			printf("Storage: Failed to send NVMe read for %s.", device.name.c_str());
+			fflush(stdout);
 			return false;
 		}
 
@@ -249,10 +257,15 @@ namespace {
 		const int ret = receive_horizonos_message(storagePort, &recv, &filter);
 		delete[] filter.whiteListTypes;
 
+		printf("Storage: NVMe read reply for %s ret=%d success=%d.", device.name.c_str(), ret, reply.success);
+		fflush(stdout);
+
 		return ret == 0 and reply.success;
 	}
 
 	auto nvmeWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+		scoped_lock requestLock(nvmeRequestMutex);
+
 		auto data = NvmeWriteMsgData();
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
@@ -285,6 +298,8 @@ namespace {
 	}
 
 	auto nvmeFlush(const BlockDevice &device) -> bool {
+		scoped_lock requestLock(nvmeRequestMutex);
+
 		auto data = NvmeFlushMsgData();
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
@@ -377,6 +392,9 @@ namespace {
 		uint64_t headerPhys = 0;
 		uint64_t headerVirt = 0;
 
+		printf("Storage: Probing GPT on %s.", rawDevice.name.c_str());
+		fflush(stdout);
+
 		if (!readOnePage(rawDevice, 1, headerPhys, headerVirt)) {
 			printf("Storage: Failed to read GPT header from %s.", rawDevice.name.c_str());
 			fflush(stdout);
@@ -394,12 +412,11 @@ namespace {
 
 		const uint32_t entriesPerPage = 0x1000 / header->partitionEntrySize;
 		const uint32_t maxEntries = min<uint32_t>(header->partitionEntryCount, 128);
+		const uint32_t entryPageCount = (maxEntries + entriesPerPage - 1) / entriesPerPage;
 		uint32_t created = 0;
 
-		for (uint32_t i = 0; i < maxEntries; ++i) {
-			const uint64_t entryPageLba = header->partitionEntryLba + (i / entriesPerPage) * (0x1000 / rawDevice.blockSize);
-			const uint32_t entryIndexInPage = i % entriesPerPage;
-
+		for (uint32_t pageIndex = 0; pageIndex < entryPageCount; ++pageIndex) {
+			const uint64_t entryPageLba = header->partitionEntryLba + pageIndex * (0x1000 / rawDevice.blockSize);
 			uint64_t entriesPhys = 0;
 			uint64_t entriesVirt = 0;
 
@@ -407,36 +424,42 @@ namespace {
 				continue;
 			}
 
-			const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entriesVirt + (entryIndexInPage * header->partitionEntrySize));
-			const bool empty = ranges::all_of(entry->partitionTypeGuid.bytes, [](const uint8_t byte) {
-				return byte == 0;
-			});
+			const uint32_t firstEntry = pageIndex * entriesPerPage;
+			const uint32_t pageEntryCount = min<uint32_t>(entriesPerPage, maxEntries - firstEntry);
 
-			if (!empty and entry->firstLba <= entry->lastLba and entry->lastLba < rawDevice.blockCount) {
-				BlockDevice partition {};
-				partition.id = nextBlockDeviceId++;
-				partition.kind = BlockDeviceKind::Partition;
-				partition.driverPort = rawDevice.driverPort;
-				partition.controllerId = rawDevice.controllerId;
-				partition.nsid = rawDevice.nsid;
-				partition.blockCount = entry->lastLba - entry->firstLba + 1;
-				partition.blockSize = rawDevice.blockSize;
-				partition.maxPagesPerRequest = rawDevice.maxPagesPerRequest;
-				partition.parentId = rawDevice.id;
-				partition.parentStartLba = entry->firstLba;
-				partition.partitionType = entry->partitionTypeGuid;
-				partition.partitionId = entry->uniquePartitionGuid;
-				partition.name = rawDevice.name + "p" + to_string(created + 1);
+			for (uint32_t entryIndex = 0; entryIndex < pageEntryCount; ++entryIndex) {
+				const uint32_t globalEntryIndex = firstEntry + entryIndex;
+				const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entriesVirt + (entryIndex * header->partitionEntrySize));
+				const bool empty = ranges::all_of(entry->partitionTypeGuid.bytes, [](const uint8_t byte) {
+					return byte == 0;
+				});
 
-				{
-					scoped_lock lock(storageMutex);
-					blockDevices.push_back(partition);
+				if (!empty and entry->firstLba <= entry->lastLba and entry->lastLba < rawDevice.blockCount) {
+					BlockDevice partition {};
+					partition.id = nextBlockDeviceId++;
+					partition.kind = BlockDeviceKind::Partition;
+					partition.driverPort = rawDevice.driverPort;
+					partition.controllerId = rawDevice.controllerId;
+					partition.nsid = rawDevice.nsid;
+					partition.blockCount = entry->lastLba - entry->firstLba + 1;
+					partition.blockSize = rawDevice.blockSize;
+					partition.maxPagesPerRequest = rawDevice.maxPagesPerRequest;
+					partition.parentId = rawDevice.id;
+					partition.parentStartLba = entry->firstLba;
+					partition.partitionType = entry->partitionTypeGuid;
+					partition.partitionId = entry->uniquePartitionGuid;
+					partition.name = rawDevice.name + "p" + to_string(globalEntryIndex + 1);
+
+					{
+						scoped_lock lock(storageMutex);
+						blockDevices.push_back(partition);
+					}
+
+					printf("Storage: Registered partition %s id=%lu start=%lu blocks=%lu.", partition.name.c_str(), partition.id, partition.parentStartLba, partition.blockCount);
+					fflush(stdout);
+					notifyFsHandlers(partition);
+					++created;
 				}
-
-				printf("Storage: Registered partition %s id=%lu start=%lu blocks=%lu.", partition.name.c_str(), partition.id, partition.parentStartLba, partition.blockCount);
-				fflush(stdout);
-				notifyFsHandlers(partition);
-				++created;
 			}
 
 			freeOnePage(entriesPhys, entriesVirt);
@@ -490,8 +513,8 @@ namespace {
 
 				printf("Storage: Registered block device %s id=%lu blocks=%lu blockSize=%u.", device.name.c_str(), device.id, device.blockCount, device.blockSize);
 				fflush(stdout);
-				notifyFsHandlers(device);
 				probeGpt(device);
+				notifyFsHandlers(device);
 			}
 
 			auto replyMsg = hos_msg();
