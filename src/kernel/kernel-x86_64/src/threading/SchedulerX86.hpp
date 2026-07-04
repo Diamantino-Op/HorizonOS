@@ -14,7 +14,7 @@ namespace kernel::x86_64::threading {
     public:
         ~ThreadContext();
 
-    	void init(Process *proc, u64 stackPointer, bool isUserspace);
+    	bool init(Process *proc, u64 stackPointer, bool isUserspace);
 
         u64 *getSimdSave() const;
 

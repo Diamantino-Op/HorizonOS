@@ -91,9 +91,11 @@ namespace kernel::common::memory {
     	static usize getSizeClassIndex(usize size);
 
     	static void insertFreeList(AllocContext *ctx, MemoryBlock *block);
-    	static void removeFreeList(AllocContext *ctx, MemoryBlock *block);
+	    	static void removeFreeList(AllocContext *ctx, MemoryBlock *block);
 
-    	static bool areAdjacent(const MemoryBlock *left, const MemoryBlock *right);
+	    	static bool areAdjacent(const MemoryBlock *left, const MemoryBlock *right);
+	    	static bool isBlockAddressValid(const AllocContext *ctx, const MemoryBlock *block);
+	    	static bool hasValidLinks(const AllocContext *ctx, const MemoryBlock *block);
 
     public:
     	static bool isPagingLvl5;

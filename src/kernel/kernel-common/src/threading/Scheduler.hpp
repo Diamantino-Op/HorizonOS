@@ -101,6 +101,7 @@ namespace kernel::common::threading {
 
     	void setKStackPointer(u64 newKStackPointer);
     	u64 getKStackPointer() const;
+    	void setKernelStackOwned(bool owned);
 
     	void setSyscallStackPointer(u64 newSyscallStackPointer);
     	u64 getSyscallStackPointer() const;
@@ -149,6 +150,7 @@ namespace kernel::common::threading {
 		u64 stackPointer {};
 
     	u64 kernelStackPointer {};
+    	bool kernelStackOwned {};
 
     	u64 syscallStackPointer {};
 

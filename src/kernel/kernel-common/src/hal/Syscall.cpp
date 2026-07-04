@@ -608,6 +608,15 @@ namespace kernel::common::hal {
 	}
 
 	auto SyscallManager::syscallThreadExit(long */*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		Scheduler *scheduler = CommonMain::getInstance()->getScheduler();
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (scheduler == nullptr || thread == nullptr) {
+			return ESRCH;
+		}
+
+		scheduler->killThread(thread);
+
 		return 0;
 	}
 
@@ -1159,6 +1168,10 @@ namespace kernel::common::hal {
 
 		if (thread == nullptr || process == nullptr || kernelCtx == nullptr || processCtx == nullptr) {
 			return EFAULT;
+		}
+
+		if (static_cast<bool>(isHhdm)) {
+			return EINVAL;
 		}
 
 		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);

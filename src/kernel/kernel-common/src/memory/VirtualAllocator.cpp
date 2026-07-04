@@ -312,6 +312,30 @@ namespace kernel::common::memory {
 		const bool prevIF = ctx->lock.lock();
 
 		auto* block = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(ptr) - sizeof(MemoryBlock));
+
+		if (!isBlockAddressValid(ctx, block)) {
+			CommonMain::getTerminal()->error("Invalid free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx", "VirtualAllocator", ptr, block, ctx);
+			ctx->lock.unlock(prevIF);
+
+			return;
+		}
+
+		if (block->free) {
+			CommonMain::getTerminal()->error("Double free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
+				"VirtualAllocator", ptr, block, ctx, block->size, block->prev, block->next);
+			ctx->lock.unlock(prevIF);
+
+			return;
+		}
+
+		if (!hasValidLinks(ctx, block)) {
+			CommonMain::getTerminal()->error("Corrupt block links on free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
+				"VirtualAllocator", ptr, block, ctx, block->size, block->prev, block->next);
+			ctx->lock.unlock(prevIF);
+
+			return;
+		}
+
 		block->free = true;
 
 		// TODO: Only do when freeing from user mem
@@ -331,6 +355,20 @@ namespace kernel::common::memory {
 	void VirtualAllocator::defrag(AllocContext *ctx, MemoryBlock *block) {
 		if (block == nullptr) {
 			return;
+		}
+
+		if (!hasValidLinks(ctx, block)) {
+			CommonMain::getTerminal()->error("Corrupt block links in defrag block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
+				"VirtualAllocator", block, ctx, block->size, block->prev, block->next);
+
+			if (!isBlockAddressValid(ctx, block->prev) || (block->prev != nullptr && block->prev->next != block)) {
+				block->prev = nullptr;
+			}
+
+			if (!isBlockAddressValid(ctx, block->next) || (block->next != nullptr && block->next->prev != block)) {
+				block->next = nullptr;
+				ctx->lastBlock = block;
+			}
 		}
 
 		if (block->prev != nullptr and block->prev->free and areAdjacent(block->prev, block)) {
@@ -544,6 +582,46 @@ namespace kernel::common::memory {
 		const u64 expectedRight = reinterpret_cast<u64>(left) + sizeof(MemoryBlock) + left->size;
 
 		return expectedRight == reinterpret_cast<u64>(right);
+	}
+
+	bool VirtualAllocator::isBlockAddressValid(const AllocContext *ctx, const MemoryBlock *block) {
+		if (ctx == nullptr || block == nullptr) {
+			return block == nullptr;
+		}
+
+		const u64 addr = reinterpret_cast<u64>(block);
+
+		if (addr % alignof(MemoryBlock) != 0) {
+			return false;
+		}
+
+		const u64 heapStart = reinterpret_cast<u64>(ctx->heapStart);
+
+		if (ctx->usesReservedHeap) {
+			return addr >= heapStart && addr + sizeof(MemoryBlock) <= ctx->heapReservedEnd;
+		}
+
+		return addr >= heapStart && addr + sizeof(MemoryBlock) <= heapStart + ctx->heapSize;
+	}
+
+	bool VirtualAllocator::hasValidLinks(const AllocContext *ctx, const MemoryBlock *block) {
+		if (!isBlockAddressValid(ctx, block)) {
+			return false;
+		}
+
+		if (!isBlockAddressValid(ctx, block->prev) || !isBlockAddressValid(ctx, block->next)) {
+			return false;
+		}
+
+		if (block->prev != nullptr && block->prev->next != block) {
+			return false;
+		}
+
+		if (block->next != nullptr && block->next->prev != block) {
+			return false;
+		}
+
+		return true;
 	}
 
 	void VirtualPageAllocator::init(const u64 kernAddr) {

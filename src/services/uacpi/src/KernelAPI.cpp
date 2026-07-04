@@ -153,7 +153,7 @@ uacpi_status uacpi_kernel_get_rsdp(uacpi_phys_addr *outRsdpAddress) {
 void *uacpi_kernel_map(const uacpi_phys_addr addr, const uacpi_size len) {
 	uint64_t ret;
 
-	if (mmap_phys(addr, len, &ret, true, MMapCacheMode::MAP_CACHE_UC) != 0) {
+	if (mmap_phys(addr, len, &ret, false, MMapCacheMode::MAP_CACHE_UC) != 0) {
 		return nullptr;
 	}
 

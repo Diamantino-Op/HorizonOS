@@ -97,6 +97,10 @@ namespace kernel::common::threading {
 			VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(this->syscallStackPointer - threadCtxStackSize));
 		}
 
+		if (this->kernelStackOwned && this->kernelStackPointer != 0) {
+			VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(this->kernelStackPointer - threadCtxStackSize));
+		}
+
 		if (this->context != nullptr) {
 			this->deleteThreadArch();
 
@@ -185,6 +189,10 @@ namespace kernel::common::threading {
 
 	u64 Thread::getKStackPointer() const {
 		return this->kernelStackPointer;
+	}
+
+	void Thread::setKernelStackOwned(const bool owned) {
+		this->kernelStackOwned = owned;
 	}
 
 	void Thread::setSyscallStackPointer(const u64 newSyscallStackPointer) {

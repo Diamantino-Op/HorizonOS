@@ -271,26 +271,82 @@ namespace kernel::common::threading {
 		AllocContext *ctx = CommonMain::getInstance()->getKernelAllocContext();
 
 		u64 newRsp = rsp;
-
-		const u8 prid = process->pridAllocator.allocPRID();
+		u64 *kernelStack = nullptr;
 
 		if (rsp == 0) {
-			newRsp = reinterpret_cast<u64>(VirtualAllocator::alloc(ctx, threadCtxStackSize)) + threadCtxStackSize;
+			kernelStack = VirtualAllocator::alloc(ctx, threadCtxStackSize);
+
+			if (kernelStack == nullptr) {
+				if (prevIF) {
+					Asm::sti();
+				}
+
+				return nullptr;
+			}
+
+			newRsp = reinterpret_cast<u64>(kernelStack) + threadCtxStackSize;
 		}
 
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(ctx, sizeof(ThreadContext)));
 
+		if (context == nullptr) {
+			if (kernelStack != nullptr) {
+				VirtualAllocator::free(ctx, kernelStack);
+			}
+
+			if (prevIF) {
+				Asm::sti();
+			}
+
+			return nullptr;
+		}
+
 		*context = ThreadContext();
 
-		context->init(process, newRsp, isUser);
+		if (!context->init(process, newRsp, isUser)) {
+			VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(context));
+
+			if (kernelStack != nullptr) {
+				VirtualAllocator::free(ctx, kernelStack);
+			}
+
+			if (prevIF) {
+				Asm::sti();
+			}
+
+			return nullptr;
+		}
+
+		const u8 prid = process->pridAllocator.allocPRID();
 
 		context->prid = prid;
 
 		thread->setStackPointer(newRsp);
 		thread->setKStackPointer(newRsp);
+		thread->setKernelStackOwned(kernelStack != nullptr);
 
 		if (isUser) {
-			thread->setSyscallStackPointer(reinterpret_cast<u64>(VirtualAllocator::alloc(ctx, threadCtxStackSize)) + threadCtxStackSize);
+			u64 *syscallStack = VirtualAllocator::alloc(ctx, threadCtxStackSize);
+
+			if (syscallStack == nullptr) {
+				context->~ThreadContext();
+				VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(context));
+
+				if (kernelStack != nullptr) {
+					thread->setKernelStackOwned(false);
+					thread->setKStackPointer(0);
+					thread->setStackPointer(0);
+					VirtualAllocator::free(ctx, kernelStack);
+				}
+
+				if (prevIF) {
+					Asm::sti();
+				}
+
+				return nullptr;
+			}
+
+			thread->setSyscallStackPointer(reinterpret_cast<u64>(syscallStack) + threadCtxStackSize);
 
 			u64 userStack = userRsp;
 
@@ -303,6 +359,7 @@ namespace kernel::common::threading {
 
 				const u64 startPage = alignDown<u64>(startAddr, pageSize);
 				const u64 endPage = alignUp<u64>(startPage + threadUserStackSize, pageSize);
+				u64 mappedEnd = startPage;
 
 				// TODO: Prob wasting 1 page on the top addr
 				for (u64 addr = startPage; addr < endPage; addr += pageSize) {
@@ -310,8 +367,33 @@ namespace kernel::common::threading {
 
 					if (physPage != nullptr) {
 						process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
+						mappedEnd = addr + pageSize;
 					} else {
 						CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
+
+						for (u64 mappedAddr = startPage; mappedAddr < mappedEnd; mappedAddr += pageSize) {
+							CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(mappedAddr), 1);
+							process->getProcessContext()->pageMap.unMapPage(mappedAddr);
+						}
+
+						Asm::writeCr3(currPageMap);
+
+						thread->setSyscallStackPointer(0);
+						VirtualAllocator::free(ctx, syscallStack);
+
+						context->~ThreadContext();
+						VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(context));
+
+						if (kernelStack != nullptr) {
+							thread->setKernelStackOwned(false);
+							VirtualAllocator::free(ctx, kernelStack);
+						}
+
+						if (prevIF) {
+							Asm::sti();
+						}
+
+						return nullptr;
 					}
 				}
 
@@ -426,7 +508,7 @@ namespace kernel::x86_64::threading {
 		}
 	}
 
-	void ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace) {
+	bool ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace) {
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
 		this->userFsBase = 0;
@@ -438,10 +520,17 @@ namespace kernel::x86_64::threading {
 		const u64 simdSaveAllocSize = CpuId::getXSaveSize() + 64;
 
 		this->originalSimdSave = VirtualAllocator::alloc(CommonMain::getInstance()->getKernelAllocContext(), simdSaveAllocSize);
+
+		if (this->originalSimdSave == nullptr) {
+			return false;
+		}
+
 		memset(this->originalSimdSave, 0, simdSaveAllocSize);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
+
+		return true;
 	}
 
 	u64 *ThreadContext::getSimdSave() const {
