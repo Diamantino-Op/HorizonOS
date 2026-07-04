@@ -911,6 +911,8 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::debugDump() {
+		return;
+
 	    auto *term = CommonMain::getTerminal();
 		const Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 	    auto *kernel = reinterpret_cast<x86_64::Kernel *>(CommonMain::getInstance());
@@ -921,8 +923,7 @@ namespace kernel::common::threading {
 			while (node != nullptr) {
 				const Thread *thread = container_of(node, &Thread::bstNode);
 
-				term->warnNoLock("      TID=%u PID=%u state=%u dynPrio=%u schedKey=%lu waitingPort=%lu pendingWakeup=%u lockedCore=%lu",
-					"SchedDump",
+				term->printfBoth(true, "      TID=%u PID=%u state=%u dynPrio=%u schedKey=%lu waitingPort=%lu pendingWakeup=%u lockedCore=%lu",
 					thread->getId(),
 					thread->getParent()->getId(),
 					static_cast<u32>(thread->getState()),
@@ -936,10 +937,10 @@ namespace kernel::common::threading {
 			}
 		};
 
-	    term->warnNoLock("=== SCHEDULER DEBUG DUMP ===", "SchedDump");
+	    term->printfBoth(true, "=== SCHEDULER DEBUG DUMP ===");
 
 	    // ── Per-core running threads ──────────────────────────────────────────────
-	    term->warnNoLock("  === RUNNING THREADS PER CORE ===", "SchedDump");
+	    term->printfBoth(true, "  === RUNNING THREADS PER CORE ===");
 
 	    // Bootstrap core
 	    const x86_64::CpuCore *bsp = cpuManager->getBootstrapCpu();
@@ -947,9 +948,8 @@ namespace kernel::common::threading {
 	    if (bsp != nullptr) {
 	        const auto *bspThread = bsp->executionNode.getCurrentThread();
 
-	        if (bspThread != nullptr && bspThread != nullptr) {
-	            term->warnNoLock("  Core CPU=%u (BSP): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
-	                "SchedDump",
+	        if (bspThread != nullptr) {
+	            term->printfBoth(true, "  Core CPU=%u (BSP): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
 	                bsp->cpuId,
 	                bspThread->getId(),
 	                bspThread->getParent()->getId(),
@@ -957,11 +957,10 @@ namespace kernel::common::threading {
 	                static_cast<u32>(bspThread->getPendingWakeup()),
 	                bspThread->getWaitingPort());
 	        } else {
-	            term->warnNoLock("  Core CPU=%u (BSP): no current thread", "SchedDump", bsp->cpuId);
+	            term->printfBoth(true, "  Core CPU=%u (BSP): no current thread", bsp->cpuId);
 	        }
 
-	    	term->warnNoLock("    ULEQueue size=%lu (BSP CPU=%u):",
-				"SchedDump", bsp->executionNode.uleQueue.size(), bsp->cpuId);
+	    	term->printfBoth(true, "    ULEQueue size=%lu (BSP CPU=%u):", bsp->executionNode.uleQueue.size(), bsp->cpuId);
 			dumpUleQueue(bsp->executionNode.uleQueue);
 	    }
 
@@ -971,9 +970,8 @@ namespace kernel::common::threading {
 	            const x86_64::CpuCore *core = &cpuManager->getCoreList()[i].cpuCore;
 	            const auto *coreThread = core->executionNode.getCurrentThread();
 
-	            if (coreThread != nullptr && coreThread != nullptr) {
-	                term->warnNoLock("  Core CPU=%u (AP %lu): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
-	                    "SchedDump",
+	            if (coreThread != nullptr) {
+	                term->printfBoth(true, "  Core CPU=%u (AP %lu): TID=%u PID=%u state=%u pendingWakeup=%u waitingPort=%lu",
 	                    core->cpuId,
 	                    i,
 	                    coreThread->getId(),
@@ -982,21 +980,19 @@ namespace kernel::common::threading {
 	                    static_cast<u32>(coreThread->getPendingWakeup()),
 	                    coreThread->getWaitingPort());
 	            } else {
-	                term->warnNoLock("  Core CPU=%u (AP %lu): no current thread", "SchedDump", core->cpuId, i);
+	                term->printfBoth(true, "  Core CPU=%u (AP %lu): no current thread", core->cpuId, i);
 	            }
 
-	        	term->warnNoLock("    ULEQueue size=%lu (AP CPU=%u):",
-					"SchedDump", core->executionNode.uleQueue.size(), core->cpuId);
+	        	term->printfBoth(true, "    ULEQueue size=%lu (AP CPU=%u):", core->executionNode.uleQueue.size(), core->cpuId);
 				dumpUleQueue(core->executionNode.uleQueue);
 	        }
 	    }
 
 	    // ── Blocked list ──────────────────────────────────────────────────────────
-	    term->warnNoLock("  BlockedList size=%lu:", "SchedDump", schedulerPtr->blockedThreadList.getSize());
+	    term->printfBoth(true, "  BlockedList size=%lu:", schedulerPtr->blockedThreadList.getSize());
 
 	    for (const auto &t : schedulerPtr->blockedThreadList) {
-	        term->warnNoLock("    TID=%u PID=%u waitingPort=%lu pendingWakeup=%u sleepNs=%lu",
-	            "SchedDump",
+	        term->printfBoth(true, "    TID=%u PID=%u waitingPort=%lu pendingWakeup=%u sleepNs=%lu",
 	            t.getId(),
 	            t.getParent()->getId(),
 	            t.getWaitingPort(),
@@ -1005,16 +1001,15 @@ namespace kernel::common::threading {
 	    }
 
 	    // ── Sleeping list ─────────────────────────────────────────────────────────
-	    term->warnNoLock("  SleepingList size=%lu:", "SchedDump", schedulerPtr->sleepingThreadList.getSize());
+	    term->printfBoth(true, "  SleepingList size=%lu:", schedulerPtr->sleepingThreadList.getSize());
 
 	    for (const auto &t : schedulerPtr->sleepingThreadList) {
-	        term->warnNoLock("    TID=%u PID=%u sleepNs=%lu", "SchedDump",
-	            t.getId(), t.getParent()->getId(), t.getSleepNs());
+	        term->printfBoth(true, "    TID=%u PID=%u sleepNs=%lu", t.getId(), t.getParent()->getId(), t.getSleepNs());
 	    }
 
 	    // ── Port messaging ────────────────────────────────────────────────────────
 	    PortMessaging::debugDump();
 
-	    term->warnNoLock("=== END DUMP ===", "SchedDump");
+	    term->printfBoth(true, "=== END DUMP ===");
 	}
 }

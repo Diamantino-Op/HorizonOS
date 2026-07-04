@@ -80,6 +80,11 @@ setUserStackAsm:
 
     ret
 
+.global kernelThreadTrampoline
+kernelThreadTrampoline:
+    sti
+    jmp r15
+
 .global threadTrampoline32
 threadTrampoline32:
     mov ax, 0x20 | 3

@@ -419,6 +419,9 @@ namespace kernel::common::threading {
 
     	bool isScheduling {};
 
+    	//u64 prevPrevThreadId {};
+    	//u64 prevPrevCount {};
+
     public:
     	UleRunQueue uleQueue {};
     	TicketSpinLock coreLock {};

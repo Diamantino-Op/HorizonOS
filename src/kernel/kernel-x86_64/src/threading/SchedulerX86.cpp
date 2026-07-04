@@ -189,9 +189,24 @@ namespace kernel::common::threading {
 			this->idleThreadStarted = true;
 		}
 
-		/*if (oldEntry != this->currentThread && oldEntry != nullptr) {
-			//CommonMain::getTerminal()->debug("Switching from thread %lu to %lu", "Scheduler", oldEntry->value->getId(), this->currentThread->value->getId());
-		}*/
+		/*if (oldThread != this->currentThread) {
+			CommonMain::getTerminal()->printfBoth(true, "Switching from thread %lu to %lu", oldThread->getId(), this->currentThread->getId());
+		}
+
+		if (this->currentThread->getId() == this->prevPrevThreadId) {
+			if (this->prevPrevCount < 10) {
+				this->prevPrevCount++;
+			} else {
+				Scheduler::debugDump();
+
+				for (;;) {
+					Asm::cli();
+					Asm::hlt();
+				}
+			}
+		}
+
+		this->prevPrevThreadId = oldThread->getId();*/
 
 		const u128 hi = static_cast<u128>(this->currentThread->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
@@ -317,7 +332,7 @@ namespace kernel::common::threading {
 				setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(&threadTrampoline64), rip, userStack);
 			}
 		} else {
-			setStackAsm(thread->getStackPointer(), rip);
+			setStackAsm(thread->getStackPointer(), reinterpret_cast<u64>(&kernelThreadTrampoline), rip);
 		}
 
 		if (prevIF) {

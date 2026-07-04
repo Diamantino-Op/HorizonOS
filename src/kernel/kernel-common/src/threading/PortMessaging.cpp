@@ -592,41 +592,34 @@ namespace kernel::common::threading {
     void PortMessaging::debugDump() {
         auto *term = CommonMain::getTerminal();
 
-        term->warnNoLock("  === PORT MESSAGING DUMP ===", "SchedDump");
+        term->printfBoth(true, "  === PORT MESSAGING DUMP ===");
 
         if (portList == nullptr) {
-            term->warnNoLock("    portList is null", "SchedDump");
+            term->printfBoth(true, "    portList is null");
+
             return;
         }
 
         for (auto &entry : *portList) {
-            term->warnNoLock("  Port=%lu  messages=%lu  waiters=%lu",
-                             "SchedDump",
-                             entry.port,
-                             entry.messages.getSize(),
-                             entry.waiters.getSize());
+            term->printfBoth(true, "  Port=%lu  messages=%lu  waiters=%lu", entry.port, entry.messages.getSize(), entry.waiters.getSize());
 
             for (const auto &msg : entry.messages) {
-                term->warnNoLock("    Msg: type=%lu  srcPort=%lu  length=%lu",
-                                 "SchedDump", msg.type, msg.sourcePort, msg.length);
+                term->printfBoth(true, "    Msg: type=%lu  srcPort=%lu  length=%lu", msg.type, msg.sourcePort, msg.length);
             }
 
             for (const auto &w : entry.waiters) {
-                if (w.thread == nullptr) continue;
-                term->warnNoLock("    Waiter: TID=%u  white=%lu  black=%lu",
-                                 "SchedDump",
-                                 w.thread->getId(),
-                                 w.whiteListCount,
-                                 w.blackListCount);
+                if (w.thread == nullptr) {
+                	continue;
+				}
+
+                term->printfBoth(true, "    Waiter: TID=%u  white=%lu  black=%lu", w.thread->getId(), w.whiteListCount, w.blackListCount);
 
                 for (usize i = 0; i < w.whiteListCount; ++i) {
-                    term->warnNoLock("      whitelist[%lu] = %lu",
-                                     "SchedDump", i, w.whiteListTypes[i]);
+                    term->printfBoth(true, "      whitelist[%lu] = %lu", i, w.whiteListTypes[i]);
                 }
 
                 for (usize i = 0; i < w.blackListCount; ++i) {
-                    term->warnNoLock("      blacklist[%lu] = %lu",
-                                     "SchedDump", i, w.blackListTypes[i]);
+                    term->printfBoth(true, "      blacklist[%lu] = %lu", i, w.blackListTypes[i]);
                 }
             }
         }
