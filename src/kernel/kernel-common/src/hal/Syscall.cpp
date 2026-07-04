@@ -440,6 +440,10 @@ namespace kernel::common::hal {
 			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 			if (physPage == nullptr) {
+				for (u64 mapped = bottomAddr; mapped < i; mapped += pageSize) {
+					ctx->pageMap.unMapPage(mapped, true);
+				}
+
 				*ret = MAP_FAILED;
 
 				return ENOMEM;

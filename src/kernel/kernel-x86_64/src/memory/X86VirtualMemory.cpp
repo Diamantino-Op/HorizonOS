@@ -271,7 +271,7 @@ namespace kernel::common::memory {
 		}
 
 		auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
-		if (lvl1Table->entries[lvl1].present) {
+		if (lvl1Table->entries[lvl1].present || lvl1Table->entries[lvl1].address != 0) {
 			if (freePage) {
 				const u64 physAddr = getEntryPhysAddress(&lvl1Table->entries[lvl1], false);
 				const bool hadAddr = lvl1Table->entries[lvl1].address != 0;

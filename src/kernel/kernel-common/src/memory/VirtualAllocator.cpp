@@ -314,7 +314,8 @@ namespace kernel::common::memory {
 		auto* block = reinterpret_cast<MemoryBlock *>(reinterpret_cast<u64>(ptr) - sizeof(MemoryBlock));
 
 		if (!isBlockAddressValid(ctx, block)) {
-			CommonMain::getTerminal()->error("Invalid free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx", "VirtualAllocator", ptr, block, ctx);
+			CommonMain::getTerminal()->error("Invalid free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx", "VirtualAllocator",
+				reinterpret_cast<u64>(ptr), reinterpret_cast<u64>(block), reinterpret_cast<u64>(ctx));
 			ctx->lock.unlock(prevIF);
 
 			return;
@@ -322,7 +323,8 @@ namespace kernel::common::memory {
 
 		if (block->free) {
 			CommonMain::getTerminal()->error("Double free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
-				"VirtualAllocator", ptr, block, ctx, block->size, block->prev, block->next);
+				"VirtualAllocator", reinterpret_cast<u64>(ptr), reinterpret_cast<u64>(block), reinterpret_cast<u64>(ctx),
+				block->size, reinterpret_cast<u64>(block->prev), reinterpret_cast<u64>(block->next));
 			ctx->lock.unlock(prevIF);
 
 			return;
@@ -330,7 +332,8 @@ namespace kernel::common::memory {
 
 		if (!hasValidLinks(ctx, block)) {
 			CommonMain::getTerminal()->error("Corrupt block links on free ptr=0x%.16lx block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
-				"VirtualAllocator", ptr, block, ctx, block->size, block->prev, block->next);
+				"VirtualAllocator", reinterpret_cast<u64>(ptr), reinterpret_cast<u64>(block), reinterpret_cast<u64>(ctx),
+				block->size, reinterpret_cast<u64>(block->prev), reinterpret_cast<u64>(block->next));
 			ctx->lock.unlock(prevIF);
 
 			return;
@@ -359,7 +362,8 @@ namespace kernel::common::memory {
 
 		if (!hasValidLinks(ctx, block)) {
 			CommonMain::getTerminal()->error("Corrupt block links in defrag block=0x%.16lx ctx=0x%.16lx size=0x%.16lx prev=0x%.16lx next=0x%.16lx",
-				"VirtualAllocator", block, ctx, block->size, block->prev, block->next);
+				"VirtualAllocator", reinterpret_cast<u64>(block), reinterpret_cast<u64>(ctx), block->size,
+				reinterpret_cast<u64>(block->prev), reinterpret_cast<u64>(block->next));
 
 			if (!isBlockAddressValid(ctx, block->prev) || (block->prev != nullptr && block->prev->next != block)) {
 				block->prev = nullptr;
