@@ -987,6 +987,10 @@ auto NvmeDriver::getNamespaceCount() const noexcept -> uint32_t {
 	return controllerInfo.nn;
 }
 
+auto NvmeDriver::getNamespaces() const noexcept -> const vector<NamespaceInfo>& {
+	return namespaces;
+}
+
 auto NvmeDriver::getActiveNamespaces(vector<uint32_t> &nsIDs) noexcept -> bool {
 	memset(reinterpret_cast<void*>(this->dataVirt), 0, 4096);
 

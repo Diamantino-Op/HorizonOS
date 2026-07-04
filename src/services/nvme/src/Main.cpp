@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <algorithm>
 
 using namespace std;
 
@@ -69,6 +70,134 @@ namespace {
 uint64_t nvmePort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
+uint64_t storagePort = 0;
+
+namespace {
+	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
+		const size_t copyLen = min(dstSize - 1, name.size());
+		memcpy(dst, name.data(), copyLen);
+		dst[copyLen] = '\0';
+		length = copyLen + 1;
+	}
+
+	auto waitForRegisteredService(const char *name) -> GetReplyMsgData {
+		for (;;) {
+			auto checkMsg = hos_msg();
+			auto checkData = CheckMsgData();
+
+			fillName(checkData.name, sizeof(checkData.name), checkData.nameLength, name);
+
+			checkMsg.type = CHECK_MSG_TYPE;
+			checkMsg.port = 1;
+			checkMsg.buffer = &checkData;
+			checkMsg.length = sizeof(checkData);
+
+			send_horizonos_message(nvmePort, 1, &checkMsg);
+
+			auto recvCheckMsg = hos_msg();
+			auto checkResData = CheckReplyMsgData();
+
+			recvCheckMsg.buffer = &checkResData;
+			recvCheckMsg.length = sizeof(checkResData);
+
+			auto filterOptions = filter_options();
+			filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_CHECK_MSG_TYPE };
+			filterOptions.whiteListCount = 1;
+
+			const int srvRegisterResult = receive_horizonos_message(nvmePort, &recvCheckMsg, &filterOptions);
+			delete[] filterOptions.whiteListTypes;
+
+			if (srvRegisterResult == 0 and checkResData.exists) {
+				break;
+			}
+
+			usleep(10000);
+		}
+
+		auto getMsg = hos_msg();
+		auto getData = GetMsgData();
+
+		fillName(getData.name, sizeof(getData.name), getData.nameLength, name);
+
+		getMsg.type = GET_MSG_TYPE;
+		getMsg.port = 1;
+		getMsg.buffer = &getData;
+		getMsg.length = sizeof(getData);
+
+		send_horizonos_message(nvmePort, 1, &getMsg);
+
+		auto recvGetMsg = hos_msg();
+		auto getResData = GetReplyMsgData();
+
+		recvGetMsg.buffer = &getResData;
+		recvGetMsg.length = sizeof(getResData);
+
+		auto filterOptions = filter_options();
+		filterOptions.whiteListTypes = new uint64_t[1]{ REPLY_GET_MSG_TYPE };
+		filterOptions.whiteListCount = 1;
+
+		receive_horizonos_message(nvmePort, &recvGetMsg, &filterOptions);
+		delete[] filterOptions.whiteListTypes;
+
+		return getResData;
+	}
+
+	void registerNamespacesWithStorage(const vector<NvmeDriver> &controllerDrivers) {
+		const GetReplyMsgData storageInfo = waitForRegisteredService("StorageManager");
+		storagePort = storageInfo.port;
+
+		printf("NVMe: Storage info: Port: %lu, TID: %u, Version: %u.%u.%u.", storageInfo.port, storageInfo.tid, storageInfo.versionMajor, storageInfo.versionMinor, storageInfo.versionPatch);
+		fflush(stdout);
+
+		for (size_t controllerId = 0; controllerId < controllerDrivers.size(); ++controllerId) {
+			for (const auto &ns : controllerDrivers[controllerId].getNamespaces()) {
+				if (!ns.valid) {
+					continue;
+				}
+
+				auto data = StorageRegisterBlockDeviceMsgData();
+				data.driverPort = nvmePort;
+				data.controllerId = static_cast<uint32_t>(controllerId);
+				data.nsid = ns.nsid;
+				data.blockCount = ns.totalLbas;
+				data.blockSize = ns.lbaSize;
+				data.maxPagesPerRequest = NVME_MAX_PAGES_PER_MSG;
+				fillName(data.name, sizeof(data.name), data.nameLength, "nvme" + to_string(controllerId) + "n" + to_string(ns.nsid));
+
+				auto msg = hos_msg();
+				msg.type = STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE;
+				msg.port = storagePort;
+				msg.buffer = &data;
+				msg.length = sizeof(data);
+
+				if (send_horizonos_message(nvmePort, storagePort, &msg) != 0) {
+					printf("NVMe: Failed to register namespace %u with Storage.", ns.nsid);
+					fflush(stdout);
+					continue;
+				}
+
+				auto reply = StorageRegisterBlockDeviceReplyMsgData();
+				auto recv = hos_msg();
+				recv.buffer = &reply;
+				recv.length = sizeof(reply);
+
+				auto filter = filter_options();
+				filter.whiteListTypes = new uint64_t[1]{ STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE };
+				filter.whiteListCount = 1;
+
+				const int ret = receive_horizonos_message(nvmePort, &recv, &filter);
+				delete[] filter.whiteListTypes;
+
+				if (ret == 0 and reply.success) {
+					printf("NVMe: Registered namespace %u as Storage block device %lu.", ns.nsid, reply.deviceId);
+				} else {
+					printf("NVMe: Storage rejected namespace %u.", ns.nsid);
+				}
+				fflush(stdout);
+			}
+		}
+	}
+}
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nvmePort));
@@ -584,6 +713,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		pthread_attr_destroy(&threadAttr);
 	}
+
+	registerNamespacesWithStorage(controllerDrivers);
 
 	for (;;) {}
 

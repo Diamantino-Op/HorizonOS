@@ -30,6 +30,9 @@ constexpr uint64_t NVME_REPLY_READ_MSG_BASE  = 0x40000;
 constexpr uint64_t NVME_REPLY_WRITE_MSG_BASE = 0x50000;
 constexpr uint64_t NVME_REPLY_FLUSH_MSG_BASE = 0x60000;
 
+constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE       = 0x70000;
+constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE = 0x70001;
+
 constexpr uint32_t NVME_MAX_PAGES_PER_MSG = 256;
 
 struct PciReadMsgData {
@@ -100,6 +103,22 @@ struct NvmeFlushMsgData {
 
 struct NvmeFlushReplyMsgData {
 	bool success {};
+};
+
+struct StorageRegisterBlockDeviceMsgData {
+	uint64_t driverPort {};
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t blockCount {};
+	uint32_t blockSize {};
+	uint32_t maxPagesPerRequest {};
+	char name[32] {};
+	size_t nameLength {};
+};
+
+struct StorageRegisterBlockDeviceReplyMsgData {
+	bool success {};
+	uint64_t deviceId {};
 };
 
 struct PciMsixAllocMsgData {
@@ -419,6 +438,7 @@ public:
 	auto createIoQueueForCore(uint64_t coreSlot, uint16_t queueId, uint64_t lapicId) noexcept -> bool;
 	auto submitIoCommand(IoQueuePair& queue, const Command &command, CompletionEntry &result) const noexcept -> bool;
 	auto getNamespaceCount() const noexcept -> uint32_t;
+	auto getNamespaces() const noexcept -> const vector<NamespaceInfo>&;
 	auto getActiveNamespaces(vector<uint32_t> &nsIDs) noexcept -> bool;
 	void shutdown() noexcept;
 
