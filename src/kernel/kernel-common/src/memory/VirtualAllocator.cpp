@@ -119,7 +119,7 @@ namespace kernel::common::memory {
 
 		const u64 ctxPage = reinterpret_cast<u64>(CommonMain::getInstance()->getPMM()->allocPages(1, true));
 
-		ctx = reinterpret_cast<AllocContext *>(ctxPage);
+		ctx = new (reinterpret_cast<void *>(ctxPage)) AllocContext();
 		initReservedKernelHeap(ctx);
 
 		const u64 ctxVirt = ctx->heapCursor;
@@ -153,6 +153,8 @@ namespace kernel::common::memory {
 
 		auto *ctxKern = reinterpret_cast<AllocContext *>(ctxAddr + CommonMain::getCurrentHhdm());
 		auto *ctx = reinterpret_cast<AllocContext *>(processAddr + pageSize);
+
+		new (ctxKern) AllocContext();
 
 		ctxKern->isUserspace = false;
 		ctxKern->heapSize = pageSize - sizeof(AllocContext);

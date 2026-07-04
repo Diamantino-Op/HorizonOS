@@ -641,6 +641,14 @@ namespace kernel::common::hal {
 
 		auto *newThread = new Thread(scheduler, process, entryFun, true, 0, stack);
 
+		if (newThread == nullptr) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return ENOMEM;
+		}
+
 		if (newThread->getContext() == nullptr) {
 			delete newThread;
 
