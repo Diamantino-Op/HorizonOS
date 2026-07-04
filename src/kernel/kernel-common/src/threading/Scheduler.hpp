@@ -198,6 +198,8 @@ namespace kernel::common::threading {
 
 		AllocContext *getProcessContextKernel() const;
 		bool ownsProcessContext() const;
+		bool isTerminating() const;
+		void setTerminating(bool val);
 
 		LinkedListEntry<Thread> *addThread(Thread *entry);
     	void removeThread(Thread *entry);
@@ -212,6 +214,7 @@ namespace kernel::common::threading {
         AllocContext *processContext {};
 		AllocContext *processContextKernel {};
 		bool processContextOwned {};
+		bool terminating {};
 
         ProcessPriority priority {};
 

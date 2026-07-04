@@ -333,6 +333,14 @@ namespace kernel::common::threading {
 		return this->processContextOwned;
 	}
 
+	bool Process::isTerminating() const {
+		return this->terminating;
+	}
+
+	void Process::setTerminating(const bool val) {
+		this->terminating = val;
+	}
+
 	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
 		return this->threadList.addStart(entry);
 	}
@@ -565,6 +573,23 @@ namespace kernel::common::threading {
 			return;
 		}
 
+		const bool prevIF = this->schedLock.lock();
+
+		if (process->isTerminating()) {
+			Thread *current = getCurrentExecutionNode()->getCurrentThread();
+			const bool killCurrent = current != nullptr && current->getParent() == process && current->getState() != ThreadState::TERMINATED;
+			this->schedLock.unlock(prevIF);
+
+			if (killCurrent) {
+				this->killThread(current);
+			}
+
+			return;
+		}
+
+		process->setTerminating(true);
+		this->schedLock.unlock(prevIF);
+
 		const LinkedListEntry<Thread> *tmpEntry = process->threadList.getFirst();
 
 		while (tmpEntry != nullptr) {
@@ -623,13 +648,27 @@ namespace kernel::common::threading {
 
 	// TODO: Fix
 	void Scheduler::killThread(Thread *thread) {
+		if (thread == nullptr) {
+			return;
+		}
+
 		const bool prevIF = this->schedLock.lock();
+
+		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
+
+		if (thread->getState() == ThreadState::TERMINATED) {
+			this->schedLock.unlock(prevIF);
+
+			if (shouldReschedule) {
+				ExecutionNode::reSchedule();
+			}
+
+			return;
+		}
 
 		thread->setState(ThreadState::TERMINATED);
 		PortMessaging::removeThread(thread);
 		Futex::removeThread(thread->getId());
-
-		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!shouldReschedule) {
 			if (this->removeThread(thread)) {
