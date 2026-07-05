@@ -29,6 +29,7 @@ struct BlockDevice {
 	Guid partitionType {};
 	Guid partitionId {};
 	string name;
+	string label;
 };
 
 struct FsHandler {

@@ -39,3 +39,9 @@ storage_manager_exe = storage_manager_proj.get_variable('storage_manager_exe')
 ext2_proj = subproject('ext2', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 ext2_exe = ext2_proj.get_variable('ext2_exe')
+
+# Ext2 Service
+
+vfs_proj = subproject('vfs', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+vfs_exe = vfs_proj.get_variable('vfs_exe')

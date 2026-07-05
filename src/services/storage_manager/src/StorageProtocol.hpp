@@ -30,9 +30,12 @@ constexpr uint64_t STORAGE_FLUSH_MSG_TYPE                       = 0x70008;
 constexpr uint64_t STORAGE_FLUSH_REPLY_MSG_TYPE                 = 0x70009;
 constexpr uint64_t STORAGE_FS_PROBE_DEVICE_MSG_TYPE             = 0x7000A;
 constexpr uint64_t STORAGE_FS_PROBE_DEVICE_REPLY_MSG_TYPE       = 0x7000B;
+constexpr uint64_t STORAGE_LIST_BLOCK_DEVICES_MSG_TYPE          = 0x7000C;
+constexpr uint64_t STORAGE_LIST_BLOCK_DEVICES_REPLY_MSG_TYPE    = 0x7000D;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
+constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
 
 struct RegisterMsgData {
 	uint16_t ownerPid {};
@@ -173,6 +176,29 @@ struct StorageFsProbeDeviceMsgData {
 
 struct StorageFsProbeDeviceReplyMsgData {
 	bool recognized {};
+};
+
+struct StorageListBlockDevicesMsgData {
+	uint32_t reserved {};
+};
+
+struct StorageListedBlockDevice {
+	uint64_t deviceId {};
+	uint8_t kind {};
+	uint64_t blockCount {};
+	uint32_t blockSize {};
+	uint64_t parentId {};
+	uint64_t parentStartLba {};
+	char name[STORAGE_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+	char label[STORAGE_MAX_NAME_LENGTH] {};
+	size_t labelLength {};
+};
+
+struct StorageListBlockDevicesReplyMsgData {
+	bool success {};
+	uint32_t deviceCount {};
+	StorageListedBlockDevice devices[STORAGE_MAX_LIST_DEVICES] {};
 };
 
 #endif

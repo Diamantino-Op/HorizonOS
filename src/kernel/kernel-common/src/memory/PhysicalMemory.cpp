@@ -121,7 +121,7 @@ namespace kernel::common::memory {
 
 		const bool prevIF = this->pmmSpinLock.lock();
 
-		PmmListEntry *currEntry = this->listPtr;
+		const PmmListEntry *currEntry = this->listPtr;
 
 		while (currEntry != nullptr) {
 			if (currEntry->count >= pageAmount) {
@@ -190,7 +190,7 @@ namespace kernel::common::memory {
 		this->freePagesPhys(reinterpret_cast<u64 *>(alignDown<u64>(phys, pageSize)), pageAmount);
 	}
 
-	void PhysicalMemoryManager::freePagesPhys(u64 *physAddress, const usize pageAmount) {
+	void PhysicalMemoryManager::freePagesPhys(const u64 *physAddress, const usize pageAmount) {
 		const u64 phys = reinterpret_cast<u64>(physAddress);
 
 		if (phys == 0 || pageAmount == 0 || (phys & (pageSize - 1)) != 0) {

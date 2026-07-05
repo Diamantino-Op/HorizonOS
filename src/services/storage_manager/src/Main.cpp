@@ -47,6 +47,18 @@ namespace {
 		length = copyLen + 1;
 	}
 
+	auto gptNameToString(const uint16_t *name, const size_t charCount) -> string {
+		string out;
+
+		for (size_t i = 0; i < charCount and name[i] != 0; ++i) {
+			const uint16_t ch = name[i];
+
+			out.push_back(ch >= 0x20 and ch <= 0x7E ? static_cast<char>(ch) : '_');
+		}
+
+		return out;
+	}
+
 	auto registerWithNameRegistry(const char *name) -> bool {
 		auto msg = hos_msg();
 		auto data = RegisterMsgData();
@@ -455,6 +467,7 @@ namespace {
 					partition.partitionType = entry->partitionTypeGuid;
 					partition.partitionId = entry->uniquePartitionGuid;
 					partition.name = rawDevice.name + "p" + to_string(globalEntryIndex + 1);
+					partition.label = gptNameToString(entry->name, 36);
 
 					{
 						const scoped_lock lock(storageMutex);
@@ -756,6 +769,58 @@ namespace {
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
+
+	[[noreturn]] auto listBlockDevicesHandler(void */*unused*/) -> void * {
+		auto data = StorageListBlockDevicesMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { STORAGE_LIST_BLOCK_DEVICES_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(storagePort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = StorageListBlockDevicesReplyMsgData();
+			reply.success = true;
+
+			{
+				const scoped_lock lock(storageMutex);
+				reply.deviceCount = min<uint32_t>(blockDevices.size(), STORAGE_MAX_LIST_DEVICES);
+
+				for (uint32_t i = 0; i < reply.deviceCount; ++i) {
+					const BlockDevice &device = blockDevices[i];
+					StorageListedBlockDevice &out = reply.devices[i];
+
+					out.deviceId = device.id;
+					out.kind = static_cast<uint8_t>(device.kind);
+					out.blockCount = device.blockCount;
+					out.blockSize = device.blockSize;
+					out.parentId = device.parentId;
+					out.parentStartLba = device.parentStartLba;
+					fillName(out.name, sizeof(out.name), out.nameLength, device.name);
+					fillName(out.label, sizeof(out.label), out.labelLength, device.label);
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = STORAGE_LIST_BLOCK_DEVICES_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+
+			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
+		}
+	}
 }
 
 auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
@@ -784,12 +849,14 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	pthread_t readThread;
 	pthread_t writeThread;
 	pthread_t flushThread;
+	pthread_t listThread;
 
 	if (pthread_create(&blockThread, nullptr, blockRegistrationHandler, nullptr) != 0 or
 	    pthread_create(&fsThread, nullptr, fsHandlerRegistrationHandler, nullptr) != 0 or
 	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0 or
 	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
-	    pthread_create(&flushThread, nullptr, flushHandler, nullptr) != 0) {
+	    pthread_create(&flushThread, nullptr, flushHandler, nullptr) != 0 or
+	    pthread_create(&listThread, nullptr, listBlockDevicesHandler, nullptr) != 0) {
 		printf("Storage: Failed to create message handlers.");
 		fflush(stdout);
 
@@ -801,6 +868,7 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	pthread_detach(readThread);
 	pthread_detach(writeThread);
 	pthread_detach(flushThread);
+	pthread_detach(listThread);
 
 	for (;;) {
 		usleep(100000);
