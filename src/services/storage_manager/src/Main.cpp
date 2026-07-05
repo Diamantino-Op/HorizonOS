@@ -1,10 +1,12 @@
 #include "StorageProtocol.hpp"
 
+#include "bits/linux/linux_sched.h"
 #include "horizonos/generic.h"
 #include "sys/mman.h"
 #include "unistd.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -77,7 +79,6 @@ namespace {
 	uint64_t storagePort = 0;
 	uint64_t nvmePort = 0;
 	uint64_t nextBlockDeviceId = 1;
-	uint64_t nvmeCpuId = 0;
 	vector<BlockDevice> blockDevices;
 	vector<FsHandler> fsHandlers;
 	mutex storageMutex;
@@ -89,12 +90,15 @@ namespace {
 		}
 
 		out.assign(name, length - 1);
+
 		return true;
 	}
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
+
 		memcpy(dst, name.data(), copyLen);
+
 		dst[copyLen] = '\0';
 		length = copyLen + 1;
 	}
@@ -105,6 +109,7 @@ namespace {
 
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
+
 		fillName(data.name, sizeof(data.name), data.nameLength, name);
 
 		msg.type = REGISTER_MSG_TYPE;
@@ -118,14 +123,17 @@ namespace {
 
 		auto reply = RegisterReplyMsgData();
 		auto replyMsg = hos_msg();
+
 		replyMsg.buffer = &reply;
 		replyMsg.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { REPLY_REGISTER_MSG_TYPE };
 		filter.whiteListCount = 1;
 
 		const int ret = receive_horizonos_message(storagePort, &replyMsg, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return ret == 0 and reply.success;
@@ -134,9 +142,11 @@ namespace {
 	auto waitForService(const char *name) -> GetReplyMsgData {
 		for (;;) {
 			auto check = CheckMsgData();
+
 			fillName(check.name, sizeof(check.name), check.nameLength, name);
 
 			auto checkMsg = hos_msg();
+
 			checkMsg.type = CHECK_MSG_TYPE;
 			checkMsg.port = 1;
 			checkMsg.buffer = &check;
@@ -146,13 +156,17 @@ namespace {
 
 			auto checkReply = CheckReplyMsgData();
 			auto recv = hos_msg();
+
 			recv.buffer = &checkReply;
 			recv.length = sizeof(checkReply);
 
 			auto filter = filter_options();
+
 			filter.whiteListTypes = new uint64_t[1] { REPLY_CHECK_MSG_TYPE };
 			filter.whiteListCount = 1;
+
 			const int ret = receive_horizonos_message(storagePort, &recv, &filter);
+
 			delete[] filter.whiteListTypes;
 
 			if (ret == 0 and checkReply.exists) {
@@ -163,31 +177,38 @@ namespace {
 		}
 
 		auto get = GetMsgData();
+
 		fillName(get.name, sizeof(get.name), get.nameLength, name);
 
 		auto getMsg = hos_msg();
+
 		getMsg.type = GET_MSG_TYPE;
 		getMsg.port = 1;
 		getMsg.buffer = &get;
 		getMsg.length = sizeof(get);
+
 		send_horizonos_message(storagePort, 1, &getMsg);
 
 		auto reply = GetReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { REPLY_GET_MSG_TYPE };
 		filter.whiteListCount = 1;
+
 		receive_horizonos_message(storagePort, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return reply;
 	}
 
 	auto findBlockDeviceLocked(const uint64_t id) -> BlockDevice * {
-		const auto it = ranges::find_if(blockDevices, [&](const BlockDevice &dev) {
+		const auto it = ranges::find_if(blockDevices, [&](const BlockDevice &dev) -> bool {
 			return dev.id == id;
 		});
 
@@ -198,7 +219,7 @@ namespace {
 		return (static_cast<uint64_t>(pageCount) * 0x1000) / device.blockSize;
 	}
 
-	auto translateToNvmeLocked(const BlockDevice &device, uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
+	auto translateToNvmeLocked(const BlockDevice &device, const uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
 		const uint64_t blocks = transferBlockCount(device, pageCount);
 
 		if (blocks == 0 or lba >= device.blockCount or blocks > device.blockCount - lba) {
@@ -208,63 +229,82 @@ namespace {
 		if (device.kind == BlockDeviceKind::NvmeNamespace) {
 			out = device;
 			out.parentStartLba = lba;
+
 			return true;
 		}
 
 		const BlockDevice *parent = findBlockDeviceLocked(device.parentId);
+
 		if (parent == nullptr or device.parentStartLba + lba >= parent->blockCount or blocks > parent->blockCount - (device.parentStartLba + lba)) {
 			return false;
 		}
 
 		out = *parent;
 		out.parentStartLba = device.parentStartLba + lba;
+
 		return true;
 	}
 
+	auto currentCpuId() -> uint64_t {
+		const int cpuId = sched_getcpu();
+
+		return cpuId < 0 ? 0 : static_cast<uint64_t>(cpuId);
+	}
+
 	auto nvmeRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
-		scoped_lock requestLock(nvmeRequestMutex);
+		const scoped_lock requestLock(nvmeRequestMutex);
+		const uint64_t cpuId = currentCpuId();
 
 		auto data = NvmeReadMsgData();
+
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
 		data.lba = lba;
 		data.pageCount = pageCount;
+
 		memcpy(data.pagePhysArray, pagePhysArray, pageCount * sizeof(uint64_t));
 
 		auto msg = hos_msg();
-		msg.type = NVME_READ_MSG_BASE + nvmeCpuId;
+
+		msg.type = NVME_READ_MSG_BASE + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
-		printf("Storage: Sending NVMe read for %s ctrl=%u nsid=%u lba=%lu pages=%u type=%lu.", device.name.c_str(), device.controllerId, device.nsid, lba, pageCount, msg.type);
-		fflush(stdout);
+		//printf("Storage: Sending NVMe read for %s ctrl=%u nsid=%u lba=%lu pages=%u type=%lu.", device.name.c_str(), device.controllerId, device.nsid, lba, pageCount, msg.type);
+		//fflush(stdout);
 
 		if (send_horizonos_message(storagePort, device.driverPort, &msg) != 0) {
 			printf("Storage: Failed to send NVMe read for %s.", device.name.c_str());
 			fflush(stdout);
+
 			return false;
 		}
 
 		auto reply = NvmeReadReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_READ_MSG_BASE + nvmeCpuId };
+
+		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_READ_MSG_BASE + cpuId };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(storagePort, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
-		printf("Storage: NVMe read reply for %s ret=%d success=%d.", device.name.c_str(), ret, reply.success);
-		fflush(stdout);
+		//printf("Storage: NVMe read reply for %s ret=%d success=%d.", device.name.c_str(), ret, reply.success);
+		//fflush(stdout);
 
 		return ret == 0 and reply.success;
 	}
 
 	auto nvmeWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
-		scoped_lock requestLock(nvmeRequestMutex);
+		const scoped_lock requestLock(nvmeRequestMutex);
+		const uint64_t cpuId = currentCpuId();
 
 		auto data = NvmeWriteMsgData();
 		data.controllerId = device.controllerId;
@@ -274,7 +314,7 @@ namespace {
 		memcpy(data.pagePhysArray, pagePhysArray, pageCount * sizeof(uint64_t));
 
 		auto msg = hos_msg();
-		msg.type = NVME_WRITE_MSG_BASE + nvmeCpuId;
+		msg.type = NVME_WRITE_MSG_BASE + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
@@ -289,7 +329,7 @@ namespace {
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_WRITE_MSG_BASE + nvmeCpuId };
+		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_WRITE_MSG_BASE + cpuId };
 		filter.whiteListCount = 1;
 		const int ret = receive_horizonos_message(storagePort, &recv, &filter);
 		delete[] filter.whiteListTypes;
@@ -298,14 +338,17 @@ namespace {
 	}
 
 	auto nvmeFlush(const BlockDevice &device) -> bool {
-		scoped_lock requestLock(nvmeRequestMutex);
+		const scoped_lock requestLock(nvmeRequestMutex);
+		const uint64_t cpuId = currentCpuId();
 
 		auto data = NvmeFlushMsgData();
+
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
 
 		auto msg = hos_msg();
-		msg.type = NVME_FLUSH_MSG_BASE + nvmeCpuId;
+
+		msg.type = NVME_FLUSH_MSG_BASE + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
@@ -316,13 +359,17 @@ namespace {
 
 		auto reply = NvmeFlushReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_FLUSH_MSG_BASE + nvmeCpuId };
+
+		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_FLUSH_MSG_BASE + cpuId };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(storagePort, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return ret == 0 and reply.success;
@@ -335,7 +382,9 @@ namespace {
 
 		if (mmap_phys(phys, 0x1000, &virt, false) != 0) {
 			freePhysPage(phys);
+
 			phys = 0;
+
 			return false;
 		}
 
@@ -345,15 +394,17 @@ namespace {
 		if (!nvmeRead(device, lba, pages, 1)) {
 			munmap(reinterpret_cast<void *>(virt), 0x1000);
 			freePhysPage(phys);
+
 			phys = 0;
 			virt = 0;
+
 			return false;
 		}
 
 		return true;
 	}
 
-	void freeOnePage(uint64_t phys, uint64_t virt) {
+	void freeOnePage(const uint64_t phys, const uint64_t virt) {
 		if (virt != 0) {
 			munmap(reinterpret_cast<void *>(virt), 0x1000);
 		}
@@ -367,7 +418,7 @@ namespace {
 		vector<FsHandler> handlers;
 
 		{
-			scoped_lock lock(storageMutex);
+			const scoped_lock lock(storageMutex);
 			handlers = fsHandlers;
 		}
 
@@ -398,6 +449,7 @@ namespace {
 		if (!readOnePage(rawDevice, 1, headerPhys, headerVirt)) {
 			printf("Storage: Failed to read GPT header from %s.", rawDevice.name.c_str());
 			fflush(stdout);
+
 			return;
 		}
 
@@ -405,8 +457,10 @@ namespace {
 
 		if (header->signature != GPT_SIGNATURE or header->headerSize < sizeof(GptHeader) or header->partitionEntrySize < sizeof(GptPartitionEntry)) {
 			freeOnePage(headerPhys, headerVirt);
+
 			printf("Storage: %s has no GPT header.", rawDevice.name.c_str());
 			fflush(stdout);
+
 			return;
 		}
 
@@ -416,7 +470,7 @@ namespace {
 		uint32_t created = 0;
 
 		for (uint32_t pageIndex = 0; pageIndex < entryPageCount; ++pageIndex) {
-			const uint64_t entryPageLba = header->partitionEntryLba + pageIndex * (0x1000 / rawDevice.blockSize);
+			const uint64_t entryPageLba = header->partitionEntryLba + (static_cast<uint64_t>(pageIndex * (0x1000 / rawDevice.blockSize)));
 			uint64_t entriesPhys = 0;
 			uint64_t entriesVirt = 0;
 
@@ -451,12 +505,13 @@ namespace {
 					partition.name = rawDevice.name + "p" + to_string(globalEntryIndex + 1);
 
 					{
-						scoped_lock lock(storageMutex);
+						const scoped_lock lock(storageMutex);
 						blockDevices.push_back(partition);
 					}
 
 					printf("Storage: Registered partition %s id=%lu start=%lu blocks=%lu.", partition.name.c_str(), partition.id, partition.parentStartLba, partition.blockCount);
 					fflush(stdout);
+
 					notifyFsHandlers(partition);
 					++created;
 				}
@@ -742,16 +797,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	const GetReplyMsgData nvmeInfo = waitForService("NVMe");
 	nvmePort = nvmeInfo.port;
 
-	long cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
-	if (cpuCount > 0) {
-		auto *cpuIds = new HosCpuInfo[cpuCount];
-		if (getCpuIds(cpuIds, static_cast<uint64_t>(cpuCount)) == 0) {
-			nvmeCpuId = cpuIds[0].cpuId;
-		}
-		delete[] cpuIds;
-	}
-
-	printf("Storage: Ready on port %lu, NVMe port %lu, NVMe CPU message slot %lu.", storagePort, nvmePort, nvmeCpuId);
+	printf("Storage: Ready on port %lu, NVMe port %lu.", storagePort, nvmePort);
 	fflush(stdout);
 
 	pthread_t blockThread;
