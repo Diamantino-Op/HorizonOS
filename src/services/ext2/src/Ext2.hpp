@@ -109,12 +109,13 @@ namespace {
 		auto writeFileOverwrite(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
 		auto writeFile(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
 		auto createFile(const string &path) -> bool;
+		auto createDirectory(const string &path) -> bool;
 		auto unlinkFile(const string &path) -> bool;
 		auto renameFile(const string &oldPath, const string &newPath) -> bool;
 		auto truncateFile(const string &path, uint64_t size) -> bool;
 		auto findFirstRootTextFile(uint32_t &inodeNumber, string &name) -> bool;
 		auto lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) -> bool;
-		auto readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries) -> bool;
+		auto readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries, uint32_t offset = 0, bool *hasMore = nullptr, uint32_t *nextOffset = nullptr) -> bool;
 		void testReadFirstTextFile();
 
 		auto getBlockSize() const -> uint64_t;

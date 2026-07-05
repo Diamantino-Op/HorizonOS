@@ -32,6 +32,8 @@ constexpr uint64_t FS_RENAME_MSG_TYPE      = 0x8000E;
 constexpr uint64_t FS_RENAME_REPLY_MSG_TYPE = 0x8000F;
 constexpr uint64_t FS_TRUNCATE_MSG_TYPE    = 0x80010;
 constexpr uint64_t FS_TRUNCATE_REPLY_MSG_TYPE = 0x80011;
+constexpr uint64_t FS_MKDIR_MSG_TYPE       = 0x80012;
+constexpr uint64_t FS_MKDIR_REPLY_MSG_TYPE = 0x80013;
 
 constexpr uint64_t VFS_STAT_MSG_TYPE       = 0x90000;
 constexpr uint64_t VFS_STAT_REPLY_MSG_TYPE = 0x90001;
@@ -59,6 +61,12 @@ constexpr uint64_t VFS_TRUNCATE_MSG_TYPE   = 0x90016;
 constexpr uint64_t VFS_TRUNCATE_REPLY_MSG_TYPE = 0x90017;
 constexpr uint64_t VFS_HANDLE_SEEK_MSG_TYPE = 0x90018;
 constexpr uint64_t VFS_HANDLE_SEEK_REPLY_MSG_TYPE = 0x90019;
+constexpr uint64_t VFS_MKDIR_MSG_TYPE      = 0x9001A;
+constexpr uint64_t VFS_MKDIR_REPLY_MSG_TYPE = 0x9001B;
+constexpr uint64_t VFS_MOUNT_REFRESH_MSG_TYPE = 0x9001C;
+constexpr uint64_t VFS_MOUNT_REFRESH_REPLY_MSG_TYPE = 0x9001D;
+constexpr uint64_t VFS_UNMOUNT_MSG_TYPE    = 0x9001E;
+constexpr uint64_t VFS_UNMOUNT_REPLY_MSG_TYPE = 0x9001F;
 
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
@@ -74,10 +82,25 @@ constexpr uint8_t VFS_NODE_DIRECTORY = 2;
 constexpr uint32_t VFS_OPEN_READ = 1 << 0;
 constexpr uint32_t VFS_OPEN_WRITE = 1 << 1;
 constexpr uint32_t VFS_OPEN_CREATE = 1 << 2;
+constexpr uint32_t VFS_OPEN_APPEND = 1 << 3;
+constexpr uint32_t VFS_OPEN_TRUNCATE = 1 << 4;
+constexpr uint32_t VFS_OPEN_EXCLUSIVE = 1 << 5;
 
 constexpr uint8_t VFS_SEEK_SET = 0;
 constexpr uint8_t VFS_SEEK_CUR = 1;
 constexpr uint8_t VFS_SEEK_END = 2;
+
+constexpr uint32_t VFS_STATUS_OK = 0;
+constexpr uint32_t VFS_STATUS_NOT_FOUND = 2;
+constexpr uint32_t VFS_STATUS_BUSY = 16;
+constexpr uint32_t VFS_STATUS_EXISTS = 17;
+constexpr uint32_t VFS_STATUS_NOT_DIR = 20;
+constexpr uint32_t VFS_STATUS_IS_DIR = 21;
+constexpr uint32_t VFS_STATUS_INVALID = 22;
+constexpr uint32_t VFS_STATUS_NO_SPACE = 28;
+constexpr uint32_t VFS_STATUS_READ_ONLY = 30;
+constexpr uint32_t VFS_STATUS_NOT_EMPTY = 39;
+constexpr uint32_t VFS_STATUS_UNSUPPORTED = 95;
 
 struct RegisterMsgData {
 	uint16_t ownerPid {};
@@ -161,10 +184,13 @@ struct FsStatReplyMsgData {
 	bool success {};
 	uint8_t nodeType {};
 	uint64_t size {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct FsReadDirMsgData {
 	uint64_t mountId {};
+	uint32_t offset {};
 	char path[VFS_MAX_PATH_LENGTH] {};
 	size_t pathLength {};
 };
@@ -180,6 +206,9 @@ struct FsReadDirReplyMsgData {
 	bool success {};
 	uint32_t entryCount {};
 	VfsDirEntry entries[VFS_MAX_DIR_ENTRIES] {};
+	uint32_t status {};
+	uint32_t nextOffset {};
+	bool hasMore {};
 };
 
 struct FsReadMsgData {
@@ -209,6 +238,7 @@ struct FsWriteReplyMsgData {
 	bool success {};
 	uint32_t bytesWritten {};
 	uint64_t size {};
+	uint32_t status {};
 };
 
 struct FsCreateMsgData {
@@ -220,6 +250,8 @@ struct FsCreateMsgData {
 
 struct FsCreateReplyMsgData {
 	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct FsUnlinkMsgData {
@@ -230,6 +262,7 @@ struct FsUnlinkMsgData {
 
 struct FsUnlinkReplyMsgData {
 	bool success {};
+	uint32_t status {};
 };
 
 struct FsRenameMsgData {
@@ -242,6 +275,7 @@ struct FsRenameMsgData {
 
 struct FsRenameReplyMsgData {
 	bool success {};
+	uint32_t status {};
 };
 
 struct FsTruncateMsgData {
@@ -254,6 +288,19 @@ struct FsTruncateMsgData {
 struct FsTruncateReplyMsgData {
 	bool success {};
 	uint64_t size {};
+	uint32_t status {};
+};
+
+struct FsMkdirMsgData {
+	uint64_t mountId {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsMkdirReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct VfsStatMsgData {
@@ -265,9 +312,12 @@ struct VfsStatReplyMsgData {
 	bool success {};
 	uint8_t nodeType {};
 	uint64_t size {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct VfsReadDirMsgData {
+	uint32_t offset {};
 	char path[VFS_MAX_PATH_LENGTH] {};
 	size_t pathLength {};
 };
@@ -276,6 +326,9 @@ struct VfsReadDirReplyMsgData {
 	bool success {};
 	uint32_t entryCount {};
 	VfsDirEntry entries[VFS_MAX_DIR_ENTRIES] {};
+	uint32_t status {};
+	uint32_t nextOffset {};
+	bool hasMore {};
 };
 
 struct VfsReadMsgData {
@@ -303,6 +356,7 @@ struct VfsWriteReplyMsgData {
 	bool success {};
 	uint32_t bytesWritten {};
 	uint64_t size {};
+	uint32_t status {};
 };
 
 struct VfsCreateMsgData {
@@ -313,6 +367,19 @@ struct VfsCreateMsgData {
 
 struct VfsCreateReplyMsgData {
 	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct VfsMkdirMsgData {
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct VfsMkdirReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct VfsUnlinkMsgData {
@@ -322,6 +389,7 @@ struct VfsUnlinkMsgData {
 
 struct VfsUnlinkReplyMsgData {
 	bool success {};
+	uint32_t status {};
 };
 
 struct VfsRenameMsgData {
@@ -333,6 +401,7 @@ struct VfsRenameMsgData {
 
 struct VfsRenameReplyMsgData {
 	bool success {};
+	uint32_t status {};
 };
 
 struct VfsTruncateMsgData {
@@ -344,6 +413,7 @@ struct VfsTruncateMsgData {
 struct VfsTruncateReplyMsgData {
 	bool success {};
 	uint64_t size {};
+	uint32_t status {};
 };
 
 struct VfsOpenMsgData {
@@ -357,6 +427,8 @@ struct VfsOpenReplyMsgData {
 	uint64_t handle {};
 	uint8_t nodeType {};
 	uint64_t size {};
+	uint32_t status {};
+	uint64_t nodeId {};
 };
 
 struct VfsCloseMsgData {
@@ -365,6 +437,7 @@ struct VfsCloseMsgData {
 
 struct VfsCloseReplyMsgData {
 	bool success {};
+	uint32_t status {};
 };
 
 struct VfsHandleReadMsgData {
@@ -377,6 +450,7 @@ struct VfsHandleReadReplyMsgData {
 	uint32_t bytesRead {};
 	uint64_t position {};
 	uint8_t data[VFS_MAX_READ_SIZE] {};
+	uint32_t status {};
 };
 
 struct VfsHandleWriteMsgData {
@@ -390,6 +464,7 @@ struct VfsHandleWriteReplyMsgData {
 	uint32_t bytesWritten {};
 	uint64_t position {};
 	uint64_t size {};
+	uint32_t status {};
 };
 
 struct VfsHandleSeekMsgData {
@@ -401,6 +476,27 @@ struct VfsHandleSeekMsgData {
 struct VfsHandleSeekReplyMsgData {
 	bool success {};
 	uint64_t position {};
+	uint32_t status {};
+};
+
+struct VfsMountRefreshMsgData {
+	uint32_t reserved {};
+};
+
+struct VfsMountRefreshReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint32_t volumeCount {};
+};
+
+struct VfsUnmountMsgData {
+	char volume[VFS_MAX_NAME_LENGTH] {};
+	size_t volumeLength {};
+};
+
+struct VfsUnmountReplyMsgData {
+	bool success {};
+	uint32_t status {};
 };
 
 #endif

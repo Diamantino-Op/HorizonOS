@@ -1452,6 +1452,92 @@ namespace {
 		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 1);
 	}
 
+	auto Ext2Volume::createDirectory(const string &path) -> bool {
+		string parentPath;
+		string name;
+
+		if (!splitParentPath(path, parentPath, name) or name == "." or name == "..") {
+			return false;
+		}
+
+		uint32_t existingInode = 0;
+		Ext2Inode existing {};
+
+		if (lookupPath(path, existingInode, existing)) {
+			return false;
+		}
+
+		uint32_t parentInodeNumber = 0;
+		Ext2Inode parent {};
+
+		if (!lookupPath(parentPath, parentInodeNumber, parent) or (parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+
+		if (!allocateInode(inodeNumber)) {
+			return false;
+		}
+
+		uint32_t dirBlock = 0;
+
+		if (!allocateBlock(dirBlock)) {
+			return false;
+		}
+
+		auto inode = Ext2Inode();
+
+		inode.mode = EXT2_S_IFDIR | 0755;
+		inode.linksCount = 2;
+		inode.sizeLo = static_cast<uint32_t>(blockSize);
+		inode.blocks = static_cast<uint32_t>(blockSize / 512);
+		inode.block[0] = dirBlock;
+
+		vector<uint8_t> blockBytes;
+
+		blockBytes.resize(blockSize);
+
+		auto *dot = reinterpret_cast<Ext2DirEntry *>(blockBytes.data());
+
+		dot->inode = inodeNumber;
+		dot->recLen = ext2DirRecLen(1);
+		dot->nameLen = 1;
+		dot->fileType = 2;
+		dot->name[0] = '.';
+
+		auto *dotDot = reinterpret_cast<Ext2DirEntry *>(blockBytes.data() + dot->recLen);
+
+		dotDot->inode = parentInodeNumber;
+		dotDot->recLen = static_cast<uint16_t>(blockSize - dot->recLen);
+		dotDot->nameLen = 2;
+		dotDot->fileType = 2;
+		dotDot->name[0] = '.';
+		dotDot->name[1] = '.';
+
+		if (!writeBlock(dirBlock, blockBytes.data()) or !writeInode(inodeNumber, inode)) {
+			return false;
+		}
+
+		++parent.linksCount;
+
+		if (!addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 2)) {
+			return false;
+		}
+
+		const uint32_t group = (inodeNumber - 1) / superblock.inodesPerGroup;
+
+		if (group < groupDescriptors.size()) {
+			++groupDescriptors[group].usedDirsCountLo;
+
+			if (!writeGroupDescriptor(group)) {
+				return false;
+			}
+		}
+
+		return writeInode(parentInodeNumber, parent) and flushDevice(device.deviceId);
+	}
+
 	auto Ext2Volume::truncateFile(const string &path, const uint64_t size) -> bool {
 		uint32_t inodeNumber = 0;
 		Ext2Inode inode {};
@@ -1690,7 +1776,7 @@ namespace {
 		return false;
 	}
 
-	auto Ext2Volume::readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries) -> bool {
+	auto Ext2Volume::readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries, const uint32_t startOffset, bool *hasMore, uint32_t *nextOffset) -> bool {
 		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
 			return false;
 		}
@@ -1702,7 +1788,19 @@ namespace {
 		}
 
 		entries.clear();
-		uint64_t offset = 0;
+		uint64_t offset = startOffset;
+
+		if (offset >= dirBytes.size()) {
+			if (hasMore != nullptr) {
+				*hasMore = false;
+			}
+
+			if (nextOffset != nullptr) {
+				*nextOffset = static_cast<uint32_t>(dirBytes.size());
+			}
+
+			return true;
+		}
 
 		while (offset + 8 <= dirBytes.size() and entries.size() < VFS_MAX_DIR_ENTRIES) {
 			const auto *entry = reinterpret_cast<const Ext2DirEntry *>(dirBytes.data() + offset);
@@ -1728,6 +1826,14 @@ namespace {
 			}
 
 			offset += entry->recLen;
+		}
+
+		if (hasMore != nullptr) {
+			*hasMore = offset + 8 <= dirBytes.size();
+		}
+
+		if (nextOffset != nullptr) {
+			*nextOffset = static_cast<uint32_t>(offset);
 		}
 
 		return true;
@@ -2052,11 +2158,16 @@ namespace {
 				uint32_t inodeNumber = 0;
 
 				if (volume.load() and volume.lookupPath(path, inodeNumber, inode)) {
-					(void) inodeNumber;
 					reply.success = true;
 					reply.nodeType = inodeNodeType(inode);
 					reply.size = volume.fileSize(inode);
+					reply.status = VFS_STATUS_OK;
+					reply.nodeId = inodeNumber;
+				} else {
+					reply.status = VFS_STATUS_NOT_FOUND;
 				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
 			}
 
 			auto replyMsg = hos_msg();
@@ -2097,16 +2208,25 @@ namespace {
 				Ext2Inode inode {};
 				uint32_t inodeNumber = 0;
 				vector<VfsDirEntry> entries;
+				bool hasMore = false;
+				uint32_t nextOffset = data.offset;
 
-				if (volume.load() and volume.lookupPath(path, inodeNumber, inode) and volume.readDirectory(inode, entries)) {
+				if (volume.load() and volume.lookupPath(path, inodeNumber, inode) and volume.readDirectory(inode, entries, data.offset, &hasMore, &nextOffset)) {
 					(void) inodeNumber;
 					reply.success = true;
 					reply.entryCount = min<uint32_t>(entries.size(), VFS_MAX_DIR_ENTRIES);
+					reply.status = VFS_STATUS_OK;
+					reply.nextOffset = nextOffset;
+					reply.hasMore = hasMore;
 
 					for (uint32_t i = 0; i < reply.entryCount; ++i) {
 						reply.entries[i] = entries[i];
 					}
+				} else {
+					reply.status = VFS_STATUS_NOT_FOUND;
 				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
 			}
 
 			auto replyMsg = hos_msg();
@@ -2198,7 +2318,12 @@ namespace {
 					reply.success = true;
 					reply.bytesWritten = data.length;
 					reply.size = volume.fileSize(inode);
+					reply.status = VFS_STATUS_OK;
+				} else {
+					reply.status = VFS_STATUS_INVALID;
 				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
 			}
 
 			auto replyMsg = hos_msg();
@@ -2238,11 +2363,74 @@ namespace {
 				Ext2Volume volume(device);
 
 				reply.success = volume.load() and volume.createFile(path);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+
+				if (reply.success) {
+					Ext2Inode inode {};
+					uint32_t inodeNumber = 0;
+
+					if (volume.lookupPath(path, inodeNumber, inode)) {
+						reply.nodeId = inodeNumber;
+					}
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
 			}
 
 			auto replyMsg = hos_msg();
 
 			replyMsg.type = FS_CREATE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto mkdirHandler(void */*unused*/) -> void * {
+		auto data = FsMkdirMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_MKDIR_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsMkdirReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.createDirectory(path);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+
+				if (reply.success) {
+					Ext2Inode inode {};
+					uint32_t inodeNumber = 0;
+
+					if (volume.lookupPath(path, inodeNumber, inode)) {
+						reply.nodeId = inodeNumber;
+					}
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_MKDIR_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
@@ -2437,6 +2625,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t readThread;
 	pthread_t writeThread;
 	pthread_t createThread;
+	pthread_t mkdirThread;
 	pthread_t unlinkThread;
 	pthread_t renameThread;
 	pthread_t truncateThread;
@@ -2448,6 +2637,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0 or
 	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
 	    pthread_create(&createThread, nullptr, createHandler, nullptr) != 0 or
+	    pthread_create(&mkdirThread, nullptr, mkdirHandler, nullptr) != 0 or
 	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
 	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
 	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0) {
@@ -2464,6 +2654,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(readThread);
 	pthread_detach(writeThread);
 	pthread_detach(createThread);
+	pthread_detach(mkdirThread);
 	pthread_detach(unlinkThread);
 	pthread_detach(renameThread);
 	pthread_detach(truncateThread);
