@@ -1,0 +1,178 @@
+#ifndef HORIZONOS_STORAGE_PROTOCOL_HPP
+#define HORIZONOS_STORAGE_PROTOCOL_HPP
+
+#include <cstddef>
+#include <cstdint>
+
+constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
+constexpr uint64_t GET_MSG_TYPE = 0x3;
+constexpr uint64_t CHECK_MSG_TYPE = 0x4;
+constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
+constexpr uint64_t REPLY_GET_MSG_TYPE = 0x6;
+constexpr uint64_t REPLY_CHECK_MSG_TYPE = 0x7;
+
+constexpr uint64_t NVME_READ_MSG_BASE        = 0x10000;
+constexpr uint64_t NVME_WRITE_MSG_BASE       = 0x20000;
+constexpr uint64_t NVME_FLUSH_MSG_BASE       = 0x30000;
+constexpr uint64_t NVME_REPLY_READ_MSG_BASE  = 0x40000;
+constexpr uint64_t NVME_REPLY_WRITE_MSG_BASE = 0x50000;
+constexpr uint64_t NVME_REPLY_FLUSH_MSG_BASE = 0x60000;
+
+constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE       = 0x70000;
+constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE = 0x70001;
+constexpr uint64_t STORAGE_REGISTER_FS_HANDLER_MSG_TYPE         = 0x70002;
+constexpr uint64_t STORAGE_REGISTER_FS_HANDLER_REPLY_MSG_TYPE   = 0x70003;
+constexpr uint64_t STORAGE_READ_MSG_TYPE                        = 0x70004;
+constexpr uint64_t STORAGE_READ_REPLY_MSG_TYPE                  = 0x70005;
+constexpr uint64_t STORAGE_WRITE_MSG_TYPE                       = 0x70006;
+constexpr uint64_t STORAGE_WRITE_REPLY_MSG_TYPE                 = 0x70007;
+constexpr uint64_t STORAGE_FLUSH_MSG_TYPE                       = 0x70008;
+constexpr uint64_t STORAGE_FLUSH_REPLY_MSG_TYPE                 = 0x70009;
+constexpr uint64_t STORAGE_FS_PROBE_DEVICE_MSG_TYPE             = 0x7000A;
+constexpr uint64_t STORAGE_FS_PROBE_DEVICE_REPLY_MSG_TYPE       = 0x7000B;
+
+constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
+constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
+
+struct RegisterMsgData {
+	uint16_t ownerPid {};
+	uint16_t tid {};
+	char name[16] {};
+	size_t nameLength {};
+	uint16_t versionMajor {};
+	uint16_t versionMinor {};
+	uint16_t versionPatch {};
+};
+
+struct GetMsgData {
+	char name[16] {};
+	size_t nameLength {};
+};
+
+struct CheckMsgData {
+	char name[16] {};
+	size_t nameLength {};
+};
+
+struct RegisterReplyMsgData {
+	bool success {};
+};
+
+struct CheckReplyMsgData {
+	bool exists {};
+};
+
+struct GetReplyMsgData {
+	uint64_t port {};
+	uint16_t tid {};
+	uint16_t versionMajor {};
+	uint16_t versionMinor {};
+	uint16_t versionPatch {};
+};
+
+struct NvmeReadMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t lba {};
+	uint32_t pageCount {};
+	uint64_t pagePhysArray[STORAGE_MAX_PAGES_PER_MSG] {};
+};
+
+struct NvmeReadReplyMsgData {
+	bool success {};
+	uint32_t pageCount {};
+};
+
+struct NvmeWriteMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t lba {};
+	uint32_t pageCount {};
+	uint64_t pagePhysArray[STORAGE_MAX_PAGES_PER_MSG] {};
+};
+
+struct NvmeWriteReplyMsgData {
+	bool success {};
+};
+
+struct NvmeFlushMsgData {
+	uint32_t controllerId {};
+	uint32_t nsid {};
+};
+
+struct NvmeFlushReplyMsgData {
+	bool success {};
+};
+
+struct StorageRegisterBlockDeviceMsgData {
+	uint64_t driverPort {};
+	uint32_t controllerId {};
+	uint32_t nsid {};
+	uint64_t blockCount {};
+	uint32_t blockSize {};
+	uint32_t maxPagesPerRequest {};
+	char name[STORAGE_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+};
+
+struct StorageRegisterBlockDeviceReplyMsgData {
+	bool success {};
+	uint64_t deviceId {};
+};
+
+struct StorageRegisterFsHandlerMsgData {
+	uint64_t handlerPort {};
+	uint16_t ownerPid {};
+	uint16_t tid {};
+	char fsName[16] {};
+	size_t fsNameLength {};
+};
+
+struct StorageRegisterFsHandlerReplyMsgData {
+	bool success {};
+};
+
+struct StorageReadMsgData {
+	uint64_t deviceId {};
+	uint64_t lba {};
+	uint32_t pageCount {};
+	uint64_t pagePhysArray[STORAGE_MAX_PAGES_PER_MSG] {};
+};
+
+struct StorageReadReplyMsgData {
+	bool success {};
+	uint32_t pageCount {};
+};
+
+struct StorageWriteMsgData {
+	uint64_t deviceId {};
+	uint64_t lba {};
+	uint32_t pageCount {};
+	uint64_t pagePhysArray[STORAGE_MAX_PAGES_PER_MSG] {};
+};
+
+struct StorageWriteReplyMsgData {
+	bool success {};
+};
+
+struct StorageFlushMsgData {
+	uint64_t deviceId {};
+};
+
+struct StorageFlushReplyMsgData {
+	bool success {};
+};
+
+struct StorageFsProbeDeviceMsgData {
+	uint64_t deviceId {};
+	uint64_t blockCount {};
+	uint32_t blockSize {};
+	char deviceName[STORAGE_MAX_NAME_LENGTH] {};
+	size_t deviceNameLength {};
+};
+
+struct StorageFsProbeDeviceReplyMsgData {
+	bool recognized {};
+};
+
+#endif
