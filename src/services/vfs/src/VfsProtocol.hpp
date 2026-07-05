@@ -34,6 +34,12 @@ constexpr uint64_t FS_TRUNCATE_MSG_TYPE    = 0x80010;
 constexpr uint64_t FS_TRUNCATE_REPLY_MSG_TYPE = 0x80011;
 constexpr uint64_t FS_MKDIR_MSG_TYPE       = 0x80012;
 constexpr uint64_t FS_MKDIR_REPLY_MSG_TYPE = 0x80013;
+constexpr uint64_t FS_SYNC_MSG_TYPE        = 0x80014;
+constexpr uint64_t FS_SYNC_REPLY_MSG_TYPE  = 0x80015;
+constexpr uint64_t FS_LINK_MSG_TYPE        = 0x80016;
+constexpr uint64_t FS_LINK_REPLY_MSG_TYPE  = 0x80017;
+constexpr uint64_t FS_SYMLINK_MSG_TYPE     = 0x80018;
+constexpr uint64_t FS_SYMLINK_REPLY_MSG_TYPE = 0x80019;
 
 constexpr uint64_t VFS_STAT_MSG_TYPE       = 0x90000;
 constexpr uint64_t VFS_STAT_REPLY_MSG_TYPE = 0x90001;
@@ -67,6 +73,28 @@ constexpr uint64_t VFS_MOUNT_REFRESH_MSG_TYPE = 0x9001C;
 constexpr uint64_t VFS_MOUNT_REFRESH_REPLY_MSG_TYPE = 0x9001D;
 constexpr uint64_t VFS_UNMOUNT_MSG_TYPE    = 0x9001E;
 constexpr uint64_t VFS_UNMOUNT_REPLY_MSG_TYPE = 0x9001F;
+constexpr uint64_t VFS_LOCK_MSG_TYPE       = 0x90020;
+constexpr uint64_t VFS_LOCK_REPLY_MSG_TYPE = 0x90021;
+constexpr uint64_t VFS_UNLOCK_MSG_TYPE     = 0x90022;
+constexpr uint64_t VFS_UNLOCK_REPLY_MSG_TYPE = 0x90023;
+constexpr uint64_t VFS_SYNC_MSG_TYPE       = 0x90024;
+constexpr uint64_t VFS_SYNC_REPLY_MSG_TYPE = 0x90025;
+constexpr uint64_t VFS_FSYNC_MSG_TYPE      = 0x90026;
+constexpr uint64_t VFS_FSYNC_REPLY_MSG_TYPE = 0x90027;
+constexpr uint64_t VFS_COPY_MSG_TYPE       = 0x90028;
+constexpr uint64_t VFS_COPY_REPLY_MSG_TYPE = 0x90029;
+constexpr uint64_t VFS_LINK_MSG_TYPE       = 0x9002A;
+constexpr uint64_t VFS_LINK_REPLY_MSG_TYPE = 0x9002B;
+constexpr uint64_t VFS_SYMLINK_MSG_TYPE    = 0x9002C;
+constexpr uint64_t VFS_SYMLINK_REPLY_MSG_TYPE = 0x9002D;
+constexpr uint64_t VFS_DEV_REGISTER_MSG_TYPE = 0x9002E;
+constexpr uint64_t VFS_DEV_REGISTER_REPLY_MSG_TYPE = 0x9002F;
+constexpr uint64_t VFS_DEV_UNREGISTER_MSG_TYPE = 0x90030;
+constexpr uint64_t VFS_DEV_UNREGISTER_REPLY_MSG_TYPE = 0x90031;
+constexpr uint64_t VFS_IOCTL_MSG_TYPE      = 0x90032;
+constexpr uint64_t VFS_IOCTL_REPLY_MSG_TYPE = 0x90033;
+constexpr uint64_t VFS_HANDLE_READDIR_MSG_TYPE = 0x90034;
+constexpr uint64_t VFS_HANDLE_READDIR_REPLY_MSG_TYPE = 0x90035;
 
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
@@ -78,6 +106,8 @@ constexpr uint32_t VFS_MAX_DIR_ENTRIES = 32;
 constexpr uint8_t VFS_NODE_UNKNOWN = 0;
 constexpr uint8_t VFS_NODE_FILE = 1;
 constexpr uint8_t VFS_NODE_DIRECTORY = 2;
+constexpr uint8_t VFS_NODE_SYMLINK = 3;
+constexpr uint8_t VFS_NODE_DEVICE = 4;
 
 constexpr uint32_t VFS_OPEN_READ = 1 << 0;
 constexpr uint32_t VFS_OPEN_WRITE = 1 << 1;
@@ -89,6 +119,9 @@ constexpr uint32_t VFS_OPEN_EXCLUSIVE = 1 << 5;
 constexpr uint8_t VFS_SEEK_SET = 0;
 constexpr uint8_t VFS_SEEK_CUR = 1;
 constexpr uint8_t VFS_SEEK_END = 2;
+
+constexpr uint8_t VFS_LOCK_SHARED = 1;
+constexpr uint8_t VFS_LOCK_EXCLUSIVE = 2;
 
 constexpr uint32_t VFS_STATUS_OK = 0;
 constexpr uint32_t VFS_STATUS_NOT_FOUND = 2;
@@ -303,6 +336,43 @@ struct FsMkdirReplyMsgData {
 	uint64_t nodeId {};
 };
 
+struct FsSyncMsgData {
+	uint64_t mountId {};
+};
+
+struct FsSyncReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct FsLinkMsgData {
+	uint64_t mountId {};
+	char oldPath[VFS_MAX_PATH_LENGTH] {};
+	size_t oldPathLength {};
+	char newPath[VFS_MAX_PATH_LENGTH] {};
+	size_t newPathLength {};
+};
+
+struct FsLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct FsSymlinkMsgData {
+	uint64_t mountId {};
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
+	char linkPath[VFS_MAX_PATH_LENGTH] {};
+	size_t linkPathLength {};
+};
+
+struct FsSymlinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
 struct VfsStatMsgData {
 	char path[VFS_MAX_PATH_LENGTH] {};
 	size_t pathLength {};
@@ -479,6 +549,19 @@ struct VfsHandleSeekReplyMsgData {
 	uint32_t status {};
 };
 
+struct VfsHandleReadDirMsgData {
+	uint64_t handle {};
+};
+
+struct VfsHandleReadDirReplyMsgData {
+	bool success {};
+	uint32_t entryCount {};
+	VfsDirEntry entries[VFS_MAX_DIR_ENTRIES] {};
+	uint64_t position {};
+	bool hasMore {};
+	uint32_t status {};
+};
+
 struct VfsMountRefreshMsgData {
 	uint32_t reserved {};
 };
@@ -497,6 +580,123 @@ struct VfsUnmountMsgData {
 struct VfsUnmountReplyMsgData {
 	bool success {};
 	uint32_t status {};
+};
+
+struct VfsLockMsgData {
+	uint64_t handle {};
+	uint64_t offset {};
+	uint64_t length {};
+	uint8_t mode {};
+};
+
+struct VfsLockReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsUnlockMsgData {
+	uint64_t handle {};
+	uint64_t offset {};
+	uint64_t length {};
+};
+
+struct VfsUnlockReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsSyncMsgData {
+	char volume[VFS_MAX_NAME_LENGTH] {};
+	size_t volumeLength {};
+};
+
+struct VfsSyncReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsFsyncMsgData {
+	uint64_t handle {};
+};
+
+struct VfsFsyncReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsCopyMsgData {
+	char oldPath[VFS_MAX_PATH_LENGTH] {};
+	size_t oldPathLength {};
+	char newPath[VFS_MAX_PATH_LENGTH] {};
+	size_t newPathLength {};
+};
+
+struct VfsCopyReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t bytesCopied {};
+};
+
+struct VfsLinkMsgData {
+	char oldPath[VFS_MAX_PATH_LENGTH] {};
+	size_t oldPathLength {};
+	char newPath[VFS_MAX_PATH_LENGTH] {};
+	size_t newPathLength {};
+};
+
+struct VfsLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct VfsSymlinkMsgData {
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
+	char linkPath[VFS_MAX_PATH_LENGTH] {};
+	size_t linkPathLength {};
+};
+
+struct VfsSymlinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct VfsDevRegisterMsgData {
+	uint64_t devicePort {};
+	uint32_t permissions {};
+	char name[VFS_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+};
+
+struct VfsDevRegisterReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsDevUnregisterMsgData {
+	char name[VFS_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+};
+
+struct VfsDevUnregisterReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct VfsIoctlMsgData {
+	uint64_t handle {};
+	uint32_t request {};
+	uint32_t inputLength {};
+	uint8_t input[VFS_MAX_READ_SIZE] {};
+};
+
+struct VfsIoctlReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint32_t outputLength {};
+	uint8_t output[VFS_MAX_READ_SIZE] {};
 };
 
 #endif

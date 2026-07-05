@@ -20,6 +20,7 @@ namespace {
 	constexpr uint16_t EXT2_S_IFMT = 0xF000;
 	constexpr uint16_t EXT2_S_IFREG = 0x8000;
 	constexpr uint16_t EXT2_S_IFDIR = 0x4000;
+	constexpr uint16_t EXT2_S_IFLNK = 0xA000;
 	constexpr uint32_t EXT2_ROOT_INO = 2;
 
 	struct Ext2Superblock {
@@ -110,6 +111,8 @@ namespace {
 		auto writeFile(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
 		auto createFile(const string &path) -> bool;
 		auto createDirectory(const string &path) -> bool;
+		auto createHardLink(const string &oldPath, const string &newPath) -> bool;
+		auto createSymlink(const string &target, const string &linkPath) -> bool;
 		auto unlinkFile(const string &path) -> bool;
 		auto renameFile(const string &oldPath, const string &newPath) -> bool;
 		auto truncateFile(const string &path, uint64_t size) -> bool;

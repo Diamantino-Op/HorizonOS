@@ -22,7 +22,15 @@ namespace {
 	uint64_t nextHandleId = 1;
 	vector<VfsVolume> volumes;
 	vector<VfsHandle> handles;
+	vector<VfsNodeLock> nodeLocks;
+	vector<VfsStatCacheEntry> statCache;
+	vector<VfsDeviceNode> deviceNodes;
+	vector<VfsPendingUnlink> pendingUnlinks;
 	pthread_mutex_t handlesLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t nodeLocksLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t cacheLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t deviceNodesLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t pendingUnlinksLock = PTHREAD_MUTEX_INITIALIZER;
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -41,6 +49,32 @@ namespace {
 		out.assign(name, length - 1);
 
 		return true;
+	}
+
+	void invalidatePathCache(const string &path = "") {
+		pthread_mutex_lock(&cacheLock);
+
+		if (path.empty()) {
+			statCache.clear();
+		} else {
+			statCache.erase(remove_if(statCache.begin(), statCache.end(), [&](const VfsStatCacheEntry &entry) -> bool {
+				return entry.path == path or entry.path.starts_with(path + "/");
+			}), statCache.end());
+		}
+
+		pthread_mutex_unlock(&cacheLock);
+	}
+
+	auto isPendingUnlinkPath(const string &path) -> bool {
+		pthread_mutex_lock(&pendingUnlinksLock);
+
+		const bool pending = ranges::any_of(pendingUnlinks, [&](const VfsPendingUnlink &unlink) -> bool {
+			return unlink.path == path;
+		});
+
+		pthread_mutex_unlock(&pendingUnlinksLock);
+
+		return pending;
 	}
 
 	auto registerWithNameRegistry(const char *name) -> bool {
@@ -551,6 +585,28 @@ namespace {
 			return true;
 		}
 
+		string nodeName = fsPath.starts_with("/") ? fsPath.substr(1) : fsPath;
+
+		pthread_mutex_lock(&deviceNodesLock);
+
+		const auto it = ranges::find_if(deviceNodes, [&](const VfsDeviceNode &node) -> bool {
+			return node.name == nodeName;
+		});
+
+		if (it != deviceNodes.end()) {
+			reply.success = true;
+			reply.nodeType = VFS_NODE_DEVICE;
+			reply.size = 0;
+			reply.status = VFS_STATUS_OK;
+			reply.nodeId = 0x10000 + static_cast<uint64_t>(it - deviceNodes.begin());
+		}
+
+		pthread_mutex_unlock(&deviceNodesLock);
+
+		if (reply.success) {
+			return true;
+		}
+
 		return false;
 	}
 
@@ -567,6 +623,22 @@ namespace {
 		reply.entries[0].size = devfsVolumesText().size();
 		fillName(reply.entries[1].name, sizeof(reply.entries[1].name), reply.entries[1].nameLength, "null");
 		reply.entries[1].nodeType = VFS_NODE_FILE;
+
+		pthread_mutex_lock(&deviceNodesLock);
+
+		for (const auto &node : deviceNodes) {
+			if (reply.entryCount >= VFS_MAX_DIR_ENTRIES) {
+				reply.hasMore = true;
+				break;
+			}
+
+			auto &entry = reply.entries[reply.entryCount++];
+
+			fillName(entry.name, sizeof(entry.name), entry.nameLength, node.name);
+			entry.nodeType = VFS_NODE_DEVICE;
+		}
+
+		pthread_mutex_unlock(&deviceNodesLock);
 
 		return true;
 	}
@@ -597,6 +669,30 @@ namespace {
 	}
 
 	auto vfsStatPath(const string &path, VfsStatReplyMsgData &reply) -> bool {
+		if (isPendingUnlinkPath(path)) {
+			reply.status = VFS_STATUS_NOT_FOUND;
+			return false;
+		}
+
+		pthread_mutex_lock(&cacheLock);
+
+		const auto cacheIt = ranges::find_if(statCache, [&](const VfsStatCacheEntry &entry) -> bool {
+			return entry.path == path;
+		});
+
+		if (cacheIt != statCache.end()) {
+			reply.success = true;
+			reply.nodeType = cacheIt->nodeType;
+			reply.size = cacheIt->size;
+			reply.nodeId = cacheIt->nodeId;
+			reply.status = VFS_STATUS_OK;
+			pthread_mutex_unlock(&cacheLock);
+
+			return true;
+		}
+
+		pthread_mutex_unlock(&cacheLock);
+
 		string volumeName;
 		string fsPath;
 
@@ -637,6 +733,21 @@ namespace {
 		reply.size = fsReply.size;
 		reply.status = VFS_STATUS_OK;
 		reply.nodeId = fsReply.nodeId;
+
+		pthread_mutex_lock(&cacheLock);
+
+		if (statCache.size() >= 64) {
+			statCache.erase(statCache.begin());
+		}
+
+		statCache.push_back(VfsStatCacheEntry {
+			.path = path,
+			.nodeType = reply.nodeType,
+			.size = reply.size,
+			.nodeId = reply.nodeId,
+		});
+
+		pthread_mutex_unlock(&cacheLock);
 
 		return true;
 	}
@@ -766,6 +877,7 @@ namespace {
 		reply.bytesWritten = fsReply.bytesWritten;
 		reply.size = fsReply.size;
 		reply.status = VFS_STATUS_OK;
+		invalidatePathCache(path);
 
 		return true;
 	}
@@ -800,6 +912,7 @@ namespace {
 		reply.success = true;
 		reply.status = VFS_STATUS_OK;
 		reply.nodeId = fsReply.nodeId;
+		invalidatePathCache(path);
 
 		return true;
 	}
@@ -834,6 +947,7 @@ namespace {
 		reply.success = true;
 		reply.status = VFS_STATUS_OK;
 		reply.nodeId = fsReply.nodeId;
+		invalidatePathCache(path);
 
 		return true;
 	}
@@ -874,8 +988,28 @@ namespace {
 		pthread_mutex_unlock(&handlesLock);
 
 		if (openNode) {
-			reply.status = VFS_STATUS_BUSY;
-			return false;
+			pthread_mutex_lock(&pendingUnlinksLock);
+
+			const bool alreadyPending = ranges::any_of(pendingUnlinks, [&](const VfsPendingUnlink &unlink) -> bool {
+				return unlink.mountId == volume->mountId and unlink.nodeId == stat.nodeId and unlink.fsPort == volume->fsPort;
+			});
+
+			if (!alreadyPending) {
+				pendingUnlinks.push_back(VfsPendingUnlink {
+					.path = path,
+					.mountId = volume->mountId,
+					.nodeId = stat.nodeId,
+					.fsPort = volume->fsPort,
+				});
+			}
+
+			pthread_mutex_unlock(&pendingUnlinksLock);
+
+			reply.success = true;
+			reply.status = VFS_STATUS_OK;
+			invalidatePathCache(path);
+
+			return true;
 		}
 
 		if (!sendFsRequest(FS_UNLINK_MSG_TYPE, FS_UNLINK_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
@@ -885,6 +1019,85 @@ namespace {
 
 		reply.success = true;
 		reply.status = VFS_STATUS_OK;
+		invalidatePathCache(path);
+
+		return true;
+	}
+
+	auto vfsCommitPendingUnlink(const VfsPendingUnlink &pending) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(pending.path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsUnlinkMsgData();
+		auto fsReply = FsUnlinkReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_UNLINK_MSG_TYPE, FS_UNLINK_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		invalidatePathCache(pending.path);
+
+		return true;
+	}
+
+	auto vfsCopyPath(const string &oldPath, const string &newPath, VfsCopyReplyMsgData &reply) -> bool {
+		auto stat = VfsStatReplyMsgData();
+		auto create = VfsCreateReplyMsgData();
+
+		if (!vfsStatPath(oldPath, stat)) {
+			reply.status = stat.status == 0 ? VFS_STATUS_NOT_FOUND : stat.status;
+			return false;
+		}
+
+		if (stat.nodeType != VFS_NODE_FILE) {
+			reply.status = VFS_STATUS_UNSUPPORTED;
+			return false;
+		}
+
+		if (!vfsCreatePath(newPath, VFS_NODE_FILE, create)) {
+			reply.status = create.status == 0 ? VFS_STATUS_INVALID : create.status;
+			return false;
+		}
+
+		uint64_t offset = 0;
+
+		while (offset < stat.size) {
+			auto read = VfsReadReplyMsgData();
+			auto write = VfsWriteReplyMsgData();
+
+			if (!vfsReadPath(oldPath, offset, VFS_MAX_READ_SIZE, read) or !read.success or read.bytesRead == 0) {
+				reply.status = offset >= stat.size ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+				reply.success = offset >= stat.size;
+				reply.bytesCopied = offset;
+
+				return reply.success;
+			}
+
+			if (!vfsWritePath(newPath, offset, read.bytesRead, read.data, write) or !write.success) {
+				reply.status = write.status == 0 ? VFS_STATUS_INVALID : write.status;
+				reply.bytesCopied = offset;
+				return false;
+			}
+
+			offset += read.bytesRead;
+		}
+
+		reply.success = true;
+		reply.status = VFS_STATUS_OK;
+		reply.bytesCopied = offset;
 
 		return true;
 	}
@@ -895,9 +1108,29 @@ namespace {
 		string newVolumeName;
 		string newFsPath;
 
-		if (!splitVfsPath(oldPath, oldVolumeName, oldFsPath) or !splitVfsPath(newPath, newVolumeName, newFsPath) or oldVolumeName != newVolumeName) {
+		if (!splitVfsPath(oldPath, oldVolumeName, oldFsPath) or !splitVfsPath(newPath, newVolumeName, newFsPath)) {
 			reply.status = VFS_STATUS_INVALID;
 			return false;
+		}
+
+		if (oldVolumeName != newVolumeName) {
+			auto copy = VfsCopyReplyMsgData();
+			auto unlink = VfsUnlinkReplyMsgData();
+
+			if (!vfsCopyPath(oldPath, newPath, copy)) {
+				reply.status = copy.status == 0 ? VFS_STATUS_INVALID : copy.status;
+				return false;
+			}
+
+			if (!vfsUnlinkPath(oldPath, unlink)) {
+				reply.status = unlink.status == 0 ? VFS_STATUS_INVALID : unlink.status;
+				return false;
+			}
+
+			reply.success = true;
+			reply.status = VFS_STATUS_OK;
+
+			return true;
 		}
 
 		const VfsVolume *volume = findVolume(oldVolumeName);
@@ -927,6 +1160,8 @@ namespace {
 
 		reply.success = true;
 		reply.status = VFS_STATUS_OK;
+		invalidatePathCache(oldPath);
+		invalidatePathCache(newPath);
 
 		pthread_mutex_lock(&handlesLock);
 
@@ -972,6 +1207,128 @@ namespace {
 		reply.success = true;
 		reply.size = fsReply.size;
 		reply.status = VFS_STATUS_OK;
+		invalidatePathCache(path);
+
+		return true;
+	}
+
+	auto vfsLinkPath(const string &oldPath, const string &newPath, VfsLinkReplyMsgData &reply) -> bool {
+		string oldVolumeName;
+		string oldFsPath;
+		string newVolumeName;
+		string newFsPath;
+
+		if (!splitVfsPath(oldPath, oldVolumeName, oldFsPath) or !splitVfsPath(newPath, newVolumeName, newFsPath) or oldVolumeName != newVolumeName) {
+			reply.status = VFS_STATUS_INVALID;
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(oldVolumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
+			reply.status = volume == nullptr ? VFS_STATUS_NOT_FOUND : VFS_STATUS_UNSUPPORTED;
+			return false;
+		}
+
+		auto request = FsLinkMsgData();
+		auto fsReply = FsLinkReplyMsgData();
+
+		request.mountId = volume->mountId;
+		fillName(request.oldPath, sizeof(request.oldPath), request.oldPathLength, oldFsPath);
+		fillName(request.newPath, sizeof(request.newPath), request.newPathLength, newFsPath);
+
+		if (!sendFsRequest(FS_LINK_MSG_TYPE, FS_LINK_REPLY_MSG_TYPE, *volume, request, fsReply) or !fsReply.success) {
+			reply.status = fsReply.status == 0 ? VFS_STATUS_INVALID : fsReply.status;
+			return false;
+		}
+
+		reply.success = true;
+		reply.status = VFS_STATUS_OK;
+		reply.nodeId = fsReply.nodeId;
+		invalidatePathCache(newPath);
+
+		return true;
+	}
+
+	auto vfsSymlinkPath(const string &target, const string &linkPath, VfsSymlinkReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(linkPath, volumeName, fsPath)) {
+			reply.status = VFS_STATUS_INVALID;
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
+			reply.status = volume == nullptr ? VFS_STATUS_NOT_FOUND : VFS_STATUS_UNSUPPORTED;
+			return false;
+		}
+
+		auto request = FsSymlinkMsgData();
+		auto fsReply = FsSymlinkReplyMsgData();
+
+		request.mountId = volume->mountId;
+		fillName(request.target, sizeof(request.target), request.targetLength, target);
+		fillName(request.linkPath, sizeof(request.linkPath), request.linkPathLength, fsPath);
+
+		if (!sendFsRequest(FS_SYMLINK_MSG_TYPE, FS_SYMLINK_REPLY_MSG_TYPE, *volume, request, fsReply) or !fsReply.success) {
+			reply.status = fsReply.status == 0 ? VFS_STATUS_INVALID : fsReply.status;
+			return false;
+		}
+
+		reply.success = true;
+		reply.status = VFS_STATUS_OK;
+		reply.nodeId = fsReply.nodeId;
+		invalidatePathCache(linkPath);
+
+		return true;
+	}
+
+	auto lockRangesOverlap(const uint64_t aOffset, const uint64_t aLength, const uint64_t bOffset, const uint64_t bLength) -> bool {
+		const uint64_t aEnd = aLength == 0 ? UINT64_MAX : aOffset + aLength;
+		const uint64_t bEnd = bLength == 0 ? UINT64_MAX : bOffset + bLength;
+
+		return aOffset < bEnd and bOffset < aEnd;
+	}
+
+	auto findHandleForOwner(const uint64_t handleId, const uint64_t ownerPort, VfsHandle &out) -> bool {
+		pthread_mutex_lock(&handlesLock);
+
+		const auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+			return handle.handle == handleId and handle.ownerPort == ownerPort;
+		});
+		const bool found = it != handles.end();
+
+		if (found) {
+			out = *it;
+		}
+
+		pthread_mutex_unlock(&handlesLock);
+
+		return found;
+	}
+
+	auto vfsSyncVolume(const string &volumeName, uint32_t &status) -> bool {
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
+			status = volume == nullptr ? VFS_STATUS_NOT_FOUND : VFS_STATUS_UNSUPPORTED;
+			return false;
+		}
+
+		auto request = FsSyncMsgData();
+		auto reply = FsSyncReplyMsgData();
+
+		request.mountId = volume->mountId;
+
+		if (!sendFsRequest(FS_SYNC_MSG_TYPE, FS_SYNC_REPLY_MSG_TYPE, *volume, request, reply) or !reply.success) {
+			status = reply.status == 0 ? VFS_STATUS_INVALID : reply.status;
+			return false;
+		}
+
+		status = VFS_STATUS_OK;
 
 		return true;
 	}
@@ -1423,6 +1780,8 @@ namespace {
 			}
 
 			auto reply = VfsCloseReplyMsgData();
+			auto pending = VfsPendingUnlink();
+			bool commitPendingUnlink = false;
 
 			pthread_mutex_lock(&handlesLock);
 
@@ -1431,7 +1790,38 @@ namespace {
 			});
 
 			if (it != handles.end()) {
+				const VfsHandle closedHandle = *it;
+
+				pthread_mutex_lock(&nodeLocksLock);
+
+				nodeLocks.erase(remove_if(nodeLocks.begin(), nodeLocks.end(), [&](const VfsNodeLock &lock) -> bool {
+					return lock.ownerPort == msg.src_port and lock.handle == data.handle;
+				}), nodeLocks.end());
+
+				pthread_mutex_unlock(&nodeLocksLock);
+
 				handles.erase(it);
+
+				const bool stillOpen = ranges::any_of(handles, [&](const VfsHandle &handle) -> bool {
+					return handle.mountId == closedHandle.mountId and handle.nodeId == closedHandle.nodeId and handle.fsPort == closedHandle.fsPort;
+				});
+
+				if (!stillOpen) {
+					pthread_mutex_lock(&pendingUnlinksLock);
+
+					const auto pendingIt = ranges::find_if(pendingUnlinks, [&](const VfsPendingUnlink &unlink) -> bool {
+						return unlink.mountId == closedHandle.mountId and unlink.nodeId == closedHandle.nodeId and unlink.fsPort == closedHandle.fsPort;
+					});
+
+					if (pendingIt != pendingUnlinks.end()) {
+						pending = *pendingIt;
+						pendingUnlinks.erase(pendingIt);
+						commitPendingUnlink = true;
+					}
+
+					pthread_mutex_unlock(&pendingUnlinksLock);
+				}
+
 				reply.success = true;
 				reply.status = VFS_STATUS_OK;
 			} else {
@@ -1439,6 +1829,10 @@ namespace {
 			}
 
 			pthread_mutex_unlock(&handlesLock);
+
+			if (commitPendingUnlink) {
+				vfsCommitPendingUnlink(pending);
+			}
 
 			auto replyMsg = hos_msg();
 			replyMsg.type = VFS_CLOSE_REPLY_MSG_TYPE;
@@ -1662,6 +2056,533 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto handleReadDirHandler(void */*unused*/) -> void * {
+		auto data = VfsHandleReadDirMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_HANDLE_READDIR_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsHandleReadDirReplyMsgData();
+			string path;
+			uint64_t offset = 0;
+			bool allowed = false;
+
+			pthread_mutex_lock(&handlesLock);
+
+			auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+				return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+			});
+
+			if (it != handles.end() and (it->flags & VFS_OPEN_READ) != 0 and it->nodeType == VFS_NODE_DIRECTORY) {
+				path = it->path;
+				offset = it->position;
+				allowed = true;
+			}
+
+			pthread_mutex_unlock(&handlesLock);
+
+			if (allowed) {
+				auto readDir = VfsReadDirReplyMsgData();
+
+				if (vfsReadDirPath(path, static_cast<uint32_t>(offset), readDir) and readDir.success) {
+					pthread_mutex_lock(&handlesLock);
+
+					it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+						return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+					});
+
+					if (it != handles.end()) {
+						it->position = readDir.nextOffset;
+						reply.position = it->position;
+					}
+
+					pthread_mutex_unlock(&handlesLock);
+
+					reply.success = true;
+					reply.entryCount = readDir.entryCount;
+					reply.hasMore = readDir.hasMore;
+					reply.status = VFS_STATUS_OK;
+
+					for (uint32_t i = 0; i < reply.entryCount; ++i) {
+						reply.entries[i] = readDir.entries[i];
+					}
+				} else {
+					reply.status = readDir.status == 0 ? VFS_STATUS_INVALID : readDir.status;
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_HANDLE_READDIR_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto lockHandler(void */*unused*/) -> void * {
+		auto data = VfsLockMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_LOCK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsLockReplyMsgData();
+			VfsHandle handle {};
+
+			if (!findHandleForOwner(data.handle, msg.src_port, handle) or (data.mode != VFS_LOCK_SHARED and data.mode != VFS_LOCK_EXCLUSIVE)) {
+				reply.status = VFS_STATUS_INVALID;
+			} else {
+				pthread_mutex_lock(&nodeLocksLock);
+
+				const bool conflict = ranges::any_of(nodeLocks, [&](const VfsNodeLock &lock) -> bool {
+					if (lock.mountId != handle.mountId or lock.nodeId != handle.nodeId or lock.handle == handle.handle) {
+						return false;
+					}
+
+					if (!lockRangesOverlap(lock.offset, lock.length, data.offset, data.length)) {
+						return false;
+					}
+
+					return lock.mode == VFS_LOCK_EXCLUSIVE or data.mode == VFS_LOCK_EXCLUSIVE;
+				});
+
+				if (!conflict) {
+					nodeLocks.push_back(VfsNodeLock {
+						.ownerPort = msg.src_port,
+						.handle = handle.handle,
+						.mountId = handle.mountId,
+						.nodeId = handle.nodeId,
+						.offset = data.offset,
+						.length = data.length,
+						.mode = data.mode,
+					});
+
+					reply.success = true;
+					reply.status = VFS_STATUS_OK;
+				} else {
+					reply.status = VFS_STATUS_BUSY;
+				}
+
+				pthread_mutex_unlock(&nodeLocksLock);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_LOCK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto unlockHandler(void */*unused*/) -> void * {
+		auto data = VfsUnlockMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_UNLOCK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsUnlockReplyMsgData();
+
+			pthread_mutex_lock(&nodeLocksLock);
+
+			const auto oldSize = nodeLocks.size();
+
+			nodeLocks.erase(remove_if(nodeLocks.begin(), nodeLocks.end(), [&](const VfsNodeLock &lock) -> bool {
+				return lock.ownerPort == msg.src_port and lock.handle == data.handle and
+				       lockRangesOverlap(lock.offset, lock.length, data.offset, data.length);
+			}), nodeLocks.end());
+
+			reply.success = nodeLocks.size() != oldSize;
+			reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_NOT_FOUND;
+
+			pthread_mutex_unlock(&nodeLocksLock);
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_UNLOCK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto syncHandler(void */*unused*/) -> void * {
+		auto data = VfsSyncMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_SYNC_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsSyncReplyMsgData();
+			string volumeName;
+
+			if (validName(data.volume, data.volumeLength, sizeof(data.volume), volumeName)) {
+				reply.success = vfsSyncVolume(volumeName, reply.status);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_SYNC_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto fsyncHandler(void */*unused*/) -> void * {
+		auto data = VfsFsyncMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_FSYNC_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsFsyncReplyMsgData();
+			VfsHandle handle {};
+
+			if (findHandleForOwner(data.handle, msg.src_port, handle)) {
+				string volumeName;
+				string fsPath;
+
+				if (splitVfsPath(handle.path, volumeName, fsPath)) {
+					reply.success = vfsSyncVolume(volumeName, reply.status);
+				} else {
+					reply.status = VFS_STATUS_INVALID;
+				}
+			} else {
+				reply.status = VFS_STATUS_NOT_FOUND;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_FSYNC_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto copyHandler(void */*unused*/) -> void * {
+		auto data = VfsCopyMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_COPY_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsCopyReplyMsgData();
+			string oldPath;
+			string newPath;
+
+			if (validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+				vfsCopyPath(oldPath, newPath, reply);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_COPY_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto linkHandler(void */*unused*/) -> void * {
+		auto data = VfsLinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_LINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsLinkReplyMsgData();
+			string oldPath;
+			string newPath;
+
+			if (validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+				vfsLinkPath(oldPath, newPath, reply);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_LINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto symlinkHandler(void */*unused*/) -> void * {
+		auto data = VfsSymlinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_SYMLINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsSymlinkReplyMsgData();
+			string target;
+			string linkPath;
+
+			if (validName(data.target, data.targetLength, sizeof(data.target), target) and validPath(data.linkPath, data.linkPathLength, linkPath)) {
+				vfsSymlinkPath(target, linkPath, reply);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_SYMLINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto devRegisterHandler(void */*unused*/) -> void * {
+		auto data = VfsDevRegisterMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_DEV_REGISTER_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsDevRegisterReplyMsgData();
+			string name;
+
+			if (data.devicePort != 0 and validName(data.name, data.nameLength, sizeof(data.name), name)) {
+				pthread_mutex_lock(&deviceNodesLock);
+
+				const bool exists = ranges::any_of(deviceNodes, [&](const VfsDeviceNode &node) -> bool {
+					return node.name == name;
+				});
+
+				if (!exists) {
+					deviceNodes.push_back(VfsDeviceNode {
+						.name = name,
+						.ownerPort = msg.src_port,
+						.devicePort = data.devicePort,
+						.permissions = data.permissions,
+					});
+					reply.success = true;
+					reply.status = VFS_STATUS_OK;
+				} else {
+					reply.status = VFS_STATUS_EXISTS;
+				}
+
+				pthread_mutex_unlock(&deviceNodesLock);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_DEV_REGISTER_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto devUnregisterHandler(void */*unused*/) -> void * {
+		auto data = VfsDevUnregisterMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_DEV_UNREGISTER_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsDevUnregisterReplyMsgData();
+			string name;
+
+			if (validName(data.name, data.nameLength, sizeof(data.name), name)) {
+				pthread_mutex_lock(&deviceNodesLock);
+
+				const auto oldSize = deviceNodes.size();
+
+				deviceNodes.erase(remove_if(deviceNodes.begin(), deviceNodes.end(), [&](const VfsDeviceNode &node) -> bool {
+					return node.name == name and node.ownerPort == msg.src_port;
+				}), deviceNodes.end());
+
+				reply.success = deviceNodes.size() != oldSize;
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_NOT_FOUND;
+
+				pthread_mutex_unlock(&deviceNodesLock);
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_DEV_UNREGISTER_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto ioctlHandler(void */*unused*/) -> void * {
+		auto data = VfsIoctlMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_IOCTL_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsIoctlReplyMsgData();
+			VfsHandle handle {};
+
+			if (findHandleForOwner(data.handle, msg.src_port, handle) and handle.nodeType == VFS_NODE_DEVICE) {
+				reply.status = VFS_STATUS_UNSUPPORTED;
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_IOCTL_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto mountRefreshHandler(void */*unused*/) -> void * {
 		auto data = VfsMountRefreshMsgData();
 		auto msg = hos_msg();
@@ -1780,6 +2701,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t closeThread;
 	pthread_t handleReadThread;
 	pthread_t handleWriteThread;
+	pthread_t handleReadDirThread;
 	pthread_t unlinkThread;
 	pthread_t renameThread;
 	pthread_t truncateThread;
@@ -1787,6 +2709,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t mkdirThread;
 	pthread_t mountRefreshThread;
 	pthread_t unmountThread;
+	pthread_t lockThread;
+	pthread_t unlockThread;
+	pthread_t syncThread;
+	pthread_t fsyncThread;
+	pthread_t copyThread;
+	pthread_t linkThread;
+	pthread_t symlinkThread;
+	pthread_t devRegisterThread;
+	pthread_t devUnregisterThread;
+	pthread_t ioctlThread;
 
 	if (pthread_create(&statThread, nullptr, statHandler, nullptr) != 0 or
 	    pthread_create(&readDirThread, nullptr, readDirHandler, nullptr) != 0 or
@@ -1797,13 +2729,24 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&closeThread, nullptr, closeHandler, nullptr) != 0 or
 	    pthread_create(&handleReadThread, nullptr, handleReadHandler, nullptr) != 0 or
 	    pthread_create(&handleWriteThread, nullptr, handleWriteHandler, nullptr) != 0 or
+	    pthread_create(&handleReadDirThread, nullptr, handleReadDirHandler, nullptr) != 0 or
 	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
 	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
 	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0 or
 	    pthread_create(&handleSeekThread, nullptr, handleSeekHandler, nullptr) != 0 or
 	    pthread_create(&mkdirThread, nullptr, mkdirHandler, nullptr) != 0 or
 	    pthread_create(&mountRefreshThread, nullptr, mountRefreshHandler, nullptr) != 0 or
-	    pthread_create(&unmountThread, nullptr, unmountHandler, nullptr) != 0) {
+	    pthread_create(&unmountThread, nullptr, unmountHandler, nullptr) != 0 or
+	    pthread_create(&lockThread, nullptr, lockHandler, nullptr) != 0 or
+	    pthread_create(&unlockThread, nullptr, unlockHandler, nullptr) != 0 or
+	    pthread_create(&syncThread, nullptr, syncHandler, nullptr) != 0 or
+	    pthread_create(&fsyncThread, nullptr, fsyncHandler, nullptr) != 0 or
+	    pthread_create(&copyThread, nullptr, copyHandler, nullptr) != 0 or
+	    pthread_create(&linkThread, nullptr, linkHandler, nullptr) != 0 or
+	    pthread_create(&symlinkThread, nullptr, symlinkHandler, nullptr) != 0 or
+	    pthread_create(&devRegisterThread, nullptr, devRegisterHandler, nullptr) != 0 or
+	    pthread_create(&devUnregisterThread, nullptr, devUnregisterHandler, nullptr) != 0 or
+	    pthread_create(&ioctlThread, nullptr, ioctlHandler, nullptr) != 0) {
 		printf("Vfs: Failed to create message handlers.");
 		fflush(stdout);
 
@@ -1819,6 +2762,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(closeThread);
 	pthread_detach(handleReadThread);
 	pthread_detach(handleWriteThread);
+	pthread_detach(handleReadDirThread);
 	pthread_detach(unlinkThread);
 	pthread_detach(renameThread);
 	pthread_detach(truncateThread);
@@ -1826,6 +2770,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(mkdirThread);
 	pthread_detach(mountRefreshThread);
 	pthread_detach(unmountThread);
+	pthread_detach(lockThread);
+	pthread_detach(unlockThread);
+	pthread_detach(syncThread);
+	pthread_detach(fsyncThread);
+	pthread_detach(copyThread);
+	pthread_detach(linkThread);
+	pthread_detach(symlinkThread);
+	pthread_detach(devRegisterThread);
+	pthread_detach(devUnregisterThread);
+	pthread_detach(ioctlThread);
 
 	for (;;) {
 		refreshVolumes();

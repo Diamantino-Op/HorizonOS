@@ -369,8 +369,23 @@ namespace {
 				return VFS_NODE_FILE;
 			case EXT2_S_IFDIR:
 				return VFS_NODE_DIRECTORY;
+			case EXT2_S_IFLNK:
+				return VFS_NODE_SYMLINK;
 			default:
 				return VFS_NODE_UNKNOWN;
+		}
+	}
+
+	auto ext2DirectoryFileType(const Ext2Inode &inode) -> uint8_t {
+		switch (inode.mode & EXT2_S_IFMT) {
+			case EXT2_S_IFREG:
+				return 1;
+			case EXT2_S_IFDIR:
+				return 2;
+			case EXT2_S_IFLNK:
+				return 7;
+			default:
+				return 0;
 		}
 	}
 
@@ -1538,6 +1553,106 @@ namespace {
 		return writeInode(parentInodeNumber, parent) and flushDevice(device.deviceId);
 	}
 
+	auto Ext2Volume::createHardLink(const string &oldPath, const string &newPath) -> bool {
+		string parentPath;
+		string name;
+
+		if (!splitParentPath(newPath, parentPath, name) or name == "." or name == "..") {
+			return false;
+		}
+
+		uint32_t existingInode = 0;
+		Ext2Inode existing {};
+
+		if (lookupPath(newPath, existingInode, existing)) {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+		Ext2Inode inode {};
+
+		if (!lookupPath(oldPath, inodeNumber, inode) or (inode.mode & EXT2_S_IFMT) == EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t parentInodeNumber = 0;
+		Ext2Inode parent {};
+
+		if (!lookupPath(parentPath, parentInodeNumber, parent) or (parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		if (!addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, ext2DirectoryFileType(inode))) {
+			return false;
+		}
+
+		++inode.linksCount;
+
+		return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
+	}
+
+	auto Ext2Volume::createSymlink(const string &target, const string &linkPath) -> bool {
+		string parentPath;
+		string name;
+
+		if (target.empty() or target.size() >= VFS_MAX_PATH_LENGTH or !splitParentPath(linkPath, parentPath, name)) {
+			return false;
+		}
+
+		uint32_t existingInode = 0;
+		Ext2Inode existing {};
+
+		if (lookupPath(linkPath, existingInode, existing)) {
+			return false;
+		}
+
+		uint32_t parentInodeNumber = 0;
+		Ext2Inode parent {};
+
+		if (!lookupPath(parentPath, parentInodeNumber, parent) or (parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+
+		if (!allocateInode(inodeNumber)) {
+			return false;
+		}
+
+		auto inode = Ext2Inode();
+
+		inode.mode = EXT2_S_IFLNK | 0777;
+		inode.linksCount = 1;
+		inode.sizeLo = target.size();
+
+		if (target.size() <= sizeof(inode.block)) {
+			memcpy(inode.block, target.data(), target.size());
+		} else {
+			uint32_t block = 0;
+
+			if (!allocateBlock(block)) {
+				return false;
+			}
+
+			vector<uint8_t> bytes;
+
+			bytes.resize(blockSize);
+			memcpy(bytes.data(), target.data(), target.size());
+			inode.block[0] = block;
+			inode.blocks = static_cast<uint32_t>(blockSize / 512);
+
+			if (!writeBlock(block, bytes.data())) {
+				return false;
+			}
+		}
+
+		if (!writeInode(inodeNumber, inode)) {
+			return false;
+		}
+
+		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 7);
+	}
+
 	auto Ext2Volume::truncateFile(const string &path, const uint64_t size) -> bool {
 		uint32_t inodeNumber = 0;
 		Ext2Inode inode {};
@@ -2438,6 +2553,149 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto syncHandler(void */*unused*/) -> void * {
+		auto data = FsSyncMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_SYNC_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsSyncReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+
+			if (mountedDevice(data.mountId, device)) {
+				reply.success = flushDevice(device.deviceId);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+			} else {
+				reply.status = VFS_STATUS_NOT_FOUND;
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_SYNC_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto linkHandler(void */*unused*/) -> void * {
+		auto data = FsLinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_LINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsLinkReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string oldPath;
+			string newPath;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.createHardLink(oldPath, newPath);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+
+				if (reply.success) {
+					Ext2Inode inode {};
+					uint32_t inodeNumber = 0;
+
+					if (volume.lookupPath(newPath, inodeNumber, inode)) {
+						reply.nodeId = inodeNumber;
+					}
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_LINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto symlinkHandler(void */*unused*/) -> void * {
+		auto data = FsSymlinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_SYMLINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsSymlinkReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string target;
+			string linkPath;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.target, data.targetLength, target) and validPath(data.linkPath, data.linkPathLength, linkPath)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.createSymlink(target, linkPath);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+
+				if (reply.success) {
+					Ext2Inode inode {};
+					uint32_t inodeNumber = 0;
+
+					if (volume.lookupPath(linkPath, inodeNumber, inode)) {
+						reply.nodeId = inodeNumber;
+					}
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_SYMLINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto unlinkHandler(void */*unused*/) -> void * {
 		auto data = FsUnlinkMsgData();
 		auto msg = hos_msg();
@@ -2629,6 +2887,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t unlinkThread;
 	pthread_t renameThread;
 	pthread_t truncateThread;
+	pthread_t syncThread;
+	pthread_t linkThread;
+	pthread_t symlinkThread;
 
 	if (pthread_create(&probeThread, nullptr, probeHandler, nullptr) != 0 or
 	    pthread_create(&mountThread, nullptr, mountHandler, nullptr) != 0 or
@@ -2638,6 +2899,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
 	    pthread_create(&createThread, nullptr, createHandler, nullptr) != 0 or
 	    pthread_create(&mkdirThread, nullptr, mkdirHandler, nullptr) != 0 or
+	    pthread_create(&syncThread, nullptr, syncHandler, nullptr) != 0 or
+	    pthread_create(&linkThread, nullptr, linkHandler, nullptr) != 0 or
+	    pthread_create(&symlinkThread, nullptr, symlinkHandler, nullptr) != 0 or
 	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
 	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
 	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0) {
@@ -2655,6 +2919,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(writeThread);
 	pthread_detach(createThread);
 	pthread_detach(mkdirThread);
+	pthread_detach(syncThread);
+	pthread_detach(linkThread);
+	pthread_detach(symlinkThread);
 	pthread_detach(unlinkThread);
 	pthread_detach(renameThread);
 	pthread_detach(truncateThread);

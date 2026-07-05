@@ -42,6 +42,12 @@ constexpr uint64_t FS_TRUNCATE_MSG_TYPE    = 0x80010;
 constexpr uint64_t FS_TRUNCATE_REPLY_MSG_TYPE = 0x80011;
 constexpr uint64_t FS_MKDIR_MSG_TYPE       = 0x80012;
 constexpr uint64_t FS_MKDIR_REPLY_MSG_TYPE = 0x80013;
+constexpr uint64_t FS_SYNC_MSG_TYPE        = 0x80014;
+constexpr uint64_t FS_SYNC_REPLY_MSG_TYPE  = 0x80015;
+constexpr uint64_t FS_LINK_MSG_TYPE        = 0x80016;
+constexpr uint64_t FS_LINK_REPLY_MSG_TYPE  = 0x80017;
+constexpr uint64_t FS_SYMLINK_MSG_TYPE     = 0x80018;
+constexpr uint64_t FS_SYMLINK_REPLY_MSG_TYPE = 0x80019;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
@@ -53,6 +59,8 @@ constexpr uint32_t VFS_MAX_DIR_ENTRIES = 32;
 constexpr uint8_t VFS_NODE_UNKNOWN = 0;
 constexpr uint8_t VFS_NODE_FILE = 1;
 constexpr uint8_t VFS_NODE_DIRECTORY = 2;
+constexpr uint8_t VFS_NODE_SYMLINK = 3;
+constexpr uint8_t VFS_NODE_DEVICE = 4;
 
 constexpr uint32_t VFS_STATUS_OK = 0;
 constexpr uint32_t VFS_STATUS_NOT_FOUND = 2;
@@ -294,6 +302,43 @@ struct FsMkdirMsgData {
 };
 
 struct FsMkdirReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct FsSyncMsgData {
+	uint64_t mountId {};
+};
+
+struct FsSyncReplyMsgData {
+	bool success {};
+	uint32_t status {};
+};
+
+struct FsLinkMsgData {
+	uint64_t mountId {};
+	char oldPath[VFS_MAX_PATH_LENGTH] {};
+	size_t oldPathLength {};
+	char newPath[VFS_MAX_PATH_LENGTH] {};
+	size_t newPathLength {};
+};
+
+struct FsLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint64_t nodeId {};
+};
+
+struct FsSymlinkMsgData {
+	uint64_t mountId {};
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
+	char linkPath[VFS_MAX_PATH_LENGTH] {};
+	size_t linkPathLength {};
+};
+
+struct FsSymlinkReplyMsgData {
 	bool success {};
 	uint32_t status {};
 	uint64_t nodeId {};
