@@ -53,8 +53,8 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
         if (recvMsg.type == readType) {
             const auto* req = reinterpret_cast<NvmeReadMsgData*>(msgBuf);
 
-            printf("NVMe: Core %lu received read ctrl=%u nsid=%u lba=%lu pages=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, req->lba, req->pageCount, recvMsg.src_port);
-            fflush(stdout);
+            //printf("NVMe: Core %lu received read ctrl=%u nsid=%u lba=%lu pages=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, req->lba, req->pageCount, recvMsg.src_port);
+            //fflush(stdout);
 
             NvmeReadReplyMsgData reply {};
             reply.pageCount = req->pageCount;
@@ -73,8 +73,8 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
         } else if (recvMsg.type == writeType) {
             const auto* req = reinterpret_cast<NvmeWriteMsgData*>(msgBuf);
 
-            printf("NVMe: Core %lu received write ctrl=%u nsid=%u lba=%lu pages=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, req->lba, req->pageCount, recvMsg.src_port);
-            fflush(stdout);
+            //printf("NVMe: Core %lu received write ctrl=%u nsid=%u lba=%lu pages=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, req->lba, req->pageCount, recvMsg.src_port);
+            //fflush(stdout);
 
             NvmeWriteReplyMsgData reply {};
 
@@ -92,8 +92,8 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
         } else if (recvMsg.type == flushType) {
             const auto* req = reinterpret_cast<NvmeFlushMsgData*>(msgBuf);
 
-            printf("NVMe: Core %lu received flush ctrl=%u nsid=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, recvMsg.src_port);
-            fflush(stdout);
+            //printf("NVMe: Core %lu received flush ctrl=%u nsid=%u from port %lu.", coreStruct->coreSlot, req->controllerId, req->nsid, recvMsg.src_port);
+            //fflush(stdout);
 
             NvmeFlushReplyMsgData reply {};
 
@@ -758,8 +758,8 @@ auto NvmeDriver::submitIoCommand(IoQueuePair &queue, const Command& command, Com
 	// Ring CQ Head doorbell: 0x1000 + (2 * qid + 1) * stride
 	mmioWrite32(mmioBase, 0x1000 + (((2U * queue.queueId) + 1U) * doorbellStride), queue.cqHead);
 
-	printf("NVMe: I/O queue %u completion status=%u sct=%u.", queue.queueId, result.status.statusCode, result.status.statusCodeType);
-	fflush(stdout);
+	//printf("NVMe: I/O queue %u completion status=%u sct=%u.", queue.queueId, result.status.statusCode, result.status.statusCodeType);
+	//fflush(stdout);
 
 	return result.status.statusCode == 0;
 }
