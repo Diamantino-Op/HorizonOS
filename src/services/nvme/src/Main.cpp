@@ -571,6 +571,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				printf("NVMe: Failed to map data page.");
 				fflush(stdout);
 
+				freePhysPage(dataPhys);
+				munmap_extra(reinterpret_cast<void *>(mmioVirt), barSize, false);
+				pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
+
 				continue;
 			}
 
@@ -580,12 +584,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		        printf("NVMe: Reset failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
 		        fflush(stdout);
 
+				munmap_extra(reinterpret_cast<void *>(dataVirt), 0x1000, false);
+				freePhysPage(dataPhys);
+				munmap_extra(reinterpret_cast<void *>(mmioVirt), barSize, false);
+				pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
+
 		        continue;
 		    }
 
 		    if (!driver.initializeAdminQueues()) {
 		        printf("NVMe: Admin queue init failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
 		        fflush(stdout);
+
+				munmap_extra(reinterpret_cast<void *>(dataVirt), 0x1000, false);
+				freePhysPage(dataPhys);
+				munmap_extra(reinterpret_cast<void *>(mmioVirt), barSize, false);
+				pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
 
 		        continue;
 		    }
@@ -594,12 +608,20 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		        printf("NVMe: Enable controller failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
 		        fflush(stdout);
 
+				driver.shutdown();
+				munmap_extra(reinterpret_cast<void *>(mmioVirt), barSize, false);
+				pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
+
 		        continue;
 		    }
 
 			if (!driver.identifyController()) {
 				printf("NVMe: Identify controller failed for %02x:%02x.%x, skipping.", dev.bus, dev.device, dev.function);
 				fflush(stdout);
+
+				driver.shutdown();
+				munmap_extra(reinterpret_cast<void *>(mmioVirt), barSize, false);
+				pciWrite32(nvmePort, pciPort, dev.bus, dev.device, dev.function, 0x04, origCmd);
 
 				continue;
 			}

@@ -399,7 +399,7 @@ namespace {
 		const uint64_t pages[1] { phys };
 
 		if (!nvmeRead(device, lba, pages, 1)) {
-			munmap(reinterpret_cast<void *>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
 			phys = 0;
@@ -413,7 +413,7 @@ namespace {
 
 	void freeOnePage(const uint64_t phys, const uint64_t virt) {
 		if (virt != 0) {
-			munmap(reinterpret_cast<void *>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 		}
 
 		if (phys != 0) {

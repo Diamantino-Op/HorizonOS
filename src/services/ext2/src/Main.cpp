@@ -217,7 +217,7 @@ namespace {
 		msg.length = sizeof(data);
 
 		if (send_horizonos_message(ext2Port, storagePort, &msg) != 0) {
-			munmap(reinterpret_cast<void *>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
 			phys = 0;
@@ -242,7 +242,7 @@ namespace {
 		delete[] filter.whiteListTypes;
 
 		if (ret != 0 or !reply.success) {
-			munmap(reinterpret_cast<void *>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
 			phys = 0;
@@ -256,7 +256,7 @@ namespace {
 
 	void freeDevicePage(const uint64_t phys, const uint64_t virt) {
 		if (virt != 0) {
-			munmap(reinterpret_cast<void *>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 		}
 
 		if (phys != 0) {

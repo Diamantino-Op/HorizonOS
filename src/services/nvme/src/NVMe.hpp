@@ -462,6 +462,8 @@ private:
 	Command* adminSQ {};
 	CompletionEntry* adminCQ {};
 	uint32_t adminQDepth { 64 };
+	uint64_t adminSQPhys {};
+	uint64_t adminCQPhys {};
 
 	uint32_t adminSQTail { 0 };
 	uint32_t adminCQHead { 0 };

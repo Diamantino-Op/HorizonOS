@@ -202,7 +202,8 @@ auto NvmeDriver::initializeAdminQueues() noexcept -> bool {
 	}
 
 	if (mmap_phys(adminCQPhys, adminCQSize, &adminCQVirt, false) != 0) {
-		munmap(reinterpret_cast<void*>(adminSQVirt), adminSQSize);
+		munmap_extra(reinterpret_cast<void*>(adminSQVirt), adminSQSize, false);
+		freePhysPage(adminSQPhys);
 		freePhysPage(adminCQPhys);
 
 		return false;
@@ -210,6 +211,8 @@ auto NvmeDriver::initializeAdminQueues() noexcept -> bool {
 
 	this->adminSQ = reinterpret_cast<Command *>(adminSQVirt);
 	this->adminCQ = reinterpret_cast<CompletionEntry *>(adminCQVirt);
+	this->adminSQPhys = adminSQPhys;
+	this->adminCQPhys = adminCQPhys;
 
 	memset(this->adminSQ, 0, adminSQSize);
 	memset(this->adminCQ, 0, adminCQSize);
@@ -573,9 +576,13 @@ auto NvmeDriver::buildChainedPrpList(const uint64_t *pagePhysArray, const uint32
 }
 
 void NvmeDriver::freePrpListPages(vector<PrpListPage> &pages) noexcept {
-	for (const auto &[_, virt] : pages) {
+	for (const auto &[phys, virt] : pages) {
 		if (virt != 0) {
-			munmap(reinterpret_cast<void*>(virt), 0x1000);
+			munmap_extra(reinterpret_cast<void*>(virt), 0x1000, false);
+		}
+
+		if (phys != 0) {
+			freePhysPage(phys);
 		}
 	}
 
@@ -634,7 +641,8 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
 			this->msixFreeVector(queueId, pair.msixVector);
 		}
 
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
+    	munmap_extra(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry), false);
+    	freePhysPage(pair.cqPhys);
 
     	return false;
     }
@@ -645,7 +653,8 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     	}
 
     	freePhysPage(pair.sqPhys);
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
+    	munmap_extra(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry), false);
+    	freePhysPage(pair.cqPhys);
 
     	return false;
     }
@@ -673,8 +682,10 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     		this->msixFreeVector(queueId, pair.msixVector);
     	}
 
-    	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
+    	munmap_extra(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command), false);
+    	munmap_extra(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry), false);
+    	freePhysPage(pair.sqPhys);
+    	freePhysPage(pair.cqPhys);
 
     	return false;
     }
@@ -692,8 +703,10 @@ auto NvmeDriver::createIoQueueForCore(const uint64_t coreSlot, const uint16_t qu
     		this->msixFreeVector(queueId, pair.msixVector);
     	}
 
-    	munmap(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command));
-    	munmap(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry));
+    	munmap_extra(reinterpret_cast<void*>(sqVirt), pair.depth * sizeof(Command), false);
+    	munmap_extra(reinterpret_cast<void*>(cqVirt), pair.depth * sizeof(CompletionEntry), false);
+    	freePhysPage(pair.sqPhys);
+    	freePhysPage(pair.cqPhys);
 
     	return false;
     }
@@ -791,14 +804,22 @@ void NvmeDriver::shutdown() noexcept {
 
         submitAdminCommand(delCQ, cqe);
 
-        // Unmap the queue memory
-        if (queue.sq != nullptr) {
-        	munmap(queue.sq, queue.depth * sizeof(Command));
-        }
+    	// Unmap the queue memory
+    	if (queue.sq != nullptr) {
+    		munmap_extra(queue.sq, queue.depth * sizeof(Command), false);
+    	}
 
-        if (queue.cq != nullptr) {
-        	munmap(queue.cq, queue.depth * sizeof(CompletionEntry));
-        }
+    	if (queue.cq != nullptr) {
+    		munmap_extra(queue.cq, queue.depth * sizeof(CompletionEntry), false);
+    	}
+
+    	if (queue.sqPhys != 0) {
+    		freePhysPage(queue.sqPhys);
+    	}
+
+    	if (queue.cqPhys != 0) {
+    		freePhysPage(queue.cqPhys);
+    	}
 
         queue = IoQueuePair {};
     }
@@ -828,26 +849,40 @@ void NvmeDriver::shutdown() noexcept {
         usleep(10000);
     }
 
-    // ── Step 3: Free admin queue memory ─────────────────────────────────────
-    if (adminSQ != nullptr) {
-        munmap(adminSQ, adminQDepth * sizeof(Command));
+	// ── Step 3: Free admin queue memory ─────────────────────────────────────
+	if (adminSQ != nullptr) {
+		munmap_extra(adminSQ, adminQDepth * sizeof(Command), false);
 
-        adminSQ = nullptr;
-    }
+		adminSQ = nullptr;
+	}
 
-    if (adminCQ != nullptr) {
-        munmap(adminCQ, adminQDepth * sizeof(CompletionEntry));
+	if (adminCQ != nullptr) {
+		munmap_extra(adminCQ, adminQDepth * sizeof(CompletionEntry), false);
 
-        adminCQ = nullptr;
-    }
+		adminCQ = nullptr;
+	}
 
-    // Free the shared identify buffer
-    if (dataVirt != 0) {
-        munmap(reinterpret_cast<uint64_t *>(dataVirt), 0x1000);
+	if (adminSQPhys != 0) {
+		freePhysPage(adminSQPhys);
+		adminSQPhys = 0;
+	}
 
-        dataVirt = 0;
-        dataPhys = 0;
-    }
+	if (adminCQPhys != 0) {
+		freePhysPage(adminCQPhys);
+		adminCQPhys = 0;
+	}
+
+	// Free the shared identify buffer
+	if (dataVirt != 0) {
+		munmap_extra(reinterpret_cast<uint64_t *>(dataVirt), 0x1000, false);
+
+		dataVirt = 0;
+	}
+
+	if (dataPhys != 0) {
+		freePhysPage(dataPhys);
+		dataPhys = 0;
+	}
 
     namespaces.clear();
 
