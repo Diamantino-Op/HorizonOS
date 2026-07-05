@@ -19,7 +19,10 @@ namespace {
 	uint64_t vfsPort = 0;
 	uint64_t storagePort = 0;
 	uint64_t ext2Port = 0;
+	uint64_t nextHandleId = 1;
 	vector<VfsVolume> volumes;
+	vector<VfsHandle> handles;
+	pthread_mutex_t handlesLock = PTHREAD_MUTEX_INITIALIZER;
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -427,6 +430,366 @@ namespace {
 		return ret == 0;
 	}
 
+	auto devfsVolumesText() -> string {
+		string text;
+
+		for (const auto &volume : volumes) {
+			text += volume.name;
+			text += " ";
+			text += volume.sourceName.empty() ? "virtual" : volume.sourceName;
+			text += "\n";
+		}
+
+		return text;
+	}
+
+	auto devfsStat(const string &fsPath, VfsStatReplyMsgData &reply) -> bool {
+		if (fsPath == "/" or fsPath.empty()) {
+			reply.success = true;
+			reply.nodeType = VFS_NODE_DIRECTORY;
+			reply.size = 0;
+
+			return true;
+		}
+
+		if (fsPath == "/volumes" or fsPath == "volumes") {
+			reply.success = true;
+			reply.nodeType = VFS_NODE_FILE;
+			reply.size = devfsVolumesText().size();
+
+			return true;
+		}
+
+		if (fsPath == "/null" or fsPath == "null") {
+			reply.success = true;
+			reply.nodeType = VFS_NODE_FILE;
+			reply.size = 0;
+
+			return true;
+		}
+
+		return false;
+	}
+
+	auto devfsReadDir(const string &fsPath, VfsReadDirReplyMsgData &reply) -> bool {
+		if (fsPath != "/" and !fsPath.empty()) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.entryCount = 2;
+		fillName(reply.entries[0].name, sizeof(reply.entries[0].name), reply.entries[0].nameLength, "volumes");
+		reply.entries[0].nodeType = VFS_NODE_FILE;
+		reply.entries[0].size = devfsVolumesText().size();
+		fillName(reply.entries[1].name, sizeof(reply.entries[1].name), reply.entries[1].nameLength, "null");
+		reply.entries[1].nodeType = VFS_NODE_FILE;
+
+		return true;
+	}
+
+	auto devfsRead(const string &fsPath, const uint64_t offset, const uint32_t length, VfsReadReplyMsgData &reply) -> bool {
+		string text;
+
+		if (fsPath == "/volumes" or fsPath == "volumes") {
+			text = devfsVolumesText();
+		} else if (fsPath == "/null" or fsPath == "null") {
+			text.clear();
+		} else {
+			return false;
+		}
+
+		reply.success = true;
+
+		if (offset >= text.size() or length == 0) {
+			reply.bytesRead = 0;
+
+			return true;
+		}
+
+		reply.bytesRead = min<uint32_t>(length, text.size() - offset);
+		memcpy(reply.data, text.data() + offset, reply.bytesRead);
+
+		return true;
+	}
+
+	auto vfsStatPath(const string &path, VfsStatReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr) {
+			return false;
+		}
+
+		if (volume->kind == VfsVolumeKind::Devices) {
+			return devfsStat(fsPath, reply);
+		}
+
+		if (volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsStatMsgData();
+		auto fsReply = FsStatReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_STAT_MSG_TYPE, FS_STAT_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.nodeType = fsReply.nodeType;
+		reply.size = fsReply.size;
+
+		return true;
+	}
+
+	auto vfsReadDirPath(const string &path, VfsReadDirReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr) {
+			return false;
+		}
+
+		if (volume->kind == VfsVolumeKind::Devices) {
+			return devfsReadDir(fsPath, reply);
+		}
+
+		if (volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsReadDirMsgData();
+		auto fsReply = FsReadDirReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_READDIR_MSG_TYPE, FS_READDIR_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.entryCount = fsReply.entryCount;
+
+		for (uint32_t i = 0; i < reply.entryCount; ++i) {
+			reply.entries[i] = fsReply.entries[i];
+		}
+
+		return true;
+	}
+
+	auto vfsReadPath(const string &path, const uint64_t offset, const uint32_t length, VfsReadReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (length > VFS_MAX_READ_SIZE or !splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr) {
+			return false;
+		}
+
+		if (volume->kind == VfsVolumeKind::Devices) {
+			return devfsRead(fsPath, offset, length, reply);
+		}
+
+		if (volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsReadMsgData();
+		auto fsReply = FsReadReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fsRequest.offset = offset;
+		fsRequest.length = length;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_READ_MSG_TYPE, FS_READ_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.bytesRead = fsReply.bytesRead;
+		memcpy(reply.data, fsReply.data, reply.bytesRead);
+
+		return true;
+	}
+
+	auto vfsWritePath(const string &path, const uint64_t offset, const uint32_t length, const uint8_t *data, VfsWriteReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (length > VFS_MAX_READ_SIZE or !splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsWriteMsgData();
+		auto fsReply = FsWriteReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fsRequest.offset = offset;
+		fsRequest.length = length;
+		memcpy(fsRequest.data, data, length);
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_WRITE_MSG_TYPE, FS_WRITE_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.bytesWritten = fsReply.bytesWritten;
+		reply.size = fsReply.size;
+
+		return true;
+	}
+
+	auto vfsCreatePath(const string &path, const uint8_t nodeType, VfsCreateReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsCreateMsgData();
+		auto fsReply = FsCreateReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fsRequest.nodeType = nodeType;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_CREATE_MSG_TYPE, FS_CREATE_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+
+		return true;
+	}
+
+	auto vfsUnlinkPath(const string &path, VfsUnlinkReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsUnlinkMsgData();
+		auto fsReply = FsUnlinkReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_UNLINK_MSG_TYPE, FS_UNLINK_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+
+		return true;
+	}
+
+	auto vfsRenamePath(const string &oldPath, const string &newPath, VfsRenameReplyMsgData &reply) -> bool {
+		string oldVolumeName;
+		string oldFsPath;
+		string newVolumeName;
+		string newFsPath;
+
+		if (!splitVfsPath(oldPath, oldVolumeName, oldFsPath) or !splitVfsPath(newPath, newVolumeName, newFsPath) or oldVolumeName != newVolumeName) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(oldVolumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsRenameMsgData();
+		auto fsReply = FsRenameReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fillName(fsRequest.oldPath, sizeof(fsRequest.oldPath), fsRequest.oldPathLength, oldFsPath);
+		fillName(fsRequest.newPath, sizeof(fsRequest.newPath), fsRequest.newPathLength, newFsPath);
+
+		if (!sendFsRequest(FS_RENAME_MSG_TYPE, FS_RENAME_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+
+		return true;
+	}
+
+	auto vfsTruncatePath(const string &path, const uint64_t size, VfsTruncateReplyMsgData &reply) -> bool {
+		string volumeName;
+		string fsPath;
+
+		if (!splitVfsPath(path, volumeName, fsPath)) {
+			return false;
+		}
+
+		const VfsVolume *volume = findVolume(volumeName);
+
+		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or volume->fsPort == 0) {
+			return false;
+		}
+
+		auto fsRequest = FsTruncateMsgData();
+		auto fsReply = FsTruncateReplyMsgData();
+
+		fsRequest.mountId = volume->mountId;
+		fsRequest.size = size;
+		fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
+
+		if (!sendFsRequest(FS_TRUNCATE_MSG_TYPE, FS_TRUNCATE_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) or !fsReply.success) {
+			return false;
+		}
+
+		reply.success = true;
+		reply.size = fsReply.size;
+
+		return true;
+	}
+
 	[[noreturn]] auto statHandler(void */*unused*/) -> void * {
 		auto data = VfsStatMsgData();
 		auto msg = hos_msg();
@@ -448,25 +811,9 @@ namespace {
 
 			auto reply = VfsStatReplyMsgData();
 			string path;
-			string volumeName;
-			string fsPath;
 
-			if (validPath(data.path, data.pathLength, path) and splitVfsPath(path, volumeName, fsPath)) {
-				const VfsVolume *volume = findVolume(volumeName);
-
-				if (volume != nullptr and volume->kind == VfsVolumeKind::Partition and volume->fsPort != 0) {
-					auto fsRequest = FsStatMsgData();
-					auto fsReply = FsStatReplyMsgData();
-
-					fsRequest.mountId = volume->mountId;
-					fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
-
-					if (sendFsRequest(FS_STAT_MSG_TYPE, FS_STAT_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) and fsReply.success) {
-						reply.success = true;
-						reply.nodeType = fsReply.nodeType;
-						reply.size = fsReply.size;
-					}
-				}
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsStatPath(path, reply);
 			}
 
 			auto replyMsg = hos_msg();
@@ -499,28 +846,9 @@ namespace {
 
 			auto reply = VfsReadDirReplyMsgData();
 			string path;
-			string volumeName;
-			string fsPath;
 
-			if (validPath(data.path, data.pathLength, path) and splitVfsPath(path, volumeName, fsPath)) {
-				const VfsVolume *volume = findVolume(volumeName);
-
-				if (volume != nullptr and volume->kind == VfsVolumeKind::Partition and volume->fsPort != 0) {
-					auto fsRequest = FsReadDirMsgData();
-					auto fsReply = FsReadDirReplyMsgData();
-
-					fsRequest.mountId = volume->mountId;
-					fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
-
-					if (sendFsRequest(FS_READDIR_MSG_TYPE, FS_READDIR_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) and fsReply.success) {
-						reply.success = true;
-						reply.entryCount = fsReply.entryCount;
-
-						for (uint32_t i = 0; i < reply.entryCount; ++i) {
-							reply.entries[i] = fsReply.entries[i];
-						}
-					}
-				}
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsReadDirPath(path, reply);
 			}
 
 			auto replyMsg = hos_msg();
@@ -553,31 +881,498 @@ namespace {
 
 			auto reply = VfsReadReplyMsgData();
 			string path;
-			string volumeName;
-			string fsPath;
 
-			if (data.length <= VFS_MAX_READ_SIZE and validPath(data.path, data.pathLength, path) and splitVfsPath(path, volumeName, fsPath)) {
-				const VfsVolume *volume = findVolume(volumeName);
-
-				if (volume != nullptr and volume->kind == VfsVolumeKind::Partition and volume->fsPort != 0) {
-					auto fsRequest = FsReadMsgData();
-					auto fsReply = FsReadReplyMsgData();
-
-					fsRequest.mountId = volume->mountId;
-					fsRequest.offset = data.offset;
-					fsRequest.length = data.length;
-					fillName(fsRequest.path, sizeof(fsRequest.path), fsRequest.pathLength, fsPath);
-
-					if (sendFsRequest(FS_READ_MSG_TYPE, FS_READ_REPLY_MSG_TYPE, *volume, fsRequest, fsReply) and fsReply.success) {
-						reply.success = true;
-						reply.bytesRead = fsReply.bytesRead;
-						memcpy(reply.data, fsReply.data, reply.bytesRead);
-					}
-				}
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsReadPath(path, data.offset, data.length, reply);
 			}
 
 			auto replyMsg = hos_msg();
 			replyMsg.type = VFS_READ_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto writeHandler(void */*unused*/) -> void * {
+		auto data = VfsWriteMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_WRITE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsWriteReplyMsgData();
+			string path;
+
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsWritePath(path, data.offset, data.length, data.data, reply);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_WRITE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto createHandler(void */*unused*/) -> void * {
+		auto data = VfsCreateMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_CREATE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsCreateReplyMsgData();
+			string path;
+
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsCreatePath(path, data.nodeType, reply);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_CREATE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto unlinkHandler(void */*unused*/) -> void * {
+		auto data = VfsUnlinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_UNLINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsUnlinkReplyMsgData();
+			string path;
+
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsUnlinkPath(path, reply);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_UNLINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto renameHandler(void */*unused*/) -> void * {
+		auto data = VfsRenameMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_RENAME_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsRenameReplyMsgData();
+			string oldPath;
+			string newPath;
+
+			if (validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+				vfsRenamePath(oldPath, newPath, reply);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_RENAME_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto truncateHandler(void */*unused*/) -> void * {
+		auto data = VfsTruncateMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_TRUNCATE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsTruncateReplyMsgData();
+			string path;
+
+			if (validPath(data.path, data.pathLength, path)) {
+				vfsTruncatePath(path, data.size, reply);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_TRUNCATE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto openHandler(void */*unused*/) -> void * {
+		auto data = VfsOpenMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_OPEN_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsOpenReplyMsgData();
+			string path;
+
+			if (validPath(data.path, data.pathLength, path)) {
+				auto stat = VfsStatReplyMsgData();
+
+				if (!vfsStatPath(path, stat) and (data.flags & VFS_OPEN_CREATE) != 0) {
+					auto create = VfsCreateReplyMsgData();
+
+					if (vfsCreatePath(path, VFS_NODE_FILE, create)) {
+						stat = VfsStatReplyMsgData();
+						vfsStatPath(path, stat);
+					}
+				}
+
+				if (stat.success) {
+					pthread_mutex_lock(&handlesLock);
+
+					const uint64_t handleId = nextHandleId++;
+
+					handles.push_back(VfsHandle {
+						.handle = handleId,
+						.ownerPort = msg.src_port,
+						.flags = data.flags,
+						.position = 0,
+						.size = stat.size,
+						.nodeType = stat.nodeType,
+						.path = path,
+					});
+
+					pthread_mutex_unlock(&handlesLock);
+
+					reply.success = true;
+					reply.handle = handleId;
+					reply.nodeType = stat.nodeType;
+					reply.size = stat.size;
+				}
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_OPEN_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto closeHandler(void */*unused*/) -> void * {
+		auto data = VfsCloseMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_CLOSE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsCloseReplyMsgData();
+
+			pthread_mutex_lock(&handlesLock);
+
+			const auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+				return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+			});
+
+			if (it != handles.end()) {
+				handles.erase(it);
+				reply.success = true;
+			}
+
+			pthread_mutex_unlock(&handlesLock);
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_CLOSE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto handleReadHandler(void */*unused*/) -> void * {
+		auto data = VfsHandleReadMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_HANDLE_READ_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsHandleReadReplyMsgData();
+			string path;
+			uint64_t offset = 0;
+			bool allowed = false;
+
+			pthread_mutex_lock(&handlesLock);
+
+			auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+				return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+			});
+
+			if (it != handles.end() and (it->flags & VFS_OPEN_READ) != 0 and it->nodeType == VFS_NODE_FILE) {
+				path = it->path;
+				offset = it->position;
+				allowed = true;
+			}
+
+			pthread_mutex_unlock(&handlesLock);
+
+			if (allowed) {
+				auto read = VfsReadReplyMsgData();
+
+				if (vfsReadPath(path, offset, data.length, read) and read.success) {
+					pthread_mutex_lock(&handlesLock);
+
+					it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+						return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+					});
+
+					if (it != handles.end()) {
+						it->position += read.bytesRead;
+						reply.position = it->position;
+					}
+
+					pthread_mutex_unlock(&handlesLock);
+
+					reply.success = true;
+					reply.bytesRead = read.bytesRead;
+					memcpy(reply.data, read.data, reply.bytesRead);
+				}
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_HANDLE_READ_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto handleWriteHandler(void */*unused*/) -> void * {
+		auto data = VfsHandleWriteMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_HANDLE_WRITE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsHandleWriteReplyMsgData();
+			string path;
+			uint64_t offset = 0;
+			bool allowed = false;
+
+			pthread_mutex_lock(&handlesLock);
+
+			auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+				return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+			});
+
+			if (it != handles.end() and (it->flags & VFS_OPEN_WRITE) != 0 and it->nodeType == VFS_NODE_FILE) {
+				path = it->path;
+				offset = it->position;
+				allowed = true;
+			}
+
+			pthread_mutex_unlock(&handlesLock);
+
+			if (allowed) {
+				auto write = VfsWriteReplyMsgData();
+
+				if (vfsWritePath(path, offset, data.length, data.data, write) and write.success) {
+					pthread_mutex_lock(&handlesLock);
+
+					it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+						return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+					});
+
+					if (it != handles.end()) {
+						it->position += write.bytesWritten;
+						it->size = write.size;
+						reply.position = it->position;
+						reply.size = it->size;
+					}
+
+					pthread_mutex_unlock(&handlesLock);
+
+					reply.success = true;
+					reply.bytesWritten = write.bytesWritten;
+				}
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_HANDLE_WRITE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto handleSeekHandler(void */*unused*/) -> void * {
+		auto data = VfsHandleSeekMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_HANDLE_SEEK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsHandleSeekReplyMsgData();
+
+			pthread_mutex_lock(&handlesLock);
+
+			auto it = ranges::find_if(handles, [&](const VfsHandle &handle) -> bool {
+				return handle.handle == data.handle and handle.ownerPort == msg.src_port;
+			});
+
+			if (it != handles.end()) {
+				int64_t base = 0;
+
+				if (data.whence == VFS_SEEK_SET) {
+					base = 0;
+				} else if (data.whence == VFS_SEEK_CUR) {
+					base = static_cast<int64_t>(it->position);
+				} else if (data.whence == VFS_SEEK_END) {
+					base = static_cast<int64_t>(it->size);
+				}
+
+				const int64_t next = base + data.offset;
+
+				if ((data.whence == VFS_SEEK_SET or data.whence == VFS_SEEK_CUR or data.whence == VFS_SEEK_END) and next >= 0) {
+					it->position = static_cast<uint64_t>(next);
+					reply.success = true;
+					reply.position = it->position;
+				}
+			}
+
+			pthread_mutex_unlock(&handlesLock);
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_HANDLE_SEEK_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
@@ -612,10 +1407,30 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t statThread;
 	pthread_t readDirThread;
 	pthread_t readThread;
+	pthread_t writeThread;
+	pthread_t createThread;
+	pthread_t openThread;
+	pthread_t closeThread;
+	pthread_t handleReadThread;
+	pthread_t handleWriteThread;
+	pthread_t unlinkThread;
+	pthread_t renameThread;
+	pthread_t truncateThread;
+	pthread_t handleSeekThread;
 
 	if (pthread_create(&statThread, nullptr, statHandler, nullptr) != 0 or
 	    pthread_create(&readDirThread, nullptr, readDirHandler, nullptr) != 0 or
-	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0) {
+	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0 or
+	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
+	    pthread_create(&createThread, nullptr, createHandler, nullptr) != 0 or
+	    pthread_create(&openThread, nullptr, openHandler, nullptr) != 0 or
+	    pthread_create(&closeThread, nullptr, closeHandler, nullptr) != 0 or
+	    pthread_create(&handleReadThread, nullptr, handleReadHandler, nullptr) != 0 or
+	    pthread_create(&handleWriteThread, nullptr, handleWriteHandler, nullptr) != 0 or
+	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
+	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
+	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0 or
+	    pthread_create(&handleSeekThread, nullptr, handleSeekHandler, nullptr) != 0) {
 		printf("Vfs: Failed to create message handlers.");
 		fflush(stdout);
 
@@ -625,6 +1440,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(statThread);
 	pthread_detach(readDirThread);
 	pthread_detach(readThread);
+	pthread_detach(writeThread);
+	pthread_detach(createThread);
+	pthread_detach(openThread);
+	pthread_detach(closeThread);
+	pthread_detach(handleReadThread);
+	pthread_detach(handleWriteThread);
+	pthread_detach(unlinkThread);
+	pthread_detach(renameThread);
+	pthread_detach(truncateThread);
+	pthread_detach(handleSeekThread);
 
 	for (;;) {
 		refreshVolumes();

@@ -23,4 +23,14 @@ struct VfsVolume {
 	string sourceName;
 };
 
+struct VfsHandle {
+	uint64_t handle {};
+	uint64_t ownerPort {};
+	uint32_t flags {};
+	uint64_t position {};
+	uint64_t size {};
+	uint8_t nodeType {};
+	string path;
+};
+
 #endif

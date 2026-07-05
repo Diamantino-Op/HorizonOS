@@ -30,6 +30,16 @@ constexpr uint64_t FS_READDIR_MSG_TYPE     = 0x80004;
 constexpr uint64_t FS_READDIR_REPLY_MSG_TYPE = 0x80005;
 constexpr uint64_t FS_READ_MSG_TYPE        = 0x80006;
 constexpr uint64_t FS_READ_REPLY_MSG_TYPE  = 0x80007;
+constexpr uint64_t FS_WRITE_MSG_TYPE       = 0x80008;
+constexpr uint64_t FS_WRITE_REPLY_MSG_TYPE = 0x80009;
+constexpr uint64_t FS_CREATE_MSG_TYPE      = 0x8000A;
+constexpr uint64_t FS_CREATE_REPLY_MSG_TYPE = 0x8000B;
+constexpr uint64_t FS_UNLINK_MSG_TYPE      = 0x8000C;
+constexpr uint64_t FS_UNLINK_REPLY_MSG_TYPE = 0x8000D;
+constexpr uint64_t FS_RENAME_MSG_TYPE      = 0x8000E;
+constexpr uint64_t FS_RENAME_REPLY_MSG_TYPE = 0x8000F;
+constexpr uint64_t FS_TRUNCATE_MSG_TYPE    = 0x80010;
+constexpr uint64_t FS_TRUNCATE_REPLY_MSG_TYPE = 0x80011;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
@@ -189,6 +199,66 @@ struct FsReadReplyMsgData {
 	bool success {};
 	uint32_t bytesRead {};
 	uint8_t data[VFS_MAX_READ_SIZE] {};
+};
+
+struct FsWriteMsgData {
+	uint64_t mountId {};
+	uint64_t offset {};
+	uint32_t length {};
+	uint8_t data[VFS_MAX_READ_SIZE] {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsWriteReplyMsgData {
+	bool success {};
+	uint32_t bytesWritten {};
+	uint64_t size {};
+};
+
+struct FsCreateMsgData {
+	uint64_t mountId {};
+	uint8_t nodeType {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsCreateReplyMsgData {
+	bool success {};
+};
+
+struct FsUnlinkMsgData {
+	uint64_t mountId {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsUnlinkReplyMsgData {
+	bool success {};
+};
+
+struct FsRenameMsgData {
+	uint64_t mountId {};
+	char oldPath[VFS_MAX_PATH_LENGTH] {};
+	size_t oldPathLength {};
+	char newPath[VFS_MAX_PATH_LENGTH] {};
+	size_t newPathLength {};
+};
+
+struct FsRenameReplyMsgData {
+	bool success {};
+};
+
+struct FsTruncateMsgData {
+	uint64_t mountId {};
+	uint64_t size {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsTruncateReplyMsgData {
+	bool success {};
+	uint64_t size {};
 };
 
 #endif

@@ -107,6 +107,11 @@ namespace {
 		auto readFile(const Ext2Inode &inode, vector<uint8_t> &out, uint64_t maxBytes = 65536) -> bool;
 		auto readFileRange(const Ext2Inode &inode, uint64_t offset, uint32_t length, vector<uint8_t> &out) -> bool;
 		auto writeFileOverwrite(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
+		auto writeFile(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
+		auto createFile(const string &path) -> bool;
+		auto unlinkFile(const string &path) -> bool;
+		auto renameFile(const string &oldPath, const string &newPath) -> bool;
+		auto truncateFile(const string &path, uint64_t size) -> bool;
 		auto findFirstRootTextFile(uint32_t &inodeNumber, string &name) -> bool;
 		auto lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) -> bool;
 		auto readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries) -> bool;
@@ -123,6 +128,24 @@ namespace {
 		auto readIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
 		auto readDoubleIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
 		auto readTripleIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
+		auto writeSuperblock() -> bool;
+		auto writeGroupDescriptor(uint32_t group) -> bool;
+		auto allocateBlock(uint32_t &block) -> bool;
+		auto allocateInode(uint32_t &inodeNumber) -> bool;
+		auto freeBlock(uint32_t block) -> bool;
+		auto freeInode(uint32_t inodeNumber) -> bool;
+		auto ensureDataBlock(Ext2Inode &inode, uint64_t fileBlock, uint32_t &fsBlock) -> bool;
+		auto ensureIndirectDataBlock(Ext2Inode &inode, uint32_t &pointerBlock, uint32_t depth, uint64_t index, uint32_t &fsBlock) -> bool;
+		auto addDirectoryEntry(uint32_t parentInodeNumber, Ext2Inode &parent, uint32_t childInodeNumber, const string &name, uint8_t fileType) -> bool;
+		auto removeDirectoryEntry(uint32_t parentInodeNumber, Ext2Inode &parent, const string &name, uint32_t &removedInode) -> bool;
+		auto directoryIsEmpty(const Ext2Inode &dir) -> bool;
+		auto updateDirectoryEntryInode(Ext2Inode &dir, const string &name, uint32_t inodeNumber) -> bool;
+		auto freeInodeBlocks(Ext2Inode &inode, uint64_t keepBlocks) -> bool;
+		auto freeIndirectBlocks(uint32_t &pointerBlock, uint32_t depth, uint64_t keepBlocks, uint64_t span) -> bool;
+		auto countIndirectBlocks(uint32_t pointerBlock, uint32_t depth) const -> uint64_t;
+		auto countInodeBlocks(const Ext2Inode &inode) const -> uint64_t;
+		auto splitParentPath(const string &path, string &parentPath, string &name) const -> bool;
+		void setInodeFileSize(Ext2Inode &inode, uint64_t size) const;
 
 		StorageFsProbeDeviceMsgData device {};
 		Ext2Superblock superblock {};

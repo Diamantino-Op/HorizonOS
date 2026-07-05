@@ -400,6 +400,22 @@ namespace {
 		return parts;
 	}
 
+	auto ext2DirRecLen(const size_t nameLength) -> uint16_t {
+		return static_cast<uint16_t>((8 + nameLength + 3) & ~static_cast<size_t>(3));
+	}
+
+	auto bitmapBitSet(const vector<uint8_t> &bitmap, const uint32_t bit) -> bool {
+		return (bitmap[bit / 8] & (1U << (bit % 8))) != 0;
+	}
+
+	void bitmapSetBit(vector<uint8_t> &bitmap, const uint32_t bit) {
+		bitmap[bit / 8] |= static_cast<uint8_t>(1U << (bit % 8));
+	}
+
+	void bitmapClearBit(vector<uint8_t> &bitmap, const uint32_t bit) {
+		bitmap[bit / 8] &= static_cast<uint8_t>(~(1U << (bit % 8)));
+	}
+
 	Ext2Volume::Ext2Volume(const StorageFsProbeDeviceMsgData &device)
 		: device(device) {
 	}
@@ -664,6 +680,968 @@ namespace {
 			}
 
 			written += toCopy;
+		}
+
+		return flushDevice(device.deviceId);
+	}
+
+	void Ext2Volume::setInodeFileSize(Ext2Inode &inode, const uint64_t size) const {
+		inode.sizeLo = static_cast<uint32_t>(size);
+
+		if ((inode.mode & EXT2_S_IFMT) == EXT2_S_IFREG) {
+			inode.sizeHighOrDirAcl = static_cast<uint32_t>(size >> 32);
+		}
+	}
+
+	auto Ext2Volume::writeSuperblock() -> bool {
+		const uint64_t superLba = EXT2_SUPERBLOCK_OFFSET / device.blockSize;
+		const uint64_t superOffsetInPage = EXT2_SUPERBLOCK_OFFSET - (superLba * device.blockSize);
+		uint64_t phys = 0;
+		uint64_t virt = 0;
+
+		if (!readDevicePage(device.deviceId, superLba, phys, virt)) {
+			return false;
+		}
+
+		memcpy(reinterpret_cast<void *>(virt + superOffsetInPage), &superblock, sizeof(superblock));
+
+		const bool success = writeDevicePage(device.deviceId, superLba, phys);
+
+		freeDevicePage(phys, virt);
+
+		return success;
+	}
+
+	auto Ext2Volume::writeGroupDescriptor(const uint32_t group) -> bool {
+		if (group >= groupDescriptors.size()) {
+			return false;
+		}
+
+		const uint64_t descTableBlock = superblock.firstDataBlock + 1;
+		const uint64_t offset = static_cast<uint64_t>(group) * EXT2_GROUP_DESCRIPTOR_SIZE;
+		const uint64_t block = descTableBlock + (offset / blockSize);
+		const uint64_t blockOffset = offset % blockSize;
+		vector<uint8_t> bytes;
+
+		bytes.resize(blockSize);
+
+		if (!readBlock(block, bytes.data())) {
+			return false;
+		}
+
+		memcpy(bytes.data() + blockOffset, &groupDescriptors[group], EXT2_GROUP_DESCRIPTOR_SIZE);
+
+		return writeBlock(block, bytes.data());
+	}
+
+	auto Ext2Volume::allocateBlock(uint32_t &block) -> bool {
+		block = 0;
+
+		for (uint32_t group = 0; group < groupDescriptors.size(); ++group) {
+			if (groupDescriptors[group].freeBlocksCountLo == 0) {
+				continue;
+			}
+
+			vector<uint8_t> bitmap;
+
+			bitmap.resize(blockSize);
+
+			if (!readBlock(groupDescriptors[group].blockBitmapLo, bitmap.data())) {
+				return false;
+			}
+
+			for (uint32_t bit = 0; bit < superblock.blocksPerGroup; ++bit) {
+				const uint64_t candidate = static_cast<uint64_t>(superblock.firstDataBlock) + static_cast<uint64_t>(group) * superblock.blocksPerGroup + bit;
+
+				if (candidate == 0 or candidate >= blocksCount(superblock)) {
+					break;
+				}
+
+				if (bitmapBitSet(bitmap, bit)) {
+					continue;
+				}
+
+				bitmapSetBit(bitmap, bit);
+				block = static_cast<uint32_t>(candidate);
+
+				--superblock.freeBlocksCount;
+				--groupDescriptors[group].freeBlocksCountLo;
+
+				vector<uint8_t> zeros;
+
+				zeros.resize(blockSize);
+
+				return writeBlock(groupDescriptors[group].blockBitmapLo, bitmap.data()) and writeGroupDescriptor(group) and writeSuperblock() and writeBlock(block, zeros.data());
+			}
+		}
+
+		return false;
+	}
+
+	auto Ext2Volume::allocateInode(uint32_t &inodeNumber) -> bool {
+		inodeNumber = 0;
+
+		for (uint32_t group = 0; group < groupDescriptors.size(); ++group) {
+			if (groupDescriptors[group].freeInodesCountLo == 0) {
+				continue;
+			}
+
+			vector<uint8_t> bitmap;
+
+			bitmap.resize(blockSize);
+
+			if (!readBlock(groupDescriptors[group].inodeBitmapLo, bitmap.data())) {
+				return false;
+			}
+
+			for (uint32_t bit = 0; bit < superblock.inodesPerGroup; ++bit) {
+				const uint64_t candidate = static_cast<uint64_t>(group) * superblock.inodesPerGroup + bit + 1;
+
+				if (candidate < superblock.firstInode or candidate > superblock.inodesCount) {
+					continue;
+				}
+
+				if (bitmapBitSet(bitmap, bit)) {
+					continue;
+				}
+
+				bitmapSetBit(bitmap, bit);
+				inodeNumber = static_cast<uint32_t>(candidate);
+
+				--superblock.freeInodesCount;
+				--groupDescriptors[group].freeInodesCountLo;
+
+				return writeBlock(groupDescriptors[group].inodeBitmapLo, bitmap.data()) and writeGroupDescriptor(group) and writeSuperblock();
+			}
+		}
+
+		return false;
+	}
+
+	auto Ext2Volume::freeBlock(const uint32_t block) -> bool {
+		if (block < superblock.firstDataBlock or block >= blocksCount(superblock)) {
+			return false;
+		}
+
+		const uint32_t group = (block - superblock.firstDataBlock) / superblock.blocksPerGroup;
+		const uint32_t bit = (block - superblock.firstDataBlock) % superblock.blocksPerGroup;
+
+		if (group >= groupDescriptors.size()) {
+			return false;
+		}
+
+		vector<uint8_t> bitmap;
+
+		bitmap.resize(blockSize);
+
+		if (!readBlock(groupDescriptors[group].blockBitmapLo, bitmap.data())) {
+			return false;
+		}
+
+		if (!bitmapBitSet(bitmap, bit)) {
+			return true;
+		}
+
+		bitmapClearBit(bitmap, bit);
+		++superblock.freeBlocksCount;
+		++groupDescriptors[group].freeBlocksCountLo;
+
+		return writeBlock(groupDescriptors[group].blockBitmapLo, bitmap.data()) and writeGroupDescriptor(group) and writeSuperblock();
+	}
+
+	auto Ext2Volume::freeInode(const uint32_t inodeNumber) -> bool {
+		if (inodeNumber < superblock.firstInode or inodeNumber > superblock.inodesCount) {
+			return false;
+		}
+
+		const uint32_t index = inodeNumber - 1;
+		const uint32_t group = index / superblock.inodesPerGroup;
+		const uint32_t bit = index % superblock.inodesPerGroup;
+
+		if (group >= groupDescriptors.size()) {
+			return false;
+		}
+
+		vector<uint8_t> bitmap;
+
+		bitmap.resize(blockSize);
+
+		if (!readBlock(groupDescriptors[group].inodeBitmapLo, bitmap.data())) {
+			return false;
+		}
+
+		if (!bitmapBitSet(bitmap, bit)) {
+			return true;
+		}
+
+		bitmapClearBit(bitmap, bit);
+		++superblock.freeInodesCount;
+		++groupDescriptors[group].freeInodesCountLo;
+
+		return writeBlock(groupDescriptors[group].inodeBitmapLo, bitmap.data()) and writeGroupDescriptor(group) and writeSuperblock();
+	}
+
+	auto Ext2Volume::ensureIndirectDataBlock(Ext2Inode &inode, uint32_t &pointerBlock, const uint32_t depth, const uint64_t index, uint32_t &fsBlock) -> bool {
+		const uint64_t pointersPerBlock = blockSize / sizeof(uint32_t);
+		uint64_t span = 1;
+
+		for (uint32_t i = 1; i < depth; ++i) {
+			span *= pointersPerBlock;
+		}
+
+		if (index >= span * pointersPerBlock) {
+			return false;
+		}
+
+		if (pointerBlock == 0) {
+			if (!allocateBlock(pointerBlock)) {
+				return false;
+			}
+
+			inode.blocks += static_cast<uint32_t>(blockSize / 512);
+		}
+
+		vector<uint8_t> bytes;
+
+		bytes.resize(blockSize);
+
+		if (!readBlock(pointerBlock, bytes.data())) {
+			return false;
+		}
+
+		auto *pointers = reinterpret_cast<uint32_t *>(bytes.data());
+		const uint64_t slot = depth == 1 ? index : index / span;
+
+		if (slot >= pointersPerBlock) {
+			return false;
+		}
+
+		if (depth == 1) {
+			if (pointers[slot] == 0) {
+				if (!allocateBlock(fsBlock)) {
+					return false;
+				}
+
+				pointers[slot] = fsBlock;
+				inode.blocks += static_cast<uint32_t>(blockSize / 512);
+
+				return writeBlock(pointerBlock, bytes.data());
+			}
+
+			fsBlock = pointers[slot];
+
+			return true;
+		}
+
+		uint32_t childPointerBlock = pointers[slot];
+
+		if (!ensureIndirectDataBlock(inode, childPointerBlock, depth - 1, index % span, fsBlock)) {
+			return false;
+		}
+
+		if (pointers[slot] != childPointerBlock) {
+			pointers[slot] = childPointerBlock;
+
+			return writeBlock(pointerBlock, bytes.data());
+		}
+
+		return true;
+	}
+
+	auto Ext2Volume::ensureDataBlock(Ext2Inode &inode, uint64_t fileBlock, uint32_t &fsBlock) -> bool {
+		fsBlock = 0;
+
+		uint64_t existing = 0;
+
+		if (resolveDataBlock(inode, fileBlock, existing)) {
+			fsBlock = static_cast<uint32_t>(existing);
+
+			return true;
+		}
+
+		if (fileBlock < 12) {
+			if (!allocateBlock(fsBlock)) {
+				return false;
+			}
+
+			inode.block[fileBlock] = fsBlock;
+			inode.blocks += static_cast<uint32_t>(blockSize / 512);
+
+			return true;
+		}
+
+		fileBlock -= 12;
+
+		const uint64_t pointersPerBlock = blockSize / sizeof(uint32_t);
+
+		if (fileBlock < pointersPerBlock) {
+			return ensureIndirectDataBlock(inode, inode.block[12], 1, fileBlock, fsBlock);
+		}
+
+		fileBlock -= pointersPerBlock;
+
+		const uint64_t doubleSpan = pointersPerBlock * pointersPerBlock;
+
+		if (fileBlock < doubleSpan) {
+			return ensureIndirectDataBlock(inode, inode.block[13], 2, fileBlock, fsBlock);
+		}
+
+		fileBlock -= doubleSpan;
+
+		return ensureIndirectDataBlock(inode, inode.block[14], 3, fileBlock, fsBlock);
+	}
+
+	auto Ext2Volume::writeFile(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) -> bool {
+		if ((inode.mode & EXT2_S_IFMT) != EXT2_S_IFREG or offset > (1ULL << 47)) {
+			return false;
+		}
+
+		if (length == 0) {
+			return true;
+		}
+
+		const uint64_t newSize = max<uint64_t>(inodeFileSize(superblock, inode), offset + length);
+		vector<uint8_t> blockBytes;
+
+		blockBytes.resize(blockSize);
+
+		uint64_t written = 0;
+
+		while (written < length) {
+			const uint64_t fileOffset = offset + written;
+			const uint64_t fileBlock = fileOffset / blockSize;
+			const uint64_t blockOffset = fileOffset % blockSize;
+			const uint64_t toCopy = min<uint64_t>(blockSize - blockOffset, length - written);
+			uint32_t fsBlock = 0;
+
+			if (!ensureDataBlock(inode, fileBlock, fsBlock)) {
+				return false;
+			}
+
+			if (!readBlock(fsBlock, blockBytes.data())) {
+				return false;
+			}
+
+			memcpy(blockBytes.data() + blockOffset, data + written, toCopy);
+
+			if (!writeBlock(fsBlock, blockBytes.data())) {
+				return false;
+			}
+
+			written += toCopy;
+		}
+
+		if (newSize > 0xffffffffULL and (superblock.featureRoCompat & EXT2_FEATURE_RO_COMPAT_LARGE_FILE) == 0) {
+			superblock.featureRoCompat |= EXT2_FEATURE_RO_COMPAT_LARGE_FILE;
+
+			if (!writeSuperblock()) {
+				return false;
+			}
+		}
+
+		setInodeFileSize(inode, newSize);
+
+		return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
+	}
+
+	auto Ext2Volume::splitParentPath(const string &path, string &parentPath, string &name) const -> bool {
+		if (path.empty() or path == "/") {
+			return false;
+		}
+
+		const size_t end = path.find_last_not_of('/');
+
+		if (end == string::npos) {
+			return false;
+		}
+
+		const size_t slash = path.find_last_of('/', end);
+
+		name = path.substr(slash == string::npos ? 0 : slash + 1, end - (slash == string::npos ? 0 : slash + 1) + 1);
+		parentPath = slash == string::npos or slash == 0 ? "/" : path.substr(0, slash);
+
+		return !name.empty() and name.size() < VFS_MAX_NAME_LENGTH;
+	}
+
+	auto Ext2Volume::addDirectoryEntry(const uint32_t parentInodeNumber, Ext2Inode &parent, const uint32_t childInodeNumber, const string &name, const uint8_t fileType) -> bool {
+		if ((parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR or name.empty() or name.size() > 255) {
+			return false;
+		}
+
+		const uint16_t needed = ext2DirRecLen(name.size());
+		const uint64_t parentSize = inodeFileSize(superblock, parent);
+		const uint64_t blocks = max<uint64_t>(1, (parentSize + blockSize - 1) / blockSize);
+		vector<uint8_t> blockBytes;
+
+		blockBytes.resize(blockSize);
+
+		for (uint64_t fileBlock = 0; fileBlock < blocks; ++fileBlock) {
+			uint32_t fsBlock = 0;
+
+			if (!ensureDataBlock(parent, fileBlock, fsBlock)) {
+				return false;
+			}
+
+			if (!readBlock(fsBlock, blockBytes.data())) {
+				return false;
+			}
+
+			uint64_t offset = 0;
+
+			while (offset + 8 <= blockSize) {
+				auto *entry = reinterpret_cast<Ext2DirEntry *>(blockBytes.data() + offset);
+
+				if (entry->recLen < 8 or offset + entry->recLen > blockSize) {
+					break;
+				}
+
+				const uint16_t actual = entry->inode == 0 ? 8 : ext2DirRecLen(entry->nameLen);
+				const uint16_t available = entry->recLen;
+
+				if (available >= actual + needed) {
+					entry->recLen = actual;
+
+					auto *newEntry = reinterpret_cast<Ext2DirEntry *>(blockBytes.data() + offset + actual);
+
+					newEntry->inode = childInodeNumber;
+					newEntry->recLen = available - actual;
+					newEntry->nameLen = static_cast<uint8_t>(name.size());
+					newEntry->fileType = fileType;
+					memcpy(newEntry->name, name.data(), name.size());
+
+					return writeBlock(fsBlock, blockBytes.data()) and writeInode(parentInodeNumber, parent) and flushDevice(device.deviceId);
+				}
+
+				offset += entry->recLen;
+			}
+		}
+
+		const uint64_t newFileBlock = blocks;
+		uint32_t fsBlock = 0;
+
+		if (!ensureDataBlock(parent, newFileBlock, fsBlock)) {
+			return false;
+		}
+
+		memset(blockBytes.data(), 0, blockSize);
+
+		auto *entry = reinterpret_cast<Ext2DirEntry *>(blockBytes.data());
+
+		entry->inode = childInodeNumber;
+		entry->recLen = static_cast<uint16_t>(blockSize);
+		entry->nameLen = static_cast<uint8_t>(name.size());
+		entry->fileType = fileType;
+		memcpy(entry->name, name.data(), name.size());
+
+		setInodeFileSize(parent, parentSize + blockSize);
+
+		return writeBlock(fsBlock, blockBytes.data()) and writeInode(parentInodeNumber, parent) and flushDevice(device.deviceId);
+	}
+
+	auto Ext2Volume::removeDirectoryEntry(const uint32_t parentInodeNumber, Ext2Inode &parent, const string &name, uint32_t &removedInode) -> bool {
+		removedInode = 0;
+
+		if ((parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR or name.empty()) {
+			return false;
+		}
+
+		const uint64_t parentSize = inodeFileSize(superblock, parent);
+		const uint64_t blocks = (parentSize + blockSize - 1) / blockSize;
+		vector<uint8_t> blockBytes;
+
+		blockBytes.resize(blockSize);
+
+		for (uint64_t fileBlock = 0; fileBlock < blocks; ++fileBlock) {
+			uint32_t fsBlock = 0;
+
+			if (!ensureDataBlock(parent, fileBlock, fsBlock) or !readBlock(fsBlock, blockBytes.data())) {
+				return false;
+			}
+
+			uint64_t offset = 0;
+			Ext2DirEntry *previous = nullptr;
+
+			while (offset + 8 <= blockSize) {
+				auto *entry = reinterpret_cast<Ext2DirEntry *>(blockBytes.data() + offset);
+
+				if (entry->recLen < 8 or offset + entry->recLen > blockSize) {
+					break;
+				}
+
+				if (entry->inode != 0 and entry->nameLen == name.size() and memcmp(entry->name, name.data(), name.size()) == 0) {
+					removedInode = entry->inode;
+
+					if (previous != nullptr) {
+						previous->recLen += entry->recLen;
+					} else {
+						entry->inode = 0;
+					}
+
+					return writeBlock(fsBlock, blockBytes.data()) and writeInode(parentInodeNumber, parent) and flushDevice(device.deviceId);
+				}
+
+				if (entry->inode != 0) {
+					previous = entry;
+				}
+
+				offset += entry->recLen;
+			}
+		}
+
+		return false;
+	}
+
+	auto Ext2Volume::directoryIsEmpty(const Ext2Inode &dir) -> bool {
+		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		vector<uint8_t> dirBytes;
+
+		if (!readFile(dir, dirBytes, inodeFileSize(superblock, dir))) {
+			return false;
+		}
+
+		uint64_t offset = 0;
+
+		while (offset + 8 <= dirBytes.size()) {
+			const auto *entry = reinterpret_cast<const Ext2DirEntry *>(dirBytes.data() + offset);
+
+			if (entry->recLen < 8 or offset + entry->recLen > dirBytes.size()) {
+				return false;
+			}
+
+			if (entry->inode != 0 and entry->nameLen > 0 and entry->nameLen <= entry->recLen - 8) {
+				const string name(entry->name, entry->nameLen);
+
+				if (name != "." and name != "..") {
+					return false;
+				}
+			}
+
+			offset += entry->recLen;
+		}
+
+		return true;
+	}
+
+	auto Ext2Volume::updateDirectoryEntryInode(Ext2Inode &dir, const string &name, const uint32_t inodeNumber) -> bool {
+		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR or name.empty()) {
+			return false;
+		}
+
+		const uint64_t dirSize = inodeFileSize(superblock, dir);
+		const uint64_t blocks = (dirSize + blockSize - 1) / blockSize;
+		vector<uint8_t> blockBytes;
+
+		blockBytes.resize(blockSize);
+
+		for (uint64_t fileBlock = 0; fileBlock < blocks; ++fileBlock) {
+			uint64_t fsBlock = 0;
+
+			if (!resolveDataBlock(dir, fileBlock, fsBlock) or !readBlock(fsBlock, blockBytes.data())) {
+				return false;
+			}
+
+			uint64_t offset = 0;
+
+			while (offset + 8 <= blockSize) {
+				auto *entry = reinterpret_cast<Ext2DirEntry *>(blockBytes.data() + offset);
+
+				if (entry->recLen < 8 or offset + entry->recLen > blockSize) {
+					break;
+				}
+
+				if (entry->inode != 0 and entry->nameLen == name.size() and memcmp(entry->name, name.data(), name.size()) == 0) {
+					entry->inode = inodeNumber;
+
+					return writeBlock(fsBlock, blockBytes.data());
+				}
+
+				offset += entry->recLen;
+			}
+		}
+
+		return false;
+	}
+
+	auto Ext2Volume::freeIndirectBlocks(uint32_t &pointerBlock, const uint32_t depth, const uint64_t keepBlocks, const uint64_t span) -> bool {
+		if (pointerBlock == 0) {
+			return true;
+		}
+
+		vector<uint8_t> bytes;
+
+		bytes.resize(blockSize);
+
+		if (!readBlock(pointerBlock, bytes.data())) {
+			return false;
+		}
+
+		auto *pointers = reinterpret_cast<uint32_t *>(bytes.data());
+		const uint64_t pointersPerBlock = blockSize / sizeof(uint32_t);
+		bool anyLive = false;
+
+		for (uint64_t slot = 0; slot < pointersPerBlock; ++slot) {
+			if (pointers[slot] == 0) {
+				continue;
+			}
+
+			const uint64_t slotStart = slot * span;
+			const uint64_t slotEnd = slotStart + span;
+
+			if (keepBlocks >= slotEnd) {
+				anyLive = true;
+
+				continue;
+			}
+
+			if (depth == 1) {
+				if (!freeBlock(pointers[slot])) {
+					return false;
+				}
+
+				pointers[slot] = 0;
+			} else if (keepBlocks <= slotStart) {
+				uint32_t child = pointers[slot];
+
+				if (!freeIndirectBlocks(child, depth - 1, 0, span / pointersPerBlock)) {
+					return false;
+				}
+
+				pointers[slot] = 0;
+			} else {
+				uint32_t child = pointers[slot];
+
+				if (!freeIndirectBlocks(child, depth - 1, keepBlocks - slotStart, span / pointersPerBlock)) {
+					return false;
+				}
+
+				pointers[slot] = child;
+			}
+
+			if (pointers[slot] != 0) {
+				anyLive = true;
+			}
+		}
+
+		if (!anyLive) {
+			if (!freeBlock(pointerBlock)) {
+				return false;
+			}
+
+			pointerBlock = 0;
+
+			return true;
+		}
+
+		return writeBlock(pointerBlock, bytes.data());
+	}
+
+	auto Ext2Volume::freeInodeBlocks(Ext2Inode &inode, const uint64_t keepBlocks) -> bool {
+		const uint64_t pointersPerBlock = blockSize / sizeof(uint32_t);
+
+		for (uint64_t i = 0; i < 12; ++i) {
+			if (i >= keepBlocks and inode.block[i] != 0) {
+				if (!freeBlock(inode.block[i])) {
+					return false;
+				}
+
+				inode.block[i] = 0;
+			}
+		}
+
+		uint64_t remaining = keepBlocks > 12 ? keepBlocks - 12 : 0;
+
+		if (!freeIndirectBlocks(inode.block[12], 1, min<uint64_t>(remaining, pointersPerBlock), 1)) {
+			return false;
+		}
+
+		remaining = remaining > pointersPerBlock ? remaining - pointersPerBlock : 0;
+
+		if (!freeIndirectBlocks(inode.block[13], 2, min<uint64_t>(remaining, pointersPerBlock * pointersPerBlock), pointersPerBlock)) {
+			return false;
+		}
+
+		remaining = remaining > pointersPerBlock * pointersPerBlock ? remaining - pointersPerBlock * pointersPerBlock : 0;
+
+		return freeIndirectBlocks(inode.block[14], 3, remaining, pointersPerBlock * pointersPerBlock);
+	}
+
+	auto Ext2Volume::countIndirectBlocks(const uint32_t pointerBlock, const uint32_t depth) const -> uint64_t {
+		if (pointerBlock == 0) {
+			return 0;
+		}
+
+		uint64_t count = 1;
+		vector<uint8_t> bytes;
+
+		bytes.resize(blockSize);
+
+		if (!readBlock(pointerBlock, bytes.data())) {
+			return count;
+		}
+
+		const auto *pointers = reinterpret_cast<const uint32_t *>(bytes.data());
+		const uint64_t pointersPerBlock = blockSize / sizeof(uint32_t);
+
+		for (uint64_t slot = 0; slot < pointersPerBlock; ++slot) {
+			if (pointers[slot] == 0) {
+				continue;
+			}
+
+			count += depth == 1 ? 1 : countIndirectBlocks(pointers[slot], depth - 1);
+		}
+
+		return count;
+	}
+
+	auto Ext2Volume::countInodeBlocks(const Ext2Inode &inode) const -> uint64_t {
+		uint64_t count = 0;
+
+		for (uint32_t i = 0; i < 12; ++i) {
+			if (inode.block[i] != 0) {
+				++count;
+			}
+		}
+
+		count += countIndirectBlocks(inode.block[12], 1);
+		count += countIndirectBlocks(inode.block[13], 2);
+		count += countIndirectBlocks(inode.block[14], 3);
+
+		return count;
+	}
+
+	auto Ext2Volume::createFile(const string &path) -> bool {
+		string parentPath;
+		string name;
+
+		if (!splitParentPath(path, parentPath, name)) {
+			return false;
+		}
+
+		uint32_t existingInode = 0;
+		Ext2Inode existing {};
+
+		if (lookupPath(path, existingInode, existing)) {
+			return false;
+		}
+
+		uint32_t parentInodeNumber = 0;
+		Ext2Inode parent {};
+
+		if (!lookupPath(parentPath, parentInodeNumber, parent) or (parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+
+		if (!allocateInode(inodeNumber)) {
+			return false;
+		}
+
+		auto inode = Ext2Inode();
+
+		inode.mode = EXT2_S_IFREG | 0644;
+		inode.linksCount = 1;
+
+		if (!writeInode(inodeNumber, inode)) {
+			return false;
+		}
+
+		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 1);
+	}
+
+	auto Ext2Volume::truncateFile(const string &path, const uint64_t size) -> bool {
+		uint32_t inodeNumber = 0;
+		Ext2Inode inode {};
+
+		if (!lookupPath(path, inodeNumber, inode) or (inode.mode & EXT2_S_IFMT) != EXT2_S_IFREG) {
+			return false;
+		}
+
+		const uint64_t keepBlocks = (size + blockSize - 1) / blockSize;
+
+		if (size > 0) {
+			for (uint64_t fileBlock = 0; fileBlock < keepBlocks; ++fileBlock) {
+				uint32_t fsBlock = 0;
+
+				if (!ensureDataBlock(inode, fileBlock, fsBlock)) {
+					return false;
+				}
+			}
+		}
+
+		if (!freeInodeBlocks(inode, keepBlocks)) {
+			return false;
+		}
+
+		if (size > 0xffffffffULL and (superblock.featureRoCompat & EXT2_FEATURE_RO_COMPAT_LARGE_FILE) == 0) {
+			superblock.featureRoCompat |= EXT2_FEATURE_RO_COMPAT_LARGE_FILE;
+
+			if (!writeSuperblock()) {
+				return false;
+			}
+		}
+
+		setInodeFileSize(inode, size);
+		inode.blocks = static_cast<uint32_t>(countInodeBlocks(inode) * (blockSize / 512));
+
+		return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
+	}
+
+	auto Ext2Volume::unlinkFile(const string &path) -> bool {
+		string parentPath;
+		string name;
+
+		if (!splitParentPath(path, parentPath, name) or name == "." or name == "..") {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+		Ext2Inode inode {};
+
+		if (!lookupPath(path, inodeNumber, inode) or inodeNumber == EXT2_ROOT_INO) {
+			return false;
+		}
+
+		const uint16_t nodeMode = inode.mode & EXT2_S_IFMT;
+
+		if (nodeMode != EXT2_S_IFREG and nodeMode != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		if (nodeMode == EXT2_S_IFDIR and !directoryIsEmpty(inode)) {
+			return false;
+		}
+
+		uint32_t parentInodeNumber = 0;
+		Ext2Inode parent {};
+
+		if (!lookupPath(parentPath, parentInodeNumber, parent) or (parent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t removedInode = 0;
+
+		if (!removeDirectoryEntry(parentInodeNumber, parent, name, removedInode) or removedInode != inodeNumber) {
+			return false;
+		}
+
+		if (!freeInodeBlocks(inode, 0)) {
+			return false;
+		}
+
+		if (nodeMode == EXT2_S_IFDIR) {
+			if (parent.linksCount > 0) {
+				--parent.linksCount;
+			}
+
+			if (!writeInode(parentInodeNumber, parent)) {
+				return false;
+			}
+
+			const uint32_t group = (inodeNumber - 1) / superblock.inodesPerGroup;
+
+			if (group < groupDescriptors.size() and groupDescriptors[group].usedDirsCountLo > 0) {
+				--groupDescriptors[group].usedDirsCountLo;
+
+				if (!writeGroupDescriptor(group)) {
+					return false;
+				}
+			}
+		}
+
+		inode = Ext2Inode();
+
+		if (!writeInode(inodeNumber, inode)) {
+			return false;
+		}
+
+		return freeInode(inodeNumber) and flushDevice(device.deviceId);
+	}
+
+	auto Ext2Volume::renameFile(const string &oldPath, const string &newPath) -> bool {
+		if (oldPath == newPath) {
+			return true;
+		}
+
+		string oldParentPath;
+		string oldName;
+		string newParentPath;
+		string newName;
+
+		if (!splitParentPath(oldPath, oldParentPath, oldName) or !splitParentPath(newPath, newParentPath, newName) or
+		    oldName == "." or oldName == ".." or newName == "." or newName == "..") {
+			return false;
+		}
+
+		uint32_t existingNumber = 0;
+		Ext2Inode existing {};
+
+		if (lookupPath(newPath, existingNumber, existing)) {
+			return false;
+		}
+
+		uint32_t inodeNumber = 0;
+		Ext2Inode inode {};
+
+		if (!lookupPath(oldPath, inodeNumber, inode) or inodeNumber == EXT2_ROOT_INO) {
+			return false;
+		}
+
+		const uint16_t nodeMode = inode.mode & EXT2_S_IFMT;
+
+		if (nodeMode != EXT2_S_IFREG and nodeMode != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		if (nodeMode == EXT2_S_IFDIR and (newParentPath == oldPath or newParentPath.starts_with(oldPath + "/"))) {
+			return false;
+		}
+
+		uint32_t newParentInodeNumber = 0;
+		Ext2Inode newParent {};
+
+		if (!lookupPath(newParentPath, newParentInodeNumber, newParent) or (newParent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		uint32_t oldParentInodeNumber = 0;
+		Ext2Inode oldParent {};
+
+		if (!lookupPath(oldParentPath, oldParentInodeNumber, oldParent) or (oldParent.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		const bool crossParent = oldParentInodeNumber != newParentInodeNumber;
+		const uint8_t fileType = nodeMode == EXT2_S_IFDIR ? 2 : 1;
+
+		if (nodeMode == EXT2_S_IFDIR and crossParent) {
+			++newParent.linksCount;
+		}
+
+		if (!addDirectoryEntry(newParentInodeNumber, newParent, inodeNumber, newName, fileType)) {
+			return false;
+		}
+
+		uint32_t removedInode = 0;
+
+		if (!removeDirectoryEntry(oldParentInodeNumber, oldParent, oldName, removedInode) or removedInode != inodeNumber) {
+			removeDirectoryEntry(newParentInodeNumber, newParent, newName, removedInode);
+
+			return false;
+		}
+
+		if (nodeMode == EXT2_S_IFDIR and crossParent) {
+			if (oldParent.linksCount > 0) {
+				--oldParent.linksCount;
+			}
+
+			if (!updateDirectoryEntryInode(inode, "..", newParentInodeNumber) or !writeInode(inodeNumber, inode) or
+			    !writeInode(oldParentInodeNumber, oldParent) or !writeInode(newParentInodeNumber, newParent)) {
+				return false;
+			}
 		}
 
 		return flushDevice(device.deviceId);
@@ -1188,6 +2166,211 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto writeHandler(void */*unused*/) -> void * {
+		auto data = FsWriteMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_WRITE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsWriteReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (data.length <= VFS_MAX_READ_SIZE and mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+				Ext2Inode inode {};
+				uint32_t inodeNumber = 0;
+
+				if (volume.load() and volume.lookupPath(path, inodeNumber, inode) and inodeNodeType(inode) == VFS_NODE_FILE and volume.writeFile(inodeNumber, inode, data.offset, data.data, data.length)) {
+					reply.success = true;
+					reply.bytesWritten = data.length;
+					reply.size = volume.fileSize(inode);
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_WRITE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto createHandler(void */*unused*/) -> void * {
+		auto data = FsCreateMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_CREATE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsCreateReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (data.nodeType == VFS_NODE_FILE and mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.createFile(path);
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_CREATE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto unlinkHandler(void */*unused*/) -> void * {
+		auto data = FsUnlinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_UNLINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsUnlinkReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.unlinkFile(path);
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_UNLINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto renameHandler(void */*unused*/) -> void * {
+		auto data = FsRenameMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_RENAME_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsRenameReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string oldPath;
+			string newPath;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.renameFile(oldPath, newPath);
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_RENAME_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto truncateHandler(void */*unused*/) -> void * {
+		auto data = FsTruncateMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_TRUNCATE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsTruncateReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+
+				if (volume.load() and volume.truncateFile(path, data.size)) {
+					reply.success = true;
+					reply.size = data.size;
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_TRUNCATE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto probeHandler(void */*unused*/) -> void * {
 		auto data = StorageFsProbeDeviceMsgData();
 		auto msg = hos_msg();
@@ -1252,12 +2435,22 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t statThread;
 	pthread_t readDirThread;
 	pthread_t readThread;
+	pthread_t writeThread;
+	pthread_t createThread;
+	pthread_t unlinkThread;
+	pthread_t renameThread;
+	pthread_t truncateThread;
 
 	if (pthread_create(&probeThread, nullptr, probeHandler, nullptr) != 0 or
 	    pthread_create(&mountThread, nullptr, mountHandler, nullptr) != 0 or
 	    pthread_create(&statThread, nullptr, statHandler, nullptr) != 0 or
 	    pthread_create(&readDirThread, nullptr, readDirHandler, nullptr) != 0 or
-	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0) {
+	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0 or
+	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
+	    pthread_create(&createThread, nullptr, createHandler, nullptr) != 0 or
+	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
+	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
+	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0) {
 		printf("Ext2: Failed to create message handlers.");
 		fflush(stdout);
 
@@ -1269,6 +2462,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(statThread);
 	pthread_detach(readDirThread);
 	pthread_detach(readThread);
+	pthread_detach(writeThread);
+	pthread_detach(createThread);
+	pthread_detach(unlinkThread);
+	pthread_detach(renameThread);
+	pthread_detach(truncateThread);
 
 	for (;;) {
 		usleep(100000);
