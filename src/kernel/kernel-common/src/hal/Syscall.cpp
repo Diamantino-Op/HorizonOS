@@ -1173,17 +1173,18 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const auto *thread = Scheduler::getCurrentThread();
-		const auto *process = thread != nullptr ? thread->getParent() : nullptr;
-		auto *kernelCtx = CommonMain::getInstance()->getKernelAllocContext();
-		auto *processCtx = process != nullptr ? process->getProcessContext() : nullptr;
-
-		if (thread == nullptr || process == nullptr || kernelCtx == nullptr || processCtx == nullptr) {
-			return EFAULT;
-		}
-
 		if (static_cast<bool>(isHhdm)) {
 			return EINVAL;
+		}
+
+		const auto *thread = Scheduler::getCurrentThread();
+		auto *process = thread != nullptr ? thread->getParent() : nullptr;
+		auto *kernelCtx = CommonMain::getInstance()->getKernelAllocContext();
+		auto *processCtx = process != nullptr ? process->getProcessContext() : nullptr;
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+
+		if (thread == nullptr || process == nullptr || kernelCtx == nullptr || processCtx == nullptr || scheduler == nullptr) {
+			return EFAULT;
 		}
 
 		const u64 alignedAddr = alignDown<u64>(physAddr, pageSize);
@@ -1199,7 +1200,6 @@ namespace kernel::common::hal {
 		}
 
 		const u64 alignedEnd = alignUp<u64>(endAddr, pageSize);
-		const u64 hhdmBase = CommonMain::getCurrentHhdm();
 		auto cacheMode = PageCacheMode::WriteBack;
 
 		switch (cacheModeRaw) {
@@ -1223,25 +1223,11 @@ namespace kernel::common::hal {
 				return EINVAL;
 		}
 
-		// TODO: Check if it should be used before re-mapping it
-
-		u64 retAddr = 0;
-
-		if (static_cast<bool>(isHhdm)) {
-			retAddr = physAddr + hhdmBase;
-		} else {
-			retAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize + pageOffset;
-		}
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		const u64 retAddr = process->topmostMappedPage + pageSize + pageOffset;
 
 		for (u64 i = alignedAddr; i < alignedEnd;) {
-			u64 virtAddr = 0;
-
-			if (static_cast<bool>(isHhdm)) {
-				virtAddr = i + hhdmBase;
-			} else {
-				virtAddr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
-			}
-
+			const u64 virtAddr = process->topmostMappedPage + pageSize;
 			const u64 remaining = alignedEnd - i;
 			u64 mappingSize = pageSize;
 			bool mapped = false;
@@ -1274,16 +1260,20 @@ namespace kernel::common::hal {
 				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
 			}
 
-			if (static_cast<bool>(isHhdm)) {
-				PageMap::invPg(virtAddr);
-			} else if (virtAddr > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
-				Scheduler::getCurrentThread()->getParent()->topmostMappedPage = virtAddr + mappingSize - pageSize;
+			if (virtAddr > process->topmostMappedPage) {
+				process->topmostMappedPage = virtAddr + mappingSize - pageSize;
+			}
+
+			if (processCtx->pageMap.getPhysAddress(virtAddr) == 0) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+				return ENOMEM;
 			}
 
 			i += mappingSize;
 		}
 
 		*ret = static_cast<long>(retAddr);
+		scheduler->getSchedLock()->unlock(schedPrevIF);
 
 		return 0;
 	}

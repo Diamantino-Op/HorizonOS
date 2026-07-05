@@ -307,13 +307,16 @@ namespace {
 		const uint64_t cpuId = currentCpuId();
 
 		auto data = NvmeWriteMsgData();
+
 		data.controllerId = device.controllerId;
 		data.nsid = device.nsid;
 		data.lba = lba;
 		data.pageCount = pageCount;
+
 		memcpy(data.pagePhysArray, pagePhysArray, pageCount * sizeof(uint64_t));
 
 		auto msg = hos_msg();
+
 		msg.type = NVME_WRITE_MSG_BASE + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
@@ -325,13 +328,17 @@ namespace {
 
 		auto reply = NvmeWriteReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_WRITE_MSG_BASE + cpuId };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(storagePort, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return ret == 0 and reply.success;
@@ -483,13 +490,14 @@ namespace {
 
 			for (uint32_t entryIndex = 0; entryIndex < pageEntryCount; ++entryIndex) {
 				const uint32_t globalEntryIndex = firstEntry + entryIndex;
-				const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entriesVirt + (entryIndex * header->partitionEntrySize));
-				const bool empty = ranges::all_of(entry->partitionTypeGuid.bytes, [](const uint8_t byte) {
+				const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entriesVirt + (static_cast<uint64_t>(entryIndex * header->partitionEntrySize)));
+				const bool empty = ranges::all_of(entry->partitionTypeGuid.bytes, [](const uint8_t byte) -> bool {
 					return byte == 0;
 				});
 
 				if (!empty and entry->firstLba <= entry->lastLba and entry->lastLba < rawDevice.blockCount) {
 					BlockDevice partition {};
+
 					partition.id = nextBlockDeviceId++;
 					partition.kind = BlockDeviceKind::Partition;
 					partition.driverPort = rawDevice.driverPort;
@@ -526,13 +534,15 @@ namespace {
 		fflush(stdout);
 	}
 
-	[[noreturn]] void *blockRegistrationHandler(void *) {
+	[[noreturn]] auto blockRegistrationHandler(void */*unused*/) -> void * {
 		auto data = StorageRegisterBlockDeviceMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -548,6 +558,7 @@ namespace {
 
 			if (validName(data.name, data.nameLength, sizeof(data.name), name) and data.blockSize != 0 and data.blockCount != 0) {
 				BlockDevice device {};
+
 				device.id = nextBlockDeviceId++;
 				device.kind = BlockDeviceKind::NvmeNamespace;
 				device.driverPort = data.driverPort;
@@ -559,7 +570,7 @@ namespace {
 				device.name = name;
 
 				{
-					scoped_lock lock(storageMutex);
+					const scoped_lock lock(storageMutex);
 					blockDevices.push_back(device);
 				}
 
@@ -568,26 +579,31 @@ namespace {
 
 				printf("Storage: Registered block device %s id=%lu blocks=%lu blockSize=%u.", device.name.c_str(), device.id, device.blockCount, device.blockSize);
 				fflush(stdout);
+
 				probeGpt(device);
 				notifyFsHandlers(device);
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
 
-	[[noreturn]] void *fsHandlerRegistrationHandler(void *) {
+	[[noreturn]] auto fsHandlerRegistrationHandler(void */*unused*/) -> void * {
 		auto data = StorageRegisterFsHandlerMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_REGISTER_FS_HANDLER_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -599,10 +615,12 @@ namespace {
 			}
 
 			string fsName;
+
 			auto reply = StorageRegisterFsHandlerReplyMsgData();
 
 			if (validName(data.fsName, data.fsNameLength, sizeof(data.fsName), fsName) and data.handlerPort != 0) {
 				FsHandler handler {};
+
 				handler.port = data.handlerPort;
 				handler.tid = data.tid;
 				handler.name = fsName;
@@ -610,8 +628,8 @@ namespace {
 				vector<BlockDevice> snapshot;
 
 				{
-					scoped_lock lock(storageMutex);
-					const bool exists = ranges::any_of(fsHandlers, [&](const FsHandler &curr) {
+					const scoped_lock lock(storageMutex);
+					const bool exists = ranges::any_of(fsHandlers, [&](const FsHandler &curr) -> bool {
 						return curr.name == fsName and curr.port == data.handlerPort;
 					});
 
@@ -623,6 +641,7 @@ namespace {
 				}
 
 				reply.success = true;
+
 				printf("Storage: Registered filesystem handler %s on port %lu.", fsName.c_str(), data.handlerPort);
 				fflush(stdout);
 
@@ -632,21 +651,25 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = STORAGE_REGISTER_FS_HANDLER_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
 
-	[[noreturn]] void *readHandler(void *) {
+	[[noreturn]] auto readHandler(void */*unused*/) -> void * {
 		auto data = StorageReadMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_READ_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -664,7 +687,7 @@ namespace {
 				BlockDevice nvmeDevice {};
 
 				{
-					scoped_lock lock(storageMutex);
+					const scoped_lock lock(storageMutex);
 					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
@@ -678,21 +701,25 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = STORAGE_READ_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
 
-	[[noreturn]] void *writeHandler(void *) {
+	[[noreturn]] auto writeHandler(void */*unused*/) -> void * {
 		auto data = StorageWriteMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_WRITE_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -709,7 +736,7 @@ namespace {
 				BlockDevice nvmeDevice {};
 
 				{
-					scoped_lock lock(storageMutex);
+					const scoped_lock lock(storageMutex);
 					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
@@ -723,21 +750,25 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = STORAGE_WRITE_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
 
-	[[noreturn]] void *flushHandler(void *) {
+	[[noreturn]] auto flushHandler(void */*unused*/) -> void * {
 		auto data = StorageFlushMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_FLUSH_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -752,7 +783,7 @@ namespace {
 			BlockDevice nvmeDevice {};
 
 			{
-				scoped_lock lock(storageMutex);
+				const scoped_lock lock(storageMutex);
 				const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
 
 				if (device != nullptr) {
@@ -772,25 +803,29 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = STORAGE_FLUSH_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
 		}
 	}
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	if (register_horizonos_port(reinterpret_cast<long *>(&storagePort)) != 0) {
 		printf("Storage: Failed to register port.");
 		fflush(stdout);
+
 		return 1;
 	}
 
 	if (!registerWithNameRegistry("StorageManager")) {
 		printf("Storage: Failed to register with Name/Registry.");
 		fflush(stdout);
+
 		return 1;
 	}
 
@@ -813,6 +848,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&flushThread, nullptr, flushHandler, nullptr) != 0) {
 		printf("Storage: Failed to create message handlers.");
 		fflush(stdout);
+
 		return 1;
 	}
 
@@ -822,5 +858,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(writeThread);
 	pthread_detach(flushThread);
 
-	for (;;) {}
+	for (;;) {
+		usleep(100000);
+	}
 }

@@ -39,7 +39,9 @@ namespace {
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
+		
 		memcpy(dst, name.data(), copyLen);
+
 		dst[copyLen] = '\0';
 		length = copyLen + 1;
 	}
@@ -50,6 +52,7 @@ namespace {
 
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
+
 		fillName(data.name, sizeof(data.name), data.nameLength, name);
 
 		msg.type = REGISTER_MSG_TYPE;
@@ -63,13 +66,17 @@ namespace {
 
 		auto reply = RegisterReplyMsgData();
 		auto replyMsg = hos_msg();
+
 		replyMsg.buffer = &reply;
 		replyMsg.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { REPLY_REGISTER_MSG_TYPE };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(ext2Port, &replyMsg, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return ret == 0 and reply.success;
@@ -78,24 +85,30 @@ namespace {
 	auto waitForStorage() -> uint64_t {
 		for (;;) {
 			auto check = CheckMsgData();
+
 			fillName(check.name, sizeof(check.name), check.nameLength, "StorageManager");
 
 			auto checkMsg = hos_msg();
+
 			checkMsg.type = CHECK_MSG_TYPE;
 			checkMsg.port = 1;
 			checkMsg.buffer = &check;
 			checkMsg.length = sizeof(check);
+
 			send_horizonos_message(ext2Port, 1, &checkMsg);
 
 			auto reply = CheckReplyMsgData();
 			auto recv = hos_msg();
+
 			recv.buffer = &reply;
 			recv.length = sizeof(reply);
 
 			auto filter = filter_options();
 			filter.whiteListTypes = new uint64_t[1] { REPLY_CHECK_MSG_TYPE };
 			filter.whiteListCount = 1;
+
 			const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+
 			delete[] filter.whiteListTypes;
 
 			if (ret == 0 and reply.exists) {
@@ -106,24 +119,31 @@ namespace {
 		}
 
 		auto get = GetMsgData();
+
 		fillName(get.name, sizeof(get.name), get.nameLength, "StorageManager");
 
 		auto getMsg = hos_msg();
+
 		getMsg.type = GET_MSG_TYPE;
 		getMsg.port = 1;
 		getMsg.buffer = &get;
 		getMsg.length = sizeof(get);
+
 		send_horizonos_message(ext2Port, 1, &getMsg);
 
 		auto reply = GetReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { REPLY_GET_MSG_TYPE };
 		filter.whiteListCount = 1;
+
 		receive_horizonos_message(ext2Port, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return reply.port;
@@ -131,12 +151,15 @@ namespace {
 
 	auto registerFsHandler() -> bool {
 		auto data = StorageRegisterFsHandlerMsgData();
+
 		data.handlerPort = ext2Port;
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
+
 		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, "ext2");
 
 		auto msg = hos_msg();
+
 		msg.type = STORAGE_REGISTER_FS_HANDLER_MSG_TYPE;
 		msg.port = storagePort;
 		msg.buffer = &data;
@@ -148,13 +171,17 @@ namespace {
 
 		auto reply = StorageRegisterFsHandlerReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_REGISTER_FS_HANDLER_REPLY_MSG_TYPE };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		return ret == 0 and reply.success;
@@ -167,19 +194,23 @@ namespace {
 
 		if (mmap_phys(phys, 0x1000, &virt, false) != 0) {
 			freePhysPage(phys);
+
 			phys = 0;
+
 			return false;
 		}
 
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
 		auto data = StorageReadMsgData();
+
 		data.deviceId = deviceId;
 		data.lba = lba;
 		data.pageCount = 1;
 		data.pagePhysArray[0] = phys;
 
 		auto msg = hos_msg();
+
 		msg.type = STORAGE_READ_MSG_TYPE;
 		msg.port = storagePort;
 		msg.buffer = &data;
@@ -188,34 +219,42 @@ namespace {
 		if (send_horizonos_message(ext2Port, storagePort, &msg) != 0) {
 			munmap(reinterpret_cast<void *>(virt), 0x1000);
 			freePhysPage(phys);
+
 			phys = 0;
 			virt = 0;
+
 			return false;
 		}
 
 		auto reply = StorageReadReplyMsgData();
 		auto recv = hos_msg();
+
 		recv.buffer = &reply;
 		recv.length = sizeof(reply);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_READ_REPLY_MSG_TYPE };
 		filter.whiteListCount = 1;
+
 		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+
 		delete[] filter.whiteListTypes;
 
 		if (ret != 0 or !reply.success) {
 			munmap(reinterpret_cast<void *>(virt), 0x1000);
 			freePhysPage(phys);
+
 			phys = 0;
 			virt = 0;
+
 			return false;
 		}
 
 		return true;
 	}
 
-	void freeDevicePage(uint64_t phys, uint64_t virt) {
+	void freeDevicePage(const uint64_t phys, const uint64_t virt) {
 		if (virt != 0) {
 			munmap(reinterpret_cast<void *>(virt), 0x1000);
 		}
@@ -245,21 +284,25 @@ namespace {
 
 		if (recognized) {
 			const uint64_t fsBlockSize = 1024ULL << superblock->logBlockSize;
+
 			printf("Ext2: Recognized %s id=%lu blocks=%u blockSize=%lu inodes=%u.", device.deviceName, device.deviceId, superblock->blocksCount, fsBlockSize, superblock->inodesCount);
 			fflush(stdout);
 		}
 
 		freeDevicePage(phys, virt);
+
 		return recognized;
 	}
 
-	[[noreturn]] void *probeHandler(void *) {
+	[[noreturn]] auto probeHandler(void */*unused*/) -> void * {
 		auto data = StorageFsProbeDeviceMsgData();
 		auto msg = hos_msg();
+
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
 		auto filter = filter_options();
+
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_FS_PROBE_DEVICE_MSG_TYPE };
 		filter.whiteListCount = 1;
 
@@ -287,12 +330,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	if (register_horizonos_port(reinterpret_cast<long *>(&ext2Port)) != 0) {
 		printf("Ext2: Failed to register port.");
 		fflush(stdout);
+
 		return 1;
 	}
 
 	if (!registerWithNameRegistry("Ext2")) {
 		printf("Ext2: Failed to register with Name/Registry.");
 		fflush(stdout);
+
 		return 1;
 	}
 
@@ -301,6 +346,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	if (!registerFsHandler()) {
 		printf("Ext2: Failed to register filesystem handler.");
 		fflush(stdout);
+
 		return 1;
 	}
 
@@ -308,6 +354,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	fflush(stdout);
 
 	pthread_t thread;
+
 	if (pthread_create(&thread, nullptr, probeHandler, nullptr) != 0) {
 		printf("Ext2: Failed to create probe handler.");
 		fflush(stdout);
@@ -317,5 +364,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	pthread_detach(thread);
 
-	for (;;) {}
+	for (;;) {
+		usleep(100000);
+	}
 }
