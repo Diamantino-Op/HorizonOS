@@ -16,6 +16,14 @@ using namespace std;
 namespace {
 	uint64_t ext2Port = 0;
 	uint64_t storagePort = 0;
+	uint64_t nextMountId = 1;
+
+	struct MountedExt2 {
+		uint64_t mountId {};
+		StorageFsProbeDeviceMsgData device {};
+	};
+
+	vector<MountedExt2> mounts;
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -24,6 +32,16 @@ namespace {
 
 		dst[copyLen] = '\0';
 		length = copyLen + 1;
+	}
+
+	auto validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
+		if (length == 0 or length > maxLength or name[length - 1] != '\0') {
+			return false;
+		}
+
+		out.assign(name, length - 1);
+
+		return true;
 	}
 
 	auto registerWithNameRegistry(const char *name) -> bool {
@@ -345,6 +363,43 @@ namespace {
 		return desc.inodeTableLo;
 	}
 
+	auto inodeNodeType(const Ext2Inode &inode) -> uint8_t {
+		switch (inode.mode & EXT2_S_IFMT) {
+			case EXT2_S_IFREG:
+				return VFS_NODE_FILE;
+			case EXT2_S_IFDIR:
+				return VFS_NODE_DIRECTORY;
+			default:
+				return VFS_NODE_UNKNOWN;
+		}
+	}
+
+	auto splitPath(const string &path) -> vector<string> {
+		vector<string> parts;
+		size_t start = 0;
+
+		while (start < path.size()) {
+			while (start < path.size() and path[start] == '/') {
+				++start;
+			}
+
+			const size_t end = path.find('/', start);
+			const size_t partEnd = end == string::npos ? path.size() : end;
+
+			if (partEnd > start) {
+				parts.emplace_back(path.substr(start, partEnd - start));
+			}
+
+			if (end == string::npos) {
+				break;
+			}
+
+			start = end + 1;
+		}
+
+		return parts;
+	}
+
 	Ext2Volume::Ext2Volume(const StorageFsProbeDeviceMsgData &device)
 		: device(device) {
 	}
@@ -532,6 +587,47 @@ namespace {
 		return true;
 	}
 
+	auto Ext2Volume::readFileRange(const Ext2Inode &inode, const uint64_t offset, const uint32_t length, vector<uint8_t> &out) -> bool {
+		const uint64_t fileSize = inodeFileSize(superblock, inode);
+
+		out.clear();
+
+		if (offset >= fileSize or length == 0) {
+			return true;
+		}
+
+		const uint64_t readSize = min<uint64_t>(length, fileSize - offset);
+
+		out.resize(readSize);
+
+		vector<uint8_t> blockBytes;
+		blockBytes.resize(blockSize);
+
+		uint64_t copied = 0;
+
+		while (copied < readSize) {
+			const uint64_t fileOffset = offset + copied;
+			const uint64_t fileBlock = fileOffset / blockSize;
+			const uint64_t blockOffset = fileOffset % blockSize;
+			const uint64_t toCopy = min<uint64_t>(blockSize - blockOffset, readSize - copied);
+			uint64_t fsBlock = 0;
+
+			if (resolveDataBlock(inode, fileBlock, fsBlock)) {
+				if (!readBlock(fsBlock, blockBytes.data())) {
+					return false;
+				}
+
+				memcpy(out.data() + copied, blockBytes.data() + blockOffset, toCopy);
+			} else {
+				memset(out.data() + copied, 0, toCopy);
+			}
+
+			copied += toCopy;
+		}
+
+		return true;
+	}
+
 	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) -> bool {
 		(void) inodeNumber;
 
@@ -616,6 +712,98 @@ namespace {
 		return false;
 	}
 
+	auto Ext2Volume::readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries) -> bool {
+		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+			return false;
+		}
+
+		vector<uint8_t> dirBytes;
+
+		if (!readFile(dir, dirBytes, inodeFileSize(superblock, dir))) {
+			return false;
+		}
+
+		entries.clear();
+		uint64_t offset = 0;
+
+		while (offset + 8 <= dirBytes.size() and entries.size() < VFS_MAX_DIR_ENTRIES) {
+			const auto *entry = reinterpret_cast<const Ext2DirEntry *>(dirBytes.data() + offset);
+
+			if (entry->recLen < 8 or offset + entry->recLen > dirBytes.size()) {
+				break;
+			}
+
+			if (entry->inode != 0 and entry->nameLen > 0 and entry->nameLen <= entry->recLen - 8) {
+				const string name(entry->name, entry->nameLen);
+
+				if (name != "." and name != "..") {
+					Ext2Inode child {};
+
+					if (readInode(entry->inode, child)) {
+						auto &out = entries.emplace_back();
+
+						fillName(out.name, sizeof(out.name), out.nameLength, name);
+						out.nodeType = inodeNodeType(child);
+						out.size = inodeFileSize(superblock, child);
+					}
+				}
+			}
+
+			offset += entry->recLen;
+		}
+
+		return true;
+	}
+
+	auto Ext2Volume::lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) -> bool {
+		inodeNumber = EXT2_ROOT_INO;
+
+		if (!readInode(inodeNumber, inode)) {
+			return false;
+		}
+
+		for (const string &part : splitPath(path)) {
+			if (part == "." or part.empty()) {
+				continue;
+			}
+
+			if (part == ".." or (inode.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
+				return false;
+			}
+
+			vector<uint8_t> dirBytes;
+
+			if (!readFile(inode, dirBytes, inodeFileSize(superblock, inode))) {
+				return false;
+			}
+
+			bool found = false;
+			uint64_t offset = 0;
+
+			while (offset + 8 <= dirBytes.size()) {
+				const auto *entry = reinterpret_cast<const Ext2DirEntry *>(dirBytes.data() + offset);
+
+				if (entry->recLen < 8 or offset + entry->recLen > dirBytes.size()) {
+					break;
+				}
+
+				if (entry->inode != 0 and entry->nameLen > 0 and entry->nameLen <= entry->recLen - 8 and string(entry->name, entry->nameLen) == part) {
+					inodeNumber = entry->inode;
+					found = readInode(inodeNumber, inode);
+					break;
+				}
+
+				offset += entry->recLen;
+			}
+
+			if (!found) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	void Ext2Volume::testReadFirstTextFile() {
 		uint32_t inodeNumber = 0;
 		string name;
@@ -667,6 +855,11 @@ namespace {
 	auto Ext2Volume::getBlockCount() const -> uint64_t {
 		return blocksCount(superblock);
 	}
+
+	auto Ext2Volume::fileSize(const Ext2Inode &inode) const -> uint64_t {
+		return inodeFileSize(superblock, inode);
+	}
+
 	auto Ext2Volume::readBlock(const uint64_t fsBlock, uint8_t *buffer) const -> bool {
 		if (blockSize == 0) {
 			return false;
@@ -776,6 +969,225 @@ namespace {
 		return true;
 	}
 
+	auto mountedDevice(const uint64_t mountId, StorageFsProbeDeviceMsgData &device) -> bool {
+		for (const auto &mount : mounts) {
+			if (mount.mountId == mountId) {
+				device = mount.device;
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	auto validPath(const char *path, const size_t length, string &out) -> bool {
+		if (length == 0 or length > VFS_MAX_PATH_LENGTH or path[length - 1] != '\0') {
+			return false;
+		}
+
+		out.assign(path, length - 1);
+
+		return true;
+	}
+
+	[[noreturn]] auto mountHandler(void */*unused*/) -> void * {
+		auto data = FsMountMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_MOUNT_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsMountReplyMsgData();
+			string deviceName;
+
+			if (data.deviceId != 0 and data.blockCount != 0 and data.blockSize != 0 and validName(data.deviceName, data.deviceNameLength, sizeof(data.deviceName), deviceName)) {
+				StorageFsProbeDeviceMsgData device {};
+
+				device.deviceId = data.deviceId;
+				device.blockCount = data.blockCount;
+				device.blockSize = data.blockSize;
+				fillName(device.deviceName, sizeof(device.deviceName), device.deviceNameLength, deviceName);
+
+				Ext2Volume volume(device);
+
+				if (volume.load()) {
+					const uint64_t mountId = nextMountId++;
+
+					mounts.push_back(MountedExt2 { mountId, device });
+					reply.success = true;
+					reply.mountId = mountId;
+
+					printf("Ext2: Mounted %s as mount %lu.", device.deviceName, mountId);
+					fflush(stdout);
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_MOUNT_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto statHandler(void */*unused*/) -> void * {
+		auto data = FsStatMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_STAT_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsStatReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+				Ext2Inode inode {};
+				uint32_t inodeNumber = 0;
+
+				if (volume.load() and volume.lookupPath(path, inodeNumber, inode)) {
+					(void) inodeNumber;
+					reply.success = true;
+					reply.nodeType = inodeNodeType(inode);
+					reply.size = volume.fileSize(inode);
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_STAT_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto readDirHandler(void */*unused*/) -> void * {
+		auto data = FsReadDirMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_READDIR_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsReadDirReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+				Ext2Inode inode {};
+				uint32_t inodeNumber = 0;
+				vector<VfsDirEntry> entries;
+
+				if (volume.load() and volume.lookupPath(path, inodeNumber, inode) and volume.readDirectory(inode, entries)) {
+					(void) inodeNumber;
+					reply.success = true;
+					reply.entryCount = min<uint32_t>(entries.size(), VFS_MAX_DIR_ENTRIES);
+
+					for (uint32_t i = 0; i < reply.entryCount; ++i) {
+						reply.entries[i] = entries[i];
+					}
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_READDIR_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
+	[[noreturn]] auto readHandler(void */*unused*/) -> void * {
+		auto data = FsReadMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_READ_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsReadReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+
+			if (data.length <= VFS_MAX_READ_SIZE and mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+				Ext2Inode inode {};
+				uint32_t inodeNumber = 0;
+				vector<uint8_t> bytes;
+
+				if (volume.load() and volume.lookupPath(path, inodeNumber, inode) and inodeNodeType(inode) == VFS_NODE_FILE and volume.readFileRange(inode, data.offset, data.length, bytes)) {
+					(void) inodeNumber;
+					reply.bytesRead = bytes.size();
+					memcpy(reply.data, bytes.data(), reply.bytesRead);
+					reply.success = true;
+				}
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_READ_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto probeHandler(void */*unused*/) -> void * {
 		auto data = StorageFsProbeDeviceMsgData();
 		auto msg = hos_msg();
@@ -835,16 +1247,28 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	printf("Ext2: Registered handler on port %lu with Storage port %lu.", ext2Port, storagePort);
 	fflush(stdout);
 
-	pthread_t thread;
+	pthread_t probeThread;
+	pthread_t mountThread;
+	pthread_t statThread;
+	pthread_t readDirThread;
+	pthread_t readThread;
 
-	if (pthread_create(&thread, nullptr, probeHandler, nullptr) != 0) {
-		printf("Ext2: Failed to create probe handler.");
+	if (pthread_create(&probeThread, nullptr, probeHandler, nullptr) != 0 or
+	    pthread_create(&mountThread, nullptr, mountHandler, nullptr) != 0 or
+	    pthread_create(&statThread, nullptr, statHandler, nullptr) != 0 or
+	    pthread_create(&readDirThread, nullptr, readDirHandler, nullptr) != 0 or
+	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0) {
+		printf("Ext2: Failed to create message handlers.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	pthread_detach(thread);
+	pthread_detach(probeThread);
+	pthread_detach(mountThread);
+	pthread_detach(statThread);
+	pthread_detach(readDirThread);
+	pthread_detach(readThread);
 
 	for (;;) {
 		usleep(100000);

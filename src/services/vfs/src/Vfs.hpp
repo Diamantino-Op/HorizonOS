@@ -15,6 +15,8 @@ enum class VfsVolumeKind : uint8_t {
 struct VfsVolume {
 	VfsVolumeKind kind {};
 	uint64_t deviceId {};
+	uint64_t fsPort {};
+	uint64_t mountId {};
 	uint64_t blockCount {};
 	uint32_t blockSize {};
 	string name;

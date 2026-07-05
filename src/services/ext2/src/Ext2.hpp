@@ -105,13 +105,17 @@ namespace {
 		auto writeInode(uint32_t inodeNumber, const Ext2Inode &inode) -> bool;
 		auto resolveDataBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) -> bool;
 		auto readFile(const Ext2Inode &inode, vector<uint8_t> &out, uint64_t maxBytes = 65536) -> bool;
+		auto readFileRange(const Ext2Inode &inode, uint64_t offset, uint32_t length, vector<uint8_t> &out) -> bool;
 		auto writeFileOverwrite(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
 		auto findFirstRootTextFile(uint32_t &inodeNumber, string &name) -> bool;
+		auto lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) -> bool;
+		auto readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries) -> bool;
 		void testReadFirstTextFile();
 
 		auto getBlockSize() const -> uint64_t;
 		auto getInodeCount() const -> uint32_t;
 		auto getBlockCount() const -> uint64_t;
+		auto fileSize(const Ext2Inode &inode) const -> uint64_t;
 
 	private:
 		auto readBlock(uint64_t fsBlock, uint8_t *buffer) const -> bool;
