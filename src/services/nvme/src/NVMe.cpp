@@ -57,6 +57,7 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
             //fflush(stdout);
 
             NvmeReadReplyMsgData reply {};
+            reply.requestId = req->requestId;
             reply.pageCount = req->pageCount;
 
             if (req->controllerId < coreStruct->controllerDrivers->size()) {
@@ -65,11 +66,12 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
 
             auto replyMsg   = hos_msg();
             replyMsg.type   = NVME_REPLY_READ_MSG_BASE + coreStruct->cpuId;
-            replyMsg.port   = recvMsg.src_port;
+            const uint64_t replyPort = req->replyPort != 0 ? req->replyPort : recvMsg.src_port;
+            replyMsg.port   = replyPort;
             replyMsg.buffer = &reply;
             replyMsg.length = sizeof(reply);
 
-            send_horizonos_message(coreStruct->nvmePort, recvMsg.src_port, &replyMsg);
+            send_horizonos_message(coreStruct->nvmePort, replyPort, &replyMsg);
         } else if (recvMsg.type == writeType) {
             const auto* req = reinterpret_cast<NvmeWriteMsgData*>(msgBuf);
 
@@ -77,6 +79,7 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
             //fflush(stdout);
 
             NvmeWriteReplyMsgData reply {};
+            reply.requestId = req->requestId;
 
             if (req->controllerId < coreStruct->controllerDrivers->size()) {
                 reply.success = (*coreStruct->controllerDrivers)[req->controllerId].write(req->nsid, req->lba, req->pagePhysArray, req->pageCount, coreStruct->coreSlot);
@@ -84,11 +87,12 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
 
             auto replyMsg   = hos_msg();
             replyMsg.type   = NVME_REPLY_WRITE_MSG_BASE + coreStruct->cpuId;
-            replyMsg.port   = recvMsg.src_port;
+            const uint64_t replyPort = req->replyPort != 0 ? req->replyPort : recvMsg.src_port;
+            replyMsg.port   = replyPort;
             replyMsg.buffer = &reply;
             replyMsg.length = sizeof(reply);
 
-            send_horizonos_message(coreStruct->nvmePort, recvMsg.src_port, &replyMsg);
+            send_horizonos_message(coreStruct->nvmePort, replyPort, &replyMsg);
         } else if (recvMsg.type == flushType) {
             const auto* req = reinterpret_cast<NvmeFlushMsgData*>(msgBuf);
 
@@ -96,6 +100,7 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
             //fflush(stdout);
 
             NvmeFlushReplyMsgData reply {};
+            reply.requestId = req->requestId;
 
             if (req->controllerId < coreStruct->controllerDrivers->size()) {
                 reply.success = (*coreStruct->controllerDrivers)[req->controllerId].flush(req->nsid, coreStruct->coreSlot);
@@ -103,11 +108,12 @@ auto NvmeDriver::coreHandler(void *ctx) -> void * {
 
             auto replyMsg   = hos_msg();
             replyMsg.type   = NVME_REPLY_FLUSH_MSG_BASE + coreStruct->cpuId;
-            replyMsg.port   = recvMsg.src_port;
+            const uint64_t replyPort = req->replyPort != 0 ? req->replyPort : recvMsg.src_port;
+            replyMsg.port   = replyPort;
             replyMsg.buffer = &reply;
             replyMsg.length = sizeof(reply);
 
-            send_horizonos_message(coreStruct->nvmePort, recvMsg.src_port, &replyMsg);
+            send_horizonos_message(coreStruct->nvmePort, replyPort, &replyMsg);
         }
     }
 }

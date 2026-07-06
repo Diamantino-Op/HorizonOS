@@ -45,3 +45,9 @@ ext2_exe = ext2_proj.get_variable('ext2_exe')
 vfs_proj = subproject('vfs', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 vfs_exe = vfs_proj.get_variable('vfs_exe')
+
+# XHCI Service
+
+xhci_proj = subproject('xhci', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+xhci_exe = xhci_proj.get_variable('xhci_exe')

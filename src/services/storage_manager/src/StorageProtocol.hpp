@@ -74,6 +74,8 @@ struct GetReplyMsgData {
 };
 
 struct NvmeReadMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 	uint64_t lba {};
@@ -82,11 +84,14 @@ struct NvmeReadMsgData {
 };
 
 struct NvmeReadReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 	uint32_t pageCount {};
 };
 
 struct NvmeWriteMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 	uint64_t lba {};
@@ -95,15 +100,19 @@ struct NvmeWriteMsgData {
 };
 
 struct NvmeWriteReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 
 struct NvmeFlushMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 };
 
 struct NvmeFlushReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 
@@ -136,6 +145,8 @@ struct StorageRegisterFsHandlerReplyMsgData {
 };
 
 struct StorageReadMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint64_t deviceId {};
 	uint64_t lba {};
 	uint32_t pageCount {};
@@ -143,11 +154,14 @@ struct StorageReadMsgData {
 };
 
 struct StorageReadReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 	uint32_t pageCount {};
 };
 
 struct StorageWriteMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint64_t deviceId {};
 	uint64_t lba {};
 	uint32_t pageCount {};
@@ -155,14 +169,18 @@ struct StorageWriteMsgData {
 };
 
 struct StorageWriteReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 
 struct StorageFlushMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint64_t deviceId {};
 };
 
 struct StorageFlushReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 

@@ -72,6 +72,8 @@ struct PciDevice {
 // Read/write carry a fixed-size array of physical page addresses.
 // pageCount <= NVME_MAX_PAGES_PER_MSG. Pages are NOT assumed contiguous.
 struct NvmeReadMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 	uint64_t lba {};
@@ -80,11 +82,14 @@ struct NvmeReadMsgData {
 };
 
 struct NvmeReadReplyMsgData {
+	uint64_t requestId {};
 	bool     success {};
 	uint32_t pageCount {};
 };
 
 struct NvmeWriteMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 	uint64_t lba {};
@@ -93,15 +98,19 @@ struct NvmeWriteMsgData {
 };
 
 struct NvmeWriteReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 
 struct NvmeFlushMsgData {
+	uint64_t replyPort {};
+	uint64_t requestId {};
 	uint32_t controllerId {};
 	uint32_t nsid {};
 };
 
 struct NvmeFlushReplyMsgData {
+	uint64_t requestId {};
 	bool success {};
 };
 

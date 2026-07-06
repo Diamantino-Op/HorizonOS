@@ -316,9 +316,9 @@ namespace {
 				replyMsg.buffer = &reply;
 				replyMsg.length = sizeof(reply);
 				sendDeviceReply(msg.src_port, replyMsg);
-				deviceRequestsHandled++;
+				++deviceRequestsHandled;
 			} else if (msg.type == VFS_DEV_WRITE_MSG_TYPE) {
-				auto *request = reinterpret_cast<VfsDeviceWriteMsgData *>(requestBuffer);
+				const auto *request = reinterpret_cast<VfsDeviceWriteMsgData *>(requestBuffer);
 				auto reply = VfsDeviceWriteReplyMsgData();
 
 				reply.success = bytesEqual(request->data, request->length, "device-write");
@@ -330,9 +330,9 @@ namespace {
 				replyMsg.buffer = &reply;
 				replyMsg.length = sizeof(reply);
 				sendDeviceReply(msg.src_port, replyMsg);
-				deviceRequestsHandled++;
+				++deviceRequestsHandled;
 			} else if (msg.type == VFS_DEV_IOCTL_MSG_TYPE) {
-				auto *request = reinterpret_cast<VfsDeviceIoctlMsgData *>(requestBuffer);
+				const auto *request = reinterpret_cast<VfsDeviceIoctlMsgData *>(requestBuffer);
 				auto reply = VfsDeviceIoctlReplyMsgData();
 
 				reply.success = request->request == TEST_IOCTL_REQUEST and bytesEqual(request->input, request->inputLength, "ping");
@@ -347,7 +347,7 @@ namespace {
 				replyMsg.buffer = &reply;
 				replyMsg.length = sizeof(reply);
 				sendDeviceReply(msg.src_port, replyMsg);
-				deviceRequestsHandled++;
+				++deviceRequestsHandled;
 			}
 		}
 

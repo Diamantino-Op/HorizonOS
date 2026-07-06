@@ -16,8 +16,11 @@ using namespace std;
 namespace {
 	uint64_t ext2Port = 0;
 	uint64_t storagePort = 0;
+	uint64_t storageReplyPort = 0;
+	uint64_t nextStorageRequestId = 1;
 	uint64_t nextMountId = 1;
 	pthread_mutex_t storageRpcLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t storageRequestIdLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t mountsLock = PTHREAD_MUTEX_INITIALIZER;
 
 	struct MountedExt2 {
@@ -41,6 +44,11 @@ namespace {
 		ScopedMutex(const ScopedMutex &) = delete;
 		auto operator=(const ScopedMutex &) -> ScopedMutex & = delete;
 	};
+
+	auto allocateStorageRequestId() -> uint64_t {
+		ScopedMutex lock(storageRequestIdLock);
+		return nextStorageRequestId++;
+	}
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -217,10 +225,13 @@ namespace {
 
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
-		ScopedMutex lock(storageRpcLock);
+		ScopedMutex rpcLock(storageRpcLock);
+		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageReadMsgData();
 
+		data.replyPort = storageReplyPort;
+		data.requestId = requestId;
 		data.deviceId = deviceId;
 		data.lba = lba;
 		data.pageCount = 1;
@@ -233,7 +244,7 @@ namespace {
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
-		if (send_horizonos_message(ext2Port, storagePort, &msg) != 0) {
+		if (send_horizonos_message(storageReplyPort, storagePort, &msg) != 0) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
@@ -254,11 +265,11 @@ namespace {
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_READ_REPLY_MSG_TYPE };
 		filter.whiteListCount = 1;
 
-		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+		const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
 
 		delete[] filter.whiteListTypes;
 
-		if (ret != 0 or !reply.success) {
+		if (ret != 0 or reply.requestId != requestId or !reply.success) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
@@ -272,10 +283,13 @@ namespace {
 	}
 
 	auto writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
-		ScopedMutex lock(storageRpcLock);
+		ScopedMutex rpcLock(storageRpcLock);
+		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageWriteMsgData();
 
+		data.replyPort = storageReplyPort;
+		data.requestId = requestId;
 		data.deviceId = deviceId;
 		data.lba = lba;
 		data.pageCount = 1;
@@ -288,7 +302,7 @@ namespace {
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
-		if (send_horizonos_message(ext2Port, storagePort, &msg) != 0) {
+		if (send_horizonos_message(storageReplyPort, storagePort, &msg) != 0) {
 			return false;
 		}
 
@@ -303,18 +317,21 @@ namespace {
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_WRITE_REPLY_MSG_TYPE };
 		filter.whiteListCount = 1;
 
-		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+		const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
 
 		delete[] filter.whiteListTypes;
 
-		return ret == 0 and reply.success;
+		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
 	auto flushDevice(const uint64_t deviceId) -> bool {
-		ScopedMutex lock(storageRpcLock);
+		ScopedMutex rpcLock(storageRpcLock);
+		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageFlushMsgData();
 
+		data.replyPort = storageReplyPort;
+		data.requestId = requestId;
 		data.deviceId = deviceId;
 
 		auto msg = hos_msg();
@@ -324,7 +341,7 @@ namespace {
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
-		if (send_horizonos_message(ext2Port, storagePort, &msg) != 0) {
+		if (send_horizonos_message(storageReplyPort, storagePort, &msg) != 0) {
 			return false;
 		}
 
@@ -339,11 +356,11 @@ namespace {
 		filter.whiteListTypes = new uint64_t[1] { STORAGE_FLUSH_REPLY_MSG_TYPE };
 		filter.whiteListCount = 1;
 
-		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+		const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
 
 		delete[] filter.whiteListTypes;
 
-		return ret == 0 and reply.success;
+		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
 	void freeDevicePage(const uint64_t phys, const uint64_t virt) {
@@ -2994,6 +3011,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 
 	storagePort = waitForStorage();
+
+	if (register_horizonos_port(reinterpret_cast<long *>(&storageReplyPort)) != 0 or storageReplyPort == 0) {
+		printf("Ext2: Failed to register Storage reply port.");
+		fflush(stdout);
+
+		return 1;
+	}
 
 	if (!registerFsHandler()) {
 		printf("Ext2: Failed to register filesystem handler.");
