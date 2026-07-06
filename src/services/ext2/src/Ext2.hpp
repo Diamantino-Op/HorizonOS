@@ -113,6 +113,7 @@ namespace {
 		auto createDirectory(const string &path) -> bool;
 		auto createHardLink(const string &oldPath, const string &newPath) -> bool;
 		auto createSymlink(const string &target, const string &linkPath) -> bool;
+		auto readSymlink(const string &linkPath, string &target) -> bool;
 		auto unlinkFile(const string &path) -> bool;
 		auto renameFile(const string &oldPath, const string &newPath) -> bool;
 		auto truncateFile(const string &path, uint64_t size) -> bool;

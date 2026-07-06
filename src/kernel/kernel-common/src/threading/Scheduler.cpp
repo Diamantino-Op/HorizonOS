@@ -5,6 +5,7 @@
 #include "IDAllocator.hpp"
 #include "Main.hpp"
 #include "PortMessaging.hpp"
+#include "hal/Syscall.hpp"
 #include "programs/Elf.hpp"
 #include "utils/Asm.hpp"
 
@@ -573,6 +574,7 @@ namespace kernel::common::threading {
 			return;
 		}
 
+		const u16 killedPid = process->getId();
 		const bool prevIF = this->schedLock.lock();
 
 		if (process->isTerminating()) {
@@ -589,6 +591,7 @@ namespace kernel::common::threading {
 
 		process->setTerminating(true);
 		this->schedLock.unlock(prevIF);
+		hal::SyscallManager::notifyProcessKilled(killedPid);
 
 		const LinkedListEntry<Thread> *tmpEntry = process->threadList.getFirst();
 
@@ -652,7 +655,10 @@ namespace kernel::common::threading {
 			return;
 		}
 
+		const u16 killedTid = thread->getId();
+		const u16 killedPid = thread->getParent() != nullptr ? thread->getParent()->getId() : 0;
 		const bool prevIF = this->schedLock.lock();
+		bool notifyKilled = false;
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
@@ -669,6 +675,7 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::TERMINATED);
 		PortMessaging::removeThread(thread);
 		Futex::removeThread(thread->getId());
+		notifyKilled = true;
 
 		if (!shouldReschedule) {
 			if (this->removeThread(thread)) {
@@ -677,6 +684,10 @@ namespace kernel::common::threading {
 		}
 
 		this->schedLock.unlock(prevIF);
+
+		if (notifyKilled) {
+			hal::SyscallManager::notifyThreadKilled(killedPid, killedTid);
+		}
 
 		if (shouldReschedule) {
 			ExecutionNode::reSchedule();

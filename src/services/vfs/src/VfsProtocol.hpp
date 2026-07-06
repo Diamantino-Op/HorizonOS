@@ -40,6 +40,8 @@ constexpr uint64_t FS_LINK_MSG_TYPE        = 0x80016;
 constexpr uint64_t FS_LINK_REPLY_MSG_TYPE  = 0x80017;
 constexpr uint64_t FS_SYMLINK_MSG_TYPE     = 0x80018;
 constexpr uint64_t FS_SYMLINK_REPLY_MSG_TYPE = 0x80019;
+constexpr uint64_t FS_READLINK_MSG_TYPE    = 0x8001A;
+constexpr uint64_t FS_READLINK_REPLY_MSG_TYPE = 0x8001B;
 
 constexpr uint64_t VFS_STAT_MSG_TYPE       = 0x90000;
 constexpr uint64_t VFS_STAT_REPLY_MSG_TYPE = 0x90001;
@@ -95,6 +97,16 @@ constexpr uint64_t VFS_IOCTL_MSG_TYPE      = 0x90032;
 constexpr uint64_t VFS_IOCTL_REPLY_MSG_TYPE = 0x90033;
 constexpr uint64_t VFS_HANDLE_READDIR_MSG_TYPE = 0x90034;
 constexpr uint64_t VFS_HANDLE_READDIR_REPLY_MSG_TYPE = 0x90035;
+constexpr uint64_t VFS_READLINK_MSG_TYPE   = 0x90036;
+constexpr uint64_t VFS_READLINK_REPLY_MSG_TYPE = 0x90037;
+constexpr uint64_t VFS_HANDLE_TRUNCATE_MSG_TYPE = 0x90038;
+constexpr uint64_t VFS_HANDLE_TRUNCATE_REPLY_MSG_TYPE = 0x90039;
+constexpr uint64_t VFS_DEV_READ_MSG_TYPE   = 0x9003A;
+constexpr uint64_t VFS_DEV_READ_REPLY_MSG_TYPE = 0x9003B;
+constexpr uint64_t VFS_DEV_WRITE_MSG_TYPE  = 0x9003C;
+constexpr uint64_t VFS_DEV_WRITE_REPLY_MSG_TYPE = 0x9003D;
+constexpr uint64_t VFS_DEV_IOCTL_MSG_TYPE  = 0x9003E;
+constexpr uint64_t VFS_DEV_IOCTL_REPLY_MSG_TYPE = 0x9003F;
 
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
@@ -233,6 +245,7 @@ struct VfsDirEntry {
 	size_t nameLength {};
 	uint8_t nodeType {};
 	uint64_t size {};
+	uint64_t nodeId {};
 };
 
 struct FsReadDirReplyMsgData {
@@ -373,6 +386,19 @@ struct FsSymlinkReplyMsgData {
 	uint64_t nodeId {};
 };
 
+struct FsReadLinkMsgData {
+	uint64_t mountId {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsReadLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
+};
+
 struct VfsStatMsgData {
 	char path[VFS_MAX_PATH_LENGTH] {};
 	size_t pathLength {};
@@ -486,6 +512,18 @@ struct VfsTruncateReplyMsgData {
 	uint32_t status {};
 };
 
+struct VfsReadLinkMsgData {
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct VfsReadLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
+};
+
 struct VfsOpenMsgData {
 	uint32_t flags {};
 	char path[VFS_MAX_PATH_LENGTH] {};
@@ -560,6 +598,60 @@ struct VfsHandleReadDirReplyMsgData {
 	uint64_t position {};
 	bool hasMore {};
 	uint32_t status {};
+};
+
+struct VfsHandleTruncateMsgData {
+	uint64_t handle {};
+	uint64_t size {};
+};
+
+struct VfsHandleTruncateReplyMsgData {
+	bool success {};
+	uint64_t size {};
+	uint32_t status {};
+};
+
+struct VfsDeviceReadMsgData {
+	char name[VFS_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+	uint64_t offset {};
+	uint32_t length {};
+};
+
+struct VfsDeviceReadReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint32_t bytesRead {};
+	uint8_t data[VFS_MAX_READ_SIZE] {};
+};
+
+struct VfsDeviceWriteMsgData {
+	char name[VFS_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+	uint64_t offset {};
+	uint32_t length {};
+	uint8_t data[VFS_MAX_READ_SIZE] {};
+};
+
+struct VfsDeviceWriteReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint32_t bytesWritten {};
+};
+
+struct VfsDeviceIoctlMsgData {
+	char name[VFS_MAX_NAME_LENGTH] {};
+	size_t nameLength {};
+	uint32_t request {};
+	uint32_t inputLength {};
+	uint8_t input[VFS_MAX_READ_SIZE] {};
+};
+
+struct VfsDeviceIoctlReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	uint32_t outputLength {};
+	uint8_t output[VFS_MAX_READ_SIZE] {};
 };
 
 struct VfsMountRefreshMsgData {

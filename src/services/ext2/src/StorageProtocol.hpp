@@ -48,6 +48,8 @@ constexpr uint64_t FS_LINK_MSG_TYPE        = 0x80016;
 constexpr uint64_t FS_LINK_REPLY_MSG_TYPE  = 0x80017;
 constexpr uint64_t FS_SYMLINK_MSG_TYPE     = 0x80018;
 constexpr uint64_t FS_SYMLINK_REPLY_MSG_TYPE = 0x80019;
+constexpr uint64_t FS_READLINK_MSG_TYPE    = 0x8001A;
+constexpr uint64_t FS_READLINK_REPLY_MSG_TYPE = 0x8001B;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
@@ -204,6 +206,7 @@ struct VfsDirEntry {
 	size_t nameLength {};
 	uint8_t nodeType {};
 	uint64_t size {};
+	uint64_t nodeId {};
 };
 
 struct FsReadDirReplyMsgData {
@@ -342,6 +345,19 @@ struct FsSymlinkReplyMsgData {
 	bool success {};
 	uint32_t status {};
 	uint64_t nodeId {};
+};
+
+struct FsReadLinkMsgData {
+	uint64_t mountId {};
+	char path[VFS_MAX_PATH_LENGTH] {};
+	size_t pathLength {};
+};
+
+struct FsReadLinkReplyMsgData {
+	bool success {};
+	uint32_t status {};
+	char target[VFS_MAX_PATH_LENGTH] {};
+	size_t targetLength {};
 };
 
 #endif

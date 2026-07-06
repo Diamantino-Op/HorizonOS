@@ -1653,6 +1653,38 @@ namespace {
 		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 7);
 	}
 
+	auto Ext2Volume::readSymlink(const string &linkPath, string &target) -> bool {
+		Ext2Inode inode {};
+		uint32_t inodeNumber = 0;
+
+		if (!lookupPath(linkPath, inodeNumber, inode) or inodeNodeType(inode) != VFS_NODE_SYMLINK) {
+			return false;
+		}
+
+		(void) inodeNumber;
+
+		const uint64_t size = inodeFileSize(superblock, inode);
+
+		if (size >= VFS_MAX_PATH_LENGTH) {
+			return false;
+		}
+
+		if (size <= sizeof(inode.block) and inode.blocks == 0) {
+			target.assign(reinterpret_cast<const char *>(inode.block), size);
+			return true;
+		}
+
+		vector<uint8_t> bytes;
+
+		if (!readFileRange(inode, 0, static_cast<uint32_t>(size), bytes)) {
+			return false;
+		}
+
+		target.assign(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+
+		return true;
+	}
+
 	auto Ext2Volume::truncateFile(const string &path, const uint64_t size) -> bool {
 		uint32_t inodeNumber = 0;
 		Ext2Inode inode {};
@@ -1936,6 +1968,7 @@ namespace {
 						fillName(out.name, sizeof(out.name), out.nameLength, name);
 						out.nodeType = inodeNodeType(child);
 						out.size = inodeFileSize(superblock, child);
+						out.nodeId = entry->inode;
 					}
 				}
 			}
@@ -2696,6 +2729,53 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto readlinkHandler(void */*unused*/) -> void * {
+		auto data = FsReadLinkMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { FS_READLINK_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(ext2Port, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = FsReadLinkReplyMsgData();
+			StorageFsProbeDeviceMsgData device {};
+			string path;
+			string target;
+
+			if (mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+				Ext2Volume volume(device);
+
+				reply.success = volume.load() and volume.readSymlink(path, target);
+				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
+
+				if (reply.success) {
+					fillName(reply.target, sizeof(reply.target), reply.targetLength, target);
+				}
+			} else {
+				reply.status = VFS_STATUS_INVALID;
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = FS_READLINK_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto unlinkHandler(void */*unused*/) -> void * {
 		auto data = FsUnlinkMsgData();
 		auto msg = hos_msg();
@@ -2890,6 +2970,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t syncThread;
 	pthread_t linkThread;
 	pthread_t symlinkThread;
+	pthread_t readlinkThread;
 
 	if (pthread_create(&probeThread, nullptr, probeHandler, nullptr) != 0 or
 	    pthread_create(&mountThread, nullptr, mountHandler, nullptr) != 0 or
@@ -2902,6 +2983,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&syncThread, nullptr, syncHandler, nullptr) != 0 or
 	    pthread_create(&linkThread, nullptr, linkHandler, nullptr) != 0 or
 	    pthread_create(&symlinkThread, nullptr, symlinkHandler, nullptr) != 0 or
+	    pthread_create(&readlinkThread, nullptr, readlinkHandler, nullptr) != 0 or
 	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
 	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
 	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0) {
@@ -2922,6 +3004,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(syncThread);
 	pthread_detach(linkThread);
 	pthread_detach(symlinkThread);
+	pthread_detach(readlinkThread);
 	pthread_detach(unlinkThread);
 	pthread_detach(renameThread);
 	pthread_detach(truncateThread);

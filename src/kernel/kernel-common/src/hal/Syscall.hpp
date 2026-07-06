@@ -62,9 +62,12 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 40;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 42;
+	constexpr u64 horizonSyscallAmount = 45;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
+	constexpr u64 kernelEventMsgType = 0x1100;
+	constexpr u64 kernelEventThreadKilled = 1;
+	constexpr u64 kernelEventProcessKilled = 2;
 
 	struct KernelSysInfo {
 		long uptime;
@@ -118,6 +121,17 @@ namespace kernel::common::hal {
 		u64 irqNum {};
 		u64 cpuId {};
 		bool isIrq {};
+	};
+
+	struct KernelEventRegistration {
+		u64 port {};
+		u64 eventMask {};
+	};
+
+	struct KernelEventData {
+		u64 eventType {};
+		u64 pid {};
+		u64 tid {};
 	};
 
 	struct HosCpuInfo {
@@ -174,6 +188,12 @@ namespace kernel::common::hal {
     	static auto syscallFreePhysPage(long *, u64 pageAddr, u64, u64, u64, u64, u64) -> u64;
     	static auto syscallGetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
     	static auto syscallSetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
+    	static auto syscallRegisterVfs(long *, u64 port, u64, u64, u64, u64, u64) -> u64;
+    	static auto syscallRegisterEventHandler(long *, u64 port, u64 eventMask, u64, u64, u64, u64) -> u64;
+    	static auto syscallVfsRequest(long *ret, u64 requestType, u64 request, u64 requestLength, u64 reply, u64 replyLength, u64) -> u64;
+
+    	static void notifyThreadKilled(u64 pid, u64 tid);
+    	static void notifyProcessKilled(u64 pid);
 
     private:
     	static void setGsBase(u64 gsBase);
@@ -187,6 +207,8 @@ namespace kernel::common::hal {
 
     public:
     	static LinkedList<IrqRegistration> irqRegistrations;
+    	static LinkedList<KernelEventRegistration> eventRegistrations;
+    	static u64 vfsPort;
 
 		static SyscallFun horizonSyscalls[horizonSyscallAmount];
     	static SyscallFun linuxSyscalls[linuxSyscallAmount];

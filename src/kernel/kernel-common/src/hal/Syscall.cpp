@@ -286,6 +286,8 @@ namespace kernel::common::hal {
 	}
 
 	LinkedList<IrqRegistration> SyscallManager::irqRegistrations {};
+	LinkedList<KernelEventRegistration> SyscallManager::eventRegistrations {};
+	u64 SyscallManager::vfsPort {};
 
 	SyscallFun SyscallManager::horizonSyscalls[horizonSyscallAmount] {};
 	SyscallFun SyscallManager::linuxSyscalls[linuxSyscallAmount] {};
@@ -333,8 +335,49 @@ namespace kernel::common::hal {
 		horizonSyscalls[39] = &syscallFreePhysPage;
 		horizonSyscalls[40] = &syscallGetAffinity;
 		horizonSyscalls[41] = &syscallSetAffinity;
+		horizonSyscalls[42] = &syscallRegisterVfs;
+		horizonSyscalls[43] = &syscallRegisterEventHandler;
+		horizonSyscalls[44] = &syscallVfsRequest;
 
 		initArch();
+	}
+
+	namespace {
+		auto kernelClientPortForCurrentThread() -> u64 {
+			const Thread *thread = Scheduler::getCurrentThread();
+			const u64 tid = thread != nullptr ? thread->getId() : 0;
+
+			return 0xffff000000000000ULL | tid;
+		}
+
+		void notifyKernelEventHandlers(const u64 eventType, const u64 pid, const u64 tid) {
+			KernelEventData data {};
+			data.eventType = eventType;
+			data.pid = pid;
+			data.tid = tid;
+
+			MessageHeader msg {};
+			msg.port = 0;
+			msg.type = kernelEventMsgType;
+			msg.buffer = reinterpret_cast<u64 *>(&data);
+			msg.length = sizeof(data);
+
+			for (const auto &registration : SyscallManager::eventRegistrations) {
+				if ((registration.eventMask & eventType) == 0) {
+					continue;
+				}
+
+				PortMessaging::sendMessage(0, registration.port, &msg);
+			}
+		}
+	}
+
+	void SyscallManager::notifyThreadKilled(const u64 pid, const u64 tid) {
+		notifyKernelEventHandlers(kernelEventThreadKilled, pid, tid);
+	}
+
+	void SyscallManager::notifyProcessKilled(const u64 pid) {
+		notifyKernelEventHandlers(kernelEventProcessKilled, pid, 0);
 	}
 
 	auto SyscallManager::portWatchdog(u64 */*unused*/) -> u32 {
@@ -1550,6 +1593,136 @@ namespace kernel::common::hal {
 
 		if (shouldReschedule) {
 			ExecutionNode::reSchedule();
+		}
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallRegisterVfs(long */*unused*/, const u64 port, u64, u64, u64, u64, u64) -> u64 {
+		if (port == 0) {
+			return EINVAL;
+		}
+
+		vfsPort = port;
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallRegisterEventHandler(long */*unused*/, const u64 port, const u64 eventMask, u64, u64, u64, u64) -> u64 {
+		if (port == 0 or eventMask == 0) {
+			return EINVAL;
+		}
+
+		for (auto &registration : eventRegistrations) {
+			if (registration.port == port) {
+				registration.eventMask = eventMask;
+
+				return 0;
+			}
+		}
+
+		auto *registration = new KernelEventRegistration();
+
+		if (registration == nullptr) {
+			return ENOMEM;
+		}
+
+		registration->port = port;
+		registration->eventMask = eventMask;
+		eventRegistrations.addEnd(registration);
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallVfsRequest(long *ret, const u64 requestType, const u64 request, const u64 requestLength, const u64 reply, const u64 replyLength, u64) -> u64 {
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (thread == nullptr or thread->getParent() == nullptr or vfsPort == 0 or requestType == 0 or reply == 0 or replyLength == 0) {
+			return EINVAL;
+		}
+
+		const AllocContext *ctx = thread->getParent()->getProcessContext();
+
+		if ((requestLength != 0 and !isValidUserRange(ctx, request, requestLength)) or !isValidUserRange(ctx, reply, replyLength)) {
+			return EFAULT;
+		}
+
+		const u64 clientPort = kernelClientPortForCurrentThread();
+		const u64 portErr = PortMessaging::registerPort(clientPort);
+
+		if (portErr != 0 and portErr != EEXIST) {
+			return portErr;
+		}
+
+		u8 *requestBuffer = nullptr;
+		auto *replyBuffer = new u8[replyLength] {};
+
+		if (replyBuffer == nullptr) {
+			return ENOMEM;
+		}
+
+		if (requestLength != 0) {
+			requestBuffer = new u8[requestLength];
+
+			if (requestBuffer == nullptr) {
+				delete[] replyBuffer;
+
+				return ENOMEM;
+			}
+
+			const int copyErr = copyFromUser(ctx, requestBuffer, request, requestLength);
+
+			if (copyErr != 0) {
+				delete[] requestBuffer;
+				delete[] replyBuffer;
+
+				return copyErr;
+			}
+		}
+
+		MessageHeader send {};
+		send.type = requestType;
+		send.buffer = reinterpret_cast<u64 *>(requestBuffer);
+		send.length = requestLength;
+
+		u64 err = PortMessaging::sendMessage(clientPort, vfsPort, &send);
+
+		delete[] requestBuffer;
+
+		if (err != 0) {
+			delete[] replyBuffer;
+
+			return err;
+		}
+
+		MessageHeader recv {};
+		recv.buffer = reinterpret_cast<u64 *>(replyBuffer);
+		recv.length = replyLength;
+		recv.timeoutNs = 10'000'000'000ULL;
+
+		u64 whiteListType = requestType + 1;
+		MessageFilterOptions filter {};
+		filter.whiteListTypes = &whiteListType;
+		filter.whiteListCount = 1;
+
+		err = PortMessaging::recvMessage(clientPort, &recv, &filter);
+
+		if (err != 0) {
+			delete[] replyBuffer;
+
+			return err;
+		}
+
+		const int copyErr = copyToUser(ctx, reply, replyBuffer, replyLength);
+
+		delete[] replyBuffer;
+
+		if (copyErr != 0) {
+			return copyErr;
+		}
+
+		if (ret != nullptr) {
+			*ret = recv.retLength;
 		}
 
 		return 0;
