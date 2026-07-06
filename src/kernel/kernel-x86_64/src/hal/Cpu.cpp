@@ -55,6 +55,7 @@ namespace kernel::x86_64::hal {
 		cr0Val.value = Asm::readCr0();
 
 		cr0Val.reg.emulation = 0;
+		cr0Val.reg.taskSwitched = 0;
 		cr0Val.reg.monitorCoProcessor = 1;
 		cr0Val.reg.numericError = 1;
 
@@ -67,6 +68,8 @@ namespace kernel::x86_64::hal {
 		cr4Val.reg.unmaskedSimdExceptionsSupport = 1;
 
 		Asm::writeCr4(cr4Val.value);
+
+		u64 xCr0 = 0;
 
 		if (CpuId::hasXSave()) {
 			cr4Val.reg.xsaveExtendedEnable = 1;
@@ -89,11 +92,12 @@ namespace kernel::x86_64::hal {
 			}
 
 			Asm::writeXCr(0, xCr0Val.value);
+			xCr0 = Asm::readXCr(0);
 		}
 
 		Asm::fninit();
 
-		terminal->info("SIMD Enabled", "Cpu");
+		terminal->info("SIMD Enabled on CPU %u: CR0=0x%.16lx CR4=0x%.16lx XCR0=0x%.16lx", "Cpu", CpuManager::getCurrentCore()->cpuId, Asm::readCr0(), Asm::readCr4(), xCr0);
 	}
 
 	void CpuManager::initSimdContext(const uPtr *ptr) {

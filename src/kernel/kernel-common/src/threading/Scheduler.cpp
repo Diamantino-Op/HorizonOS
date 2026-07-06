@@ -607,6 +607,12 @@ namespace kernel::common::threading {
 	LinkedListEntry<Thread> *Scheduler::addThread(const bool isUser, const u64 rip, Process *process) {
 		auto *newThread = new Thread(this, process, rip, isUser);
 
+		if (newThread == nullptr || newThread->getContext() == nullptr) {
+			delete newThread;
+
+			return nullptr;
+		}
+
 		newThread->setState(ThreadState::READY);
 
 		const bool prevIF = this->schedLock.lock();
