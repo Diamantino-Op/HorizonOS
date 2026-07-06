@@ -18,6 +18,12 @@ namespace {
 	std::atomic<uint32_t> deviceRequestsHandled { 0 };
 	std::atomic<bool> deviceThreadReady { false };
 
+	constexpr size_t DEVICE_REQUEST_BUFFER_SIZE = std::max({
+		sizeof(VfsDeviceReadMsgData),
+		sizeof(VfsDeviceWriteMsgData),
+		sizeof(VfsDeviceIoctlMsgData),
+	});
+
 	void fillName(char *dst, const size_t dstSize, size_t &length, const char *name) {
 		const size_t copyLen = std::min(dstSize - 1, strlen(name));
 		memcpy(dst, name, copyLen);
@@ -193,7 +199,7 @@ namespace {
 	auto deviceThreadMain(void */*unused*/) -> void * {
 		deviceThreadReady = true;
 
-		alignas(VfsDeviceIoctlMsgData) uint8_t requestBuffer[sizeof(VfsDeviceIoctlMsgData)] {};
+		alignas(VfsDeviceWriteMsgData) uint8_t requestBuffer[DEVICE_REQUEST_BUFFER_SIZE] {};
 		hos_msg msg {};
 		msg.buffer = requestBuffer;
 		msg.length = sizeof(requestBuffer);
@@ -636,6 +642,9 @@ namespace {
 	}
 
 	auto testPartitionFileWorkflows() -> bool {
+		printf("[VFS test] starting partition file workflows\r\n");
+		fflush(stdout);
+
 		VolumeList volumes {};
 
 		if (!mountedPartitionVolumes(volumes)) {
