@@ -18,7 +18,7 @@ namespace {
 	constexpr uint64_t KERNEL_EVENT_MSG_TYPE = 0x1100;
 	constexpr uint64_t KERNEL_EVENT_THREAD_KILLED = 1;
 	constexpr uint64_t KERNEL_EVENT_PROCESS_KILLED = 2;
-	constexpr uint64_t KERNEL_SYSCALL_CLIENT_PORT_BASE = 0xffff000000000000ULL;
+	constexpr uint64_t VFS_CLIENT_PORT_BASE = 0xffff000000000000ULL;
 
 	struct KernelEventData {
 		uint64_t eventType {};
@@ -61,15 +61,23 @@ namespace {
 		return true;
 	}
 
+	auto clientPortForOwner(const uint64_t pid, const uint64_t tid) -> uint64_t {
+		return VFS_CLIENT_PORT_BASE | ((pid & 0xffff) << 32) | (tid & 0xffffffff);
+	}
+
+	auto ownerPidFromClientPort(const uint64_t ownerPort) -> uint64_t {
+		return (ownerPort >> 32) & 0xffff;
+	}
+
 	void invalidatePathCache(const string &path = "") {
 		pthread_mutex_lock(&cacheLock);
 
 		if (path.empty()) {
 			statCache.clear();
 		} else {
-			statCache.erase(remove_if(statCache.begin(), statCache.end(), [&](const VfsStatCacheEntry &entry) -> bool {
+			erase_if(statCache, [&](const VfsStatCacheEntry &entry) -> bool {
 				return entry.path == path or entry.path.starts_with(path + "/");
-			}), statCache.end());
+			});
 		}
 
 		pthread_mutex_unlock(&cacheLock);
@@ -236,7 +244,7 @@ namespace {
 	}
 
 	auto partitionVolumeStem(const string &partitionLabel, const string &deviceName, const uint32_t fallbackIndex) -> string {
-		const string labelStem = sanitizeVolumeStem(partitionLabel, fallbackIndex);
+		string labelStem = sanitizeVolumeStem(partitionLabel, fallbackIndex);
 
 		if (!partitionLabel.empty() and !labelStem.empty()) {
 			return labelStem;
@@ -515,7 +523,7 @@ namespace {
 			return false;
 		}
 
-		string raw(path, length - 1);
+		const string raw(path, length - 1);
 
 		return normalizeVfsPath(raw, out);
 	}
@@ -646,7 +654,7 @@ namespace {
 			return true;
 		}
 
-		string nodeName = devfsNodeName(fsPath);
+		const string nodeName = devfsNodeName(fsPath);
 
 		pthread_mutex_lock(&deviceNodesLock);
 
@@ -1264,6 +1272,28 @@ namespace {
 
 		for (const auto &pending : pendingToCommit) {
 			vfsCommitPendingUnlink(pending);
+		}
+	}
+
+	void cleanupOwnerProcess(const uint64_t pid) {
+		vector<uint64_t> ownerPorts;
+
+		pthread_mutex_lock(&handlesLock);
+
+		for (const auto &handle : handles) {
+			if (ownerPidFromClientPort(handle.ownerPort) != (pid & 0xffff)) {
+				continue;
+			}
+
+			if (find(ownerPorts.begin(), ownerPorts.end(), handle.ownerPort) == ownerPorts.end()) {
+				ownerPorts.push_back(handle.ownerPort);
+			}
+		}
+
+		pthread_mutex_unlock(&handlesLock);
+
+		for (const uint64_t ownerPort : ownerPorts) {
+			cleanupOwnerPort(ownerPort);
 		}
 	}
 
@@ -3056,9 +3086,9 @@ namespace {
 			}
 
 			if (data.eventType == KERNEL_EVENT_THREAD_KILLED and data.tid != 0) {
-				cleanupOwnerPort(KERNEL_SYSCALL_CLIENT_PORT_BASE | data.tid);
+				cleanupOwnerPort(clientPortForOwner(data.pid, data.tid));
 			} else if (data.eventType == KERNEL_EVENT_PROCESS_KILLED and data.pid != 0) {
-				(void)data;
+				cleanupOwnerProcess(data.pid);
 			}
 		}
 	}
@@ -3072,7 +3102,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
-	if (registerVfsService(vfsPort) != 0 or registerKernelEventHandler(vfsPort, KERNEL_EVENT_THREAD_KILLED | KERNEL_EVENT_PROCESS_KILLED) != 0) {
+	if (registerKernelEventHandler(vfsPort, KERNEL_EVENT_THREAD_KILLED | KERNEL_EVENT_PROCESS_KILLED) != 0) {
 		printf("Vfs: Failed to register with kernel.");
 		fflush(stdout);
 
