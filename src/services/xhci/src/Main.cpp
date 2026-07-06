@@ -1,8 +1,8 @@
 #include "Xhci.hpp"
 
 #include "horizonos/generic.h"
-#include "sys/mman.h"
 #include "pthread.h"
+#include "sys/mman.h"
 #include "unistd.h"
 
 #include <algorithm>
@@ -625,6 +625,9 @@ namespace {
 		filter.whiteListTypes = new uint64_t[1] { IRQ_RECEIVE_MSG_TYPE };
 		filter.whiteListCount = 1;
 
+		printf("XHCI: Event IRQ handler waiting on port %lu.", controller->memory.eventPort);
+		fflush(stdout);
+
 		for (;;) {
 			irq = {};
 			recv.buffer = &irq;
@@ -642,6 +645,20 @@ namespace {
 				++loggedEvents;
 			}
 		}
+	}
+
+	auto startEventIrqHandler(MappedController &controller) -> bool {
+		pthread_t thread {};
+
+		if (pthread_create(&thread, nullptr, eventIrqHandler, &controller) != 0) {
+			printf("XHCI: Failed to start event IRQ handler for %02x:%02x.%x.", controller.pci.bus, controller.pci.device, controller.pci.function);
+			fflush(stdout);
+			return false;
+		}
+
+		eventThreads.push_back(thread);
+
+		return true;
 	}
 
 	auto setupMsix(MappedController &controller) -> bool {
@@ -758,6 +775,7 @@ namespace {
 		}
 
 		const uint32_t configSlots = min<uint32_t>(maxSlots, XHCI_MAX_CONFIGURED_SLOTS);
+		controller.configuredSlots = configSlots;
 		mmioWrite32(operationalBase, XHCI_OP_CONFIG, configSlots);
 
 		if (!setupMsix(controller)) {
@@ -767,16 +785,7 @@ namespace {
 			return false;
 		}
 
-		if (!startController(operationalBase, true)) {
-			printf("XHCI: Controller %zu failed to start.", index);
-			fflush(stdout);
-			releaseControllerMemory(controller.memory);
-			return false;
-		}
-
-		setInterrupterEnabled(controller, true);
-
-		printf("XHCI: Controller %zu reset complete, configured %u device slot(s), DCBAA=0x%lx CR=0x%lx ER=0x%lx ERST=0x%lx.",
+		printf("XHCI: Controller %zu prepared, configured %u device slot(s), DCBAA=0x%lx CR=0x%lx ER=0x%lx ERST=0x%lx.",
 		       index,
 		       configSlots,
 		       controller.memory.dcbaa.phys,
@@ -786,18 +795,6 @@ namespace {
 		fflush(stdout);
 
 		return true;
-	}
-
-	void startEventIrqHandler(MappedController &controller) {
-		pthread_t thread {};
-
-		if (pthread_create(&thread, nullptr, eventIrqHandler, &controller) != 0) {
-			printf("XHCI: Failed to start event IRQ handler for %02x:%02x.%x.", controller.pci.bus, controller.pci.device, controller.pci.function);
-			fflush(stdout);
-			return;
-		}
-
-		eventThreads.push_back(thread);
 	}
 }
 
@@ -855,7 +852,23 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		}
 
 		controllers.push_back(controller);
-		startEventIrqHandler(controllers.back());
+
+		auto &activeController = controllers.back();
+
+		if (!startEventIrqHandler(activeController)) {
+			continue;
+		}
+
+		if (!startController(activeController.operationalBase, true)) {
+			printf("XHCI: Controller %zu failed to start.", controllers.size() - 1);
+			fflush(stdout);
+			continue;
+		}
+
+		setInterrupterEnabled(activeController, true);
+
+		printf("XHCI: Controller %zu started, configured %u device slot(s).", controllers.size() - 1, activeController.configuredSlots);
+		fflush(stdout);
 	}
 
 	printf("XHCI: %zu controller(s) initialized.", controllers.size());
