@@ -1,3 +1,4 @@
+#include "DevFs.hpp"
 #include "Vfs.hpp"
 #include "VfsProtocol.hpp"
 
@@ -31,15 +32,14 @@ namespace {
 	uint64_t ext2Port = 0;
 	uint64_t nextHandleId = 1;
 	vector<VfsVolume> volumes;
+	DevFs devfs(volumes);
 	vector<VfsHandle> handles;
 	vector<VfsNodeLock> nodeLocks;
 	vector<VfsStatCacheEntry> statCache;
-	vector<VfsDeviceNode> deviceNodes;
 	vector<VfsPendingUnlink> pendingUnlinks;
 	pthread_mutex_t handlesLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t nodeLocksLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t cacheLock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_t deviceNodesLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t pendingUnlinksLock = PTHREAD_MUTEX_INITIALIZER;
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
@@ -558,276 +558,6 @@ namespace {
 		return ret == 0;
 	}
 
-	template<typename Request, typename Reply>
-	auto sendDeviceRequest(const uint64_t requestType, const uint64_t replyType, const VfsDeviceNode &node, Request &request, Reply &reply) -> bool {
-		auto msg = hos_msg();
-
-		msg.type = requestType;
-		msg.port = node.devicePort;
-		msg.buffer = &request;
-		msg.length = sizeof(request);
-
-		if (send_horizonos_message(vfsPort, node.devicePort, &msg) != 0) {
-			return false;
-		}
-
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { replyType };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(vfsPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
-
-		return ret == 0;
-	}
-
-	auto devfsNodeName(const string &fsPath) -> string {
-		return fsPath.starts_with("/") ? fsPath.substr(1) : fsPath;
-	}
-
-	auto findDeviceNode(const string &name, VfsDeviceNode &out) -> bool {
-		pthread_mutex_lock(&deviceNodesLock);
-
-		const auto it = ranges::find_if(deviceNodes, [&](const VfsDeviceNode &node) -> bool {
-			return node.name == name;
-		});
-		const bool found = it != deviceNodes.end();
-
-		if (found) {
-			out = *it;
-		}
-
-		pthread_mutex_unlock(&deviceNodesLock);
-
-		return found;
-	}
-
-	auto devfsVolumesText() -> string {
-		string text;
-
-		for (const auto &volume : volumes) {
-			text += volume.name;
-			text += " ";
-			text += volume.mounted ? "mounted " : "unmounted ";
-			text += volume.sourceName.empty() ? "virtual" : volume.sourceName;
-			text += "\n";
-		}
-
-		return text;
-	}
-
-	auto devfsStat(const string &fsPath, VfsStatReplyMsgData &reply) -> bool {
-		if (fsPath == "/" or fsPath.empty()) {
-			reply.success = true;
-			reply.nodeType = VFS_NODE_DIRECTORY;
-			reply.size = 0;
-			reply.status = VFS_STATUS_OK;
-			reply.nodeId = 1;
-
-			return true;
-		}
-
-		if (fsPath == "/volumes" or fsPath == "volumes") {
-			reply.success = true;
-			reply.nodeType = VFS_NODE_FILE;
-			reply.size = devfsVolumesText().size();
-			reply.status = VFS_STATUS_OK;
-			reply.nodeId = 2;
-
-			return true;
-		}
-
-		if (fsPath == "/null" or fsPath == "null") {
-			reply.success = true;
-			reply.nodeType = VFS_NODE_FILE;
-			reply.size = 0;
-			reply.status = VFS_STATUS_OK;
-			reply.nodeId = 3;
-
-			return true;
-		}
-
-		const string nodeName = devfsNodeName(fsPath);
-
-		pthread_mutex_lock(&deviceNodesLock);
-
-		const auto it = ranges::find_if(deviceNodes, [&](const VfsDeviceNode &node) -> bool {
-			return node.name == nodeName;
-		});
-
-		if (it != deviceNodes.end()) {
-			reply.success = true;
-			reply.nodeType = VFS_NODE_DEVICE;
-			reply.size = 0;
-			reply.status = VFS_STATUS_OK;
-			reply.nodeId = 0x10000 + static_cast<uint64_t>(it - deviceNodes.begin());
-		}
-
-		pthread_mutex_unlock(&deviceNodesLock);
-
-		if (reply.success) {
-			return true;
-		}
-
-		return false;
-	}
-
-	auto devfsReadDir(const string &fsPath, VfsReadDirReplyMsgData &reply) -> bool {
-		if (fsPath != "/" and !fsPath.empty()) {
-			return false;
-		}
-
-		reply.success = true;
-		reply.entryCount = 2;
-		reply.status = VFS_STATUS_OK;
-		fillName(reply.entries[0].name, sizeof(reply.entries[0].name), reply.entries[0].nameLength, "volumes");
-		reply.entries[0].nodeType = VFS_NODE_FILE;
-		reply.entries[0].size = devfsVolumesText().size();
-		fillName(reply.entries[1].name, sizeof(reply.entries[1].name), reply.entries[1].nameLength, "null");
-		reply.entries[1].nodeType = VFS_NODE_FILE;
-
-		pthread_mutex_lock(&deviceNodesLock);
-
-		for (const auto &node : deviceNodes) {
-			if (reply.entryCount >= VFS_MAX_DIR_ENTRIES) {
-				reply.hasMore = true;
-				break;
-			}
-
-			auto &entry = reply.entries[reply.entryCount++];
-
-			fillName(entry.name, sizeof(entry.name), entry.nameLength, node.name);
-			entry.nodeType = VFS_NODE_DEVICE;
-		}
-
-		pthread_mutex_unlock(&deviceNodesLock);
-
-		return true;
-	}
-
-	auto devfsRead(const string &fsPath, const uint64_t offset, const uint32_t length, VfsReadReplyMsgData &reply) -> bool {
-		string text;
-
-		if (fsPath == "/volumes" or fsPath == "volumes") {
-			text = devfsVolumesText();
-		} else if (fsPath == "/null" or fsPath == "null") {
-			text.clear();
-		} else {
-			VfsDeviceNode node {};
-			const string nodeName = devfsNodeName(fsPath);
-
-			if (!findDeviceNode(nodeName, node)) {
-				return false;
-			}
-
-			auto request = VfsDeviceReadMsgData();
-			auto deviceReply = VfsDeviceReadReplyMsgData();
-
-			fillName(request.name, sizeof(request.name), request.nameLength, nodeName);
-			request.offset = offset;
-			request.length = length;
-
-			if (!sendDeviceRequest(VFS_DEV_READ_MSG_TYPE, VFS_DEV_READ_REPLY_MSG_TYPE, node, request, deviceReply) or !deviceReply.success) {
-				reply.success = false;
-				return false;
-			}
-
-			reply.success = true;
-			reply.bytesRead = min<uint32_t>(deviceReply.bytesRead, VFS_MAX_READ_SIZE);
-			memcpy(reply.data, deviceReply.data, reply.bytesRead);
-
-			return true;
-		}
-
-		reply.success = true;
-
-		if (offset >= text.size() or length == 0) {
-			reply.bytesRead = 0;
-
-			return true;
-		}
-
-		reply.bytesRead = min<uint32_t>(length, text.size() - offset);
-		memcpy(reply.data, text.data() + offset, reply.bytesRead);
-
-		return true;
-	}
-
-	auto devfsWrite(const string &fsPath, const uint64_t offset, const uint32_t length, const uint8_t *data, VfsWriteReplyMsgData &reply) -> bool {
-		if (fsPath == "/null" or fsPath == "null") {
-			reply.success = true;
-			reply.bytesWritten = length;
-			reply.size = 0;
-			reply.status = VFS_STATUS_OK;
-			return true;
-		}
-
-		VfsDeviceNode node {};
-		const string nodeName = devfsNodeName(fsPath);
-
-		if (!findDeviceNode(nodeName, node)) {
-			reply.status = VFS_STATUS_NOT_FOUND;
-			return false;
-		}
-
-		auto request = VfsDeviceWriteMsgData();
-		auto deviceReply = VfsDeviceWriteReplyMsgData();
-
-		fillName(request.name, sizeof(request.name), request.nameLength, nodeName);
-		request.offset = offset;
-		request.length = length;
-		memcpy(request.data, data, length);
-
-		if (!sendDeviceRequest(VFS_DEV_WRITE_MSG_TYPE, VFS_DEV_WRITE_REPLY_MSG_TYPE, node, request, deviceReply) or !deviceReply.success) {
-			reply.status = deviceReply.status == 0 ? VFS_STATUS_INVALID : deviceReply.status;
-			return false;
-		}
-
-		reply.success = true;
-		reply.bytesWritten = deviceReply.bytesWritten;
-		reply.size = 0;
-		reply.status = VFS_STATUS_OK;
-
-		return true;
-	}
-
-	auto devfsIoctl(const string &fsPath, const VfsIoctlMsgData &data, VfsIoctlReplyMsgData &reply) -> bool {
-		VfsDeviceNode node {};
-		const string nodeName = devfsNodeName(fsPath);
-
-		if (!findDeviceNode(nodeName, node)) {
-			reply.status = VFS_STATUS_NOT_FOUND;
-			return false;
-		}
-
-		auto request = VfsDeviceIoctlMsgData();
-		auto deviceReply = VfsDeviceIoctlReplyMsgData();
-
-		fillName(request.name, sizeof(request.name), request.nameLength, nodeName);
-		request.request = data.request;
-		request.inputLength = min<uint32_t>(data.inputLength, VFS_MAX_READ_SIZE);
-		memcpy(request.input, data.input, request.inputLength);
-
-		if (!sendDeviceRequest(VFS_DEV_IOCTL_MSG_TYPE, VFS_DEV_IOCTL_REPLY_MSG_TYPE, node, request, deviceReply) or !deviceReply.success) {
-			reply.status = deviceReply.status == 0 ? VFS_STATUS_UNSUPPORTED : deviceReply.status;
-			return false;
-		}
-
-		reply.success = true;
-		reply.status = VFS_STATUS_OK;
-		reply.outputLength = min<uint32_t>(deviceReply.outputLength, VFS_MAX_READ_SIZE);
-		memcpy(reply.output, deviceReply.output, reply.outputLength);
-
-		return true;
-	}
-
 	auto vfsStatPath(const string &path, VfsStatReplyMsgData &reply) -> bool {
 		if (isPendingUnlinkPath(path)) {
 			reply.status = VFS_STATUS_NOT_FOUND;
@@ -869,7 +599,7 @@ namespace {
 		}
 
 		if (volume->kind == VfsVolumeKind::Devices) {
-			return devfsStat(fsPath, reply);
+			return devfs.stat(fsPath, reply);
 		}
 
 		if (volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
@@ -929,7 +659,7 @@ namespace {
 		}
 
 		if (volume->kind == VfsVolumeKind::Devices) {
-			return devfsReadDir(fsPath, reply);
+			return devfs.readDir(fsPath, reply);
 		}
 
 		if (volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
@@ -978,7 +708,7 @@ namespace {
 		}
 
 		if (volume->kind == VfsVolumeKind::Devices) {
-			return devfsRead(fsPath, offset, length, reply);
+			return devfs.read(fsPath, offset, length, reply);
 		}
 
 		if (volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
@@ -1015,7 +745,7 @@ namespace {
 		const VfsVolume *volume = findVolume(volumeName);
 
 		if (volume != nullptr and volume->kind == VfsVolumeKind::Devices) {
-			return devfsWrite(fsPath, offset, length, data, reply);
+			return devfs.write(fsPath, offset, length, data, reply);
 		}
 
 		if (volume == nullptr or volume->kind != VfsVolumeKind::Partition or !volume->mounted or volume->fsPort == 0) {
@@ -1232,7 +962,7 @@ namespace {
 
 			pthread_mutex_lock(&nodeLocksLock);
 
-			nodeLocks.erase(remove_if(nodeLocks.begin(), nodeLocks.end(), [&](const VfsNodeLock &lock) -> bool {
+			nodeLocks.erase(std::ranges::remove_if(nodeLocks,, [&](const VfsNodeLock &lock) -> bool {
 				return lock.ownerPort == ownerPort and lock.handle == closedHandle.handle;
 			}), nodeLocks.end());
 
@@ -1262,13 +992,7 @@ namespace {
 
 		pthread_mutex_unlock(&handlesLock);
 
-		pthread_mutex_lock(&deviceNodesLock);
-
-		deviceNodes.erase(remove_if(deviceNodes.begin(), deviceNodes.end(), [&](const VfsDeviceNode &node) -> bool {
-			return node.ownerPort == ownerPort;
-		}), deviceNodes.end());
-
-		pthread_mutex_unlock(&deviceNodesLock);
+		devfs.cleanupOwner(ownerPort);
 
 		for (const auto &pending : pendingToCommit) {
 			vfsCommitPendingUnlink(pending);
@@ -1285,7 +1009,8 @@ namespace {
 				continue;
 			}
 
-			if (find(ownerPorts.begin(), ownerPorts.end(), handle.ownerPort) == ownerPorts.end()) {
+			// TODO: Changed
+			if (std::ranges::find(ownerPorts, handle.ownerPort) == ownerPorts.end()) {
 				ownerPorts.push_back(handle.ownerPort);
 			}
 		}
@@ -1639,10 +1364,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_STAT_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1676,10 +1403,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_READDIR_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1711,10 +1440,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_READ_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1746,10 +1477,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_WRITE_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1781,10 +1514,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_CREATE_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1818,10 +1553,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_MKDIR_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1853,10 +1590,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_UNLINK_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1889,10 +1628,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+
 			replyMsg.type = VFS_RENAME_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -1924,10 +1665,12 @@ namespace {
 			}
 
 			auto replyMsg = hos_msg();
+			
 			replyMsg.type = VFS_TRUNCATE_REPLY_MSG_TYPE;
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
 		}
 	}
@@ -2069,13 +1812,13 @@ namespace {
 			});
 
 			if (it != handles.end()) {
-				const VfsHandle closedHandle = *it;
+				const VfsHandle &closedHandle = *it;
 
 				pthread_mutex_lock(&nodeLocksLock);
 
-				nodeLocks.erase(remove_if(nodeLocks.begin(), nodeLocks.end(), [&](const VfsNodeLock &lock) -> bool {
+				erase_if(nodeLocks, [&](const VfsNodeLock &lock) -> bool {
 					return lock.ownerPort == msg.src_port and lock.handle == data.handle;
-				}), nodeLocks.end());
+				});
 
 				pthread_mutex_unlock(&nodeLocksLock);
 
@@ -2381,9 +2124,7 @@ namespace {
 						if (handle.handle == data.handle and handle.ownerPort == msg.src_port) {
 							handle.size = truncate.size;
 
-							if (handle.position > handle.size) {
-								handle.position = handle.size;
-							}
+							handle.position = std::min(handle.position, handle.size);
 
 							break;
 						}
@@ -2582,10 +2323,10 @@ namespace {
 
 			const auto oldSize = nodeLocks.size();
 
-			nodeLocks.erase(remove_if(nodeLocks.begin(), nodeLocks.end(), [&](const VfsNodeLock &lock) -> bool {
+			erase_if(nodeLocks, [&](const VfsNodeLock &lock) -> bool {
 				return lock.ownerPort == msg.src_port and lock.handle == data.handle and
 				       lockRangesOverlap(lock.offset, lock.length, data.offset, data.length);
-			}), nodeLocks.end());
+			});
 
 			reply.success = nodeLocks.size() != oldSize;
 			reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_NOT_FOUND;
@@ -2856,26 +2597,7 @@ namespace {
 			string name;
 
 			if (data.devicePort != 0 and validName(data.name, data.nameLength, sizeof(data.name), name)) {
-				pthread_mutex_lock(&deviceNodesLock);
-
-				const bool exists = ranges::any_of(deviceNodes, [&](const VfsDeviceNode &node) -> bool {
-					return node.name == name;
-				});
-
-				if (!exists) {
-					deviceNodes.push_back(VfsDeviceNode {
-						.name = name,
-						.ownerPort = msg.src_port,
-						.devicePort = data.devicePort,
-						.permissions = data.permissions,
-					});
-					reply.success = true;
-					reply.status = VFS_STATUS_OK;
-				} else {
-					reply.status = VFS_STATUS_EXISTS;
-				}
-
-				pthread_mutex_unlock(&deviceNodesLock);
+				devfs.registerNode(name, msg.src_port, data.devicePort, data.permissions, reply);
 			} else {
 				reply.status = VFS_STATUS_INVALID;
 			}
@@ -2912,18 +2634,7 @@ namespace {
 			string name;
 
 			if (validName(data.name, data.nameLength, sizeof(data.name), name)) {
-				pthread_mutex_lock(&deviceNodesLock);
-
-				const auto oldSize = deviceNodes.size();
-
-				deviceNodes.erase(remove_if(deviceNodes.begin(), deviceNodes.end(), [&](const VfsDeviceNode &node) -> bool {
-					return node.name == name and node.ownerPort == msg.src_port;
-				}), deviceNodes.end());
-
-				reply.success = deviceNodes.size() != oldSize;
-				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_NOT_FOUND;
-
-				pthread_mutex_unlock(&deviceNodesLock);
+				devfs.unregisterNode(name, msg.src_port, reply);
 			} else {
 				reply.status = VFS_STATUS_INVALID;
 			}
@@ -2964,7 +2675,7 @@ namespace {
 				string fsPath;
 
 				if (splitVfsPath(handle.path, volumeName, fsPath) and volumeName == "Devices:") {
-					devfsIoctl(fsPath, data, reply);
+					devfs.ioctl(fsPath, data, reply);
 				} else {
 					reply.status = VFS_STATUS_INVALID;
 				}
@@ -3101,6 +2812,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		return 1;
 	}
+
+	devfs.setPort(vfsPort);
 
 	if (registerKernelEventHandler(vfsPort, KERNEL_EVENT_THREAD_KILLED | KERNEL_EVENT_PROCESS_KILLED) != 0) {
 		printf("Vfs: Failed to register with kernel.");

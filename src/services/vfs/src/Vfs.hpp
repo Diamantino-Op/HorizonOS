@@ -54,13 +54,6 @@ struct VfsStatCacheEntry {
 	uint64_t nodeId {};
 };
 
-struct VfsDeviceNode {
-	string name;
-	uint64_t ownerPort {};
-	uint64_t devicePort {};
-	uint32_t permissions {};
-};
-
 struct VfsPendingUnlink {
 	string path;
 	uint64_t mountId {};

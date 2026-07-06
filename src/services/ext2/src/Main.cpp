@@ -494,7 +494,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::readInode(const uint32_t inodeNumber, Ext2Inode &out) -> bool {
+	auto Ext2Volume::readInode(const uint32_t inodeNumber, Ext2Inode &out) const -> bool {
 			if (inodeNumber == 0 or inodeNumber > superblock.inodesCount) {
 				return false;
 			}
@@ -524,7 +524,7 @@ namespace {
 			return true;
 		}
 
-	auto Ext2Volume::writeInode(const uint32_t inodeNumber, const Ext2Inode &inode) -> bool {
+	auto Ext2Volume::writeInode(const uint32_t inodeNumber, const Ext2Inode &inode) const -> bool {
 		if (inodeNumber == 0 or inodeNumber > superblock.inodesCount) {
 			return false;
 		}
@@ -554,7 +554,7 @@ namespace {
 		return writeBlock(block, blockBytes.data());
 	}
 
-	auto Ext2Volume::resolveDataBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) -> bool {
+	auto Ext2Volume::resolveDataBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) const -> bool {
 		fsBlock = 0;
 
 		if (fileBlock < 12) {
@@ -584,7 +584,7 @@ namespace {
 		return readTripleIndirectPointer(inode.block[14], fileBlock, fsBlock);
 	}
 
-	auto Ext2Volume::readFile(const Ext2Inode &inode, vector<uint8_t> &out, const uint64_t maxBytes) -> bool {
+	auto Ext2Volume::readFile(const Ext2Inode &inode, vector<uint8_t> &out, const uint64_t maxBytes) const -> bool {
 		const uint64_t fileSize = inodeFileSize(superblock, inode);
 		const uint64_t readSize = min<uint64_t>(fileSize, maxBytes);
 
@@ -618,7 +618,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::readFileRange(const Ext2Inode &inode, const uint64_t offset, const uint32_t length, vector<uint8_t> &out) -> bool {
+	auto Ext2Volume::readFileRange(const Ext2Inode &inode, const uint64_t offset, const uint32_t length, vector<uint8_t> &out) const -> bool {
 		const uint64_t fileSize = inodeFileSize(superblock, inode);
 
 		out.clear();
@@ -659,7 +659,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) -> bool {
+	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) const -> bool {
 		(void) inodeNumber;
 
 		const uint64_t fileSize = inodeFileSize(superblock, inode);
@@ -700,7 +700,7 @@ namespace {
 		return flushDevice(device.deviceId);
 	}
 
-	void Ext2Volume::setInodeFileSize(Ext2Inode &inode, const uint64_t size) const {
+	void Ext2Volume::setInodeFileSize(Ext2Inode &inode, const uint64_t size) {
 		inode.sizeLo = static_cast<uint32_t>(size);
 
 		if ((inode.mode & EXT2_S_IFMT) == EXT2_S_IFREG) {
@@ -708,7 +708,7 @@ namespace {
 		}
 	}
 
-	auto Ext2Volume::writeSuperblock() -> bool {
+	auto Ext2Volume::writeSuperblock() const -> bool {
 		const uint64_t superLba = EXT2_SUPERBLOCK_OFFSET / device.blockSize;
 		const uint64_t superOffsetInPage = EXT2_SUPERBLOCK_OFFSET - (superLba * device.blockSize);
 		uint64_t phys = 0;
@@ -727,7 +727,7 @@ namespace {
 		return success;
 	}
 
-	auto Ext2Volume::writeGroupDescriptor(const uint32_t group) -> bool {
+	auto Ext2Volume::writeGroupDescriptor(const uint32_t group) const -> bool {
 		if (group >= groupDescriptors.size()) {
 			return false;
 		}
@@ -766,7 +766,7 @@ namespace {
 			}
 
 			for (uint32_t bit = 0; bit < superblock.blocksPerGroup; ++bit) {
-				const uint64_t candidate = static_cast<uint64_t>(superblock.firstDataBlock) + static_cast<uint64_t>(group) * superblock.blocksPerGroup + bit;
+				const uint64_t candidate = static_cast<uint64_t>(superblock.firstDataBlock) + (static_cast<uint64_t>(group) * superblock.blocksPerGroup) + bit;
 
 				if (candidate == 0 or candidate >= blocksCount(superblock)) {
 					break;
@@ -810,7 +810,7 @@ namespace {
 			}
 
 			for (uint32_t bit = 0; bit < superblock.inodesPerGroup; ++bit) {
-				const uint64_t candidate = static_cast<uint64_t>(group) * superblock.inodesPerGroup + bit + 1;
+				const uint64_t candidate = (static_cast<uint64_t>(group) * superblock.inodesPerGroup) + bit + 1;
 
 				if (candidate < superblock.firstInode or candidate > superblock.inodesCount) {
 					continue;
@@ -1059,7 +1059,7 @@ namespace {
 		return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
 	}
 
-	auto Ext2Volume::splitParentPath(const string &path, string &parentPath, string &name) const -> bool {
+	auto Ext2Volume::splitParentPath(const string &path, string &parentPath, string &name) -> bool {
 		if (path.empty() or path == "/") {
 			return false;
 		}
@@ -1206,7 +1206,7 @@ namespace {
 		return false;
 	}
 
-	auto Ext2Volume::directoryIsEmpty(const Ext2Inode &dir) -> bool {
+	auto Ext2Volume::directoryIsEmpty(const Ext2Inode &dir) const -> bool {
 		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
 			return false;
 		}
@@ -1240,7 +1240,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::updateDirectoryEntryInode(Ext2Inode &dir, const string &name, const uint32_t inodeNumber) -> bool {
+	auto Ext2Volume::updateDirectoryEntryInode(const Ext2Inode &dir, const string &name, const uint32_t inodeNumber) const -> bool {
 		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR or name.empty()) {
 			return false;
 		}
@@ -1378,7 +1378,7 @@ namespace {
 			return false;
 		}
 
-		remaining = remaining > pointersPerBlock * pointersPerBlock ? remaining - pointersPerBlock * pointersPerBlock : 0;
+		remaining = remaining > pointersPerBlock * pointersPerBlock ? remaining - (pointersPerBlock * pointersPerBlock) : 0;
 
 		return freeIndirectBlocks(inode.block[14], 3, remaining, pointersPerBlock * pointersPerBlock);
 	}
@@ -1880,7 +1880,7 @@ namespace {
 		return flushDevice(device.deviceId);
 	}
 
-	auto Ext2Volume::findFirstRootTextFile(uint32_t &inodeNumber, string &name) -> bool {
+	auto Ext2Volume::findFirstRootTextFile(uint32_t &inodeNumber, string &name) const -> bool {
 		Ext2Inode root {};
 
 		if (!readInode(EXT2_ROOT_INO, root) or (root.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
@@ -1923,7 +1923,7 @@ namespace {
 		return false;
 	}
 
-	auto Ext2Volume::readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries, const uint32_t startOffset, bool *hasMore, uint32_t *nextOffset) -> bool {
+	auto Ext2Volume::readDirectory(const Ext2Inode &dir, vector<VfsDirEntry> &entries, const uint32_t startOffset, bool *hasMore, uint32_t *nextOffset) const -> bool {
 		if ((dir.mode & EXT2_S_IFMT) != EXT2_S_IFDIR) {
 			return false;
 		}
@@ -1987,7 +1987,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) -> bool {
+	auto Ext2Volume::lookupPath(const string &path, uint32_t &inodeNumber, Ext2Inode &inode) const -> bool {
 		inodeNumber = EXT2_ROOT_INO;
 
 		if (!readInode(inodeNumber, inode)) {
@@ -2258,7 +2258,7 @@ namespace {
 				if (volume.load()) {
 					const uint64_t mountId = nextMountId++;
 
-					mounts.push_back(MountedExt2 { mountId, device });
+					mounts.push_back(MountedExt2 { .mountId = mountId, .device = device });
 					reply.success = true;
 					reply.mountId = mountId;
 
@@ -2273,6 +2273,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2324,6 +2325,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2383,6 +2385,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2430,6 +2433,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2480,6 +2484,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2531,6 +2536,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2582,6 +2588,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2621,6 +2628,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2673,6 +2681,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2725,6 +2734,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2772,6 +2782,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2811,6 +2822,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2851,6 +2863,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2893,6 +2906,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
@@ -2924,6 +2938,7 @@ namespace {
 			replyMsg.port = msg.src_port;
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
+			
 			send_horizonos_message(ext2Port, msg.src_port, &replyMsg);
 		}
 	}
