@@ -226,3 +226,9 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] waiting for mounted partition volumes (100/300)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] waiting for mounted partition volumes (150/300)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] waiting for mounted partition volumes (200/300)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] waiting for mounted partition volumes (250/300)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] waiting for mounted partition volumes (300/300)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] Devices:/volumes after wait: Devices: mounted devfs|Tmp: mounted tmpfs|[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] FAIL partition file workflows: no mounted partition volumes found[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: [VFS test] failed[0m
+[ [1;34minformation [0m] [1;30mSyscall: [0;37mProcess 10 exited with status code: 1[0m

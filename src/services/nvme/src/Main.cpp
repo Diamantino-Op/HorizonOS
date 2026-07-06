@@ -145,9 +145,17 @@ namespace {
 	void registerNamespacesWithStorage(const vector<NvmeDriver> &controllerDrivers) {
 		const GetReplyMsgData storageInfo = waitForRegisteredService("StorageManager");
 		storagePort = storageInfo.port;
+		uint64_t storageRegisterPort {};
 
 		printf("NVMe: Storage info: Port: %lu, TID: %u, Version: %u.%u.%u.", storageInfo.port, storageInfo.tid, storageInfo.versionMajor, storageInfo.versionMinor, storageInfo.versionPatch);
 		fflush(stdout);
+
+		if (register_horizonos_port(reinterpret_cast<long *>(&storageRegisterPort)) != 0 or storageRegisterPort == 0) {
+			printf("NVMe: Failed to register private Storage reply port.");
+			fflush(stdout);
+
+			return;
+		}
 
 		for (size_t controllerId = 0; controllerId < controllerDrivers.size(); ++controllerId) {
 			for (const auto &ns : controllerDrivers[controllerId].getNamespaces()) {
@@ -170,7 +178,7 @@ namespace {
 				msg.buffer = &data;
 				msg.length = sizeof(data);
 
-				if (send_horizonos_message(nvmePort, storagePort, &msg) != 0) {
+				if (send_horizonos_message(storageRegisterPort, storagePort, &msg) != 0) {
 					printf("NVMe: Failed to register namespace %u with Storage.", ns.nsid);
 					fflush(stdout);
 					continue;
@@ -185,7 +193,7 @@ namespace {
 				filter.whiteListTypes = new uint64_t[1]{ STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE };
 				filter.whiteListCount = 1;
 
-				const int ret = receive_horizonos_message(nvmePort, &recv, &filter);
+				const int ret = receive_horizonos_message(storageRegisterPort, &recv, &filter);
 				delete[] filter.whiteListTypes;
 
 				if (ret == 0 and reply.success) {
