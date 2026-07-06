@@ -962,9 +962,10 @@ namespace {
 
 			pthread_mutex_lock(&nodeLocksLock);
 
-			nodeLocks.erase(std::ranges::remove_if(nodeLocks,, [&](const VfsNodeLock &lock) -> bool {
+			const auto removedLocks = std::ranges::remove_if(nodeLocks, [&](const VfsNodeLock &lock) -> bool {
 				return lock.ownerPort == ownerPort and lock.handle == closedHandle.handle;
-			}), nodeLocks.end());
+			});
+			nodeLocks.erase(removedLocks.begin(), removedLocks.end());
 
 			pthread_mutex_unlock(&nodeLocksLock);
 

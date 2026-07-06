@@ -1,14 +1,5 @@
-#include "stdio.h"
-#include "horizonos/generic.h"
+#include "VfsTests.hpp"
 
-int main(int argc, char* argv[]) {
-	while (true) {
-		printf("Test!\r\n");
-
-		break;
-	}
-
-
-
-	return 0;
+int main(int, char **) {
+	return runVfsTests() ? 0 : 1;
 }
