@@ -259,39 +259,22 @@ auto NvmeDriver::submitAdminCommand(const Command &command, CompletionEntry &res
 	adminSQTail = (adminSQTail + 1) % adminQDepth;
 	mmioWrite32(mmioBase, 0x1000, adminSQTail); // Admin SQ Tail Doorbell
 
-	if (this->adminMsixVector != 0) {
-		auto wakeMsg = hos_msg();
-		auto recvData = IrqReceiveData();
-		auto filter  = filter_options();
+	bool found = false;
 
-		filter.whiteListTypes = new uint64_t[1]{ IRQ_RECEIVE_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		wakeMsg.buffer = &recvData;
-		wakeMsg.length = sizeof(IrqReceiveData);
-
-		const int ret = receive_horizonos_message(this->adminCompletionPort, &wakeMsg, &filter);
-
-		delete[] filter.whiteListTypes;
-
-		if (ret != 0) {
-			return false;
-		}
-	} else {
-		bool found = false;
-
-		for (int i = 0; i < 100000; ++i) {
-			if (adminCQ[adminCQHead].status.phase == adminCQPhase) {
-				found = true;
-				break;
-			}
-
-			usleep(10000);
+	for (int i = 0; i < 100000; ++i) {
+		if (adminCQ[adminCQHead].status.phase == adminCQPhase) {
+			found = true;
+			break;
 		}
 
-		if (!found) {
-			return false;
-		}
+		usleep(100);
+	}
+
+	if (!found) {
+		printf("NVMe: Admin queue timed out waiting for completion.");
+		fflush(stdout);
+
+		return false;
 	}
 
 	// ── Consume the completion entry (same for both paths) ───────────────

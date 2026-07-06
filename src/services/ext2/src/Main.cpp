@@ -17,6 +17,8 @@ namespace {
 	uint64_t ext2Port = 0;
 	uint64_t storagePort = 0;
 	uint64_t nextMountId = 1;
+	pthread_mutex_t storageRpcLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t mountsLock = PTHREAD_MUTEX_INITIALIZER;
 
 	struct MountedExt2 {
 		uint64_t mountId {};
@@ -24,6 +26,21 @@ namespace {
 	};
 
 	vector<MountedExt2> mounts;
+
+	struct ScopedMutex {
+		pthread_mutex_t *mutex {};
+
+		explicit ScopedMutex(pthread_mutex_t &lock) : mutex(&lock) {
+			pthread_mutex_lock(mutex);
+		}
+
+		~ScopedMutex() {
+			pthread_mutex_unlock(mutex);
+		}
+
+		ScopedMutex(const ScopedMutex &) = delete;
+		auto operator=(const ScopedMutex &) -> ScopedMutex & = delete;
+	};
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -200,6 +217,8 @@ namespace {
 
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
+		ScopedMutex lock(storageRpcLock);
+
 		auto data = StorageReadMsgData();
 
 		data.deviceId = deviceId;
@@ -253,6 +272,8 @@ namespace {
 	}
 
 	auto writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
+		ScopedMutex lock(storageRpcLock);
+
 		auto data = StorageWriteMsgData();
 
 		data.deviceId = deviceId;
@@ -290,6 +311,8 @@ namespace {
 	}
 
 	auto flushDevice(const uint64_t deviceId) -> bool {
+		ScopedMutex lock(storageRpcLock);
+
 		auto data = StorageFlushMsgData();
 
 		data.deviceId = deviceId;
@@ -1740,7 +1763,7 @@ namespace {
 
 		const uint16_t nodeMode = inode.mode & EXT2_S_IFMT;
 
-		if (nodeMode != EXT2_S_IFREG and nodeMode != EXT2_S_IFDIR) {
+		if (nodeMode != EXT2_S_IFREG and nodeMode != EXT2_S_IFDIR and nodeMode != EXT2_S_IFLNK and nodeMode != 0) {
 			return false;
 		}
 
@@ -1761,7 +1784,15 @@ namespace {
 			return false;
 		}
 
-		if (!freeInodeBlocks(inode, 0)) {
+		if (nodeMode != EXT2_S_IFDIR and inode.linksCount > 1) {
+			--inode.linksCount;
+
+			return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
+		}
+
+		const bool fastSymlink = nodeMode == EXT2_S_IFLNK and inode.blocks == 0;
+
+		if (!fastSymlink and !freeInodeBlocks(inode, 0)) {
 			return false;
 		}
 
@@ -2202,6 +2233,8 @@ namespace {
 	}
 
 	auto mountedDevice(const uint64_t mountId, StorageFsProbeDeviceMsgData &device) -> bool {
+		ScopedMutex lock(mountsLock);
+
 		for (const auto &mount : mounts) {
 			if (mount.mountId == mountId) {
 				device = mount.device;
@@ -2256,6 +2289,7 @@ namespace {
 				Ext2Volume volume(device);
 
 				if (volume.load()) {
+					ScopedMutex lock(mountsLock);
 					const uint64_t mountId = nextMountId++;
 
 					mounts.push_back(MountedExt2 { .mountId = mountId, .device = device });
