@@ -32,10 +32,15 @@ constexpr uint64_t STORAGE_FS_PROBE_DEVICE_MSG_TYPE             = 0x7000A;
 constexpr uint64_t STORAGE_FS_PROBE_DEVICE_REPLY_MSG_TYPE       = 0x7000B;
 constexpr uint64_t STORAGE_LIST_BLOCK_DEVICES_MSG_TYPE          = 0x7000C;
 constexpr uint64_t STORAGE_LIST_BLOCK_DEVICES_REPLY_MSG_TYPE    = 0x7000D;
+constexpr uint64_t STORAGE_UNREGISTER_BLOCK_DEVICE_MSG_TYPE       = 0x7000E;
+constexpr uint64_t STORAGE_UNREGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE = 0x7000F;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
+
+constexpr uint8_t STORAGE_TRANSPORT_NVME_COMPAT = 0;
+constexpr uint8_t STORAGE_TRANSPORT_GENERIC_BLOCK = 1;
 
 struct RegisterMsgData {
 	uint16_t ownerPid {};
@@ -125,11 +130,30 @@ struct StorageRegisterBlockDeviceMsgData {
 	uint32_t maxPagesPerRequest {};
 	char name[STORAGE_MAX_NAME_LENGTH] {};
 	size_t nameLength {};
+	uint8_t transport {};
+	uint64_t readMsgBase {};
+	uint64_t writeMsgBase {};
+	uint64_t flushMsgBase {};
+	uint64_t readReplyMsgBase {};
+	uint64_t writeReplyMsgBase {};
+	uint64_t flushReplyMsgBase {};
 };
 
 struct StorageRegisterBlockDeviceReplyMsgData {
 	bool success {};
 	uint64_t deviceId {};
+};
+
+struct StorageUnregisterBlockDeviceMsgData {
+	uint64_t deviceId {};
+	uint64_t driverPort {};
+	uint32_t controllerId {};
+	uint32_t nsid {};
+};
+
+struct StorageUnregisterBlockDeviceReplyMsgData {
+	bool success {};
+	uint32_t removedCount {};
 };
 
 struct StorageRegisterFsHandlerMsgData {

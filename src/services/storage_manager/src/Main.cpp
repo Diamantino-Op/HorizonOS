@@ -28,7 +28,7 @@ namespace {
 	vector<BlockDevice> blockDevices;
 	vector<FsHandler> fsHandlers;
 	mutex storageMutex;
-	mutex nvmeRequestMutex;
+	mutex blockRequestMutex;
 	mutex nvmeRequestIdMutex;
 
 	auto allocateNvmeRequestId() -> uint64_t {
@@ -183,14 +183,14 @@ namespace {
 		return (static_cast<uint64_t>(pageCount) * 0x1000) / device.blockSize;
 	}
 
-	auto translateToNvmeLocked(const BlockDevice &device, const uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
+	auto translateToBlockLocked(const BlockDevice &device, const uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
 		const uint64_t blocks = transferBlockCount(device, pageCount);
 
 		if (blocks == 0 or lba >= device.blockCount or blocks > device.blockCount - lba) {
 			return false;
 		}
 
-		if (device.kind == BlockDeviceKind::NvmeNamespace) {
+		if (device.kind == BlockDeviceKind::WholeDisk) {
 			out = device;
 			out.parentStartLba = lba;
 
@@ -215,8 +215,34 @@ namespace {
 		return cpuId < 0 ? 0 : static_cast<uint64_t>(cpuId);
 	}
 
-	auto nvmeRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
-		const scoped_lock requestLock(nvmeRequestMutex);
+	void applyDefaultTransport(BlockDevice &device) {
+		if (device.readMsgBase == 0) {
+			device.readMsgBase = NVME_READ_MSG_BASE;
+		}
+
+		if (device.writeMsgBase == 0) {
+			device.writeMsgBase = NVME_WRITE_MSG_BASE;
+		}
+
+		if (device.flushMsgBase == 0) {
+			device.flushMsgBase = NVME_FLUSH_MSG_BASE;
+		}
+
+		if (device.readReplyMsgBase == 0) {
+			device.readReplyMsgBase = NVME_REPLY_READ_MSG_BASE;
+		}
+
+		if (device.writeReplyMsgBase == 0) {
+			device.writeReplyMsgBase = NVME_REPLY_WRITE_MSG_BASE;
+		}
+
+		if (device.flushReplyMsgBase == 0) {
+			device.flushReplyMsgBase = NVME_REPLY_FLUSH_MSG_BASE;
+		}
+	}
+
+	auto blockRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+		const scoped_lock requestLock(blockRequestMutex);
 		const uint64_t cpuId = currentCpuId();
 		const uint64_t requestId = allocateNvmeRequestId();
 
@@ -233,7 +259,7 @@ namespace {
 
 		auto msg = hos_msg();
 
-		msg.type = NVME_READ_MSG_BASE + cpuId;
+		msg.type = device.readMsgBase + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
@@ -242,7 +268,7 @@ namespace {
 		//fflush(stdout);
 
 		if (send_horizonos_message(nvmeReplyPort, device.driverPort, &msg) != 0) {
-			printf("Storage: Failed to send NVMe read for %s.", device.name.c_str());
+			printf("Storage: Failed to send block read for %s.", device.name.c_str());
 			fflush(stdout);
 
 			return false;
@@ -256,7 +282,7 @@ namespace {
 
 		auto filter = filter_options();
 
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_READ_MSG_BASE + cpuId };
+		filter.whiteListTypes = new uint64_t[1] { device.readReplyMsgBase + cpuId };
 		filter.whiteListCount = 1;
 
 		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
@@ -269,8 +295,8 @@ namespace {
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
-	auto nvmeWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
-		const scoped_lock requestLock(nvmeRequestMutex);
+	auto blockWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+		const scoped_lock requestLock(blockRequestMutex);
 		const uint64_t cpuId = currentCpuId();
 		const uint64_t requestId = allocateNvmeRequestId();
 
@@ -287,7 +313,7 @@ namespace {
 
 		auto msg = hos_msg();
 
-		msg.type = NVME_WRITE_MSG_BASE + cpuId;
+		msg.type = device.writeMsgBase + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
@@ -304,7 +330,7 @@ namespace {
 
 		auto filter = filter_options();
 
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_WRITE_MSG_BASE + cpuId };
+		filter.whiteListTypes = new uint64_t[1] { device.writeReplyMsgBase + cpuId };
 		filter.whiteListCount = 1;
 
 		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
@@ -314,8 +340,8 @@ namespace {
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
-	auto nvmeFlush(const BlockDevice &device) -> bool {
-		const scoped_lock requestLock(nvmeRequestMutex);
+	auto blockFlush(const BlockDevice &device) -> bool {
+		const scoped_lock requestLock(blockRequestMutex);
 		const uint64_t cpuId = currentCpuId();
 		const uint64_t requestId = allocateNvmeRequestId();
 
@@ -328,7 +354,7 @@ namespace {
 
 		auto msg = hos_msg();
 
-		msg.type = NVME_FLUSH_MSG_BASE + cpuId;
+		msg.type = device.flushMsgBase + cpuId;
 		msg.port = device.driverPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
@@ -345,7 +371,7 @@ namespace {
 
 		auto filter = filter_options();
 
-		filter.whiteListTypes = new uint64_t[1] { NVME_REPLY_FLUSH_MSG_BASE + cpuId };
+		filter.whiteListTypes = new uint64_t[1] { device.flushReplyMsgBase + cpuId };
 		filter.whiteListCount = 1;
 
 		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
@@ -371,7 +397,7 @@ namespace {
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 		const uint64_t pages[1] { phys };
 
-		if (!nvmeRead(device, lba, pages, 1)) {
+		if (!blockRead(device, lba, pages, 1)) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
@@ -479,6 +505,13 @@ namespace {
 					partition.blockCount = entry->lastLba - entry->firstLba + 1;
 					partition.blockSize = rawDevice.blockSize;
 					partition.maxPagesPerRequest = rawDevice.maxPagesPerRequest;
+					partition.transport = rawDevice.transport;
+					partition.readMsgBase = rawDevice.readMsgBase;
+					partition.writeMsgBase = rawDevice.writeMsgBase;
+					partition.flushMsgBase = rawDevice.flushMsgBase;
+					partition.readReplyMsgBase = rawDevice.readReplyMsgBase;
+					partition.writeReplyMsgBase = rawDevice.writeReplyMsgBase;
+					partition.flushReplyMsgBase = rawDevice.flushReplyMsgBase;
 					partition.parentId = rawDevice.id;
 					partition.parentStartLba = entry->firstLba;
 					partition.partitionType = entry->partitionTypeGuid;
@@ -534,13 +567,21 @@ namespace {
 				BlockDevice device {};
 
 				device.id = nextBlockDeviceId++;
-				device.kind = BlockDeviceKind::NvmeNamespace;
+				device.kind = BlockDeviceKind::WholeDisk;
 				device.driverPort = data.driverPort;
 				device.controllerId = data.controllerId;
 				device.nsid = data.nsid;
 				device.blockCount = data.blockCount;
 				device.blockSize = data.blockSize;
-				device.maxPagesPerRequest = min<uint32_t>(data.maxPagesPerRequest, STORAGE_MAX_PAGES_PER_MSG);
+				device.maxPagesPerRequest = data.maxPagesPerRequest == 0 ? STORAGE_MAX_PAGES_PER_MSG : min<uint32_t>(data.maxPagesPerRequest, STORAGE_MAX_PAGES_PER_MSG);
+				device.transport = data.transport;
+				device.readMsgBase = data.readMsgBase;
+				device.writeMsgBase = data.writeMsgBase;
+				device.flushMsgBase = data.flushMsgBase;
+				device.readReplyMsgBase = data.readReplyMsgBase;
+				device.writeReplyMsgBase = data.writeReplyMsgBase;
+				device.flushReplyMsgBase = data.flushReplyMsgBase;
+				applyDefaultTransport(device);
 				device.name = name;
 
 				{
@@ -635,6 +676,70 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto blockUnregistrationHandler(void */*unused*/) -> void * {
+		auto data = StorageUnregisterBlockDeviceMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { STORAGE_UNREGISTER_BLOCK_DEVICE_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(storagePort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = StorageUnregisterBlockDeviceReplyMsgData();
+
+			{
+				const scoped_lock lock(storageMutex);
+				vector<uint64_t> removedParents;
+
+				for (auto it = blockDevices.begin(); it != blockDevices.end();) {
+					const bool matchById = data.deviceId != 0 and it->id == data.deviceId;
+					const bool matchByDriver = data.deviceId == 0 and data.driverPort != 0 and it->driverPort == data.driverPort and it->controllerId == data.controllerId and it->nsid == data.nsid;
+
+					if (it->kind == BlockDeviceKind::WholeDisk and (matchById or matchByDriver)) {
+						removedParents.push_back(it->id);
+						it = blockDevices.erase(it);
+						++reply.removedCount;
+						continue;
+					}
+
+					if (it->kind == BlockDeviceKind::Partition and (matchById or ranges::find(removedParents, it->parentId) != removedParents.end())) {
+						it = blockDevices.erase(it);
+						++reply.removedCount;
+						continue;
+					}
+
+					++it;
+				}
+			}
+
+			reply.success = reply.removedCount != 0;
+
+			if (reply.success) {
+				printf("Storage: Unregistered block device ctrl=%u nsid=%u removed=%u.", data.controllerId, data.nsid, reply.removedCount);
+				fflush(stdout);
+			}
+
+			auto replyMsg = hos_msg();
+
+			replyMsg.type = STORAGE_UNREGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+
+			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
+		}
+	}
+
 	[[noreturn]] auto readHandler(void */*unused*/) -> void * {
 		auto data = StorageReadMsgData();
 		auto msg = hos_msg();
@@ -659,19 +764,19 @@ namespace {
 			reply.pageCount = data.pageCount;
 
 			if (data.pageCount > 0 and data.pageCount <= STORAGE_MAX_PAGES_PER_MSG) {
-				BlockDevice nvmeDevice {};
+				BlockDevice blockDevice {};
 
 				{
 					const scoped_lock lock(storageMutex);
 					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
-						translateToNvmeLocked(*device, data.lba, data.pageCount, nvmeDevice);
+						translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
 					}
 				}
 
-				if (nvmeDevice.driverPort != 0) {
-					reply.success = nvmeRead(nvmeDevice, nvmeDevice.parentStartLba, data.pagePhysArray, data.pageCount);
+				if (blockDevice.driverPort != 0) {
+					reply.success = blockRead(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
 				}
 			}
 
@@ -710,19 +815,19 @@ namespace {
 			reply.requestId = data.requestId;
 
 			if (data.pageCount > 0 and data.pageCount <= STORAGE_MAX_PAGES_PER_MSG) {
-				BlockDevice nvmeDevice {};
+				BlockDevice blockDevice {};
 
 				{
 					const scoped_lock lock(storageMutex);
 					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
-						translateToNvmeLocked(*device, data.lba, data.pageCount, nvmeDevice);
+						translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
 					}
 				}
 
-				if (nvmeDevice.driverPort != 0) {
-					reply.success = nvmeWrite(nvmeDevice, nvmeDevice.parentStartLba, data.pagePhysArray, data.pageCount);
+				if (blockDevice.driverPort != 0) {
+					reply.success = blockWrite(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
 				}
 			}
 
@@ -759,7 +864,7 @@ namespace {
 
 			auto reply = StorageFlushReplyMsgData();
 			reply.requestId = data.requestId;
-			BlockDevice nvmeDevice {};
+			BlockDevice blockDevice {};
 
 			{
 				const scoped_lock lock(storageMutex);
@@ -769,16 +874,16 @@ namespace {
 					if (device->kind == BlockDeviceKind::Partition) {
 						const BlockDevice *parent = findBlockDeviceLocked(device->parentId);
 						if (parent != nullptr) {
-							nvmeDevice = *parent;
+							blockDevice = *parent;
 						}
 					} else {
-						nvmeDevice = *device;
+						blockDevice = *device;
 					}
 				}
 			}
 
-			if (nvmeDevice.driverPort != 0) {
-				reply.success = nvmeFlush(nvmeDevice);
+			if (blockDevice.driverPort != 0) {
+				reply.success = blockFlush(blockDevice);
 			}
 
 			auto replyMsg = hos_msg();
@@ -875,6 +980,7 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	fflush(stdout);
 
 	pthread_t blockThread;
+	pthread_t unregisterThread;
 	pthread_t fsThread;
 	pthread_t readThread;
 	pthread_t writeThread;
@@ -882,6 +988,7 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	pthread_t listThread;
 
 	if (pthread_create(&blockThread, nullptr, blockRegistrationHandler, nullptr) != 0 or
+	    pthread_create(&unregisterThread, nullptr, blockUnregistrationHandler, nullptr) != 0 or
 	    pthread_create(&fsThread, nullptr, fsHandlerRegistrationHandler, nullptr) != 0 or
 	    pthread_create(&readThread, nullptr, readHandler, nullptr) != 0 or
 	    pthread_create(&writeThread, nullptr, writeHandler, nullptr) != 0 or
@@ -894,6 +1001,7 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	}
 
 	pthread_detach(blockThread);
+	pthread_detach(unregisterThread);
 	pthread_detach(fsThread);
 	pthread_detach(readThread);
 	pthread_detach(writeThread);

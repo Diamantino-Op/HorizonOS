@@ -7,7 +7,7 @@
 using namespace std;
 
 enum class BlockDeviceKind : uint8_t {
-	NvmeNamespace,
+	WholeDisk,
 	Partition,
 };
 
@@ -24,6 +24,13 @@ struct BlockDevice {
 	uint64_t blockCount {};
 	uint32_t blockSize {};
 	uint32_t maxPagesPerRequest {};
+	uint8_t transport {};
+	uint64_t readMsgBase {};
+	uint64_t writeMsgBase {};
+	uint64_t flushMsgBase {};
+	uint64_t readReplyMsgBase {};
+	uint64_t writeReplyMsgBase {};
+	uint64_t flushReplyMsgBase {};
 	uint64_t parentId {};
 	uint64_t parentStartLba {};
 	Guid partitionType {};

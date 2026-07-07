@@ -36,9 +36,12 @@ constexpr uint64_t USB_STORAGE_REPLY_WRITE_MSG_BASE = 0x50000;
 constexpr uint64_t USB_STORAGE_REPLY_FLUSH_MSG_BASE = 0x60000;
 constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE = 0x70000;
 constexpr uint64_t STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE = 0x70001;
+constexpr uint64_t STORAGE_UNREGISTER_BLOCK_DEVICE_MSG_TYPE = 0x7000E;
+constexpr uint64_t STORAGE_UNREGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE = 0x7000F;
 
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
+constexpr uint8_t STORAGE_TRANSPORT_GENERIC_BLOCK = 1;
 
 constexpr uint8_t PCI_CLASS_SERIAL_BUS = 0x0C;
 constexpr uint8_t PCI_SUBCLASS_USB = 0x03;
@@ -106,6 +109,9 @@ constexpr uint32_t XHCI_TRB_TYPE_DISABLE_SLOT_COMMAND = 10;
 constexpr uint32_t XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND = 11;
 constexpr uint32_t XHCI_TRB_TYPE_CONFIGURE_ENDPOINT_COMMAND = 12;
 constexpr uint32_t XHCI_TRB_TYPE_EVALUATE_CONTEXT_COMMAND = 13;
+constexpr uint32_t XHCI_TRB_TYPE_RESET_ENDPOINT_COMMAND = 14;
+constexpr uint32_t XHCI_TRB_TYPE_STOP_ENDPOINT_COMMAND = 15;
+constexpr uint32_t XHCI_TRB_TYPE_SET_TR_DEQUEUE_POINTER_COMMAND = 16;
 constexpr uint32_t XHCI_TRB_TYPE_NOOP_COMMAND = 23;
 constexpr uint32_t XHCI_TRB_TYPE_TRANSFER_EVENT = 32;
 constexpr uint32_t XHCI_TRB_TYPE_COMMAND_COMPLETION_EVENT = 33;
@@ -142,6 +148,8 @@ constexpr uint32_t USB_REQUEST_SET_CONFIGURATION = 9;
 constexpr uint32_t USB_REQUEST_GET_STATUS = 0;
 constexpr uint32_t USB_REQUEST_CLEAR_FEATURE = 1;
 constexpr uint32_t USB_REQUEST_SET_FEATURE = 3;
+constexpr uint32_t USB_HID_REQUEST_SET_IDLE = 0x0A;
+constexpr uint32_t USB_HID_REQUEST_SET_PROTOCOL = 0x0B;
 constexpr uint32_t USB_CLASS_HID = 0x03;
 constexpr uint32_t USB_CLASS_HUB = 0x09;
 constexpr uint32_t USB_CLASS_MASS_STORAGE = 0x08;
@@ -156,6 +164,8 @@ constexpr uint32_t USB_HUB_FEATURE_PORT_RESET = 4;
 constexpr uint32_t USB_HUB_FEATURE_PORT_POWER = 8;
 constexpr uint32_t USB_HUB_FEATURE_C_PORT_CONNECTION = 16;
 constexpr uint32_t USB_HUB_FEATURE_C_PORT_RESET = 20;
+constexpr uint32_t USB_FEATURE_ENDPOINT_HALT = 0;
+constexpr uint32_t USB_MASS_STORAGE_REQUEST_BULK_ONLY_RESET = 0xFF;
 constexpr uint16_t USB_HUB_PORT_STATUS_CONNECTION = 1U << 0;
 constexpr uint16_t USB_HUB_PORT_STATUS_ENABLE = 1U << 1;
 constexpr uint16_t USB_HUB_PORT_STATUS_LOW_SPEED = 1U << 9;
@@ -328,11 +338,30 @@ struct StorageRegisterBlockDeviceMsgData {
 	uint32_t maxPagesPerRequest {};
 	char name[STORAGE_MAX_NAME_LENGTH] {};
 	size_t nameLength {};
+	uint8_t transport {};
+	uint64_t readMsgBase {};
+	uint64_t writeMsgBase {};
+	uint64_t flushMsgBase {};
+	uint64_t readReplyMsgBase {};
+	uint64_t writeReplyMsgBase {};
+	uint64_t flushReplyMsgBase {};
 };
 
 struct StorageRegisterBlockDeviceReplyMsgData {
 	bool success {};
 	uint64_t deviceId {};
+};
+
+struct StorageUnregisterBlockDeviceMsgData {
+	uint64_t deviceId {};
+	uint64_t driverPort {};
+	uint32_t controllerId {};
+	uint32_t nsid {};
+};
+
+struct StorageUnregisterBlockDeviceReplyMsgData {
+	bool success {};
+	uint32_t removedCount {};
 };
 
 struct XhciTrb {
@@ -410,6 +439,7 @@ struct XhciDevice {
 };
 
 struct MappedController {
+	uint32_t controllerId {};
 	PciDevice pci {};
 	uint64_t barPhys {};
 	uint64_t barSize {};
