@@ -480,6 +480,18 @@ namespace {
 		return false;
 	}
 
+	void setControllerInterruptsEnabled(const uint64_t operationalBase, const bool enabled) {
+		uint32_t command = mmioRead32(operationalBase, XHCI_OP_USBCMD);
+
+		if (enabled) {
+			command |= XHCI_USBCMD_INTE;
+		} else {
+			command &= ~XHCI_USBCMD_INTE;
+		}
+
+		mmioWrite32(operationalBase, XHCI_OP_USBCMD, command);
+	}
+
 	auto maxScratchpadBuffers(const uint32_t hcsParams2) -> uint32_t {
 		return ((hcsParams2 >> 27) & 0x1FU) << 5U | ((hcsParams2 >> 21) & 0x1FU);
 	}
@@ -558,6 +570,13 @@ namespace {
 		mmioWrite32(interrupterBase, XHCI_INTERRUPTER_IMAN, enabled ? 0x3 : 0);
 	}
 
+	void acknowledgeEvents(const MappedController &controller) {
+		const uint64_t interrupterBase = controller.runtimeBase + 0x20;
+		const uint32_t iman = mmioRead32(interrupterBase, XHCI_INTERRUPTER_IMAN);
+		mmioWrite32(interrupterBase, XHCI_INTERRUPTER_IMAN, (iman & 0x2U) | 0x1U);
+		mmioWrite32(controller.operationalBase, XHCI_OP_USBSTS, XHCI_USBSTS_EINT);
+	}
+
 	void updateEventDequeuePointer(const MappedController &controller) {
 		const uint64_t interrupterBase = controller.runtimeBase + 0x20;
 		const uint64_t eventDequeuePhys = controller.memory.eventRing.phys + controller.memory.eventDequeueIndex * sizeof(XhciTrb);
@@ -570,6 +589,44 @@ namespace {
 
 	auto completionCode(const XhciTrb &event) -> uint32_t {
 		return (event.status >> 24) & 0xFFU;
+	}
+
+	void ringDoorbell(const MappedController &controller, const uint32_t target, const uint32_t value) {
+		mmioWrite32(controller.doorbellBase, target * 4, value);
+	}
+
+	auto enqueueCommand(MappedController &controller, const XhciTrb &command) -> bool {
+		if (controller.memory.commandEnqueueIndex >= XHCI_COMMAND_RING_TRBS - 1) {
+			return false;
+		}
+
+		auto *ring = reinterpret_cast<XhciTrb *>(controller.memory.commandRing.virt);
+		auto &slot = ring[controller.memory.commandEnqueueIndex];
+		slot = command;
+
+		if (controller.memory.commandProducerCycle != 0) {
+			slot.control |= XHCI_TRB_CYCLE;
+		} else {
+			slot.control &= ~XHCI_TRB_CYCLE;
+		}
+
+		++controller.memory.commandEnqueueIndex;
+
+		if (controller.memory.commandEnqueueIndex == XHCI_COMMAND_RING_TRBS - 1) {
+			controller.memory.commandEnqueueIndex = 0;
+			controller.memory.commandProducerCycle ^= 1;
+		}
+
+		ringDoorbell(controller, 0, 0);
+
+		return true;
+	}
+
+	auto submitNoopCommand(MappedController &controller) -> bool {
+		auto command = XhciTrb();
+		command.control = XHCI_TRB_TYPE_NOOP_COMMAND << XHCI_TRB_TYPE_SHIFT;
+
+		return enqueueCommand(controller, command);
 	}
 
 	auto drainEvents(MappedController &controller, uint32_t &loggedEvents) -> uint32_t {
@@ -610,7 +667,64 @@ namespace {
 			updateEventDequeuePointer(controller);
 		}
 
+		if (drained != 0) {
+			acknowledgeEvents(controller);
+		}
+
 		return drained;
+	}
+
+	void logControllerStatus(const MappedController &controller, const char *phase) {
+		const uint32_t usbcmd = mmioRead32(controller.operationalBase, XHCI_OP_USBCMD);
+		const uint32_t usbsts = mmioRead32(controller.operationalBase, XHCI_OP_USBSTS);
+		const uint32_t iman = mmioRead32(controller.runtimeBase + 0x20, XHCI_INTERRUPTER_IMAN);
+
+		printf("XHCI: %s status USBCMD=0x%x USBSTS=0x%x IMAN=0x%x.", phase, usbcmd, usbsts, iman);
+		fflush(stdout);
+	}
+
+	void logPorts(const MappedController &controller) {
+		for (uint32_t port = 1; port <= controller.maxPorts; ++port) {
+			const uint32_t portOffset = XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC;
+			const uint32_t portsc = mmioRead32(controller.operationalBase, portOffset);
+
+			if (portsc != 0) {
+				printf("XHCI: Port %u PORTSC=0x%x.", port, portsc);
+				fflush(stdout);
+			}
+		}
+	}
+
+	void postStartProbe(MappedController &controller) {
+		uint32_t loggedEvents = 0;
+
+		logControllerStatus(controller, "post-start");
+		logPorts(controller);
+
+		if (!submitNoopCommand(controller)) {
+			printf("XHCI: Failed to submit No-Op command.");
+			fflush(stdout);
+			return;
+		}
+
+		printf("XHCI: Submitted No-Op command.");
+		fflush(stdout);
+
+		for (int i = 0; i < 100; ++i) {
+			const uint32_t drained = drainEvents(controller, loggedEvents);
+
+			if (drained != 0) {
+				printf("XHCI: Polled %u event(s) after No-Op command.", drained);
+				fflush(stdout);
+				return;
+			}
+
+			usleep(1000);
+		}
+
+		logControllerStatus(controller, "after No-Op timeout");
+		printf("XHCI: No event observed after No-Op command.");
+		fflush(stdout);
 	}
 
 	auto eventIrqHandler(void *ctx) -> void * {
@@ -649,14 +763,25 @@ namespace {
 
 	auto startEventIrqHandler(MappedController &controller) -> bool {
 		pthread_t thread {};
+		int err = 0;
 
-		if (pthread_create(&thread, nullptr, eventIrqHandler, &controller) != 0) {
-			printf("XHCI: Failed to start event IRQ handler for %02x:%02x.%x.", controller.pci.bus, controller.pci.device, controller.pci.function);
+		for (int attempt = 1; attempt <= 20; ++attempt) {
+			err = pthread_create(&thread, nullptr, eventIrqHandler, &controller);
+
+			if (err == 0) {
+				eventThreads.push_back(thread);
+
+				return true;
+			}
+
+			usleep(10000);
+		}
+
+		if (err != 0) {
+			printf("XHCI: Failed to start event IRQ handler for %02x:%02x.%x err=%d.", controller.pci.bus, controller.pci.device, controller.pci.function, err);
 			fflush(stdout);
 			return false;
 		}
-
-		eventThreads.push_back(thread);
 
 		return true;
 	}
@@ -855,20 +980,27 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		auto &activeController = controllers.back();
 
-		if (!startEventIrqHandler(activeController)) {
-			continue;
-		}
+		setInterrupterEnabled(activeController, false);
 
-		if (!startController(activeController.operationalBase, true)) {
+		if (!startController(activeController.operationalBase, false)) {
 			printf("XHCI: Controller %zu failed to start.", controllers.size() - 1);
 			fflush(stdout);
 			continue;
 		}
 
-		setInterrupterEnabled(activeController, true);
-
 		printf("XHCI: Controller %zu started, configured %u device slot(s).", controllers.size() - 1, activeController.configuredSlots);
 		fflush(stdout);
+
+		postStartProbe(activeController);
+
+		if (!startEventIrqHandler(activeController)) {
+			continue;
+		}
+
+		setInterrupterEnabled(activeController, true);
+		setControllerInterruptsEnabled(activeController.operationalBase, true);
+
+		logControllerStatus(activeController, "irq-enabled");
 	}
 
 	printf("XHCI: %zu controller(s) initialized.", controllers.size());
