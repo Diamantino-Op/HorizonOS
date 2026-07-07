@@ -18,6 +18,9 @@ constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
 constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
 constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
 constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
+constexpr uint64_t PCI_MSI_ALLOC_MSG_TYPE = 0x50;
+constexpr uint64_t PCI_MSI_ALLOC_REPLY_MSG_TYPE = 0x60;
+constexpr uint64_t PCI_MSI_FREE_MSG_TYPE = 0x70;
 constexpr uint64_t PCI_MSIX_ALLOC_MSG_TYPE = 0x80;
 constexpr uint64_t PCI_MSIX_ALLOC_REPLY_MSG_TYPE = 0x90;
 constexpr uint64_t PCI_MSIX_FREE_MSG_TYPE = 0xA0;
@@ -51,8 +54,11 @@ constexpr uint8_t PCI_PROGIF_XHCI = 0x30;
 
 constexpr uint16_t PCI_COMMAND = 0x04;
 constexpr uint16_t PCI_BAR0 = 0x10;
+constexpr uint16_t PCI_INTERRUPT_LINE = 0x3C;
+constexpr uint16_t PCI_INTERRUPT_PIN = 0x3D;
 constexpr uint32_t PCI_COMMAND_MEMORY_SPACE = 1U << 1;
 constexpr uint32_t PCI_COMMAND_BUS_MASTER = 1U << 2;
+constexpr uint32_t PCI_COMMAND_INTERRUPT_DISABLE = 1U << 10;
 
 constexpr uint32_t XHCI_CAP_CAPLENGTH = 0x00;
 constexpr uint32_t XHCI_CAP_HCSPARAMS1 = 0x04;
@@ -252,6 +258,24 @@ struct PciWriteMsgData {
 	uint32_t data {};
 };
 
+struct PciMsiAllocMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+	uint64_t port {};
+	uint64_t lapicId {};
+};
+
+struct PciMsiAllocReplyMsgData {
+	uint8_t vec {};
+};
+
+struct PciMsiFreeMsgData {
+	uint8_t bus {};
+	uint8_t dev {};
+	uint8_t func {};
+};
+
 struct PciMsixAllocMsgData {
 	uint8_t bus {};
 	uint8_t dev {};
@@ -422,6 +446,11 @@ struct ControllerMemory {
 	uint32_t maxScratchpads {};
 	uint64_t eventPort {};
 	uint8_t msixVector {};
+	uint8_t msiVector {};
+	uint8_t legacyIrq {};
+	bool usingMsix {};
+	bool usingMsi {};
+	bool usingLegacyIrq {};
 };
 
 struct XhciDevice {

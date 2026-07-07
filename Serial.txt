@@ -6,7 +6,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mUpdated TSS... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mIDT Loaded... OK[0m
 [ [1;34minformation [0m] [1;30mPMM: [0;37mInitializing Physical Memory Manager...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8453652480[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8453648384[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAllocator Context created...[0m
 [ [1;34minformation [0m] [1;30mVMM: [0;37mInitializing Virtual Memory Manager...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVMM Loaded... OK[0m
@@ -57,7 +57,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 6 as ELF...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/vfs Size: 9021384[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 7 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/xhci Size: 9052816[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/xhci Size: 9056496[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 8 as ELF...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 9: /boot/HorizonOS/programs/hello_world Size: 7763944[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 9 as ELF...[0m
@@ -68,82 +68,82 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mSyscalls Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAll Cpus initialized...[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] starting[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 5 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 1 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 7 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 6 initialized...[0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 9 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 8 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 4 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 2 initialized...[0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 6 initialized...[0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 5 initialized...[0m
 [ [1;34minformation [0m] [1;30mCpu: [0;37mCore 3 initialized...[0m
-[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 9 initialized...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 3: Name/Registry Service: Successfully registered port: 1![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Successfully registered port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mCpu: [0;37mCore 2 initialized...[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 3: Name/Registry Service: Successfully registered port: 1![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Starting Name/Registry register message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service Vfs registered on port 4![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service PCI registered on port 5![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service XHCI registered on port 6![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service NVMe registered on port 7![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service uAcpi registered on port 8![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service Ext2 registered on port 2![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service StorageManager registered on port 3![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 24: Starting Name/Registry check message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service XHCI registered on port 7![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service PCI registered on port 8![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Successfully registered service![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service Vfs registered on port 5![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service uAcpi registered on port 2![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service NVMe registered on port 4![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service StorageManager registered on port 3![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 21: Service Ext2 registered on port 6![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 23: Starting Name/Registry get message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: Successfully registered service![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Successfully registered service![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 22: Starting Name/Registry unregister message handler![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 5, TID: 5, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: PCI info: Port: 5, TID: 5, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 8, TID: 4, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 5, TID: 5, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 7: Storage: Ready on port 3, NVMe port 7, NVMe reply port 9.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 8), waiting for MCFG data...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mstarting uACPI, version 6.0.0[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Requesting PCI service to search for NVMe devices...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 24: Starting Name/Registry check message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: PCI info: Port: 8, TID: 5, Version: 0.0.0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Storage info: Port: 3, TID: 7, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 9: Vfs: Ready on port 4, Storage port 3, Ext2 port 2.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uACPI exists[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: uACPI: PCI info: Port: 8, TID: 5, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: PCI info: Port: 8, TID: 5, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 7: Storage: Ready on port 3, NVMe port 4, NVMe reply port 11.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Requesting PCI service to search for NVMe devices...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: uAcpi info: Port: 2, TID: 4, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Notified uACPI (port 2), waiting for MCFG data...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 9: Vfs: Ready on port 5, Storage port 3, Ext2 port 6.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 29: Starting uAcpi irq message handler![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mstarting uACPI, version 6.0.0[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mRSDP 0x000000007FB7E014 00000024 v02 (BOCHS )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 25: Starting uAcpi irq message handler![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mXSDT 0x000000007FB7D0E8 00000054 v01 (BOCHS  BXPC    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mDSDT 0x000000007FB7A000 0000260D v01 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 30: Storage: Registered filesystem handler ext2 on port 2.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 32: Storage: Registered filesystem handler ext2 on port 6.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACP 0x000000007FB79000 000000F4 v03 (BOCHS  BXPC    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mAPIC 0x000000007FB78000 000000C0 v03 (BOCHS  BXPC    )[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 8: Ext2: Registered handler on port 2 with Storage port 3.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 8: Ext2: Registered handler on port 6 with Storage port 3.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mHPET 0x000000007FB77000 00000038 v01 (BOCHS  BXPC    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mMCFG 0x000000007FB76000 0000003C v01 (BOCHS  BXPC    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mWAET 0x000000007FB75000 00000028 v01 (BOCHS  BXPC    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mBGRT 0x000000007FB74000 00000038 v01 (INTEL  EDK2    )[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mFACS 0x000000007FBDD000 00000040[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1799 ops in 2ms (avg 738626/s)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI service ready, forwarding MCFG...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64: Vfs: Volume table:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  Devices:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  Tmp:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=0 ecam=e0000000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65: Vfs: Volume table:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  Devices:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  Tmp:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37msuccessfully loaded 1 AML blob, 1799 ops in 8ms (avg 202991/s)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS mount refresh[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e0000000 virt=7bf000 buses=0-255[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS Devices: stat[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS Devices: readdir[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS Devices:/null read[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS Devices:/null write[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS directory handle readdir[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI service ready, forwarding MCFG...[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=0 ecam=e0000000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e0000000 virt=7bf000 buses=0-255[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs register[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device stat[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device read[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device write[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mPCI root bridge: seg=0 bus=128 ecam=e8000000[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: ECAM segment 0 mapped: phys=e8000000 virt=80840000 buses=128-255[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: All MCFG segments received (2 segment(s))[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating devices...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs register[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating root complex seg=0 bus 00-ff[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device stat[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device read[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device write[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs device ioctl[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 5: PCI: Enumerating root complex seg=0 bus 00-ff[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS devfs unregister[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] starting partition file workflows[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] waiting for mounted partition volumes (1/300)[0m
@@ -172,40 +172,37 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 89: PCI: Msix Global Enable message loop started![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 90: PCI: Msix Global Disable message loop started![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: barPhys: 0x7000000000, barSize: 0x4000[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Controller 0 81:00.0 BAR=0x81200000 size=0x4000 cap0=0x1000040 versionRaw=0x100 version=1.00 slots=64 ports=8 interrupters=16 scratchpads=0 pageMask=0x1 hcs2=0xf hcc=0x87001.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered AdminCQ port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 0 on 00:04.0 vector=0x24[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Controller 0 81:00.0 BAR=0x81200000 size=0x4000 cap0=0x1000040 versionRaw=0x100 version=1.00 slots=64 ports=8 interrupters=16 scratchpads=0 pageMask=0x1 hcs2=0xf hcc=0x87001.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller model: QEMU NVMe Ctrl, serial: deadbeef, namespaces: 256[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 0 on 81:00.0 vector=0x25[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: MSI-X entry 0 vector=37 eventPort=14.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Controller 0 prepared, configured 32 device slot(s), DCBAA=0x10be26000 CR=0x10be27000 ER=0x10be28000 ERST=0x10be29000.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Namespace 1 — 41943040 LBAs × 512 bytes = 20480 MB[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Controller 0 prepared, configured 32 device slot(s), DCBAA=0x10be25000 CR=0x10be26000 ER=0x10be27000 ERST=0x10be28000.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Controller 0 started, configured 32 device slot(s).[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller 00:04.0 ready.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mnamespace initialization done in 44ms: 49 devices, 0 thermal zones[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37menabled 2 GPEs in block _GPE@[0->64][0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: post-start status USBCMD=0x1 USBSTS=0x0 IMAN=0x0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: 1 controller(s) initialized.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller model: QEMU NVMe Ctrl, serial: deadbeef, namespaces: 256[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 1 PORTSC=0x202a0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: CPUs: 10[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 2 PORTSC=0x202a0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 1 port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 1 on 00:04.0 vector=0x26[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 3 PORTSC=0x21203.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 4 PORTSC=0x202a0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 5 PORTSC=0x20ee1.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 6 PORTSC=0x20ee1.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 7 PORTSC=0x202a0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37mnamespace initialization done in 50ms: 49 devices, 0 thermal zones[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port 8 PORTSC=0x202a0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Submitted No-Op command.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 4: [0;34muACPI: [0;37menabled 2 GPEs in block _GPE@[0->64][0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Event ctrl=0x8401 status=0x1000000 param=000000010be27000 type=33 code=1 index=0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Event ctrl=0x8401 status=0x1000000 param=000000010be26000 type=33 code=1 index=0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Polled 1 event(s) after No-Op command.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Namespace 1 — 41943040 LBAs × 512 bytes = 20480 MB[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Controller 00:04.0 ready.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: 1 controller(s) initialized.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: CPUs: 10[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Addressed device on port3 as slot 1 speed=4 route=0x0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=1 port=3 descriptor header maxPacket=9.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 1 for core slot 0[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 2 port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 2 on 00:04.0 vector=0x22[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 1 port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=1 port=3 descriptor vid=46f4 pid=0001 class=00 subclass=00 protocol=00 maxPacket=9.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 1 on 00:04.0 vector=0x26[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=1 strings manufacturer='QEMU' product='QEMU USB HARDDRIVE' serial='1-0000:80:03.0:00.0:00.0-3'.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configuration slot=1 value=1 interfaces=1 attributes=0xc0 maxPower=0 total=44.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Interface slot=1 if=0 alt=0 endpoints=2 class=08 subclass=06 protocol=50.[0m
@@ -213,53 +210,56 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Endpoint slot=1 addr=0x02 attrs=0x02 maxPacket=1024 interval=0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configured endpoints slot=1 addFlags=0x19.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Set configuration slot=1 value=1.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 1 for core slot 0[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 2 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: INQUIRY slot=1 vendor='QEMU    ' product='QEMU HARDDISK   '.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 2 on 00:04.0 vector=0x22[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: READ CAPACITY slot=1 blocks=8388608 blockSize=512.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Registered block device usb0n1 id=1 blocks=8388608 blockSize=512.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Probing GPT on usb0n1.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Failed to read GPT header from usb0n1.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: Registered usb0n1 slot=1 blocks=8388608 blockSize=512.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port status change event for port 5 during command wait.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 2 for core slot 1[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 3 port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 3 on 00:04.0 vector=0x22[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: INQUIRY slot=1 vendor='QEMU    ' product='QEMU HARDDISK   '.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: READ CAPACITY slot=1 blocks=8388608 blockSize=512.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 3 for core slot 2[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 4 port![0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Registered block device usb0n1 id=1 blocks=8388608 blockSize=512.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Probing GPT on usb0n1.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Failed to read GPT header from usb0n1.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/MSD: Registered usb0n1 slot=1 blocks=8388608 blockSize=512.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port status change event for port 5 during command wait.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 4 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Addressed device on port5 as slot 2 speed=3 route=0x0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=2 port=5 descriptor header maxPacket=64.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=2 port=5 descriptor vid=0627 pid=0001 class=00 subclass=00 protocol=00 maxPacket=64.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=2 strings manufacturer='QEMU' product='QEMU USB Keyboard' serial='68284-0000:80:03.0:00.0:00.0-1'.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 3 for core slot 2[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 4 port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configuration slot=2 value=1 interfaces=1 attributes=0xa0 maxPower=50 total=34.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Interface slot=2 if=0 alt=0 endpoints=1 class=03 subclass=01 protocol=01.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 4 for core slot 3[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 5 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 4 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Endpoint slot=2 addr=0x81 attrs=0x03 maxPacket=8 interval=7.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configured endpoints slot=2 addFlags=0x9.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Set configuration slot=2 value=1.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/HID: Boot HID keyboard slot=2 if=0 endpointCount=1 protocol=1 idle=1 input handling not installed.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 5 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Port status change event for port 6 during command wait.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Addressed device on port6 as slot 3 speed=3 route=0x0.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=3 port=6 descriptor header maxPacket=64.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=3 port=6 descriptor vid=0627 pid=0001 class=00 subclass=00 protocol=00 maxPacket=64.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 5 for core slot 4[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 6 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 4 for core slot 3[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 5 port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Device slot=3 strings manufacturer='QEMU' product='QEMU USB Mouse' serial='89126-0000:80:03.0:00.0:00.0-2'.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 6 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configuration slot=3 value=1 interfaces=1 attributes=0xa0 maxPower=50 total=34.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Interface slot=3 if=0 alt=0 endpoints=1 class=03 subclass=01 protocol=02.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Endpoint slot=3 addr=0x81 attrs=0x03 maxPacket=4 interval=7.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Configured endpoints slot=3 addFlags=0x9.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Set configuration slot=3 value=1.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 6 for core slot 5[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 7 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 5 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI/HID: Boot HID mouse slot=3 if=0 endpointCount=1 protocol=1 idle=1 input handling not installed.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: Enumerated 3 root device(s).[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 7 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: irq-enabled status USBCMD=0x5 USBSTS=0x8 IMAN=0x2.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 10: XHCI: 1 controller(s) initialized.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 91: XHCI: Event IRQ handler waiting on port 14.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 5 for core slot 4[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 6 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 6 on 00:04.0 vector=0x22[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 6 for core slot 5[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 7 port![0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 7 on 00:04.0 vector=0x22[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Created I/O queue 7 for core slot 6[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Successfully registered IOCQ 8 port![0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 87: PCI/MSI-X: Entry 8 on 00:04.0 vector=0x22[0m
@@ -275,27 +275,27 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 2 with ID 2, lapic ID: 2[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 3 with ID 3, lapic ID: 3[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 4 with ID 4, lapic ID: 4[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 95: NVMe: Core 3 locked to CPU ID 3. (From 3)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 5 with ID 5, lapic ID: 5[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 94: NVMe: Core 2 locked to CPU ID 2. (From 2)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 92: NVMe: Core 0 locked to CPU ID 0. (From 0)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 6 with ID 6, lapic ID: 6[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 7 with ID 7, lapic ID: 7[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 8 with ID 8, lapic ID: 8[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Cpu 9 with ID 9, lapic ID: 9[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 99: NVMe: Core 7 locked to CPU ID 7. (From 7)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 92: NVMe: Core 0 locked to CPU ID 0. (From 0)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 96: NVMe: Core 4 locked to CPU ID 4. (From 4)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Storage info: Port: 3, TID: 7, Version: 0.0.0.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Registered block device nvme0n1 id=2 blocks=41943040 blockSize=512.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Probing GPT on nvme0n1.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 98: NVMe: Core 9 locked to CPU ID 9. (From 9)NVMe: Core 6 locked to CPU ID 6. (From 6)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 93: NVMe: Core 1 locked to CPU ID 1. (From 1)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 94: NVMe: Core 2 locked to CPU ID 2. (From 2)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 100: NVMe: Core 8 locked to CPU ID 8. (From 8)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Registered partition nvme0n1p1 id=3 start=2048 blocks=1046528.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Registered partition nvme0n1p2 id=4 start=1048576 blocks=5242880.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Storage info: Port: 3, TID: 7, Version: 0.0.0.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Registered block device nvme0n1 id=2 blocks=41943040 blockSize=512.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Probing GPT on nvme0n1.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 101: NVMe: Core 9 locked to CPU ID 9. (From 9)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 99: NVMe: Core 7 locked to CPU ID 7. (From 7)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 95: NVMe: Core 3 locked to CPU ID 3. (From 3)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 98: NVMe: Core 6 locked to CPU ID 6. (From 6)[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 97: NVMe: Core 5 locked to CPU ID 5. (From 5)[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: Registered partition nvme0n1p3 id=5 start=6291456 blocks=35649536.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 26: Storage: GPT probe for nvme0n1 created 3 partition(s).[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 96: NVMe: Core 4 locked to CPU ID 4. (From 4)[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Registered partition nvme0n1p1 id=3 start=2048 blocks=1046528.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Registered partition nvme0n1p2 id=4 start=1048576 blocks=5242880.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: Registered partition nvme0n1p3 id=5 start=6291456 blocks=35649536.[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 28: Storage: GPT probe for nvme0n1 created 3 partition(s).[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 6: NVMe: Registered namespace 1 as Storage block device 2.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 39: Ext2: Recognized nvme0n1p2 id=4 blocks=655360 blockSize=4096 inodes=163840.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 39: Ext2: First text file on nvme0n1p2 is Root.txt (31 bytes): Hello from the root partition!
@@ -307,12 +307,13 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 39: Ext2: Verified overwrite write path on nvme0n1p3/Data.txt.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 42: Ext2: Mounted nvme0n1p2 as mount 1.[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 42: Ext2: Mounted nvme0n1p3 as mount 2.[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64: Vfs: Volume table:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  Devices:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  Tmp:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  HorizonOS:[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 64:  Data:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65: Vfs: Volume table:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  Devices:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  Tmp:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  HorizonOS:[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 65:  Data:[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS partition HorizonOS: root file/link workflow[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] PASS partition Data: root file/link workflow[0m
 [ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] all passed[0m
 [ [1;34minformation [0m] [1;30mSyscall: [0;37mProcess 11 exited with status code: 0[0m
+[ [1;34minformation [0m] [1;30mUser: [0;37mThread 93: NVMe: Core 1 locked to CPU ID 1. (From 1)[0m

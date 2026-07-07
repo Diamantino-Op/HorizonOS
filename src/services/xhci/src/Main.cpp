@@ -333,6 +333,42 @@ namespace {
 		return reply.vec;
 	}
 
+	auto msiAllocVector(const PciDevice &dev, const uint64_t notifyPort, const uint64_t lapicId = 1000000) -> uint8_t {
+		auto data = PciMsiAllocMsgData();
+
+		data.bus = dev.bus;
+		data.dev = dev.device;
+		data.func = dev.function;
+		data.port = notifyPort;
+		data.lapicId = lapicId;
+
+		auto msg = hos_msg();
+
+		msg.type = PCI_MSI_ALLOC_MSG_TYPE;
+		msg.port = pciPort;
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		send_horizonos_message(xhciPort, pciPort, &msg);
+
+		auto reply = PciMsiAllocReplyMsgData();
+		auto recv = hos_msg();
+
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { PCI_MSI_ALLOC_REPLY_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		receive_horizonos_message(xhciPort, &recv, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		return reply.vec;
+	}
+
 	auto findControllers() -> vector<PciDevice> {
 		auto search = PciSearchDeviceMsgData();
 
@@ -2553,7 +2589,13 @@ namespace {
 			}
 
 			if (drained == 0 and loggedEvents < 32) {
-				printf("XHCI: MSI-X vector %u irq=%lu cpu=%lu had no completed events.", controller->memory.msixVector, irq.irqNum, irq.cpuId);
+				if (controller->memory.usingMsix) {
+					printf("XHCI: MSI-X vector %u irq=%lu cpu=%lu had no completed events.", controller->memory.msixVector, irq.irqNum, irq.cpuId);
+				} else if (controller->memory.usingMsi) {
+					printf("XHCI: MSI vector %u irq=%lu cpu=%lu had no completed events.", controller->memory.msiVector, irq.irqNum, irq.cpuId);
+				} else {
+					printf("XHCI: legacy IRQ %u irq=%lu cpu=%lu had no completed events.", controller->memory.legacyIrq, irq.irqNum, irq.cpuId);
+				}
 				fflush(stdout);
 
 				++loggedEvents;
@@ -2765,20 +2807,74 @@ namespace {
 		pthread_create(&flushThread, nullptr, storageFlushHandler, nullptr);
 	}
 
-	auto setupMsix(MappedController &controller) -> bool {
+	auto setupInterrupts(MappedController &controller) -> bool {
 		if (register_horizonos_port(reinterpret_cast<long *>(&controller.memory.eventPort)) != 0 or controller.memory.eventPort == 0) {
 			return false;
 		}
 
-		msixGlobalEnable(controller.pci);
-
 		controller.memory.msixVector = msixAllocVector(controller.pci, 0, controller.memory.eventPort);
 
-		if (controller.memory.msixVector == 0) {
+		if (controller.memory.msixVector != 0) {
+			msixGlobalEnable(controller.pci);
+
+			controller.memory.usingMsix = true;
+
+			printf("XHCI: MSI-X entry 0 vector=%u eventPort=%lu.", controller.memory.msixVector, controller.memory.eventPort);
+			fflush(stdout);
+
+			return true;
+		}
+
+		printf("XHCI: MSI-X unavailable for %02x:%02x.%x, trying MSI.", controller.pci.bus, controller.pci.device, controller.pci.function);
+		fflush(stdout);
+
+		controller.memory.msiVector = msiAllocVector(controller.pci, controller.memory.eventPort);
+
+		if (controller.memory.msiVector != 0) {
+			controller.memory.usingMsi = true;
+
+			printf("XHCI: MSI vector=%u eventPort=%lu.", controller.memory.msiVector, controller.memory.eventPort);
+			fflush(stdout);
+
+			return true;
+		}
+
+		printf("XHCI: MSI unavailable for %02x:%02x.%x, trying legacy INTx.", controller.pci.bus, controller.pci.device, controller.pci.function);
+		fflush(stdout);
+
+		const uint8_t interruptPin = static_cast<uint8_t>(pciRead32(controller.pci, PCI_INTERRUPT_PIN) & 0xFFU);
+		const uint8_t interruptLine = static_cast<uint8_t>(pciRead32(controller.pci, PCI_INTERRUPT_LINE) & 0xFFU);
+
+		if (interruptPin == 0 or interruptLine == 0 or interruptLine == 0xFF) {
+			printf("XHCI: No usable legacy interrupt line for %02x:%02x.%x pin=%u line=%u.",
+			       controller.pci.bus,
+			       controller.pci.device,
+			       controller.pci.function,
+			       interruptPin,
+			       interruptLine);
+			fflush(stdout);
+
 			return false;
 		}
 
-		printf("XHCI: MSI-X entry 0 vector=%u eventPort=%lu.", controller.memory.msixVector, controller.memory.eventPort);
+		if (install_irq_handler(interruptLine, controller.memory.eventPort) != 0) {
+			printf("XHCI: Failed to install legacy IRQ handler line=%u for %02x:%02x.%x.",
+			       interruptLine,
+			       controller.pci.bus,
+			       controller.pci.device,
+			       controller.pci.function);
+			fflush(stdout);
+
+			return false;
+		}
+
+		const uint32_t command = pciRead32(controller.pci, PCI_COMMAND);
+		pciWrite32(controller.pci, PCI_COMMAND, command & ~PCI_COMMAND_INTERRUPT_DISABLE);
+
+		controller.memory.legacyIrq = interruptLine;
+		controller.memory.usingLegacyIrq = true;
+
+		printf("XHCI: Legacy INTx pin=%u irq=%u eventPort=%lu.", interruptPin, interruptLine, controller.memory.eventPort);
 		fflush(stdout);
 
 		return true;
@@ -2989,8 +3085,8 @@ namespace {
 		controller.configuredSlots = configSlots;
 		mmioWrite32(operationalBase, XHCI_OP_CONFIG, configSlots);
 
-		if (!setupMsix(controller)) {
-			printf("XHCI: Controller %zu failed to configure MSI-X.", index);
+		if (!setupInterrupts(controller)) {
+			printf("XHCI: Controller %zu failed to configure interrupts.", index);
 			fflush(stdout);
 
 			releaseControllerMemory(controller.memory);
