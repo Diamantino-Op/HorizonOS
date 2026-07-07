@@ -629,6 +629,96 @@ namespace {
 		return enqueueCommand(controller, command);
 	}
 
+	auto commandPhys(const MappedController &controller, const uint32_t index) -> uint64_t {
+		return controller.memory.commandRing.phys + index * sizeof(XhciTrb);
+	}
+
+	auto enqueueCommandAndGetPhys(MappedController &controller, const XhciTrb &command, uint64_t &phys) -> bool {
+		const uint32_t index = controller.memory.commandEnqueueIndex;
+
+		if (!enqueueCommand(controller, command)) {
+			return false;
+		}
+
+		phys = commandPhys(controller, index);
+
+		return true;
+	}
+
+	auto waitForCommandCompletion(MappedController &controller, const uint64_t commandTrbPhys, XhciTrb &completion, const int timeoutMs = 1000) -> bool {
+		uint32_t ignoredLogs = 32;
+
+		for (int i = 0; i < timeoutMs; ++i) {
+			auto *events = reinterpret_cast<XhciTrb *>(controller.memory.eventRing.virt);
+
+			for (;;) {
+				auto &event = events[controller.memory.eventDequeueIndex];
+
+				if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
+					break;
+				}
+
+				const uint32_t type = eventType(event);
+				const uint64_t eventParam = static_cast<uint64_t>(event.parameterLow) | (static_cast<uint64_t>(event.parameterHigh) << 32);
+				const bool matched = type == XHCI_TRB_TYPE_COMMAND_COMPLETION_EVENT and eventParam == commandTrbPhys;
+
+				if (matched) {
+					completion = event;
+				} else if (type == XHCI_TRB_TYPE_PORT_STATUS_CHANGE_EVENT) {
+					const uint32_t portId = static_cast<uint32_t>(eventParam >> 24);
+					printf("XHCI: Port status change event for port %u during command wait.", portId);
+					fflush(stdout);
+				} else if (ignoredLogs != 0) {
+					printf("XHCI: Ignored event type=%u code=%u while waiting for command 0x%lx.", type, completionCode(event), commandTrbPhys);
+					fflush(stdout);
+					--ignoredLogs;
+				}
+
+				controller.memory.eventDequeueIndex++;
+
+				if (controller.memory.eventDequeueIndex == XHCI_EVENT_RING_TRBS) {
+					controller.memory.eventDequeueIndex = 0;
+					controller.memory.eventConsumerCycle ^= 1;
+				}
+
+				updateEventDequeuePointer(controller);
+
+				if (matched) {
+					acknowledgeEvents(controller);
+					return true;
+				}
+			}
+
+			usleep(1000);
+		}
+
+		return false;
+	}
+
+	auto runCommand(MappedController &controller, const XhciTrb &command, XhciTrb &completion, const int timeoutMs = 1000) -> bool {
+		uint64_t phys = 0;
+
+		if (!enqueueCommandAndGetPhys(controller, command, phys)) {
+			return false;
+		}
+
+		if (!waitForCommandCompletion(controller, phys, completion, timeoutMs)) {
+			printf("XHCI: Timed out waiting for command TRB 0x%lx.", phys);
+			fflush(stdout);
+			return false;
+		}
+
+		const uint32_t code = completionCode(completion);
+
+		if (code != XHCI_COMPLETION_SUCCESS) {
+			printf("XHCI: Command TRB 0x%lx failed code=%u ctrl=0x%x status=0x%x.", phys, code, completion.control, completion.status);
+			fflush(stdout);
+			return false;
+		}
+
+		return true;
+	}
+
 	auto drainEvents(MappedController &controller, uint32_t &loggedEvents) -> uint32_t {
 		uint32_t drained = 0;
 
@@ -724,6 +814,382 @@ namespace {
 
 		logControllerStatus(controller, "after No-Op timeout");
 		printf("XHCI: No event observed after No-Op command.");
+		fflush(stdout);
+	}
+
+	auto contextSize(const MappedController &controller) -> uint32_t {
+		return controller.uses64ByteContexts ? XHCI_CONTEXT_SIZE_64 : XHCI_CONTEXT_SIZE_32;
+	}
+
+	auto contextPtr(const AllocatedPage &page, const MappedController &controller, const uint32_t index) -> uint32_t * {
+		return reinterpret_cast<uint32_t *>(page.virt + index * contextSize(controller));
+	}
+
+	void setContextDword(const AllocatedPage &page, const MappedController &controller, const uint32_t index, const uint32_t dword, const uint32_t value) {
+		contextPtr(page, controller, index)[dword] = value;
+	}
+
+	auto portSpeed(const MappedController &controller, const uint8_t port) -> uint8_t {
+		const uint32_t portsc = mmioRead32(controller.operationalBase, XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC);
+		return static_cast<uint8_t>((portsc >> XHCI_PORTSC_SPEED_SHIFT) & XHCI_PORTSC_SPEED_MASK);
+	}
+
+	auto ep0MaxPacketForSpeed(const uint8_t speed) -> uint16_t {
+		if (speed >= 4) {
+			return 512;
+		}
+
+		if (speed == 3) {
+			return 64;
+		}
+
+		return 8;
+	}
+
+	auto waitForTransferEvent(MappedController &controller, const uint8_t slotId, const uint8_t endpointId, XhciTrb &completion, const int timeoutMs = 1000) -> bool {
+		uint32_t ignoredLogs = 32;
+
+		for (int i = 0; i < timeoutMs; ++i) {
+			auto *events = reinterpret_cast<XhciTrb *>(controller.memory.eventRing.virt);
+
+			for (;;) {
+				auto &event = events[controller.memory.eventDequeueIndex];
+
+				if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
+					break;
+				}
+
+				const uint32_t type = eventType(event);
+				const uint8_t eventSlot = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
+				const uint8_t eventEndpoint = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
+				const bool matched = type == XHCI_TRB_TYPE_TRANSFER_EVENT and eventSlot == slotId and eventEndpoint == endpointId;
+
+				if (matched) {
+					completion = event;
+				} else if (type == XHCI_TRB_TYPE_PORT_STATUS_CHANGE_EVENT) {
+					const uint64_t eventParam = static_cast<uint64_t>(event.parameterLow) | (static_cast<uint64_t>(event.parameterHigh) << 32);
+					const uint32_t portId = static_cast<uint32_t>(eventParam >> 24);
+					printf("XHCI: Port status change event for port %u during transfer wait.", portId);
+					fflush(stdout);
+				} else if (ignoredLogs != 0) {
+					printf("XHCI: Ignored event type=%u code=%u slot=%u ep=%u while waiting for transfer slot=%u ep=%u.",
+					       type,
+					       completionCode(event),
+					       eventSlot,
+					       eventEndpoint,
+					       slotId,
+					       endpointId);
+					fflush(stdout);
+					--ignoredLogs;
+				}
+
+				controller.memory.eventDequeueIndex++;
+
+				if (controller.memory.eventDequeueIndex == XHCI_EVENT_RING_TRBS) {
+					controller.memory.eventDequeueIndex = 0;
+					controller.memory.eventConsumerCycle ^= 1;
+				}
+
+				updateEventDequeuePointer(controller);
+
+				if (matched) {
+					acknowledgeEvents(controller);
+					return true;
+				}
+			}
+
+			usleep(1000);
+		}
+
+		return false;
+	}
+
+	auto enqueueTransferTrb(XhciDevice &device, const XhciTrb &trb) -> bool {
+		if (device.transferEnqueueIndex >= XHCI_TRANSFER_RING_TRBS - 1) {
+			return false;
+		}
+
+		auto *ring = reinterpret_cast<XhciTrb *>(device.transferRing.virt);
+		auto &slot = ring[device.transferEnqueueIndex];
+		slot = trb;
+
+		if (device.transferProducerCycle != 0) {
+			slot.control |= XHCI_TRB_CYCLE;
+		} else {
+			slot.control &= ~XHCI_TRB_CYCLE;
+		}
+
+		++device.transferEnqueueIndex;
+
+		if (device.transferEnqueueIndex == XHCI_TRANSFER_RING_TRBS - 1) {
+			device.transferEnqueueIndex = 0;
+			device.transferProducerCycle ^= 1;
+		}
+
+		return true;
+	}
+
+	auto controlTransferIn(MappedController &controller,
+	                       XhciDevice &device,
+	                       const uint8_t requestType,
+	                       const uint8_t request,
+	                       const uint16_t value,
+	                       const uint16_t index,
+	                       const uint16_t length,
+	                       const uint64_t dataPhys) -> bool {
+		auto setup = XhciTrb();
+		setup.parameterLow = static_cast<uint32_t>(requestType) | (static_cast<uint32_t>(request) << 8) | (static_cast<uint32_t>(value) << 16);
+		setup.parameterHigh = static_cast<uint32_t>(index) | (static_cast<uint32_t>(length) << 16);
+		setup.status = 8;
+		setup.control = XHCI_TRB_IDT | (3U << 16) | (XHCI_TRB_TYPE_SETUP_STAGE << XHCI_TRB_TYPE_SHIFT);
+
+		auto data = XhciTrb();
+		data.parameterLow = static_cast<uint32_t>(dataPhys);
+		data.parameterHigh = static_cast<uint32_t>(dataPhys >> 32);
+		data.status = length;
+		data.control = XHCI_TRB_DIR_IN | XHCI_TRB_ISP | (XHCI_TRB_TYPE_DATA_STAGE << XHCI_TRB_TYPE_SHIFT);
+
+		auto status = XhciTrb();
+		status.control = XHCI_TRB_IOC | (XHCI_TRB_TYPE_STATUS_STAGE << XHCI_TRB_TYPE_SHIFT);
+
+		if (!enqueueTransferTrb(device, setup) or !enqueueTransferTrb(device, data) or !enqueueTransferTrb(device, status)) {
+			return false;
+		}
+
+		ringDoorbell(controller, device.slotId, 1);
+
+		auto completion = XhciTrb();
+
+		if (!waitForTransferEvent(controller, device.slotId, 1, completion, 1000)) {
+			printf("XHCI: Control transfer timed out slot=%u.", device.slotId);
+			fflush(stdout);
+			return false;
+		}
+
+		const uint32_t code = completionCode(completion);
+
+		if (code != XHCI_COMPLETION_SUCCESS and code != XHCI_COMPLETION_SHORT_PACKET) {
+			printf("XHCI: Control transfer failed slot=%u code=%u ctrl=0x%x status=0x%x.", device.slotId, code, completion.control, completion.status);
+			fflush(stdout);
+			return false;
+		}
+
+		return true;
+	}
+
+	auto waitForPortReset(MappedController &controller, const uint8_t port) -> bool {
+		const uint32_t offset = XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC;
+
+		for (int i = 0; i < 250; ++i) {
+			const uint32_t portsc = mmioRead32(controller.operationalBase, offset);
+
+			if ((portsc & XHCI_PORTSC_PR) == 0 and (portsc & XHCI_PORTSC_PRC) != 0) {
+				mmioWrite32(controller.operationalBase, offset, XHCI_PORTSC_PRC | XHCI_PORTSC_CSC | XHCI_PORTSC_PEC);
+				return true;
+			}
+
+			usleep(1000);
+		}
+
+		return false;
+	}
+
+	auto resetPortIfNeeded(MappedController &controller, const uint8_t port) -> bool {
+		const uint32_t offset = XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC;
+		uint32_t portsc = mmioRead32(controller.operationalBase, offset);
+
+		if ((portsc & XHCI_PORTSC_CCS) == 0) {
+			return false;
+		}
+
+		if ((portsc & XHCI_PORTSC_PED) != 0) {
+			mmioWrite32(controller.operationalBase, offset, portsc & XHCI_PORTSC_CHANGE_BITS);
+			return true;
+		}
+
+		mmioWrite32(controller.operationalBase, offset, (portsc & ~XHCI_PORTSC_CHANGE_BITS) | XHCI_PORTSC_PR);
+
+		if (!waitForPortReset(controller, port)) {
+			printf("XHCI: Port %u reset timed out.", port);
+			fflush(stdout);
+			return false;
+		}
+
+		portsc = mmioRead32(controller.operationalBase, offset);
+
+		if ((portsc & XHCI_PORTSC_PED) == 0) {
+			printf("XHCI: Port %u did not enable after reset PORTSC=0x%x.", port, portsc);
+			fflush(stdout);
+			return false;
+		}
+
+		return true;
+	}
+
+	auto enableSlot(MappedController &controller, uint8_t &slotId) -> bool {
+		auto command = XhciTrb();
+		command.control = XHCI_TRB_TYPE_ENABLE_SLOT_COMMAND << XHCI_TRB_TYPE_SHIFT;
+
+		auto completion = XhciTrb();
+
+		if (!runCommand(controller, command, completion)) {
+			return false;
+		}
+
+		slotId = static_cast<uint8_t>((completion.control >> 24) & 0xFFU);
+
+		if (slotId == 0) {
+			printf("XHCI: Enable Slot completed with slot id 0.");
+			fflush(stdout);
+			return false;
+		}
+
+		return true;
+	}
+
+	auto setupTransferRing(XhciDevice &device) -> bool {
+		if (!allocatePage(device.transferRing)) {
+			return false;
+		}
+
+		auto *ring = reinterpret_cast<XhciTrb *>(device.transferRing.virt);
+		auto &link = ring[XHCI_TRANSFER_RING_TRBS - 1];
+		link.parameterLow = static_cast<uint32_t>(device.transferRing.phys);
+		link.parameterHigh = static_cast<uint32_t>(device.transferRing.phys >> 32);
+		link.control = XHCI_TRB_CYCLE | XHCI_TRB_TOGGLE_CYCLE | (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT);
+
+		return true;
+	}
+
+	auto setupDeviceContexts(MappedController &controller, XhciDevice &device) -> bool {
+		if (!allocatePage(device.inputContext) or !allocatePage(device.deviceContext) or !allocatePage(device.descriptorBuffer) or !setupTransferRing(device)) {
+			return false;
+		}
+
+		auto *dcbaa = reinterpret_cast<uint64_t *>(controller.memory.dcbaa.virt);
+		dcbaa[device.slotId] = device.deviceContext.phys;
+
+		setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
+		setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, 0x3);
+
+		const uint32_t routeString = 0;
+		const uint32_t slotDword0 = routeString | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
+		const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+
+		setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
+		setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+
+		const uint64_t dequeue = device.transferRing.phys | XHCI_TRB_CYCLE;
+		const uint32_t ep0Dword1 = (4U << 3) | (3U << 1);
+		const uint32_t ep0Dword4 = 8U | (static_cast<uint32_t>(device.maxPacketSize) << 16);
+
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, ep0Dword1);
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
+
+		return true;
+	}
+
+	auto addressDevice(MappedController &controller, XhciDevice &device) -> bool {
+		auto command = XhciTrb();
+		command.parameterLow = static_cast<uint32_t>(device.inputContext.phys);
+		command.parameterHigh = static_cast<uint32_t>(device.inputContext.phys >> 32);
+		command.control = (XHCI_TRB_TYPE_ADDRESS_DEVICE_COMMAND << XHCI_TRB_TYPE_SHIFT) | (static_cast<uint32_t>(device.slotId) << 24);
+
+		auto completion = XhciTrb();
+		return runCommand(controller, command, completion, 1000);
+	}
+
+	auto readDeviceDescriptor(MappedController &controller, XhciDevice &device, const uint16_t length) -> bool {
+		memset(reinterpret_cast<void *>(device.descriptorBuffer.virt), 0, XHCI_PAGE_SIZE);
+
+		if (!controlTransferIn(controller,
+		                       device,
+		                       0x80,
+		                       USB_REQUEST_GET_DESCRIPTOR,
+		                       static_cast<uint16_t>(USB_DESCRIPTOR_DEVICE << 8),
+		                       0,
+		                       length,
+		                       device.descriptorBuffer.phys)) {
+			return false;
+		}
+
+		auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+
+		if (desc[0] < 8 or desc[1] != USB_DESCRIPTOR_DEVICE) {
+			printf("XHCI: Invalid device descriptor header slot=%u len=%u type=%u.", device.slotId, desc[0], desc[1]);
+			fflush(stdout);
+			return false;
+		}
+
+		if (length >= 18) {
+			const uint16_t vendor = static_cast<uint16_t>(desc[8]) | (static_cast<uint16_t>(desc[9]) << 8);
+			const uint16_t product = static_cast<uint16_t>(desc[10]) | (static_cast<uint16_t>(desc[11]) << 8);
+			printf("XHCI: Device slot=%u port=%u descriptor vid=%04x pid=%04x class=%02x subclass=%02x protocol=%02x maxPacket=%u.",
+			       device.slotId,
+			       device.rootPort,
+			       vendor,
+			       product,
+			       desc[4],
+			       desc[5],
+			       desc[6],
+			       desc[7]);
+			fflush(stdout);
+		} else {
+			printf("XHCI: Device slot=%u port=%u descriptor header maxPacket=%u.", device.slotId, device.rootPort, desc[7]);
+			fflush(stdout);
+		}
+
+		return true;
+	}
+
+	void enumerateRootPorts(MappedController &controller) {
+		for (uint8_t port = 1; port <= controller.maxPorts; ++port) {
+			const uint32_t portsc = mmioRead32(controller.operationalBase, XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC);
+
+			if ((portsc & XHCI_PORTSC_CCS) == 0) {
+				continue;
+			}
+
+			if (!resetPortIfNeeded(controller, port)) {
+				continue;
+			}
+
+			auto device = XhciDevice();
+			device.rootPort = port;
+			device.speed = portSpeed(controller, port);
+			device.maxPacketSize = ep0MaxPacketForSpeed(device.speed);
+
+			if (!enableSlot(controller, device.slotId)) {
+				continue;
+			}
+
+			if (!setupDeviceContexts(controller, device)) {
+				printf("XHCI: Failed to allocate contexts for port %u slot %u.", port, device.slotId);
+				fflush(stdout);
+				continue;
+			}
+
+			if (!addressDevice(controller, device)) {
+				printf("XHCI: Failed to address device on port %u slot %u.", port, device.slotId);
+				fflush(stdout);
+				continue;
+			}
+
+			printf("XHCI: Addressed device on port %u as slot %u speed=%u.", port, device.slotId, device.speed);
+			fflush(stdout);
+
+			if (readDeviceDescriptor(controller, device, 8)) {
+				auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+				device.maxPacketSize = desc[7] == 9 ? 512 : desc[7];
+				readDeviceDescriptor(controller, device, 18);
+			}
+
+			controller.devices.push_back(device);
+		}
+
+		printf("XHCI: Enumerated %zu root device(s).", controller.devices.size());
 		fflush(stdout);
 	}
 
@@ -859,6 +1325,7 @@ namespace {
 		controller.maxSlots = maxSlots;
 		controller.maxPorts = maxPorts;
 		controller.maxInterrupters = maxInterrupters;
+		controller.uses64ByteContexts = (hccParams1 & (1U << 2)) != 0;
 
 		printf("XHCI: Controller %zu %02x:%02x.%x BAR=0x%lx size=0x%lx cap0=0x%x versionRaw=0x%x version=%x.%02x slots=%u ports=%u interrupters=%u scratchpads=%u pageMask=0x%x hcs2=0x%x hcc=0x%x.",
 		       index,
@@ -992,6 +1459,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		fflush(stdout);
 
 		postStartProbe(activeController);
+
+		enumerateRootPorts(activeController);
 
 		if (!startEventIrqHandler(activeController)) {
 			continue;
