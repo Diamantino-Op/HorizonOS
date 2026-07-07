@@ -466,14 +466,13 @@ namespace kernel::common::hal {
 
 		u64 addr = hint;
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		const bool fixed = static_cast<bool>(flags & MAP_FIXED);
 
-		if (addr == 0) {
-			addr = process->topmostMappedPage + pageSize;
-		} else if (ctx->pageMap.getPhysAddress(addr) != 0) {
+		if (fixed && addr == 0) {
 			scheduler->getSchedLock()->unlock(schedPrevIF);
 			*ret = MAP_FAILED;
 
-			return EEXIST;
+			return EINVAL;
 		}
 
 		if (static_cast<bool>(flags & MAP_ANON) and offset != 0) {
@@ -481,6 +480,10 @@ namespace kernel::common::hal {
 			*ret = MAP_FAILED;
 
 			return EINVAL;
+		}
+
+		if (addr == 0) {
+			addr = process->topmostMappedPage + pageSize;
 		}
 
 		if (size > ~0ULL - addr || addr + size > ~0ULL - (pageSize - 1)) {
@@ -492,12 +495,67 @@ namespace kernel::common::hal {
 
 		const u64 bottomAddr = alignDown<u64>(addr, pageSize);
 		const u64 topAddr = alignUp<u64>(addr + size, pageSize);
+		const u64 mapSize = topAddr - bottomAddr;
 
-		for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
-			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+		if (!fixed) {
+			if (hint != 0) {
+				for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
+					if (ctx->pageMap.hasPageEntry(i)) {
+						scheduler->getSchedLock()->unlock(schedPrevIF);
+						*ret = MAP_FAILED;
+
+						return EEXIST;
+					}
+				}
+			} else {
+				bool found = false;
+
+				while (!found) {
+					found = true;
+					const u64 searchBottom = alignDown<u64>(addr, pageSize);
+					const u64 searchTop = searchBottom + mapSize;
+
+					if (searchTop < searchBottom) {
+						scheduler->getSchedLock()->unlock(schedPrevIF);
+						*ret = MAP_FAILED;
+
+						return ENOMEM;
+					}
+
+					for (u64 i = searchBottom; i < searchTop; i += pageSize) {
+						if (ctx->pageMap.hasPageEntry(i)) {
+							if (searchTop > ~0ULL - pageSize) {
+								scheduler->getSchedLock()->unlock(schedPrevIF);
+								*ret = MAP_FAILED;
+
+								return ENOMEM;
+							}
+
+							addr = searchTop;
+							found = false;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		const u64 finalBottomAddr = alignDown<u64>(addr, pageSize);
+		const u64 finalTopAddr = finalBottomAddr + mapSize;
+
+		if (fixed) {
+			for (u64 i = finalBottomAddr; i < finalTopAddr; i += pageSize) {
+				ctx->pageMap.unMapPage(i, true);
+			}
+		}
+
+		const u8 pageFlags = static_cast<u8>((prot == PROT_NONE ? 0 : 1) | ((prot & PROT_WRITE) != 0 ? 0b10 : 0) | 0b100);
+
+		for (u64 i = finalBottomAddr; i < finalTopAddr; i += pageSize) {
+			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, true);
 
 			if (physPage == nullptr) {
-				for (u64 mapped = bottomAddr; mapped < i; mapped += pageSize) {
+				for (u64 mapped = finalBottomAddr; mapped < i; mapped += pageSize) {
 					ctx->pageMap.unMapPage(mapped, true);
 				}
 
@@ -507,7 +565,20 @@ namespace kernel::common::hal {
 				return ENOMEM;
 			}
 
-			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), (prot & 0b11) | 0b101, false, not static_cast<bool>(prot & PROT_EXEC));
+			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), pageFlags, false, not static_cast<bool>(prot & PROT_EXEC));
+
+			if (!ctx->pageMap.hasPageEntry(i)) {
+				CommonMain::getInstance()->getPMM()->freePagesPhys(const_cast<u64 *>(physPage), 1);
+
+				for (u64 mapped = finalBottomAddr; mapped < i; mapped += pageSize) {
+					ctx->pageMap.unMapPage(mapped, true);
+				}
+
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+				*ret = MAP_FAILED;
+
+				return ENOMEM;
+			}
 
 			if (i > process->topmostMappedPage) {
 				process->topmostMappedPage = i;

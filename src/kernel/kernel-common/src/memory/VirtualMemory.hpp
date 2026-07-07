@@ -42,6 +42,8 @@ namespace kernel::common::memory {
 
         u64 getPhysAddress(u64 vAddr) const;
 
+		bool hasPageEntry(u64 vAddr) const;
+
         u64 *getPageTable() const;
 
         u64 getAddr() const;
@@ -74,12 +76,12 @@ namespace kernel::common::memory {
 
         u64 getVirtualKernelAddr() const;
 
-    	static void initPAT();
+	static void initPAT();
 
     private:
         void init();
 
-    	static u64 patEntry(u8 index, u8 type);
+	static u64 patEntry(u8 index, u8 type);
 
         u64 kernelAddrPhys {};
         u64 kernelAddrVirt {};

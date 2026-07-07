@@ -388,6 +388,53 @@ namespace kernel::common::memory {
 		return getEntryPhysAddress(&lvl1Table->entries[lvl1], false) + (vAddr & 0xFFF);
 	}
 
+	bool PageMap::hasPageEntry(const u64 vAddr) const {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
+		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
+		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
+		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
+		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
+
+		const PageTable *lvl4Table = nullptr;
+
+		if (VirtualAllocator::isPagingLvl5) {
+			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
+			if (!lvl5Table->entries[lvl5].present) {
+				return false;
+			}
+
+			lvl4Table = reinterpret_cast<PageTable *>((lvl5Table->entries[lvl5].address << 12) + CommonMain::getCurrentHhdm());
+		} else {
+			lvl4Table = reinterpret_cast<PageTable *>(this->pageTable);
+		}
+
+		if (!lvl4Table->entries[lvl4].present) {
+			return false;
+		}
+
+		const auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Table->entries[lvl4].address << 12) + CommonMain::getCurrentHhdm());
+		if (!lvl3Table->entries[lvl3].present) {
+			return false;
+		}
+
+		if (lvl3Table->entries[lvl3].size) {
+			return lvl3Table->entries[lvl3].present || lvl3Table->entries[lvl3].address != 0;
+		}
+
+		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Table->entries[lvl3].address << 12) + CommonMain::getCurrentHhdm());
+		if (!lvl2Table->entries[lvl2].present) {
+			return false;
+		}
+
+		if (lvl2Table->entries[lvl2].size) {
+			return lvl2Table->entries[lvl2].present || lvl2Table->entries[lvl2].address != 0;
+		}
+
+		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Table->entries[lvl2].address << 12) + CommonMain::getCurrentHhdm());
+
+		return lvl1Table->entries[lvl1].present || lvl1Table->entries[lvl1].address != 0;
+	}
+
 	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 
@@ -475,4 +522,3 @@ namespace kernel::common::memory {
 		Asm::invalidatePage(page);
 	}
 }
-

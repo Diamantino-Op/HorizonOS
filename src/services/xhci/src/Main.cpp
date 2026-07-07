@@ -727,6 +727,8 @@ namespace {
 
 					printf("XHCI: Port status change event for port %u during command wait.", portId);
 					fflush(stdout);
+				} else if (type == XHCI_TRB_TYPE_TRANSFER_EVENT) {
+					controller.pendingTransferEvents.push_back(event);
 				} else if (ignoredLogs != 0) {
 					printf("XHCI: Ignored event type=%u code=%u while waiting for command 0x%lx.", type, completionCode(event), commandTrbPhys);
 					fflush(stdout);
@@ -946,6 +948,18 @@ namespace {
 		uint32_t ignoredLogs = 32;
 
 		for (int i = 0; i < timeoutMs; ++i) {
+			for (auto it = controller.pendingTransferEvents.begin(); it != controller.pendingTransferEvents.end(); ++it) {
+				const auto eventSlot = static_cast<uint8_t>((it->control >> 24) & 0xFFU);
+				const auto eventEndpoint = static_cast<uint8_t>((it->control >> 16) & 0x1FU);
+
+				if (eventSlot == slotId and eventEndpoint == endpointId) {
+					completion = *it;
+					controller.pendingTransferEvents.erase(it);
+
+					return true;
+				}
+			}
+
 			const auto *events = reinterpret_cast<XhciTrb *>(controller.memory.eventRing.virt);
 
 			for (;;) {
@@ -971,7 +985,7 @@ namespace {
 						fflush(stdout);
 					}
 				} else if (type == XHCI_TRB_TYPE_TRANSFER_EVENT) {
-					controller.pendingHubInterruptEvents.emplace_back(eventSlot, eventEndpoint);
+					controller.pendingTransferEvents.push_back(event);
 				} else if (ignoredLogs != 0) {
 					printf("XHCI: Ignored event type=%u code=%u slot=%u ep=%u while waiting for transfer slot=%u ep=%u.",
 					       type,
@@ -2376,7 +2390,20 @@ namespace {
 
 		{
 			const scoped_lock lock(eventRingMutex);
-			pending.swap(controller.pendingHubInterruptEvents);
+
+			for (auto it = controller.pendingTransferEvents.begin(); it != controller.pendingTransferEvents.end();) {
+				const auto slotId = static_cast<uint8_t>((it->control >> 24) & 0xFFU);
+				const auto endpointId = static_cast<uint8_t>((it->control >> 16) & 0x1FU);
+				const auto *device = findDeviceBySlot(controller, slotId);
+
+				if (device == nullptr or !device->isHub or device->hubInterruptEndpointId != endpointId) {
+					++it;
+					continue;
+				}
+
+				pending.emplace_back(slotId, endpointId);
+				it = controller.pendingTransferEvents.erase(it);
+			}
 		}
 
 		for (const auto &[slotId, endpointId] : pending) {

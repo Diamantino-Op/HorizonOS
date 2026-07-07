@@ -6,7 +6,7 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mUpdated TSS... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mIDT Loaded... OK[0m
 [ [1;34minformation [0m] [1;30mPMM: [0;37mInitializing Physical Memory Manager...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8453738496[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTotal Usable Memory: 8453656576[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAllocator Context created...[0m
 [ [1;34minformation [0m] [1;30mVMM: [0;37mInitializing Virtual Memory Manager...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mVMM Loaded... OK[0m
@@ -42,24 +42,24 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mClock: [0;37mNew main clock: Kvm[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAcpiPM Clock Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mClocks setup... OK[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 67884[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 1: /boot/HorizonOS/services/name_registry Size: 8468256[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 0: /boot/HorizonOS/HorizonOS.sym Size: 67970[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 1: /boot/HorizonOS/services/name_registry Size: 8470640[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 1 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 2: /boot/HorizonOS/services/uacpi Size: 9198536[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 2: /boot/HorizonOS/services/uacpi Size: 9200920[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 2 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 3: /boot/HorizonOS/services/pci Size: 8762152[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 3: /boot/HorizonOS/services/pci Size: 8764536[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 3 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/nvme Size: 8534696[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 4: /boot/HorizonOS/services/nvme Size: 8537080[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 4 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 5: /boot/HorizonOS/services/storage_manager Size: 8616192[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 5: /boot/HorizonOS/services/storage_manager Size: 8618568[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 5 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/ext2 Size: 8595504[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 6: /boot/HorizonOS/services/ext2 Size: 8597888[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 6 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/vfs Size: 9019008[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 7: /boot/HorizonOS/services/vfs Size: 9021384[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 7 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/xhci Size: 9014600[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 8: /boot/HorizonOS/services/xhci Size: 9052816[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 8 as ELF...[0m
-[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 9: /boot/HorizonOS/programs/hello_world Size: 7761560[0m
+[ [1;34minformation [0m] [1;30mHorizonOS: [0;37mModule 9: /boot/HorizonOS/programs/hello_world Size: 7763944[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mLoading module 9 as ELF...[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mExample threads registered... OK[0m
 [ [1;34minformation [0m] [1;30mClock: [0;37mRegistering new clock: TSC[0m
@@ -67,4 +67,3 @@ BdsDxe: starting Boot0002 "UEFI QEMU DVD-ROM QM00005 " from PciRoot(0x0)/Pci(0x1
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mTSC Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mSyscalls Initialised... OK[0m
 [ [1;34minformation [0m] [1;30mHorizonOS: [0;37mAll Cpus initialized...[0m
-[ [1;34minformation [0m] [1;30mUser: [0;37mThread 11: [VFS test] starting[0m
