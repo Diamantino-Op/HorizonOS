@@ -552,7 +552,7 @@ namespace kernel::common::hal {
 		const u8 pageFlags = static_cast<u8>((prot == PROT_NONE ? 0 : 1) | ((prot & PROT_WRITE) != 0 ? 0b10 : 0) | 0b100);
 
 		for (u64 i = finalBottomAddr; i < finalTopAddr; i += pageSize) {
-			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, true);
+			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 			if (physPage == nullptr) {
 				for (u64 mapped = finalBottomAddr; mapped < i; mapped += pageSize) {

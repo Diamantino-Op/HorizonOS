@@ -437,6 +437,7 @@ namespace kernel::common::memory {
 
 	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
+		const u8 tableFlags = flags | 0b1;
 
 		if (!parentTable->entries[index].present) {
 			auto *newTable = reinterpret_cast<PageTable *>(CommonMain::getInstance()->getPMM()->allocPages(1, false));
@@ -448,7 +449,7 @@ namespace kernel::common::memory {
 			parentTable->entries[index].executeDisable = noExec;
 			parentTable->entries[index].global = global;
 
-			this->setPageFlags(reinterpret_cast<u64 *>(&parentTable->entries[index]), flags);
+			this->setPageFlags(reinterpret_cast<u64 *>(&parentTable->entries[index]), tableFlags);
 
 			parentTable->entries[index].address = (reinterpret_cast<u64>(newTable) >> 12) & 0xFFFFFFFFFF;
 		} else {
