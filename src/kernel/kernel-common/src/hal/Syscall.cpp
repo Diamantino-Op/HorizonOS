@@ -597,6 +597,8 @@ namespace kernel::common::hal {
 					const u64 searchTop = searchBottom + mapSize;
 
 					if (searchTop < searchBottom) {
+						CommonMain::getTerminal()->error("mmap failed: VA search wrapped pid=%u tid=%u addr=0x%.16lx size=0x%.16lx mapSize=0x%.16lx",
+							"Syscall Manager", process->getId(), thread->getId(), addr, size, mapSize);
 						scheduler->getSchedLock()->unlock(schedPrevIF);
 						*ret = MAP_FAILED;
 
@@ -606,6 +608,8 @@ namespace kernel::common::hal {
 					for (u64 i = searchBottom; i < searchTop; i += pageSize) {
 						if (ctx->pageMap.hasPageEntry(i)) {
 							if (searchTop > ~0ULL - pageSize) {
+								CommonMain::getTerminal()->error("mmap failed: VA search exhausted pid=%u tid=%u addr=0x%.16lx size=0x%.16lx mapSize=0x%.16lx",
+									"Syscall Manager", process->getId(), thread->getId(), addr, size, mapSize);
 								scheduler->getSchedLock()->unlock(schedPrevIF);
 								*ret = MAP_FAILED;
 
@@ -636,6 +640,8 @@ namespace kernel::common::hal {
 			const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 			if (physPage == nullptr) {
+				CommonMain::getTerminal()->error("mmap failed: PMM out of pages pid=%u tid=%u addr=0x%.16lx size=0x%.16lx free=0x%.16lx",
+					"Syscall Manager", process->getId(), thread->getId(), finalBottomAddr, mapSize, CommonMain::getInstance()->getPMM()->getFreeMemory());
 				for (u64 mapped = finalBottomAddr; mapped < i; mapped += pageSize) {
 					ctx->pageMap.unMapPage(mapped, true);
 				}
@@ -649,6 +655,8 @@ namespace kernel::common::hal {
 			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), pageFlags, false, not static_cast<bool>(prot & PROT_EXEC));
 
 			if (!ctx->pageMap.hasPageEntry(i)) {
+				CommonMain::getTerminal()->error("mmap failed: page table insertion failed pid=%u tid=%u vaddr=0x%.16lx paddr=0x%.16lx free=0x%.16lx",
+					"Syscall Manager", process->getId(), thread->getId(), i, reinterpret_cast<u64>(physPage), CommonMain::getInstance()->getPMM()->getFreeMemory());
 				CommonMain::getInstance()->getPMM()->freePagesPhys(const_cast<u64 *>(physPage), 1);
 
 				for (u64 mapped = finalBottomAddr; mapped < i; mapped += pageSize) {
@@ -677,14 +685,28 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		AllocContext *ctx = Scheduler::getCurrentThread()->getParent()->getProcessContext();
+		auto *thread = Scheduler::getCurrentThread();
+		auto *process = thread != nullptr ? thread->getParent() : nullptr;
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
 
+		if (thread == nullptr || process == nullptr || scheduler == nullptr) {
+			return EFAULT;
+		}
+
+		if (addr > ~0ULL - size || addr + size > ~0ULL - (pageSize - 1)) {
+			return EINVAL;
+		}
+
+		AllocContext *ctx = process->getProcessContext();
 		const u64 bottomAddr = alignDown<u64>(addr, pageSize);
 		const u64 topAddr = alignUp<u64>(addr + size, pageSize);
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 
 		for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
 			ctx->pageMap.unMapPage(i, static_cast<bool>(freePage));
 		}
+
+		scheduler->getSchedLock()->unlock(schedPrevIF);
 
 		return 0;
 	}
