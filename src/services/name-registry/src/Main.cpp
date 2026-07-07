@@ -450,6 +450,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		bool exists = false;
 
 		{
+			std::scoped_lock lock(services_mutex);
 			exists = ranges::any_of(*services,
 				[&](const Service& s) {
 					return s.name == name;

@@ -134,6 +134,11 @@ namespace kernel::common::hal {
 		u64 tid {};
 	};
 
+	struct UserPhysPage {
+		u64 address {};
+		u64 ownerPid {};
+	};
+
 	struct HosCpuInfo {
 		u64 cpuId;
 		u64 apicId;
@@ -206,6 +211,7 @@ namespace kernel::common::hal {
     public:
     	static LinkedList<IrqRegistration> irqRegistrations;
     	static LinkedList<KernelEventRegistration> eventRegistrations;
+    	static LinkedList<UserPhysPage> userPhysPages;
 
 		static SyscallFun horizonSyscalls[horizonSyscallAmount];
     	static SyscallFun linuxSyscalls[linuxSyscallAmount];

@@ -368,6 +368,7 @@ namespace kernel::common::hal {
 
 	LinkedList<IrqRegistration> SyscallManager::irqRegistrations {};
 	LinkedList<KernelEventRegistration> SyscallManager::eventRegistrations {};
+	LinkedList<UserPhysPage> SyscallManager::userPhysPages {};
 
 	SyscallFun SyscallManager::horizonSyscalls[horizonSyscallAmount] {};
 	SyscallFun SyscallManager::linuxSyscalls[linuxSyscallAmount] {};
@@ -758,6 +759,9 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
+		const Thread *thread = Scheduler::getCurrentThread();
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+
 		u64 clockNs = 0;
 		const int err = getCurrentClockNs(&clockNs);
 
@@ -765,8 +769,20 @@ namespace kernel::common::hal {
 			return err;
 		}
 
-		*reinterpret_cast<long *>(secs) = static_cast<long>(clockNs / nanosecondsPerSecond);
-		*reinterpret_cast<long *>(nanos) = static_cast<long>(clockNs % nanosecondsPerSecond);
+		const long clockSecs = static_cast<long>(clockNs / nanosecondsPerSecond);
+		const long clockNanos = static_cast<long>(clockNs % nanosecondsPerSecond);
+
+		int copyErr = copyToUser(ctx, secs, &clockSecs, sizeof(clockSecs));
+
+		if (copyErr != 0) {
+			return copyErr;
+		}
+
+		copyErr = copyToUser(ctx, nanos, &clockNanos, sizeof(clockNanos));
+
+		if (copyErr != 0) {
+			return copyErr;
+		}
 
 		return 0;
 	}
@@ -1669,11 +1685,34 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+		const Thread *thread = Scheduler::getCurrentThread();
+		const Process *process = thread != nullptr ? thread->getParent() : nullptr;
+
+		if (scheduler == nullptr || process == nullptr) {
+			return EFAULT;
+		}
+
 		const u64 *page = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 		if (page == nullptr) {
 			return ENOMEM;
 		}
+
+		auto *trackedPage = new UserPhysPage();
+
+		if (trackedPage == nullptr) {
+			CommonMain::getInstance()->getPMM()->freePagesPhys(page, 1);
+
+			return ENOMEM;
+		}
+
+		trackedPage->address = reinterpret_cast<u64>(page);
+		trackedPage->ownerPid = process->getId();
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		userPhysPages.addEnd(trackedPage);
+		scheduler->getSchedLock()->unlock(schedPrevIF);
 
 		*ret = reinterpret_cast<long>(page);
 
@@ -1683,6 +1722,42 @@ namespace kernel::common::hal {
 	auto SyscallManager::syscallFreePhysPage(long */*unused*/, const u64 pageAddr, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (pageAddr == 0 || (pageAddr & (pageSize - 1)) != 0) {
 			return EINVAL;
+		}
+
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+		const Thread *thread = Scheduler::getCurrentThread();
+		const Process *process = thread != nullptr ? thread->getParent() : nullptr;
+
+		if (scheduler == nullptr || process == nullptr) {
+			return EFAULT;
+		}
+
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
+		bool owned = false;
+
+		auto *node = userPhysPages.getFirst();
+
+		while (node != nullptr) {
+			auto *next = node->next;
+
+			if (node->value != nullptr && node->value->address == pageAddr && node->value->ownerPid == process->getId()) {
+				owned = userPhysPages.removeEntry(node);
+
+				if (owned) {
+					delete node->value;
+					delete node;
+				}
+
+				break;
+			}
+
+			node = next;
+		}
+
+		scheduler->getSchedLock()->unlock(schedPrevIF);
+
+		if (!owned) {
+			return EPERM;
 		}
 
 		CommonMain::getInstance()->getPMM()->freePagesPhys(reinterpret_cast<u64 *>(pageAddr), 1);
