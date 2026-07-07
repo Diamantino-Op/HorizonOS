@@ -57,6 +57,9 @@ private:
 		uint64_t blockCount {};
 		uint32_t blockSize {};
 		uint32_t tag { 1 };
+		uint8_t senseKey {};
+		uint8_t additionalSenseCode {};
+		uint8_t additionalSenseQualifier {};
 	};
 
 	UsbMassStorageTransport transport {};
@@ -67,11 +70,13 @@ private:
 	auto sendCommand(Unit &unit, const uint8_t *cdb, uint8_t cdbLength, const uint64_t *dataPages, uint32_t dataPageCount, uint32_t dataLength, bool dataIn) const -> bool;
 	auto inquiry(Unit &unit) const -> bool;
 	auto testUnitReady(Unit &unit) const -> bool;
-	auto requestSense(Unit &unit) const -> bool;
+	auto requestSense(Unit &unit, bool logSense = false) const -> bool;
 	auto readCapacity10(Unit &unit) const -> bool;
 	auto readCapacity16(Unit &unit) const -> bool;
 	void recover(Unit &unit) const;
-	auto readWrite10(Unit &unit, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, bool write) const -> bool;
+	auto readWrite(Unit &unit, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, bool write) const -> bool;
+	auto readWriteWithRetry(Unit &unit, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount, bool write) const -> bool;
+	auto flushWithRetry(Unit &unit) const -> bool;
 };
 
 #endif

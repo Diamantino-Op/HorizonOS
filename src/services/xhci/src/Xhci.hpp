@@ -3,6 +3,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
@@ -140,6 +142,7 @@ constexpr uint32_t XHCI_SLOT_CONTEXT_INDEX = 1;
 constexpr uint32_t XHCI_EP0_CONTEXT_INDEX = 2;
 constexpr uint32_t USB_DESCRIPTOR_DEVICE = 1;
 constexpr uint32_t USB_DESCRIPTOR_CONFIGURATION = 2;
+constexpr uint32_t USB_DESCRIPTOR_STRING = 3;
 constexpr uint32_t USB_DESCRIPTOR_INTERFACE = 4;
 constexpr uint32_t USB_DESCRIPTOR_ENDPOINT = 5;
 constexpr uint32_t USB_DESCRIPTOR_HUB = 0x29;
@@ -163,6 +166,8 @@ constexpr uint32_t USB_ENDPOINT_TRANSFER_INTERRUPT = 0x03;
 constexpr uint32_t USB_HUB_FEATURE_PORT_RESET = 4;
 constexpr uint32_t USB_HUB_FEATURE_PORT_POWER = 8;
 constexpr uint32_t USB_HUB_FEATURE_C_PORT_CONNECTION = 16;
+constexpr uint32_t USB_HUB_FEATURE_C_PORT_ENABLE = 17;
+constexpr uint32_t USB_HUB_FEATURE_C_PORT_OVER_CURRENT = 19;
 constexpr uint32_t USB_HUB_FEATURE_C_PORT_RESET = 20;
 constexpr uint32_t USB_FEATURE_ENDPOINT_HALT = 0;
 constexpr uint32_t USB_MASS_STORAGE_REQUEST_BULK_ONLY_RESET = 0xFF;
@@ -423,17 +428,30 @@ struct XhciDevice {
 	uint32_t controllerId {};
 	uint8_t slotId {};
 	uint8_t rootPort {};
+	uint8_t parentSlotId {};
+	uint8_t hubPort {};
 	uint32_t routeString {};
 	uint8_t depth {};
 	uint8_t speed {};
 	uint16_t maxPacketSize { 8 };
 	uint8_t configurationValue {};
 	bool configured {};
+	bool isHub {};
+	uint8_t hubPortCount {};
+	uint16_t hubCharacteristics {};
+	uint8_t hubPowerOnDelayMs {};
+	uint8_t hubInterruptEndpointId {};
+	uint8_t hubInterruptEndpointAddress {};
+	bool hubInterruptTransferPending {};
+	std::string manufacturer {};
+	std::string product {};
+	std::string serial {};
 	std::vector<UsbInterface> interfaces {};
 	AllocatedPage inputContext {};
 	AllocatedPage deviceContext {};
 	AllocatedPage transferRing {};
 	AllocatedPage descriptorBuffer {};
+	AllocatedPage hubInterruptBuffer {};
 	uint32_t transferEnqueueIndex {};
 	uint32_t transferProducerCycle { 1 };
 };
@@ -454,6 +472,7 @@ struct MappedController {
 	uint32_t configuredSlots {};
 	bool uses64ByteContexts {};
 	std::vector<XhciDevice> devices {};
+	std::vector<std::pair<uint8_t, uint8_t>> pendingHubInterruptEvents {};
 	ControllerMemory memory {};
 };
 

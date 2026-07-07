@@ -40,11 +40,32 @@ namespace {
 		return (static_cast<uint32_t>(bytes[0]) << 24) | (static_cast<uint32_t>(bytes[1]) << 16) | (static_cast<uint32_t>(bytes[2]) << 8) | static_cast<uint32_t>(bytes[3]);
 	}
 
+	auto be64(const uint8_t *bytes) -> uint64_t {
+		uint64_t value = 0;
+
+		for (uint32_t i = 0; i < 8; ++i) {
+			value = (value << 8) | bytes[i];
+		}
+
+		return value;
+	}
+
+	void putBe16(uint8_t *bytes, const uint16_t value) {
+		bytes[0] = static_cast<uint8_t>(value >> 8);
+		bytes[1] = static_cast<uint8_t>(value);
+	}
+
 	void putBe32(uint8_t *bytes, const uint32_t value) {
 		bytes[0] = static_cast<uint8_t>(value >> 24);
 		bytes[1] = static_cast<uint8_t>(value >> 16);
 		bytes[2] = static_cast<uint8_t>(value >> 8);
 		bytes[3] = static_cast<uint8_t>(value);
+	}
+
+	void putBe64(uint8_t *bytes, const uint64_t value) {
+		for (uint32_t i = 0; i < 8; ++i) {
+			bytes[i] = static_cast<uint8_t>(value >> ((7 - i) * 8));
+		}
 	}
 }
 
@@ -158,7 +179,7 @@ auto UsbMassStorageDriver::testUnitReady(Unit &unit) const -> bool {
 	return sendCommand(unit, cdb, sizeof(cdb), nullptr, 0, 0, false);
 }
 
-auto UsbMassStorageDriver::requestSense(Unit &unit) const -> bool {
+auto UsbMassStorageDriver::requestSense(Unit &unit, const bool logSense) const -> bool {
 	AllocatedPage page {};
 
 	if (!allocateStage(page)) {
@@ -172,6 +193,19 @@ auto UsbMassStorageDriver::requestSense(Unit &unit) const -> bool {
 
 	const uint64_t phys = page.phys;
 	const bool ok = sendCommand(unit, cdb, sizeof(cdb), &phys, 1, 18, true);
+
+	if (ok) {
+		const auto *data = reinterpret_cast<uint8_t *>(page.virt);
+
+		unit.senseKey = data[2] & 0x0F;
+		unit.additionalSenseCode = data[12];
+		unit.additionalSenseQualifier = data[13];
+
+		if (logSense) {
+			printf("XHCI/MSD: REQUEST SENSE slot=%u key=0x%02x asc=0x%02x ascq=0x%02x.", unit.device != nullptr ? unit.device->slotId : 0, unit.senseKey, unit.additionalSenseCode, unit.additionalSenseQualifier);
+			fflush(stdout);
+		}
+	}
 
 	freeStage(page);
 
@@ -232,11 +266,7 @@ auto UsbMassStorageDriver::readCapacity16(Unit &unit) const -> bool {
 
 	if (ok) {
 		const auto *data = reinterpret_cast<uint8_t *>(page.virt);
-		uint64_t lastLba = 0;
-
-		for (uint32_t i = 0; i < 8; ++i) {
-			lastLba = (lastLba << 8) | data[i];
-		}
+		const uint64_t lastLba = be64(data);
 
 		unit.blockCount = lastLba + 1;
 		unit.blockSize = be32(data + 8);
@@ -264,7 +294,7 @@ void UsbMassStorageDriver::recover(Unit &unit) const {
 	}
 }
 
-auto UsbMassStorageDriver::readWrite10(Unit &unit, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount, const bool write) const -> bool {
+auto UsbMassStorageDriver::readWrite(Unit &unit, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount, const bool write) const -> bool {
 	if (unit.blockSize == 0 or pageCount == 0 or pagePhysArray == nullptr) {
 		return false;
 	}
@@ -277,20 +307,66 @@ auto UsbMassStorageDriver::readWrite10(Unit &unit, const uint64_t lba, const uin
 
 	const uint64_t blocks = byteCount / unit.blockSize;
 
-	if (lba > UINT32_MAX or blocks == 0 or blocks > 0xFFFF) {
+	if (blocks == 0 or blocks > UINT32_MAX or lba + blocks > unit.blockCount) {
 		return false;
 	}
 
-	uint8_t cdb[10] {};
+	if (lba <= UINT32_MAX and blocks <= 0xFFFF) {
+		uint8_t cdb[10] {};
 
-	cdb[0] = write ? 0x2A : 0x28;
+		cdb[0] = write ? 0x2A : 0x28;
+		putBe32(cdb + 2, static_cast<uint32_t>(lba));
+		putBe16(cdb + 7, static_cast<uint16_t>(blocks));
 
-	putBe32(cdb + 2, static_cast<uint32_t>(lba));
+		return sendCommand(unit, cdb, sizeof(cdb), pagePhysArray, pageCount, static_cast<uint32_t>(byteCount), !write);
+	}
 
-	cdb[7] = static_cast<uint8_t>(blocks >> 8);
-	cdb[8] = static_cast<uint8_t>(blocks);
+	uint8_t cdb[16] {};
+
+	cdb[0] = write ? 0x8A : 0x88;
+	putBe64(cdb + 2, lba);
+	putBe32(cdb + 10, static_cast<uint32_t>(blocks));
 
 	return sendCommand(unit, cdb, sizeof(cdb), pagePhysArray, pageCount, static_cast<uint32_t>(byteCount), !write);
+}
+
+auto UsbMassStorageDriver::readWriteWithRetry(Unit &unit, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount, const bool write) const -> bool {
+	for (uint32_t attempt = 0; attempt < 3; ++attempt) {
+		if (readWrite(unit, lba, pagePhysArray, pageCount, write)) {
+			return true;
+		}
+
+		requestSense(unit, true);
+
+		if (unit.senseKey == 0x06) {
+			readCapacity10(unit);
+		}
+
+		if (unit.senseKey == 0x03 or unit.senseKey == 0x04) {
+			return false;
+		}
+
+		usleep(50000);
+	}
+
+	return false;
+}
+
+auto UsbMassStorageDriver::flushWithRetry(Unit &unit) const -> bool {
+	uint8_t cdb[10] {};
+
+	cdb[0] = 0x35;
+
+	for (uint32_t attempt = 0; attempt < 3; ++attempt) {
+		if (sendCommand(unit, cdb, sizeof(cdb), nullptr, 0, 0, false)) {
+			return true;
+		}
+
+		requestSense(unit, true);
+		usleep(50000);
+	}
+
+	return false;
 }
 
 auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device, UsbInterface &interface) -> bool {
@@ -338,13 +414,23 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 		return false;
 	}
 
+	bool ready = false;
+
 	for (int attempt = 0; attempt < 20; ++attempt) {
 		if (testUnitReady(unit)) {
+			ready = true;
 			break;
 		}
 
 		requestSense(unit);
 		usleep(100000);
+	}
+
+	if (!ready) {
+		printf("XHCI/MSD: Unit not ready slot=%u.", device.slotId);
+		fflush(stdout);
+
+		return false;
 	}
 
 	if (!readCapacity10(unit)) {
@@ -376,13 +462,13 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 auto UsbMassStorageDriver::read(const uint32_t controllerId, const uint32_t nsid, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
 	Unit *unit = find(controllerId, nsid);
 
-	return unit != nullptr and readWrite10(*unit, lba, pagePhysArray, pageCount, false);
+	return unit != nullptr and readWriteWithRetry(*unit, lba, pagePhysArray, pageCount, false);
 }
 
 auto UsbMassStorageDriver::write(const uint32_t controllerId, const uint32_t nsid, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
 	Unit *unit = find(controllerId, nsid);
 
-	return unit != nullptr and readWrite10(*unit, lba, pagePhysArray, pageCount, true);
+	return unit != nullptr and readWriteWithRetry(*unit, lba, pagePhysArray, pageCount, true);
 }
 
 auto UsbMassStorageDriver::flush(const uint32_t controllerId, const uint32_t nsid) -> bool {
@@ -392,11 +478,7 @@ auto UsbMassStorageDriver::flush(const uint32_t controllerId, const uint32_t nsi
 		return false;
 	}
 
-	uint8_t cdb[10] {};
-
-	cdb[0] = 0x35;
-
-	return sendCommand(*unit, cdb, sizeof(cdb), nullptr, 0, 0, false);
+	return flushWithRetry(*unit);
 }
 
 void UsbMassStorageDriver::removeDevice(const XhciDevice &device) {
