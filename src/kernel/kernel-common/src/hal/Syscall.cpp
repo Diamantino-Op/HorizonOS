@@ -436,31 +436,55 @@ namespace kernel::common::hal {
 
 		// TODO: implement fd and offset
 
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
 		if (size == 0) {
 			*ret = MAP_FAILED;
 
 			return EINVAL;
 		}
 
-		AllocContext *ctx = Scheduler::getCurrentThread()->getParent()->getProcessContext();
+		auto *thread = Scheduler::getCurrentThread();
+		auto *process = thread != nullptr ? thread->getParent() : nullptr;
+		auto *scheduler = CommonMain::getInstance()->getScheduler();
+
+		if (thread == nullptr || process == nullptr || scheduler == nullptr) {
+			*ret = MAP_FAILED;
+
+			return EFAULT;
+		}
+
+		AllocContext *ctx = process->getProcessContext();
+
+		if (ctx == nullptr) {
+			*ret = MAP_FAILED;
+
+			return EFAULT;
+		}
 
 		u64 addr = hint;
+		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 
 		if (addr == 0) {
-			addr = Scheduler::getCurrentThread()->getParent()->topmostMappedPage + pageSize;
+			addr = process->topmostMappedPage + pageSize;
 		} else if (ctx->pageMap.getPhysAddress(addr) != 0) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
 			*ret = MAP_FAILED;
 
 			return EEXIST;
 		}
 
 		if (static_cast<bool>(flags & MAP_ANON) and offset != 0) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
 			*ret = MAP_FAILED;
 
 			return EINVAL;
 		}
 
 		if (size > ~0ULL - addr || addr + size > ~0ULL - (pageSize - 1)) {
+			scheduler->getSchedLock()->unlock(schedPrevIF);
 			*ret = MAP_FAILED;
 
 			return EINVAL;
@@ -477,6 +501,7 @@ namespace kernel::common::hal {
 					ctx->pageMap.unMapPage(mapped, true);
 				}
 
+				scheduler->getSchedLock()->unlock(schedPrevIF);
 				*ret = MAP_FAILED;
 
 				return ENOMEM;
@@ -484,12 +509,13 @@ namespace kernel::common::hal {
 
 			ctx->pageMap.mapPage(i, reinterpret_cast<u64>(physPage), (prot & 0b11) | 0b101, false, not static_cast<bool>(prot & PROT_EXEC));
 
-			if (i > Scheduler::getCurrentThread()->getParent()->topmostMappedPage) {
-				Scheduler::getCurrentThread()->getParent()->topmostMappedPage = i;
+			if (i > process->topmostMappedPage) {
+				process->topmostMappedPage = i;
 			}
 		}
 
 		*ret = static_cast<long>(addr);
+		scheduler->getSchedLock()->unlock(schedPrevIF);
 
 		return 0;
 	}

@@ -1141,6 +1141,66 @@ namespace {
 		return runCommand(controller, command, completion, 1000);
 	}
 
+	auto disableSlot(MappedController &controller, XhciDevice &device) -> bool {
+		if (device.slotId == 0) {
+			return true;
+		}
+
+		auto command = XhciTrb();
+		command.control = (XHCI_TRB_TYPE_DISABLE_SLOT_COMMAND << XHCI_TRB_TYPE_SHIFT) | (static_cast<uint32_t>(device.slotId) << 24);
+
+		auto completion = XhciTrb();
+		return runCommand(controller, command, completion, 1000);
+	}
+
+	void releaseDeviceMemory(MappedController &controller, XhciDevice &device) {
+		if (device.slotId != 0 and controller.memory.dcbaa.virt != 0) {
+			auto *dcbaa = reinterpret_cast<uint64_t *>(controller.memory.dcbaa.virt);
+			dcbaa[device.slotId] = 0;
+		}
+
+		freePage(device.descriptorBuffer);
+		freePage(device.transferRing);
+		freePage(device.deviceContext);
+		freePage(device.inputContext);
+		device = {};
+	}
+
+	auto evaluateEp0Context(MappedController &controller, XhciDevice &device) -> bool {
+		if (device.inputContext.virt == 0) {
+			return false;
+		}
+
+		memset(reinterpret_cast<void *>(device.inputContext.virt), 0, XHCI_PAGE_SIZE);
+
+		setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
+		setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, 0x3);
+
+		const uint32_t routeString = 0;
+		const uint32_t slotDword0 = routeString | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
+		const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+
+		setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
+		setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+
+		const uint64_t dequeue = device.transferRing.phys | XHCI_TRB_CYCLE;
+		const uint32_t ep0Dword1 = (4U << 3) | (3U << 1);
+		const uint32_t ep0Dword4 = 8U | (static_cast<uint32_t>(device.maxPacketSize) << 16);
+
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, ep0Dword1);
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
+
+		auto command = XhciTrb();
+		command.parameterLow = static_cast<uint32_t>(device.inputContext.phys);
+		command.parameterHigh = static_cast<uint32_t>(device.inputContext.phys >> 32);
+		command.control = (XHCI_TRB_TYPE_EVALUATE_CONTEXT_COMMAND << XHCI_TRB_TYPE_SHIFT) | (static_cast<uint32_t>(device.slotId) << 24);
+
+		auto completion = XhciTrb();
+		return runCommand(controller, command, completion, 1000);
+	}
+
 	auto readDeviceDescriptor(MappedController &controller, XhciDevice &device, const uint16_t length) -> bool {
 		memset(reinterpret_cast<void *>(device.descriptorBuffer.virt), 0, XHCI_PAGE_SIZE);
 
@@ -1186,8 +1246,6 @@ namespace {
 
 	void parseConfigurationDescriptor(XhciDevice &device, const uint8_t *desc, const uint16_t totalLength) {
 		uint16_t offset = 0;
-		UsbInterfaceInfo *currentInterface = nullptr;
-		device.interfaces.clear();
 
 		while (offset + 2 <= totalLength) {
 			const uint8_t length = desc[offset];
@@ -1206,15 +1264,6 @@ namespace {
 				const uint8_t interfaceClass = desc[offset + 5];
 				const uint8_t interfaceSubclass = desc[offset + 6];
 				const uint8_t interfaceProtocol = desc[offset + 7];
-				auto interface = UsbInterfaceInfo();
-				interface.number = interfaceNumber;
-				interface.alternateSetting = alternateSetting;
-				interface.interfaceClass = interfaceClass;
-				interface.interfaceSubclass = interfaceSubclass;
-				interface.interfaceProtocol = interfaceProtocol;
-
-				device.interfaces.push_back(interface);
-				currentInterface = &device.interfaces.back();
 
 				printf("XHCI: Interface slot=%u if=%u alt=%u endpoints=%u class=%02x subclass=%02x protocol=%02x.",
 				       device.slotId,
@@ -1235,15 +1284,6 @@ namespace {
 				const uint8_t attributes = desc[offset + 3];
 				const uint16_t maxPacket = static_cast<uint16_t>(desc[offset + 4]) | (static_cast<uint16_t>(desc[offset + 5]) << 8);
 				const uint8_t interval = desc[offset + 6];
-				auto endpoint = UsbEndpointInfo();
-				endpoint.address = endpointAddress;
-				endpoint.attributes = attributes;
-				endpoint.maxPacketSize = maxPacket;
-				endpoint.interval = interval;
-
-				if (currentInterface != nullptr) {
-					currentInterface->endpoints.push_back(endpoint);
-				}
 
 				printf("XHCI: Endpoint slot=%u addr=0x%02x attrs=0x%02x maxPacket=%u interval=%u.",
 				       device.slotId,
@@ -1334,6 +1374,8 @@ namespace {
 	}
 
 	void enumerateRootPorts(MappedController &controller) {
+		controller.devices.reserve(controller.maxPorts);
+
 		for (uint8_t port = 1; port <= controller.maxPorts; ++port) {
 			const uint32_t portsc = mmioRead32(controller.operationalBase, XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC);
 
@@ -1345,24 +1387,32 @@ namespace {
 				continue;
 			}
 
-			auto device = XhciDevice();
+			controller.devices.emplace_back();
+			auto &device = controller.devices.back();
 			device.rootPort = port;
 			device.speed = portSpeed(controller, port);
 			device.maxPacketSize = ep0MaxPacketForSpeed(device.speed);
 
 			if (!enableSlot(controller, device.slotId)) {
+				controller.devices.pop_back();
 				continue;
 			}
 
 			if (!setupDeviceContexts(controller, device)) {
 				printf("XHCI: Failed to allocate contexts for port %u slot %u.", port, device.slotId);
 				fflush(stdout);
+				disableSlot(controller, device);
+				releaseDeviceMemory(controller, device);
+				controller.devices.pop_back();
 				continue;
 			}
 
 			if (!addressDevice(controller, device)) {
 				printf("XHCI: Failed to address device on port %u slot %u.", port, device.slotId);
 				fflush(stdout);
+				disableSlot(controller, device);
+				releaseDeviceMemory(controller, device);
+				controller.devices.pop_back();
 				continue;
 			}
 
@@ -1371,7 +1421,21 @@ namespace {
 
 			if (readDeviceDescriptor(controller, device, 8)) {
 				auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
-				device.maxPacketSize = desc[7] == 9 ? 512 : desc[7];
+				const uint16_t actualMaxPacketSize = desc[7] == 9 ? 512 : desc[7];
+
+				if (actualMaxPacketSize != device.maxPacketSize) {
+					device.maxPacketSize = actualMaxPacketSize;
+
+					if (!evaluateEp0Context(controller, device)) {
+						printf("XHCI: Failed to evaluate EP0 context slot=%u maxPacket=%u.", device.slotId, device.maxPacketSize);
+						fflush(stdout);
+						disableSlot(controller, device);
+						releaseDeviceMemory(controller, device);
+						controller.devices.pop_back();
+						continue;
+					}
+				}
+
 				readDeviceDescriptor(controller, device, 18);
 			}
 
@@ -1387,7 +1451,6 @@ namespace {
 				}
 			}
 
-			controller.devices.push_back(device);
 		}
 
 		printf("XHCI: Enumerated %zu root device(s).", controller.devices.size());
@@ -1631,32 +1694,33 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	controllers.reserve(devices.size());
 
 	for (const auto &device : devices) {
-		MappedController controller {};
+		controllers.emplace_back();
+		auto &controller = controllers.back();
+		const size_t controllerIndex = controllers.size() - 1;
 
 		if (!mapBar0(device, controller)) {
+			controllers.pop_back();
 			continue;
 		}
 
-		if (!bringUpController(controller, controllers.size())) {
+		if (!bringUpController(controller, controllerIndex)) {
 			munmap_extra(reinterpret_cast<void *>(controller.mmioVirt), controller.barSize, false);
 			pciWrite32(device, PCI_COMMAND, controller.originalCommand);
+			controllers.pop_back();
 			
 			continue;
 		}
-
-		controllers.push_back(controller);
-
-		auto &activeController = controllers.back();
+		auto &activeController = controller;
 
 		setInterrupterEnabled(activeController, false);
 
 		if (!startController(activeController.operationalBase, false)) {
-			printf("XHCI: Controller %zu failed to start.", controllers.size() - 1);
+			printf("XHCI: Controller %zu failed to start.", controllerIndex);
 			fflush(stdout);
 			continue;
 		}
 
-		printf("XHCI: Controller %zu started, configured %u device slot(s).", controllers.size() - 1, activeController.configuredSlots);
+		printf("XHCI: Controller %zu started, configured %u device slot(s).", controllerIndex, activeController.configuredSlots);
 		fflush(stdout);
 
 		postStartProbe(activeController);
