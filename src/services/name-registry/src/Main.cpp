@@ -134,7 +134,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		// take a snapshot of the services while protected by the mutex
 		vector<Service> snapshot;
 
-		snapshot = *services;
+		{
+			std::scoped_lock lock(services_mutex);
+			snapshot = *services;
+		}
 
 		for (const auto &service : snapshot) {
 			bool ret = false;

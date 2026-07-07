@@ -564,7 +564,7 @@ namespace kernel::common::hal {
 		}
 
 		if (addr == 0) {
-			addr = process->topmostMappedPage + pageSize;
+			addr = pageSize;
 		}
 
 		if (size > ~0ULL - addr || addr + size > ~0ULL - (pageSize - 1)) {

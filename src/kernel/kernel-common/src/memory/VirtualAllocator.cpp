@@ -167,7 +167,7 @@ namespace kernel::common::memory {
 
 		CommonMain::getTerminal()->debug("PageMap Address: 0x%.16lx", "VirtualAllocator", pageMapAddr);
 
-		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctx->pageFlags , false, false);
+		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctxKern->pageFlags , false, false);
 
 		ctxKern->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctxKern, true); // , not ctx->isUserspace
 

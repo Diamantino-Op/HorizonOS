@@ -28,6 +28,23 @@ extern limine_module_request moduleRequest;
 
 namespace {
 	alignas(kernel::x86_64::Kernel) u8 kernelStorage[sizeof(kernel::x86_64::Kernel)];
+
+	auto stringEquals(const char *left, const char *right) -> bool {
+		if (left == nullptr || right == nullptr) {
+			return false;
+		}
+
+		while (*left != '\0' && *right != '\0') {
+			if (*left != *right) {
+				return false;
+			}
+
+			++left;
+			++right;
+		}
+
+		return *left == '\0' && *right == '\0';
+	}
 }
 
 extern "C" __attribute__((no_instrument_function)) void kernelMain(const u64 rsp) {
@@ -216,6 +233,12 @@ namespace kernel::x86_64 {
 
 			terminal.info("Module %u: %s Size: %u", "HorizonOS", i, moduleFile->path, moduleFile->size);
 
+			if (stringEquals(moduleFile->string, "Symbol")) {
+				terminal.info("Skipping symbol module %u: %s", "HorizonOS", i, moduleFile->path);
+
+				continue;
+			}
+
 			if (Elf::isElf(static_cast<ElfCommonHeader *>(moduleFile->address))) {
 				SimpleSpinLock lock = {};
 
@@ -239,6 +262,7 @@ namespace kernel::x86_64 {
 				if (elfLocation != nullptr) {
 					this->scheduler->addThread(true, reinterpret_cast<u64>(elfLocation), moduleProcess);
 				} else {
+					terminal.error("Failed to load module %u as userspace ELF: %s", "HorizonOS", i, moduleFile->path);
 					this->scheduler->killProcess(moduleProcess);
 				}
 			}
