@@ -977,6 +977,46 @@ namespace {
 		return true;
 	}
 
+	auto controlTransferNoData(MappedController &controller,
+	                           XhciDevice &device,
+	                           const uint8_t requestType,
+	                           const uint8_t request,
+	                           const uint16_t value,
+	                           const uint16_t index) -> bool {
+		auto setup = XhciTrb();
+		setup.parameterLow = static_cast<uint32_t>(requestType) | (static_cast<uint32_t>(request) << 8) | (static_cast<uint32_t>(value) << 16);
+		setup.parameterHigh = static_cast<uint32_t>(index);
+		setup.status = 8;
+		setup.control = XHCI_TRB_IDT | (XHCI_TRB_TYPE_SETUP_STAGE << XHCI_TRB_TYPE_SHIFT);
+
+		auto status = XhciTrb();
+		status.control = XHCI_TRB_DIR_IN | XHCI_TRB_IOC | (XHCI_TRB_TYPE_STATUS_STAGE << XHCI_TRB_TYPE_SHIFT);
+
+		if (!enqueueTransferTrb(device, setup) or !enqueueTransferTrb(device, status)) {
+			return false;
+		}
+
+		ringDoorbell(controller, device.slotId, 1);
+
+		auto completion = XhciTrb();
+
+		if (!waitForTransferEvent(controller, device.slotId, 1, completion, 1000)) {
+			printf("XHCI: Control no-data transfer timed out slot=%u request=%u.", device.slotId, request);
+			fflush(stdout);
+			return false;
+		}
+
+		const uint32_t code = completionCode(completion);
+
+		if (code != XHCI_COMPLETION_SUCCESS) {
+			printf("XHCI: Control no-data transfer failed slot=%u request=%u code=%u ctrl=0x%x status=0x%x.", device.slotId, request, code, completion.control, completion.status);
+			fflush(stdout);
+			return false;
+		}
+
+		return true;
+	}
+
 	auto waitForPortReset(MappedController &controller, const uint8_t port) -> bool {
 		const uint32_t offset = XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC;
 
@@ -1144,6 +1184,155 @@ namespace {
 		return true;
 	}
 
+	void parseConfigurationDescriptor(XhciDevice &device, const uint8_t *desc, const uint16_t totalLength) {
+		uint16_t offset = 0;
+		UsbInterfaceInfo *currentInterface = nullptr;
+		device.interfaces.clear();
+
+		while (offset + 2 <= totalLength) {
+			const uint8_t length = desc[offset];
+			const uint8_t type = desc[offset + 1];
+
+			if (length < 2 or offset + length > totalLength) {
+				printf("XHCI: Malformed descriptor slot=%u offset=%u len=%u type=%u total=%u.", device.slotId, offset, length, type, totalLength);
+				fflush(stdout);
+				return;
+			}
+
+			if (type == USB_DESCRIPTOR_INTERFACE and length >= 9) {
+				const uint8_t interfaceNumber = desc[offset + 2];
+				const uint8_t alternateSetting = desc[offset + 3];
+				const uint8_t endpointCount = desc[offset + 4];
+				const uint8_t interfaceClass = desc[offset + 5];
+				const uint8_t interfaceSubclass = desc[offset + 6];
+				const uint8_t interfaceProtocol = desc[offset + 7];
+				auto interface = UsbInterfaceInfo();
+				interface.number = interfaceNumber;
+				interface.alternateSetting = alternateSetting;
+				interface.interfaceClass = interfaceClass;
+				interface.interfaceSubclass = interfaceSubclass;
+				interface.interfaceProtocol = interfaceProtocol;
+
+				device.interfaces.push_back(interface);
+				currentInterface = &device.interfaces.back();
+
+				printf("XHCI: Interface slot=%u if=%u alt=%u endpoints=%u class=%02x subclass=%02x protocol=%02x.",
+				       device.slotId,
+				       interfaceNumber,
+				       alternateSetting,
+				       endpointCount,
+				       interfaceClass,
+				       interfaceSubclass,
+				       interfaceProtocol);
+				fflush(stdout);
+
+				if (interfaceClass == USB_CLASS_HID) {
+					printf("XHCI: TODO HID interface slot=%u if=%u subclass=%02x protocol=%02x.", device.slotId, interfaceNumber, interfaceSubclass, interfaceProtocol);
+					fflush(stdout);
+				}
+			} else if (type == USB_DESCRIPTOR_ENDPOINT and length >= 7) {
+				const uint8_t endpointAddress = desc[offset + 2];
+				const uint8_t attributes = desc[offset + 3];
+				const uint16_t maxPacket = static_cast<uint16_t>(desc[offset + 4]) | (static_cast<uint16_t>(desc[offset + 5]) << 8);
+				const uint8_t interval = desc[offset + 6];
+				auto endpoint = UsbEndpointInfo();
+				endpoint.address = endpointAddress;
+				endpoint.attributes = attributes;
+				endpoint.maxPacketSize = maxPacket;
+				endpoint.interval = interval;
+
+				if (currentInterface != nullptr) {
+					currentInterface->endpoints.push_back(endpoint);
+				}
+
+				printf("XHCI: Endpoint slot=%u addr=0x%02x attrs=0x%02x maxPacket=%u interval=%u.",
+				       device.slotId,
+				       endpointAddress,
+				       attributes,
+				       maxPacket,
+				       interval);
+				fflush(stdout);
+			}
+
+			offset += length;
+		}
+	}
+
+	auto readConfigurationDescriptor(MappedController &controller, XhciDevice &device, uint8_t &configurationValue) -> bool {
+		memset(reinterpret_cast<void *>(device.descriptorBuffer.virt), 0, XHCI_PAGE_SIZE);
+
+		if (!controlTransferIn(controller,
+		                       device,
+		                       0x80,
+		                       USB_REQUEST_GET_DESCRIPTOR,
+		                       static_cast<uint16_t>(USB_DESCRIPTOR_CONFIGURATION << 8),
+		                       0,
+		                       9,
+		                       device.descriptorBuffer.phys)) {
+			return false;
+		}
+
+		auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+
+		if (desc[0] < 9 or desc[1] != USB_DESCRIPTOR_CONFIGURATION) {
+			printf("XHCI: Invalid configuration descriptor header slot=%u len=%u type=%u.", device.slotId, desc[0], desc[1]);
+			fflush(stdout);
+			return false;
+		}
+
+		uint16_t totalLength = static_cast<uint16_t>(desc[2]) | (static_cast<uint16_t>(desc[3]) << 8);
+
+		if (totalLength < 9) {
+			totalLength = 9;
+		}
+
+		if (totalLength > XHCI_PAGE_SIZE) {
+			printf("XHCI: Configuration descriptor too large slot=%u total=%u, truncating to %u.", device.slotId, totalLength, XHCI_PAGE_SIZE);
+			fflush(stdout);
+			totalLength = XHCI_PAGE_SIZE;
+		}
+
+		memset(reinterpret_cast<void *>(device.descriptorBuffer.virt), 0, XHCI_PAGE_SIZE);
+
+		if (!controlTransferIn(controller,
+		                       device,
+		                       0x80,
+		                       USB_REQUEST_GET_DESCRIPTOR,
+		                       static_cast<uint16_t>(USB_DESCRIPTOR_CONFIGURATION << 8),
+		                       0,
+		                       totalLength,
+		                       device.descriptorBuffer.phys)) {
+			return false;
+		}
+
+		desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+		configurationValue = desc[5];
+
+		printf("XHCI: Configuration slot=%u value=%u interfaces=%u attributes=0x%02x maxPower=%u total=%u.",
+		       device.slotId,
+		       configurationValue,
+		       desc[4],
+		       desc[7],
+		       desc[8],
+		       totalLength);
+		fflush(stdout);
+
+		parseConfigurationDescriptor(device, desc, totalLength);
+
+		return true;
+	}
+
+	auto setConfiguration(MappedController &controller, XhciDevice &device, const uint8_t configurationValue) -> bool {
+		if (!controlTransferNoData(controller, device, 0x00, USB_REQUEST_SET_CONFIGURATION, configurationValue, 0)) {
+			return false;
+		}
+
+		printf("XHCI: Set configuration slot=%u value=%u.", device.slotId, configurationValue);
+		fflush(stdout);
+
+		return true;
+	}
+
 	void enumerateRootPorts(MappedController &controller) {
 		for (uint8_t port = 1; port <= controller.maxPorts; ++port) {
 			const uint32_t portsc = mmioRead32(controller.operationalBase, XHCI_OP_PORT_REGS + (port - 1) * XHCI_OP_PORT_STRIDE + XHCI_PORTSC);
@@ -1184,6 +1373,18 @@ namespace {
 				auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
 				device.maxPacketSize = desc[7] == 9 ? 512 : desc[7];
 				readDeviceDescriptor(controller, device, 18);
+			}
+
+			uint8_t configurationValue = 0;
+
+			if (readConfigurationDescriptor(controller, device, configurationValue) and configurationValue != 0) {
+				if (!setConfiguration(controller, device, configurationValue)) {
+					printf("XHCI: Failed to set configuration slot=%u value=%u.", device.slotId, configurationValue);
+					fflush(stdout);
+				} else {
+					device.configurationValue = configurationValue;
+					device.configured = true;
+				}
 			}
 
 			controller.devices.push_back(device);
