@@ -177,6 +177,87 @@ namespace kernel::common::hal {
 			return 0;
 		}
 
+		struct CopiedMessageFilterOptions {
+			MessageFilterOptions options {};
+			u64 *blackListTypes {};
+			u64 *whiteListTypes {};
+		};
+
+		auto releaseCopiedMessageFilterOptions(CopiedMessageFilterOptions *copied) -> void {
+			if (copied == nullptr) {
+				return;
+			}
+
+			delete[] copied->blackListTypes;
+			delete[] copied->whiteListTypes;
+
+			copied->options.blackListTypes = nullptr;
+			copied->options.whiteListTypes = nullptr;
+			copied->options.blackListCount = 0;
+			copied->options.whiteListCount = 0;
+			copied->blackListTypes = nullptr;
+			copied->whiteListTypes = nullptr;
+		}
+
+		auto copyMessageFilterArray(const AllocContext *ctx, const u64 *userTypes, const usize count, u64 **kernelTypes) -> int {
+			if (count == 0) {
+				*kernelTypes = nullptr;
+				return 0;
+			}
+
+			if (userTypes == nullptr || count > (~static_cast<usize>(0) / sizeof(u64))) {
+				return EFAULT;
+			}
+
+			const usize bytes = count * sizeof(u64);
+			auto *types = new u64[count];
+
+			if (types == nullptr) {
+				return ENOMEM;
+			}
+
+			const int err = copyFromUser(ctx, types, reinterpret_cast<u64>(userTypes), bytes);
+
+			if (err != 0) {
+				delete[] types;
+				return err;
+			}
+
+			*kernelTypes = types;
+			return 0;
+		}
+
+		auto copyMessageFilterOptionsFromUser(const AllocContext *ctx, const u64 userOptions, CopiedMessageFilterOptions *copied) -> int {
+			if (userOptions == 0) {
+				return 0;
+			}
+
+			const int headerErr = copyFromUser(ctx, &copied->options, userOptions, sizeof(copied->options));
+
+			if (headerErr != 0) {
+				return headerErr;
+			}
+
+			int err = copyMessageFilterArray(ctx, copied->options.blackListTypes, copied->options.blackListCount, &copied->blackListTypes);
+
+			if (err != 0) {
+				releaseCopiedMessageFilterOptions(copied);
+				return err;
+			}
+
+			err = copyMessageFilterArray(ctx, copied->options.whiteListTypes, copied->options.whiteListCount, &copied->whiteListTypes);
+
+			if (err != 0) {
+				releaseCopiedMessageFilterOptions(copied);
+				return err;
+			}
+
+			copied->options.blackListTypes = copied->blackListTypes;
+			copied->options.whiteListTypes = copied->whiteListTypes;
+
+			return 0;
+		}
+
 		auto writeUserByte(const AllocContext *ctx, const u64 userPtr, const u8 byte) -> int {
 			return copyToUser(ctx, userPtr, &byte, sizeof(byte));
 		}
@@ -804,11 +885,10 @@ namespace kernel::common::hal {
 	}
 
 	auto SyscallManager::syscallSendMsg(long *ret, const u64 sendPort, const u64 port, const u64 msgHdr, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
-		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 		auto *thread = Scheduler::getCurrentThread();
 
-		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or hdr == nullptr) {
+		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or msgHdr == 0) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
@@ -816,34 +896,73 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		if (!isValidUserRange(thread->getParent()->getProcessContext(), msgHdr, sizeof(MessageHeader))) {
+		const auto *ctx = thread->getParent()->getProcessContext();
+		MessageHeader hdr {};
+		const int hdrErr = copyFromUser(ctx, &hdr, msgHdr, sizeof(hdr));
+
+		if (hdrErr != 0) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
 
-			return EFAULT;
+			return hdrErr;
 		}
 
-		if (hdr->length > 0 && !isValidUserRange(thread->getParent()->getProcessContext(), reinterpret_cast<u64>(hdr->buffer), hdr->length)) {
-			if (ret != nullptr) {
-				*ret = -1;
+		auto *userBuffer = hdr.buffer;
+		u8 *kernelBuffer = nullptr;
+
+		if (hdr.length > 0) {
+			kernelBuffer = new u8[hdr.length];
+
+			if (kernelBuffer == nullptr) {
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return ENOMEM;
 			}
 
-			return EFAULT;
+			const int bufferErr = copyFromUser(ctx, kernelBuffer, reinterpret_cast<u64>(userBuffer), hdr.length);
+
+			if (bufferErr != 0) {
+				delete[] kernelBuffer;
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return bufferErr;
+			}
+
+			hdr.buffer = reinterpret_cast<u64 *>(kernelBuffer);
 		}
 
 		for (u64 retryAttempt = 0;; ++retryAttempt) {
-			const u64 result = PortMessaging::sendMessage(sendPort, port, hdr);
+			const u64 result = PortMessaging::sendMessage(sendPort, port, &hdr);
 
 			if (result == 0) {
+				hdr.buffer = userBuffer;
+				const int copyErr = copyToUser(ctx, msgHdr, &hdr, sizeof(hdr));
+				delete[] kernelBuffer;
+
+				if (copyErr != 0) {
+					if (ret != nullptr) {
+						*ret = -1;
+					}
+
+					return copyErr;
+				}
+
 				if (ret != nullptr) {
-					*ret = hdr->retLength;
+					*ret = hdr.retLength;
 				}
 
 				return 0;
 			}
 
 			if (result != ENOENT) {
+				delete[] kernelBuffer;
+
 				if (ret != nullptr) {
 					*ret = -1;
 				}
@@ -852,6 +971,8 @@ namespace kernel::common::hal {
 			}
 
 			if (retryAttempt >= sendMessageRetryCount) {
+				delete[] kernelBuffer;
+
 				if (ret != nullptr) {
 					*ret = -1;
 				}
@@ -866,41 +987,61 @@ namespace kernel::common::hal {
 	}
 
 	auto SyscallManager::syscallRecvMsg(long *ret, const u64 port, const u64 msgHdr, const u64 options, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
-		auto *hdr = reinterpret_cast<MessageHeader *>(msgHdr);
 		const auto *scheduler = CommonMain::getInstance()->getScheduler();
 		const auto *thread = Scheduler::getCurrentThread();
 
-		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or hdr == nullptr) {
+		if (scheduler == nullptr or thread == nullptr or thread->getParent() == nullptr or msgHdr == 0) {
 			return EFAULT;
 		}
 
-		if (!isValidUserRange(thread->getParent()->getProcessContext(), msgHdr, sizeof(MessageHeader))) {
+		const auto *ctx = thread->getParent()->getProcessContext();
+		MessageHeader hdr {};
+		const int hdrErr = copyFromUser(ctx, &hdr, msgHdr, sizeof(hdr));
+
+		if (hdrErr != 0) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
 
-			return EFAULT;
+			return hdrErr;
 		}
 
-		if (options != 0 && !isValidUserRange(thread->getParent()->getProcessContext(), options, sizeof(MessageFilterOptions))) {
+		CopiedMessageFilterOptions copiedOptions {};
+		const int optionsErr = copyMessageFilterOptionsFromUser(ctx, options, &copiedOptions);
+
+		if (optionsErr != 0) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
 
-			return EFAULT;
+			return optionsErr;
 		}
 
-		if (hdr->length > 0 && !isValidUserRange(thread->getParent()->getProcessContext(), reinterpret_cast<u64>(hdr->buffer), hdr->length)) {
-			if (ret != nullptr) {
-				*ret = -1;
+		auto *userBuffer = hdr.buffer;
+		u8 *kernelBuffer = nullptr;
+
+		if (hdr.length > 0) {
+			kernelBuffer = new u8[hdr.length];
+
+			if (kernelBuffer == nullptr) {
+				releaseCopiedMessageFilterOptions(&copiedOptions);
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return ENOMEM;
 			}
 
-			return EFAULT;
+			hdr.buffer = reinterpret_cast<u64 *>(kernelBuffer);
 		}
 
-		const u64 result = PortMessaging::recvMessage(port, hdr, reinterpret_cast<MessageFilterOptions *>(options));
+		const u64 result = PortMessaging::recvMessage(port, &hdr, options != 0 ? &copiedOptions.options : nullptr);
 
 		if (result != 0) {
+			delete[] kernelBuffer;
+			releaseCopiedMessageFilterOptions(&copiedOptions);
+
 			if (ret != nullptr) {
 				*ret = -1;
 			}
@@ -908,8 +1049,39 @@ namespace kernel::common::hal {
 			return result;
 		}
 
+		const ssize retLength = hdr.retLength;
+
+		if (retLength > 0) {
+			const int bufferErr = copyToUser(ctx, reinterpret_cast<u64>(userBuffer), kernelBuffer, static_cast<usize>(retLength));
+
+			if (bufferErr != 0) {
+				delete[] kernelBuffer;
+				releaseCopiedMessageFilterOptions(&copiedOptions);
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return bufferErr;
+			}
+		}
+
+		hdr.buffer = userBuffer;
+		const int copyErr = copyToUser(ctx, msgHdr, &hdr, sizeof(hdr));
+
+		delete[] kernelBuffer;
+		releaseCopiedMessageFilterOptions(&copiedOptions);
+
+		if (copyErr != 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return copyErr;
+		}
+
 		if (ret != nullptr) {
-			*ret = hdr->retLength;
+			*ret = retLength;
 		}
 
 		return 0;
