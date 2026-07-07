@@ -58,6 +58,29 @@ namespace kernel::common::hal {
 			return isMappedAddress(ctx, pointer) && isMappedAddress(ctx, end);
 		}
 
+		auto isFullyMappedUserRange(const AllocContext *ctx, const u64 pointer, const usize size) -> bool {
+			if (!isValidUserRange(ctx, pointer, size)) {
+				return false;
+			}
+
+			const u64 end = pointer + size - 1;
+			u64 addr = alignDown<u64>(pointer, pageSize);
+
+			while (addr <= end) {
+				if (!isMappedAddress(ctx, addr)) {
+					return false;
+				}
+
+				if (addr > ~0ULL - pageSize) {
+					break;
+				}
+
+				addr += pageSize;
+			}
+
+			return true;
+		}
+
 		auto isValidFutexPointer(const AllocContext *ctx, const u64 pointer) -> bool {
 			return isValidUserRange(ctx, pointer, sizeof(u32));
 		}
@@ -132,7 +155,7 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			if (!isValidUserRange(ctx, userPtr, size)) {
+			if (!isFullyMappedUserRange(ctx, userPtr, size)) {
 				return EFAULT;
 			}
 
@@ -157,7 +180,7 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			if (!isValidUserRange(ctx, userPtr, size)) {
+			if (!isFullyMappedUserRange(ctx, userPtr, size)) {
 				return EFAULT;
 			}
 
@@ -1352,17 +1375,37 @@ namespace kernel::common::hal {
 			}
 		}
 
-		SignalAction newActionCopy;
+		SignalAction newActionCopy {};
 
 		if (action != 0) {
-			newActionCopy = *reinterpret_cast<const SignalAction *>(action);
+			const int copyErr = copyFromUser(ctx, &newActionCopy, action, sizeof(newActionCopy));
+
+			if (copyErr != 0) {
+				return copyErr;
+			}
 		}
 
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 		const auto currentAction = thread->getParent()->signalActions[sig - 1];
 
 		if (oldAction != 0) {
-			*reinterpret_cast<SignalAction *>(oldAction) = currentAction;
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+
+			const int copyErr = copyToUser(ctx, oldAction, &currentAction, sizeof(currentAction));
+
+			if (copyErr != 0) {
+				return copyErr;
+			}
+
+			const bool relockPrevIF = scheduler->getSchedLock()->lock();
+
+			if (action != 0) {
+				thread->getParent()->signalActions[sig - 1] = newActionCopy;
+			}
+
+			scheduler->getSchedLock()->unlock(relockPrevIF);
+
+			return 0;
 		}
 
 		if (action != 0) {
@@ -1658,9 +1701,7 @@ namespace kernel::common::hal {
 	}
 
 	auto SyscallManager::syscallGetCpuIDs(long */*unused*/, const u64 cpuIdOutArray, const u64 cpuCount, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
-		auto *cpuIdArr = reinterpret_cast<HosCpuInfo *>(cpuIdOutArray);
-
-		if (cpuIdArr == nullptr) {
+		if (cpuIdOutArray == 0) {
 			return EINVAL;
 		}
 
@@ -1672,9 +1713,27 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
+		if (cpuCount > (~static_cast<u64>(0) / sizeof(HosCpuInfo))) {
+			return EINVAL;
+		}
+
+		const Thread *thread = Scheduler::getCurrentThread();
+		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+
+		if (!isFullyMappedUserRange(ctx, cpuIdOutArray, cpuCount * sizeof(HosCpuInfo))) {
+			return EFAULT;
+		}
+
 		for (u64 i = 0; i < cpuCount; i++) {
-			cpuIdArr[i].cpuId = mpRequest.response->cpus[i]->processor_id;
-			cpuIdArr[i].apicId = mpRequest.response->cpus[i]->lapic_id;
+			HosCpuInfo info {};
+			info.cpuId = mpRequest.response->cpus[i]->processor_id;
+			info.apicId = mpRequest.response->cpus[i]->lapic_id;
+
+			const int err = copyToUser(ctx, cpuIdOutArray + (i * sizeof(info)), &info, sizeof(info));
+
+			if (err != 0) {
+				return err;
+			}
 		}
 
 		return 0;

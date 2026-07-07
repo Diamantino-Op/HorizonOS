@@ -226,7 +226,15 @@ namespace kernel::common::memory {
 	// TODO: Maybe set to 0 too
 	// TODO: Use Linked List
 	u64 *VirtualAllocator::alloc(AllocContext *ctx, const u64 size, const bool isUserAlloc) {
+		if (ctx == nullptr || size == 0 || size > ~0ULL - sizeof(MemoryBlock)) {
+			return nullptr;
+		}
+
 		const u64 alignedSize = alignUp<u64>(size, sizeof(MemoryBlock));
+
+		if (alignedSize < size || alignedSize > ~0ULL - (sizeof(MemoryBlock) * 2)) {
+			return nullptr;
+		}
 
 		const bool prevIF = ctx->lock.lock();
 
@@ -398,7 +406,7 @@ namespace kernel::common::memory {
 			removeFreeList(ctx, block->next);
 
 			const MemoryBlock *next = block->next;
-			
+
 			block->size += next->size + sizeof(MemoryBlock);
 			block->next = next->next;
 
@@ -418,8 +426,16 @@ namespace kernel::common::memory {
 	}
 
 	bool VirtualAllocator::growHeap(AllocContext *ctx, const u64 minSize, const bool isUserAlloc) {
+		if (ctx == nullptr || minSize > ~0ULL - sizeof(MemoryBlock)) {
+			return false;
+		}
+
 		const usize totalSize = minSize + sizeof(MemoryBlock);
 		auto allocSize = alignUp<usize>(totalSize, pageSize);
+
+		if (allocSize < totalSize) {
+			return false;
+		}
 
 		auto *baseAddress = reinterpret_cast<u64 *>(reinterpret_cast<u64>(ctx->heapStart) + ctx->heapSize);
 

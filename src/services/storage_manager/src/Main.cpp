@@ -31,6 +31,10 @@ namespace {
 	mutex blockRequestMutex;
 	mutex nvmeRequestIdMutex;
 
+	auto allocateBlockDeviceIdLocked() -> uint64_t {
+		return nextBlockDeviceId++;
+	}
+
 	auto allocateNvmeRequestId() -> uint64_t {
 		const scoped_lock lock(nvmeRequestIdMutex);
 		return nextNvmeRequestId++;
@@ -497,7 +501,6 @@ namespace {
 				if (!empty and entry->firstLba <= entry->lastLba and entry->lastLba < rawDevice.blockCount) {
 					BlockDevice partition {};
 
-					partition.id = nextBlockDeviceId++;
 					partition.kind = BlockDeviceKind::Partition;
 					partition.driverPort = rawDevice.driverPort;
 					partition.controllerId = rawDevice.controllerId;
@@ -521,6 +524,7 @@ namespace {
 
 					{
 						const scoped_lock lock(storageMutex);
+						partition.id = allocateBlockDeviceIdLocked();
 						blockDevices.push_back(partition);
 					}
 
@@ -566,7 +570,6 @@ namespace {
 			if (validName(data.name, data.nameLength, sizeof(data.name), name) and data.blockSize != 0 and data.blockCount != 0) {
 				BlockDevice device {};
 
-				device.id = nextBlockDeviceId++;
 				device.kind = BlockDeviceKind::WholeDisk;
 				device.driverPort = data.driverPort;
 				device.controllerId = data.controllerId;
@@ -586,6 +589,7 @@ namespace {
 
 				{
 					const scoped_lock lock(storageMutex);
+					device.id = allocateBlockDeviceIdLocked();
 					blockDevices.push_back(device);
 				}
 

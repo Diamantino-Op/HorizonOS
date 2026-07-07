@@ -17,7 +17,7 @@ namespace kernel::common::threading {
         usize length     {};
         u8   *buffer     {};
 
-    	PortMessage() = default;
+	PortMessage() = default;
         ~PortMessage();
 
         // Non-copyable, non-movable — always heap-allocated via new.
@@ -36,7 +36,7 @@ namespace kernel::common::threading {
         u64    *whiteListTypes {};
         usize   whiteListCount {};
 
-    	PortWaiter() = default;
+	PortWaiter() = default;
         ~PortWaiter();
 
         // Returns true if this waiter accepts a message of the given type.
@@ -55,7 +55,7 @@ namespace kernel::common::threading {
         LinkedList<PortWaiter>  waiters  {};
         TicketSpinLock          lock     {};
 
-    	PortEntry() = default;
+	PortEntry() = default;
         ~PortEntry();
 
         PortEntry(const PortEntry &) = delete;

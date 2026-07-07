@@ -116,6 +116,14 @@ namespace kernel::common::threading {
     // Returns the TID of the thread to unblock, or 0 if none.
     // =========================================================================
 
+    namespace {
+        void restoreInterrupts(const bool prevIF) {
+            if (prevIF) {
+                asm volatile("sti" ::: "memory");
+            }
+        }
+    }
+
     u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
         auto *waiterNode = entry->waiters.getFirst();
 
@@ -136,7 +144,7 @@ namespace kernel::common::threading {
             waiterNode = waiterNode->next;
         }
 
-    	return 0;
+	return 0;
     }
 
     // =========================================================================
@@ -357,48 +365,50 @@ namespace kernel::common::threading {
 
                 // Message passes the filter — check buffer capacity.
                 if (hdr->length < msg->length) {
-                    entry->lock.unlock(prevPortIF);
+                    entry->lock.unlockNoSti();
+                    restoreInterrupts(prevPortIF);
 
                     return EMSGSIZE;
                 }
 
                 // Snapshot all fields before we delete the node.
-            	const usize msgLen     = msg->length;
-            	const u64   msgSrcPort = msg->sourcePort;
-            	const u64   msgType    = msg->type;
+                const usize msgLen     = msg->length;
+                const u64   msgSrcPort = msg->sourcePort;
+                const u64   msgType    = msg->type;
 
-            	if (!entry->messages.removeEntry(msgNode)) {
-            		entry->lock.unlock(prevPortIF);
+                if (!entry->messages.removeEntry(msgNode)) {
+                    entry->lock.unlockNoSti();
+                    restoreInterrupts(prevPortIF);
 
-            		return ENOENT;
-            	}
+                    return ENOENT;
+                }
 
-            	// Remove this thread's waiter entry from the port (it was registered
-            	// when we first blocked; now that we have the message, clean it up).
-	            {
-                	auto *w = entry->waiters.getFirst();
+                // Remove this thread's waiter entry from the port (it was registered
+                // when we first blocked; now that we have the message, clean it up).
+                {
+                    auto *w = entry->waiters.getFirst();
 
-                	while (w != nullptr) {
-                		auto *next = w->next;
+                    while (w != nullptr) {
+                        auto *next = w->next;
 
-                		if (w->value != nullptr && w->value->thread == Scheduler::getCurrentThread()) {
-                			const PortWaiter *dw = w->value;
+                        if (w->value != nullptr && w->value->thread == Scheduler::getCurrentThread()) {
+                            const PortWaiter *dw = w->value;
 
-                			entry->waiters.removeEntry(w);
+                            entry->waiters.removeEntry(w);
 
-                			delete dw;
-                			delete w;
+                            delete dw;
+                            delete w;
 
-                			break;
-                		}
+                            break;
+                        }
 
-                		w = next;
-                	}
-	            }
+                        w = next;
+                    }
+                }
 
-            	if (msgLen > 0) {
-            		memcpy(hdr->buffer, msg->buffer, msgLen);
-            	}
+                if (msgLen > 0) {
+                    memcpy(hdr->buffer, msg->buffer, msgLen);
+                }
 
                 hdr->port      = port;
                 hdr->srcPort   = msgSrcPort;
@@ -408,7 +418,8 @@ namespace kernel::common::threading {
                 delete msg;
                 delete msgNode;
 
-                entry->lock.unlock(prevPortIF);
+                entry->lock.unlockNoSti();
+                restoreInterrupts(prevPortIF);
 
                 return 0;
             }
@@ -428,7 +439,8 @@ namespace kernel::common::threading {
 	            const u64 nowNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
 
 	            if (nowNs >= deadlineNs) {
-	                entry->lock.unlock(prevPortIF);
+	                entry->lock.unlockNoSti();
+                    restoreInterrupts(prevPortIF);
 
 	                return ETIMEDOUT;
 	            }
@@ -437,7 +449,8 @@ namespace kernel::common::threading {
 	        Thread *currThread = Scheduler::getCurrentThread();
 
 	        if (currThread == nullptr) {
-	            entry->lock.unlock(prevPortIF);
+	            entry->lock.unlockNoSti();
+                restoreInterrupts(prevPortIF);
 
 	            return EFAULT;
 	        }
@@ -475,7 +488,8 @@ namespace kernel::common::threading {
 
 	            if (waiter == nullptr) {
 	                scheduler->getSchedLock()->unlockNoSti();
-	                entry->lock.unlock(prevPortIF);
+	                entry->lock.unlockNoSti();
+                    restoreInterrupts(prevPortIF);
 
 	                return ENOMEM;
 	            }
@@ -493,7 +507,8 @@ namespace kernel::common::threading {
 	                        delete waiter;
 
 	                        scheduler->getSchedLock()->unlockNoSti();
-	                        entry->lock.unlock(prevPortIF);
+	                        entry->lock.unlockNoSti();
+                            restoreInterrupts(prevPortIF);
 
 	                        return ENOMEM;
 	                    }
@@ -508,7 +523,8 @@ namespace kernel::common::threading {
 	                        delete waiter;
 
 	                        scheduler->getSchedLock()->unlockNoSti();
-	                        entry->lock.unlock(prevPortIF);
+	                        entry->lock.unlockNoSti();
+                            restoreInterrupts(prevPortIF);
 
 	                        return ENOMEM;
 	                    }
@@ -609,7 +625,7 @@ namespace kernel::common::threading {
 
             for (const auto &w : entry.waiters) {
                 if (w.thread == nullptr) {
-                	continue;
+	continue;
 				}
 
                 term->printfBoth(true, "    Waiter: TID=%u  white=%lu  black=%lu", w.thread->getId(), w.whiteListCount, w.blackListCount);

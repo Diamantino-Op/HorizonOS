@@ -10,6 +10,26 @@
 extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
+	namespace {
+		bool rangesOverlap(const u64 aBase, const u64 aPages, const u64 bBase, const u64 bPages) {
+			if (aPages == 0 || bPages == 0 || aPages > (~0ULL / pageSize) || bPages > (~0ULL / pageSize)) {
+				return true;
+			}
+
+			const u64 aSize = aPages * pageSize;
+			const u64 bSize = bPages * pageSize;
+
+			if (aBase > ~0ULL - aSize || bBase > ~0ULL - bSize) {
+				return true;
+			}
+
+			const u64 aEnd = aBase + aSize;
+			const u64 bEnd = bBase + bSize;
+
+			return aBase < bEnd && bBase < aEnd;
+		}
+	}
+
 	void PhysicalMemoryManager::init() {
 		Terminal* terminal = CommonMain::getTerminal();
 
@@ -193,11 +213,23 @@ namespace kernel::common::memory {
 	void PhysicalMemoryManager::freePagesPhys(const u64 *physAddress, const usize pageAmount) {
 		const u64 phys = reinterpret_cast<u64>(physAddress);
 
-		if (phys == 0 || pageAmount == 0 || (phys & (pageSize - 1)) != 0) {
+		if (phys == 0 || pageAmount == 0 || (phys & (pageSize - 1)) != 0 || pageAmount > (~static_cast<usize>(0) / pageSize)) {
 			return;
 		}
 
 		const bool prevIF = this->pmmSpinLock.lock();
+
+		for (const PmmListEntry *entry = this->listPtr; entry != nullptr; entry = entry->next) {
+			const u64 entryPhys = reinterpret_cast<u64>(entry) - CommonMain::getCurrentHhdm();
+
+			if (rangesOverlap(phys, pageAmount, entryPhys, entry->count)) {
+				CommonMain::getTerminal()->error("Rejected overlapping free phys=0x%.16lx pages=%lu existing=0x%.16lx existingPages=%lu",
+					"PMM", phys, pageAmount, entryPhys, entry->count);
+				this->pmmSpinLock.unlock(prevIF);
+
+				return;
+			}
+		}
 
 		auto *currEntry = reinterpret_cast<PmmListEntry *>(phys + CommonMain::getCurrentHhdm());
 
@@ -218,6 +250,8 @@ namespace kernel::common::memory {
 	}
 
 	u64 PhysicalMemoryManager::getFreeMemory() const {
+		auto *self = const_cast<PhysicalMemoryManager *>(this);
+		const bool prevIF = self->pmmSpinLock.lock();
 		const PmmListEntry *currEntry = this->listPtr;
 
 		u64 totFreeMemory = 0;
@@ -227,6 +261,8 @@ namespace kernel::common::memory {
 
 			currEntry = currEntry->next;
 		}
+
+		self->pmmSpinLock.unlock(prevIF);
 
 		return totFreeMemory;
 	}
