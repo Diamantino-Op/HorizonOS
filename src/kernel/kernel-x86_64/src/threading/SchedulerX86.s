@@ -2,6 +2,7 @@
 .extern loadNewThread
 .extern finishScheduleSwitch
 .extern checkDisabled
+.extern kernelThreadReturned
 
 .global switchContextAsm
 switchContextAsm:
@@ -83,7 +84,8 @@ setUserStackAsm:
 .global kernelThreadTrampoline
 kernelThreadTrampoline:
     sti
-    jmp r15
+    call r15
+    call kernelThreadReturned
 
 .global threadTrampoline32
 threadTrampoline32:

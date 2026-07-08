@@ -97,6 +97,20 @@ namespace kernel::common::threading {
 		CpuManager::getCurrentCore()->executionNode.finishScheduleSwitch();
 	}
 
+	extern "C" void kernelThreadReturned() {
+		Scheduler *scheduler = CommonMain::getInstance() != nullptr ? CommonMain::getInstance()->getScheduler() : nullptr;
+		Thread *thread = Scheduler::getCurrentThread();
+
+		if (scheduler != nullptr && thread != nullptr) {
+			scheduler->killThread(thread);
+		}
+
+		for (;;) {
+			Asm::cli();
+			Asm::hlt();
+		}
+	}
+
 	extern "C" u128 scheduleEntry(const u64 oldRsp) {
 		return CpuManager::getCurrentCore()->executionNode.schedule(oldRsp);
 	}
