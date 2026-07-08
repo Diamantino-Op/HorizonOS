@@ -27,6 +27,17 @@ struct BotCsw {
 	uint8_t status {};
 } __attribute__((packed));
 
+class MassStorageUtils {
+public:
+	static auto allocateStage(AllocatedPage &page) -> bool;
+	static void freeStage(AllocatedPage &page);
+	static auto be32(const uint8_t *bytes) -> uint32_t;
+	static auto be64(const uint8_t *bytes) -> uint64_t;
+	static void putBe16(uint8_t *bytes, uint16_t value);
+	static void putBe32(uint8_t *bytes, uint32_t value);
+	static void putBe64(uint8_t *bytes, uint64_t value);
+};
+
 struct UsbMassStorageTransport {
 	void *ctx {};
 	bool (*bulkTransfer)(const void *ctx, const XhciDevice &device, UsbEndpoint &endpoint, const uint64_t *pagePhysArray, uint32_t pageCount, uint32_t length, bool in, uint32_t *actualLength) {};

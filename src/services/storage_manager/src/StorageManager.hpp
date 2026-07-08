@@ -11,6 +11,7 @@
 using namespace std;
 
 constexpr uint64_t GPT_SIGNATURE = 0x5452415020494645ULL;
+constexpr uint16_t MBR_BOOT_SIGNATURE = 0xAA55;
 
 enum class BlockDeviceKind : uint8_t {
 	WholeDisk,
@@ -77,6 +78,21 @@ struct GptPartitionEntry {
 	uint16_t name[36] {};
 } __attribute__((packed));
 
+struct MbrPartitionEntry {
+	uint8_t status {};
+	uint8_t firstChs[3] {};
+	uint8_t type {};
+	uint8_t lastChs[3] {};
+	uint32_t firstLba {};
+	uint32_t sectorCount {};
+} __attribute__((packed));
+
+struct MbrSector {
+	uint8_t bootCode[446] {};
+	MbrPartitionEntry partitions[4] {};
+	uint16_t signature {};
+} __attribute__((packed));
+
 class StorageManagerService {
 public:
 	auto start() -> int;
@@ -103,6 +119,7 @@ public:
 	static void freeOnePage(uint64_t phys, uint64_t virt);
 	static void notifyFsHandlers(const BlockDevice &device);
 	static void probeGpt(const BlockDevice &rawDevice);
+	static void probeMbr(const BlockDevice &rawDevice);
 };
 
 #endif

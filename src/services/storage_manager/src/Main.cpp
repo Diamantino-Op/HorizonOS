@@ -544,6 +544,87 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 	fflush(stdout);
 }
 
+void StorageManagerUtils::probeMbr(const BlockDevice &rawDevice) {
+	uint64_t mbrPhys = 0;
+	uint64_t mbrVirt = 0;
+
+	printf("Storage: Probing MBR on %s.", rawDevice.name.c_str());
+	fflush(stdout);
+
+	if (!StorageManagerUtils::readOnePage(rawDevice, 0, mbrPhys, mbrVirt)) {
+		printf("Storage: Failed to read MBR from %s.", rawDevice.name.c_str());
+		fflush(stdout);
+
+		return;
+	}
+
+	const auto *mbr = reinterpret_cast<const MbrSector *>(mbrVirt);
+
+	if (mbr->signature != MBR_BOOT_SIGNATURE) {
+		StorageManagerUtils::freeOnePage(mbrPhys, mbrVirt);
+
+		printf("Storage: %s has no MBR signature.", rawDevice.name.c_str());
+		fflush(stdout);
+
+		return;
+	}
+
+	uint32_t created = 0;
+
+	for (uint32_t i = 0; i < 4; ++i) {
+		const MbrPartitionEntry &entry = mbr->partitions[i];
+
+		if (entry.type == 0 or entry.type == 0xEE or entry.sectorCount == 0) {
+			continue;
+		}
+
+		if (entry.firstLba >= rawDevice.blockCount or entry.sectorCount > rawDevice.blockCount - entry.firstLba) {
+			printf("Storage: Ignoring invalid MBR partition %u on %s start=%u sectors=%u.", i + 1, rawDevice.name.c_str(), entry.firstLba, entry.sectorCount);
+			fflush(stdout);
+
+			continue;
+		}
+
+		BlockDevice partition {};
+
+		partition.kind = BlockDeviceKind::Partition;
+		partition.driverPort = rawDevice.driverPort;
+		partition.controllerId = rawDevice.controllerId;
+		partition.nsid = rawDevice.nsid;
+		partition.blockCount = entry.sectorCount;
+		partition.blockSize = rawDevice.blockSize;
+		partition.maxPagesPerRequest = rawDevice.maxPagesPerRequest;
+		partition.transport = rawDevice.transport;
+		partition.readMsgBase = rawDevice.readMsgBase;
+		partition.writeMsgBase = rawDevice.writeMsgBase;
+		partition.flushMsgBase = rawDevice.flushMsgBase;
+		partition.readReplyMsgBase = rawDevice.readReplyMsgBase;
+		partition.writeReplyMsgBase = rawDevice.writeReplyMsgBase;
+		partition.flushReplyMsgBase = rawDevice.flushReplyMsgBase;
+		partition.parentId = rawDevice.id;
+		partition.parentStartLba = entry.firstLba;
+		partition.name = rawDevice.name + "p" + to_string(i + 1);
+		partition.label = partition.name;
+
+		{
+			const scoped_lock lock(storageMutex);
+			partition.id = StorageManagerUtils::allocateBlockDeviceIdLocked();
+			blockDevices.push_back(partition);
+		}
+
+		printf("Storage: Registered MBR partition %s id=%lu type=0x%02x start=%lu blocks=%lu.", partition.name.c_str(), partition.id, entry.type, partition.parentStartLba, partition.blockCount);
+		fflush(stdout);
+
+		StorageManagerUtils::notifyFsHandlers(partition);
+		++created;
+	}
+
+	StorageManagerUtils::freeOnePage(mbrPhys, mbrVirt);
+
+	printf("Storage: MBR probe for %s created %u partition(s).", rawDevice.name.c_str(), created);
+	fflush(stdout);
+}
+
 namespace {
 	[[noreturn]] auto blockRegistrationHandler(void */*unused*/) -> void * {
 		auto data = StorageRegisterBlockDeviceMsgData();
@@ -600,6 +681,7 @@ namespace {
 				fflush(stdout);
 
 				StorageManagerUtils::probeGpt(device);
+				StorageManagerUtils::probeMbr(device);
 				StorageManagerUtils::notifyFsHandlers(device);
 			}
 

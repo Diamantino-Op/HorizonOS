@@ -23,3 +23,5 @@ Token.txt
 /libs/tcmalloc
 /toolchain
 /docs
+
+opencode.json

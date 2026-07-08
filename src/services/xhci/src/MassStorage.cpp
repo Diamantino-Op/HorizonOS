@@ -6,8 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace {
-	auto allocateStage(AllocatedPage &page) -> bool {
+auto MassStorageUtils::allocateStage(AllocatedPage &page) -> bool {
 		if (allocPhysPage(&page.phys) != 0) {
 			return false;
 		}
@@ -24,7 +23,7 @@ namespace {
 		return true;
 	}
 
-	void freeStage(AllocatedPage &page) {
+	void MassStorageUtils::freeStage(AllocatedPage &page) {
 		if (page.virt != 0) {
 			munmap_extra(reinterpret_cast<void *>(page.virt), STAGE_PAGE_SIZE, false);
 		}
@@ -36,11 +35,11 @@ namespace {
 		page = {};
 	}
 
-	auto be32(const uint8_t *bytes) -> uint32_t {
+	auto MassStorageUtils::be32(const uint8_t *bytes) -> uint32_t {
 		return (static_cast<uint32_t>(bytes[0]) << 24) | (static_cast<uint32_t>(bytes[1]) << 16) | (static_cast<uint32_t>(bytes[2]) << 8) | static_cast<uint32_t>(bytes[3]);
 	}
 
-	auto be64(const uint8_t *bytes) -> uint64_t {
+	auto MassStorageUtils::be64(const uint8_t *bytes) -> uint64_t {
 		uint64_t value = 0;
 
 		for (uint32_t i = 0; i < 8; ++i) {
@@ -50,24 +49,23 @@ namespace {
 		return value;
 	}
 
-	void putBe16(uint8_t *bytes, const uint16_t value) {
+	void MassStorageUtils::putBe16(uint8_t *bytes, const uint16_t value) {
 		bytes[0] = static_cast<uint8_t>(value >> 8);
 		bytes[1] = static_cast<uint8_t>(value);
 	}
 
-	void putBe32(uint8_t *bytes, const uint32_t value) {
+	void MassStorageUtils::putBe32(uint8_t *bytes, const uint32_t value) {
 		bytes[0] = static_cast<uint8_t>(value >> 24);
 		bytes[1] = static_cast<uint8_t>(value >> 16);
 		bytes[2] = static_cast<uint8_t>(value >> 8);
 		bytes[3] = static_cast<uint8_t>(value);
 	}
 
-	void putBe64(uint8_t *bytes, const uint64_t value) {
+	void MassStorageUtils::putBe64(uint8_t *bytes, const uint64_t value) {
 		for (uint32_t i = 0; i < 8; ++i) {
 			bytes[i] = static_cast<uint8_t>(value >> ((7 - i) * 8));
 		}
 	}
-}
 
 void UsbMassStorageDriver::setTransport(const UsbMassStorageTransport &nextTransport) {
 	transport = nextTransport;
@@ -91,9 +89,9 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 	AllocatedPage cbwPage {};
 	AllocatedPage cswPage {};
 
-	if (!allocateStage(cbwPage) or !allocateStage(cswPage)) {
-		freeStage(cbwPage);
-		freeStage(cswPage);
+	if (!MassStorageUtils::allocateStage(cbwPage) or !MassStorageUtils::allocateStage(cswPage)) {
+		MassStorageUtils::freeStage(cbwPage);
+		MassStorageUtils::freeStage(cswPage);
 
 		return false;
 	}
@@ -129,8 +127,8 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 		ok = csw->signature == CSW_SIGNATURE and csw->tag == cbw->tag and csw->status == 0;
 	}
 
-	freeStage(cbwPage);
-	freeStage(cswPage);
+	MassStorageUtils::freeStage(cbwPage);
+	MassStorageUtils::freeStage(cswPage);
 
 	if (!ok) {
 		recover(unit);
@@ -142,7 +140,7 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 auto UsbMassStorageDriver::inquiry(Unit &unit) const -> bool {
 	AllocatedPage page {};
 
-	if (!allocateStage(page)) {
+	if (!MassStorageUtils::allocateStage(page)) {
 		return false;
 	}
 
@@ -166,7 +164,7 @@ auto UsbMassStorageDriver::inquiry(Unit &unit) const -> bool {
 		fflush(stdout);
 	}
 
-	freeStage(page);
+	MassStorageUtils::freeStage(page);
 
 	return ok;
 }
@@ -182,7 +180,7 @@ auto UsbMassStorageDriver::testUnitReady(Unit &unit) const -> bool {
 auto UsbMassStorageDriver::requestSense(Unit &unit, const bool logSense) const -> bool {
 	AllocatedPage page {};
 
-	if (!allocateStage(page)) {
+	if (!MassStorageUtils::allocateStage(page)) {
 		return false;
 	}
 
@@ -207,7 +205,7 @@ auto UsbMassStorageDriver::requestSense(Unit &unit, const bool logSense) const -
 		}
 	}
 
-	freeStage(page);
+	MassStorageUtils::freeStage(page);
 
 	return ok;
 }
@@ -215,7 +213,7 @@ auto UsbMassStorageDriver::requestSense(Unit &unit, const bool logSense) const -
 auto UsbMassStorageDriver::readCapacity10(Unit &unit) const -> bool {
 	AllocatedPage page {};
 
-	if (!allocateStage(page)) {
+	if (!MassStorageUtils::allocateStage(page)) {
 		return false;
 	}
 
@@ -228,11 +226,11 @@ auto UsbMassStorageDriver::readCapacity10(Unit &unit) const -> bool {
 
 	if (ok) {
 		const auto *data = reinterpret_cast<uint8_t *>(page.virt);
-		const uint32_t lastLba = be32(data);
-		const uint32_t blockSize = be32(data + 4);
+		const uint32_t lastLba = MassStorageUtils::be32(data);
+		const uint32_t blockSize = MassStorageUtils::be32(data + 4);
 
 		if (lastLba == UINT32_MAX) {
-			freeStage(page);
+			MassStorageUtils::freeStage(page);
 			return readCapacity16(unit);
 		}
 
@@ -243,7 +241,7 @@ auto UsbMassStorageDriver::readCapacity10(Unit &unit) const -> bool {
 		fflush(stdout);
 	}
 
-	freeStage(page);
+	MassStorageUtils::freeStage(page);
 
 	return ok and unit.blockCount != 0 and unit.blockSize != 0;
 }
@@ -251,7 +249,7 @@ auto UsbMassStorageDriver::readCapacity10(Unit &unit) const -> bool {
 auto UsbMassStorageDriver::readCapacity16(Unit &unit) const -> bool {
 	AllocatedPage page {};
 
-	if (!allocateStage(page)) {
+	if (!MassStorageUtils::allocateStage(page)) {
 		return false;
 	}
 
@@ -266,16 +264,16 @@ auto UsbMassStorageDriver::readCapacity16(Unit &unit) const -> bool {
 
 	if (ok) {
 		const auto *data = reinterpret_cast<uint8_t *>(page.virt);
-		const uint64_t lastLba = be64(data);
+		const uint64_t lastLba = MassStorageUtils::be64(data);
 
 		unit.blockCount = lastLba + 1;
-		unit.blockSize = be32(data + 8);
+		unit.blockSize = MassStorageUtils::be32(data + 8);
 
 		printf("XHCI/MSD: READ CAPACITY(16) slot=%u blocks=%lu blockSize=%u.", unit.device->slotId, unit.blockCount, unit.blockSize);
 		fflush(stdout);
 	}
 
-	freeStage(page);
+	MassStorageUtils::freeStage(page);
 
 	return ok and unit.blockCount != 0 and unit.blockSize != 0;
 }
@@ -315,8 +313,8 @@ auto UsbMassStorageDriver::readWrite(Unit &unit, const uint64_t lba, const uint6
 		uint8_t cdb[10] {};
 
 		cdb[0] = write ? 0x2A : 0x28;
-		putBe32(cdb + 2, static_cast<uint32_t>(lba));
-		putBe16(cdb + 7, static_cast<uint16_t>(blocks));
+		MassStorageUtils::putBe32(cdb + 2, static_cast<uint32_t>(lba));
+		MassStorageUtils::putBe16(cdb + 7, static_cast<uint16_t>(blocks));
 
 		return sendCommand(unit, cdb, sizeof(cdb), pagePhysArray, pageCount, static_cast<uint32_t>(byteCount), !write);
 	}
@@ -324,8 +322,8 @@ auto UsbMassStorageDriver::readWrite(Unit &unit, const uint64_t lba, const uint6
 	uint8_t cdb[16] {};
 
 	cdb[0] = write ? 0x8A : 0x88;
-	putBe64(cdb + 2, lba);
-	putBe32(cdb + 10, static_cast<uint32_t>(blocks));
+	MassStorageUtils::putBe64(cdb + 2, lba);
+	MassStorageUtils::putBe32(cdb + 10, static_cast<uint32_t>(blocks));
 
 	return sendCommand(unit, cdb, sizeof(cdb), pagePhysArray, pageCount, static_cast<uint32_t>(byteCount), !write);
 }
