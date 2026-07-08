@@ -70,6 +70,10 @@ auto NameRegistryService::start() -> int {
 		}
 
 		for (const auto &service : snapshot) {
+			if (service.tid == 0 or !NameRegistryUtils::validServiceName(service.name)) {
+				continue;
+			}
+
 			bool ret = false;
 
 			int err = is_thread_alive(service.tid, &ret);
@@ -79,7 +83,7 @@ auto NameRegistryService::start() -> int {
 				fflush(stdout);
 
 				std::scoped_lock lock(services_mutex);
-				NameRegistryUtils::unregisterService(services, service.name);
+				NameRegistryUtils::unregisterService(services, service);
 			}
 		}
 
@@ -410,6 +414,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 }
 
 void NameRegistryUtils::registerService(vector<Service> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
+	if (services == nullptr or port == 0 or tid == 0 or !validServiceName(name)) {
+		return;
+	}
+
 	services->emplace_back(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch);
 
 	printf("Service %s registered on port %lu!", name.c_str(), port);
@@ -417,8 +425,36 @@ void NameRegistryUtils::registerService(vector<Service> *services, const uint64_
 }
 
 void NameRegistryUtils::unregisterService(vector<Service> *services, string name) {
+	if (services == nullptr or !validServiceName(name)) {
+		return;
+	}
+
 	erase_if(*services, [name](const Service &service) { return service.name == name; });
 
 	printf("Service %s unregistered!", name.c_str());
 	fflush(stdout);
+}
+
+auto NameRegistryUtils::unregisterService(vector<Service> *services, const Service &expected) -> bool {
+	if (services == nullptr or expected.port == 0 or expected.tid == 0 or !validServiceName(expected.name)) {
+		return false;
+	}
+
+	const auto oldSize = services->size();
+
+	erase_if(*services, [&expected](const Service &service) {
+		return service.name == expected.name and
+		       service.port == expected.port and
+		       service.ownerPid == expected.ownerPid and
+		       service.tid == expected.tid;
+	});
+
+	const bool removed = services->size() != oldSize;
+
+	if (removed) {
+		printf("Service %s unregistered!", expected.name.c_str());
+		fflush(stdout);
+	}
+
+	return removed;
 }

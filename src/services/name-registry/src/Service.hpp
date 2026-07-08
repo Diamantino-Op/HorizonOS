@@ -84,6 +84,14 @@ struct Service {
 
 class NameRegistryUtils {
 public:
+	static auto validServiceName(const string &name) -> bool {
+		if (name.empty() or name == "none" or name == "NAME") {
+			return false;
+		}
+
+		return true;
+	}
+
 	template <typename MsgT>
 	static auto extractServiceName(const MsgT *msg, string &name) -> bool {
 		if (msg == nullptr or msg->nameLength == 0 or msg->nameLength > sizeof(msg->name)) {
@@ -96,11 +104,12 @@ public:
 
 		name.assign(msg->name, msg->nameLength - 1);
 
-		return true;
+		return validServiceName(name);
 	}
 
 	static void registerService(vector<Service> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
 	static void unregisterService(vector<Service> *services, string name);
+	static auto unregisterService(vector<Service> *services, const Service &expected) -> bool;
 };
 
 #endif

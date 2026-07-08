@@ -2030,61 +2030,97 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		usleep(50000);
 
-		if (XhciUtils::readDeviceDescriptor(controller, device, 8)) {
-			const auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
-			const uint16_t actualMaxPacketSize = desc[7] == 9 ? 512 : desc[7];
+		if (!XhciUtils::readDeviceDescriptor(controller, device, 8)) {
+			printf("XHCI: Failed to read initial device descriptor slot=%u.", device.slotId);
+			fflush(stdout);
 
-			if (actualMaxPacketSize != device.maxPacketSize) {
-				device.maxPacketSize = actualMaxPacketSize;
+			XhciUtils::disableSlot(controller, device);
+			XhciUtils::releaseDeviceMemory(controller, device);
 
-				if (!XhciUtils::evaluateEp0Context(controller, device)) {
-					printf("XHCI: Failed to evaluate EP0 context slot=%u maxPacket=%u.", device.slotId, device.maxPacketSize);
-					fflush(stdout);
+			controller.devices.pop_back();
 
-					XhciUtils::disableSlot(controller, device);
-					XhciUtils::releaseDeviceMemory(controller, device);
+			return false;
+		}
 
-					controller.devices.pop_back();
+		const auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+		const uint16_t actualMaxPacketSize = desc[7] == 9 ? 512 : desc[7];
 
-					return false;
-				}
+		if (actualMaxPacketSize != device.maxPacketSize) {
+			device.maxPacketSize = actualMaxPacketSize;
+
+			if (!XhciUtils::evaluateEp0Context(controller, device)) {
+				printf("XHCI: Failed to evaluate EP0 context slot=%u maxPacket=%u.", device.slotId, device.maxPacketSize);
+				fflush(stdout);
+
+				XhciUtils::disableSlot(controller, device);
+				XhciUtils::releaseDeviceMemory(controller, device);
+
+				controller.devices.pop_back();
+
+				return false;
 			}
+		}
 
-			if (XhciUtils::readDeviceDescriptor(controller, device, 18)) {
-				const auto *fullDesc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
-				const uint8_t manufacturerIndex = fullDesc[14];
-				const uint8_t productIndex = fullDesc[15];
-				const uint8_t serialIndex = fullDesc[16];
+		if (XhciUtils::readDeviceDescriptor(controller, device, 18)) {
+			const auto *fullDesc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+			const uint8_t manufacturerIndex = fullDesc[14];
+			const uint8_t productIndex = fullDesc[15];
+			const uint8_t serialIndex = fullDesc[16];
 
-				device.manufacturer = XhciUtils::readStringDescriptor(controller, device, manufacturerIndex);
-				device.product = XhciUtils::readStringDescriptor(controller, device, productIndex);
-				device.serial = XhciUtils::readStringDescriptor(controller, device, serialIndex);
+			device.manufacturer = XhciUtils::readStringDescriptor(controller, device, manufacturerIndex);
+			device.product = XhciUtils::readStringDescriptor(controller, device, productIndex);
+			device.serial = XhciUtils::readStringDescriptor(controller, device, serialIndex);
 
-				if (!device.manufacturer.empty() or !device.product.empty() or !device.serial.empty()) {
-					printf("XHCI: Device slot=%u strings manufacturer='%s' product='%s' serial='%s'.", device.slotId, device.manufacturer.c_str(), device.product.c_str(), device.serial.c_str());
-					fflush(stdout);
-				}
+			if (!device.manufacturer.empty() or !device.product.empty() or !device.serial.empty()) {
+				printf("XHCI: Device slot=%u strings manufacturer='%s' product='%s' serial='%s'.", device.slotId, device.manufacturer.c_str(), device.product.c_str(), device.serial.c_str());
+				fflush(stdout);
 			}
 		}
 
 		uint8_t configurationValue = 0;
 
-		if (XhciUtils::readConfigurationDescriptor(controller, device, configurationValue) and configurationValue != 0) {
-			XhciUtils::prepareHubMetadata(controller, device);
+		if (!XhciUtils::readConfigurationDescriptor(controller, device, configurationValue) or configurationValue == 0) {
+			printf("XHCI: Failed to read usable configuration descriptor slot=%u.", device.slotId);
+			fflush(stdout);
 
-			if (!XhciUtils::configureEndpoints(controller, device)) {
-				printf("XHCI: Failed to configure endpoints slot=%u.", device.slotId);
-				fflush(stdout);
-			} else if (!XhciUtils::setConfiguration(controller, device, configurationValue)) {
-				printf("XHCI: Failed to set configuration slot=%u value=%u.", device.slotId, configurationValue);
-				fflush(stdout);
-			} else {
-				device.configurationValue = configurationValue;
-				device.configured = true;
+			XhciUtils::disableSlot(controller, device);
+			XhciUtils::releaseDeviceMemory(controller, device);
 
-				XhciUtils::bindClassDrivers(controller, device, controllerId);
-			}
+			controller.devices.pop_back();
+
+			return false;
 		}
+
+		XhciUtils::prepareHubMetadata(controller, device);
+
+		if (!XhciUtils::configureEndpoints(controller, device)) {
+			printf("XHCI: Failed to configure endpoints slot=%u.", device.slotId);
+			fflush(stdout);
+
+			XhciUtils::disableSlot(controller, device);
+			XhciUtils::releaseDeviceMemory(controller, device);
+
+			controller.devices.pop_back();
+
+			return false;
+		}
+
+		if (!XhciUtils::setConfiguration(controller, device, configurationValue)) {
+			printf("XHCI: Failed to set configuration slot=%u value=%u.", device.slotId, configurationValue);
+			fflush(stdout);
+
+			XhciUtils::disableSlot(controller, device);
+			XhciUtils::releaseDeviceMemory(controller, device);
+
+			controller.devices.pop_back();
+
+			return false;
+		}
+
+		device.configurationValue = configurationValue;
+		device.configured = true;
+
+		XhciUtils::bindClassDrivers(controller, device, controllerId);
 
 		return true;
 	}

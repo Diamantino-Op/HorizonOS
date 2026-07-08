@@ -441,7 +441,7 @@ namespace kernel::common::threading {
 	extern "C" void switchContextAsm();
 
 	// TODO: Make configurable
-    constexpr u64 threadCtxStackSize = pageSize * 2;
+    constexpr u64 threadCtxStackSize = pageSize * 16;
 	constexpr u64 threadUserStackSize = pageSize * 8;
 
 	// TODO: Maybe do sleep queues and block queues
