@@ -135,11 +135,17 @@ constexpr uint32_t XHCI_TRB_DIR_IN = 1U << 16;
 constexpr uint32_t XHCI_TRB_TOGGLE_CYCLE = 1U << 1;
 constexpr uint32_t XHCI_COMPLETION_SUCCESS = 1;
 constexpr uint32_t XHCI_COMPLETION_SHORT_PACKET = 13;
+constexpr uint32_t XHCI_ENDPOINT_STATE_DISABLED = 0;
+constexpr uint32_t XHCI_ENDPOINT_STATE_RUNNING = 1;
+constexpr uint32_t XHCI_ENDPOINT_STATE_HALTED = 2;
+constexpr uint32_t XHCI_ENDPOINT_STATE_STOPPED = 3;
+constexpr uint32_t XHCI_ENDPOINT_STATE_ERROR = 4;
 
 constexpr uint32_t XHCI_PAGE_SIZE = 0x1000;
 constexpr uint32_t XHCI_COMMAND_RING_TRBS = 256;
 constexpr uint32_t XHCI_EVENT_RING_TRBS = 256;
 constexpr uint32_t XHCI_TRANSFER_RING_TRBS = 256;
+constexpr uint32_t XHCI_CONTROL_TRANSFER_ATTEMPTS = 4;
 constexpr uint32_t XHCI_ERST_ENTRIES = 1;
 constexpr uint32_t XHCI_MAX_CONFIGURED_SLOTS = 32;
 constexpr uint32_t XHCI_CONTEXT_SIZE_32 = 32;
@@ -559,7 +565,9 @@ public:
 	static void postStartProbe(MappedController &controller);
 	static auto contextSize(const MappedController &controller) -> uint32_t;
 	static auto contextPtr(const AllocatedPage &page, const MappedController &controller, uint32_t index) -> uint32_t *;
+	static auto contextDword(const AllocatedPage &page, const MappedController &controller, uint32_t index, uint32_t dword) -> uint32_t;
 	static void setContextDword(const AllocatedPage &page, const MappedController &controller, uint32_t index, uint32_t dword, uint32_t value);
+	static auto endpointState(const MappedController &controller, const XhciDevice &device, uint8_t endpointId) -> uint32_t;
 	static auto portSpeed(const MappedController &controller, uint8_t port) -> uint8_t;
 	static auto ep0MaxPacketForSpeed(uint8_t speed) -> uint16_t;
 	static auto usbEndpointId(uint8_t endpointAddress) -> uint8_t;
@@ -584,6 +592,8 @@ public:
 	static auto stopEndpoint(MappedController &controller, const XhciDevice &device, const UsbEndpoint &endpoint) -> bool;
 	static auto resetEndpoint(MappedController &controller, const XhciDevice &device, const UsbEndpoint &endpoint) -> bool;
 	static auto setEndpointDequeuePointer(MappedController &controller, const XhciDevice &device, const UsbEndpoint &endpoint) -> bool;
+	static void resetControlTransferRing(XhciDevice &device);
+	static void recoverControlEndpoint(MappedController &controller, XhciDevice &device);
 	static void releaseDeviceMemory(const MappedController &controller, XhciDevice &device);
 	static auto evaluateEp0Context(MappedController &controller, const XhciDevice &device) -> bool;
 	static auto configureEndpoints(MappedController &controller, XhciDevice &device) -> bool;
