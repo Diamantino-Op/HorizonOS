@@ -140,13 +140,13 @@ namespace {
 		auto inodeUsesExtents(const Ext2Inode &inode) const -> bool;
 		auto readFile(const Ext2Inode &inode, vector<uint8_t> &out, uint64_t maxBytes = 65536) const -> bool;
 		auto readFileRange(const Ext2Inode &inode, uint64_t offset, uint32_t length, vector<uint8_t> &out) const -> bool;
-		auto writeFileOverwrite(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) const -> bool;
+		auto writeFileOverwrite(uint32_t inodeNumber, const Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) const -> bool;
 		auto writeFile(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) -> bool;
 		auto createFile(const string &path) -> bool;
 		auto createDirectory(const string &path) -> bool;
 		auto createHardLink(const string &oldPath, const string &newPath) -> bool;
 		auto createSymlink(const string &target, const string &linkPath) -> bool;
-		auto readSymlink(const string &linkPath, string &target) -> bool;
+		auto readSymlink(const string &linkPath, string &target) const -> bool;
 		auto unlinkFile(const string &path) -> bool;
 		auto renameFile(const string &oldPath, const string &newPath) -> bool;
 		auto truncateFile(const string &path, uint64_t size) -> bool;

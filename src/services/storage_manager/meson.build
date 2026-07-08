@@ -4,6 +4,14 @@ add_languages('c', 'cpp', native: true, required: true)
 add_languages('c', 'cpp', native: false, required: true)
 
 sh = find_program('sh', required: true)
+cc = meson.get_compiler('cpp')
+
+tcmalloc_lib_dir = join_paths(meson.global_source_root(), 'libs', 'tcmalloc', 'out')
+
+tcmalloc_lib = cc.find_library('tcmalloc',
+                               dirs : tcmalloc_lib_dir,
+                               static : true
+)
 
 storage_manager_inc = include_directories('src')
 
@@ -14,10 +22,11 @@ storage_manager_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(get_option('g
 
 storage_manager_exe = executable('storage_manager',
                                  storage_manager_src,
-                       include_directories: [ storage_manager_inc, sysroot_inc_path ],
-                       c_args: [ '-Og', '-g', '-ggdb3', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                       cpp_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                       link_args: [ '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '-lc++abi', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                       pie: false,
-                       native: false
+                                 include_directories: [ storage_manager_inc, sysroot_inc_path ],
+                                 dependencies: [ tcmalloc_lib ],
+                                 c_args: [ '-Og', '-g', '-ggdb3', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                                 cpp_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                                 link_args: [ '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '-lc++abi', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                                 pie: false,
+                                 native: false
 )

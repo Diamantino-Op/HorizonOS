@@ -4,6 +4,14 @@ add_languages('c', 'cpp', native: true, required: true)
 add_languages('c', 'cpp', native: false, required: true)
 
 sh = find_program('sh', required: true)
+cc = meson.get_compiler('cpp')
+
+tcmalloc_lib_dir = join_paths(meson.global_source_root(), 'libs', 'tcmalloc', 'out')
+
+tcmalloc_lib = cc.find_library('tcmalloc',
+                               dirs : tcmalloc_lib_dir,
+                               static : true
+)
 
 fat32_inc = include_directories('src')
 
@@ -13,11 +21,12 @@ sysroot_inc_path = include_directories('../../../libs/sysroot/usr/include')
 fat32_src = run_command(sh, '-c', '@0@ @1@ *.cpp'.format(get_option('globber_path'), join_paths(meson.project_source_root(), 'src')), check: true).stdout().strip().split('\n')
 
 fat32_exe = executable('fat32',
-                      fat32_src,
-                                 include_directories: [ fat32_inc, sysroot_inc_path ],
-                                 c_args: [ '-Og', '-g', '-ggdb3', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                                 cpp_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                                 link_args: [ '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '-lc++abi', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
-                                 pie: false,
-                                 native: false
+                       fat32_src,
+                       include_directories: [ fat32_inc, sysroot_inc_path ],
+                       dependencies: [ tcmalloc_lib ],
+                       c_args: [ '-Og', '-g', '-ggdb3', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                       cpp_args: [ '-Og', '-g', '-ggdb3', '-stdlib=libc++', '-static', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                       link_args: [ '-stdlib=libc++', '--rtlib=compiler-rt', '--unwindlib=libunwind', '-static', '-lc++abi', '--target=@0@-horizonos-elf'.format(get_option('arch')) ],
+                       pie: false,
+                       native: false
 )

@@ -13,12 +13,6 @@ tcmalloc_lib = cc.find_library('tcmalloc',
                                static : true
 )
 
-deps_proj = subproject('horizon_deps',
-                       default_options: [
-                           'globber_path=@0@'.format(get_option('globber_path'))
-                       ]
-)
-
 nvme_inc = include_directories('src')
 
 sysroot_path = join_paths(meson.global_source_root(), 'libs', 'sysroot')

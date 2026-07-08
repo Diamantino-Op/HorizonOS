@@ -692,8 +692,8 @@ namespace kernel::common::threading {
 		}
 
 		thread->setState(ThreadState::TERMINATED);
-		PortMessaging::removeThread(thread);
-		Futex::removeThread(thread->getId());
+		thread->setWaitingPort(0);
+		thread->setSleepNs(0);
 		notifyKilled = true;
 
 		if (!shouldReschedule) {
@@ -703,6 +703,9 @@ namespace kernel::common::threading {
 		}
 
 		this->schedLock.unlock(prevIF);
+
+		PortMessaging::removeThread(thread);
+		Futex::removeThread(thread->getId());
 
 		if (notifyKilled) {
 			hal::SyscallManager::notifyThreadKilled(killedPid, killedTid);

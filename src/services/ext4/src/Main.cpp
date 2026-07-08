@@ -46,7 +46,7 @@ namespace {
 	};
 
 	auto allocateStorageRequestId() -> uint64_t {
-		ScopedMutex lock(storageRequestIdLock);
+		const ScopedMutex lock(storageRequestIdLock);
 		return nextStorageRequestId++;
 	}
 
@@ -333,7 +333,7 @@ namespace {
 
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
-		ScopedMutex rpcLock(storageRpcLock);
+		const ScopedMutex rpcLock(storageRpcLock);
 		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageReadMsgData();
@@ -391,7 +391,7 @@ namespace {
 	}
 
 	auto writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
-		ScopedMutex rpcLock(storageRpcLock);
+		const ScopedMutex rpcLock(storageRpcLock);
 		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageWriteMsgData();
@@ -433,7 +433,7 @@ namespace {
 	}
 
 	auto flushDevice(const uint64_t deviceId) -> bool {
-		ScopedMutex rpcLock(storageRpcLock);
+		const ScopedMutex rpcLock(storageRpcLock);
 		const uint64_t requestId = allocateStorageRequestId();
 
 		auto data = StorageFlushMsgData();
@@ -838,7 +838,7 @@ namespace {
 		return true;
 	}
 
-	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) const -> bool {
+	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, const Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) const -> bool {
 		(void) inodeNumber;
 
 		if (!mutationsSupported()) {
@@ -1285,7 +1285,7 @@ namespace {
 		}
 
 		auto *indices = reinterpret_cast<Ext4ExtentIndex *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
-		Ext4ExtentIndex *selected = nullptr;
+		const Ext4ExtentIndex *selected = nullptr;
 
 		for (uint16_t i = 0; i < header->entries; ++i) {
 			if (fileBlock < indices[i].block) {
@@ -1839,7 +1839,7 @@ namespace {
 			}
 
 			if (endFileBlock > keepBlocks) {
-				const uint32_t keepLen = static_cast<uint32_t>(keepBlocks - firstFileBlock);
+				const auto keepLen = static_cast<uint32_t>(keepBlocks - firstFileBlock);
 
 				for (uint32_t block = keepLen; block < len; ++block) {
 					if (!freeBlock(static_cast<uint32_t>(start + block))) {
@@ -2152,7 +2152,7 @@ namespace {
 		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 7);
 	}
 
-	auto Ext2Volume::readSymlink(const string &linkPath, string &target) -> bool {
+	auto Ext2Volume::readSymlink(const string &linkPath, string &target) const -> bool {
 		Ext2Inode inode {};
 		uint32_t inodeNumber = 0;
 
@@ -2445,7 +2445,7 @@ namespace {
 			}
 
 			if (entry->inode != 0 and entry->nameLen > 0 and entry->nameLen <= entry->recLen - 8) {
-				string candidate(entry->name, entry->nameLen);
+				const string candidate(entry->name, entry->nameLen);
 
 				if (candidate != "." and candidate != ".." and candidate.ends_with(".txt")) {
 					Ext2Inode candidateInode {};
@@ -2801,7 +2801,7 @@ namespace {
 	}
 
 	auto mountedDevice(const uint64_t mountId, StorageFsProbeDeviceMsgData &device) -> bool {
-		ScopedMutex lock(mountsLock);
+		const ScopedMutex lock(mountsLock);
 
 		for (const auto &mount : mounts) {
 			if (mount.mountId == mountId) {
