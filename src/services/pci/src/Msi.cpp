@@ -257,10 +257,9 @@ static auto msixTablePtr(const uint8_t bus, const uint8_t dev, const uint8_t fun
 
     // Map one page – MSI-X table entries are 16 bytes; even 2048 entries fit
     // in 32 KiB, so map 64 KiB to be safe.
-    constexpr size_t MAP_SIZE = 0x10000;
     uint64_t virt = 0;
 
-    if (mmap_phys(tablePhys, MAP_SIZE, &virt, false, MMapCacheMode::MAP_CACHE_UC) != 0) {
+    if (mmap_phys(tablePhys, MSIX_TABLE_MAP_SIZE, &virt, false, MMapCacheMode::MAP_CACHE_UC) != 0) {
         printf("PCI/MSI-X: mmap_phys of table failed (phys=%llx)", static_cast<unsigned long long>(tablePhys));
     	fflush(stdout);
 

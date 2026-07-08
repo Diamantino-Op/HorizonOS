@@ -1,18 +1,22 @@
-#ifndef HORIZONOS_SERVICE_HPP
-#define HORIZONOS_SERVICE_HPP
+#ifndef HORIZONOS_UACPI_SERVICE_HPP
+#define HORIZONOS_UACPI_SERVICE_HPP
 
+#include <cstddef>
 #include <cstdint>
-#include <string>
-
-using namespace std;
 
 constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
-constexpr uint64_t UNREGISTER_MSG_TYPE = 0x2;
 constexpr uint64_t GET_MSG_TYPE = 0x3;
 constexpr uint64_t CHECK_MSG_TYPE = 0x4;
 constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
 constexpr uint64_t REPLY_GET_MSG_TYPE = 0x6;
 constexpr uint64_t REPLY_CHECK_MSG_TYPE = 0x7;
+
+constexpr uint64_t PCI_READY_MSG_TYPE = 0x10;
+
+constexpr uint64_t MCFG_DONE_MSG_TYPE = 0x100;
+constexpr uint64_t MCFG_SEGMENT_MSG_TYPE = 0x200;
+
+constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
 
 struct RegisterMsgData {
 	uint16_t ownerPid {};
@@ -22,13 +26,6 @@ struct RegisterMsgData {
 	uint16_t versionMajor {};
 	uint16_t versionMinor {};
 	uint16_t versionPatch {};
-};
-
-struct UnregisterMsgData {
-	uint16_t ownerPid {};
-	uint16_t tid {};
-	char name[16] {};
-	size_t nameLength {};
 };
 
 struct GetMsgData {
@@ -57,28 +54,16 @@ struct GetReplyMsgData {
 	uint16_t versionPatch {};
 };
 
-class NameRegistryService {
-public:
-	auto start() -> int;
+struct McfgSegmentMsgData {
+	uint64_t ecamBase {};
+	uint64_t segment {};
+	uint64_t bbn {};
+	uint8_t endBus {};
 };
 
-struct Service {
-	uint64_t port;
-	uint64_t ownerPid;
-	uint64_t tid;
-	string name;
-	uint64_t versionMajor;
-	uint64_t versionMinor;
-	uint64_t versionPatch;
-
-	Service(const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) :
-		port(port),
-		ownerPid(ownerPid),
-		tid(tid),
-		name(name),
-		versionMajor(versionMajor),
-		versionMinor(versionMinor),
-		versionPatch(versionPatch) {}
+class UacpiService {
+public:
+	auto start() -> int;
 };
 
 #endif

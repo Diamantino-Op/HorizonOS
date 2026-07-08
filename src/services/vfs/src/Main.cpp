@@ -15,19 +15,6 @@
 using namespace std;
 
 namespace {
-	constexpr uint8_t STORAGE_DEVICE_KIND_WHOLE_DISK = 0;
-	constexpr uint8_t STORAGE_DEVICE_KIND_PARTITION = 1;
-	constexpr uint64_t KERNEL_EVENT_MSG_TYPE = 0x1100;
-	constexpr uint64_t KERNEL_EVENT_THREAD_KILLED = 1;
-	constexpr uint64_t KERNEL_EVENT_PROCESS_KILLED = 2;
-	constexpr uint64_t VFS_CLIENT_PORT_BASE = 0xffff000000000000ULL;
-
-	struct KernelEventData {
-		uint64_t eventType {};
-		uint64_t pid {};
-		uint64_t tid {};
-	};
-
 	uint64_t vfsPort = 0;
 	uint64_t storagePort = 0;
 	uint64_t nextHandleId = 1;
@@ -2970,7 +2957,7 @@ namespace {
 	}
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+auto VfsService::start() -> int {
 	if (register_horizonos_port(reinterpret_cast<long *>(&vfsPort)) != 0) {
 		printf("Vfs: Failed to register port.");
 		fflush(stdout);
@@ -3105,4 +3092,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		refreshVolumes();
 		usleep(500000);
 	}
+}
+
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	VfsService service;
+
+	return service.start();
 }

@@ -12,61 +12,6 @@
 
 using namespace std;
 
-constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
-constexpr uint64_t GET_MSG_TYPE = 0x3;
-constexpr uint64_t CHECK_MSG_TYPE = 0x4;
-constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
-constexpr uint64_t REPLY_GET_MSG_TYPE = 0x6;
-constexpr uint64_t REPLY_CHECK_MSG_TYPE = 0x7;
-constexpr uint64_t PCI_SEARCH_DEVICE_MSG_TYPE = 0xD0;
-constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_START_MSG_TYPE = 0xE0;
-constexpr uint64_t PCI_SEARCH_DEVICE_REPLY_MSG_TYPE = 0xF0;
-
-namespace {
-	// Name max 16 chars
-	struct RegisterMsgData {
-		uint16_t ownerPid {};
-		uint16_t tid {};
-		char name[16] {};
-		size_t nameLength {};
-		uint16_t versionMajor {};
-		uint16_t versionMinor {};
-		uint16_t versionPatch {};
-	};
-
-	struct GetMsgData {
-		char name[16] {};
-		size_t nameLength {};
-	};
-
-	struct CheckMsgData {
-		char name[16] {};
-		size_t nameLength {};
-	};
-
-	struct RegisterReplyMsgData {
-		bool success {};
-	};
-
-	struct CheckReplyMsgData {
-		bool exists {};
-	};
-
-	struct GetReplyMsgData {
-		uint64_t port {};
-		uint16_t tid {};
-		uint16_t versionMajor {};
-		uint16_t versionMinor {};
-		uint16_t versionPatch {};
-	};
-
-	struct PciSearchDeviceMsgData {
-		uint8_t pciClass {};
-		uint8_t pciSubclass {};
-		uint8_t pciProg {};
-	};
-}
-
 uint64_t nvmePort = 0;
 uint64_t pciPort = 0;
 uint64_t pciTid = 0;
@@ -207,7 +152,7 @@ namespace {
 	}
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+auto NvmeService::start() -> int {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nvmePort));
 
 	if (registerResult == 0) {
@@ -749,4 +694,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	for (;;) {}
 
 	return 0;
+}
+
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	NvmeService service;
+
+	return service.start();
 }

@@ -34,7 +34,7 @@ storage_manager_proj = subproject('storage_manager', default_options: [ 'globber
 
 storage_manager_exe = storage_manager_proj.get_variable('storage_manager_exe')
 
-# Ext2 Service
+# Ext4 Service
 
 ext4_proj = subproject('ext4', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 

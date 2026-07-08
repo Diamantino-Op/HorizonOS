@@ -239,4 +239,9 @@ auto isPciBridge(uint8_t classCode, uint8_t subclass) -> bool;
 [[noreturn]] auto handleMsixGlobalEnable(void *arg) -> void *;
 [[noreturn]] auto handleMsixGlobalDisable(void *arg) -> void *;
 
+class PciService {
+public:
+	auto start() -> int;
+};
+
 #endif

@@ -146,6 +146,7 @@ constexpr uint32_t XHCI_CONTEXT_SIZE_64 = 64;
 constexpr uint32_t XHCI_INPUT_CONTROL_CONTEXT_INDEX = 0;
 constexpr uint32_t XHCI_SLOT_CONTEXT_INDEX = 1;
 constexpr uint32_t XHCI_EP0_CONTEXT_INDEX = 2;
+constexpr uint32_t XHCI_EP0_DWORD1_DEFAULT = (4U << 3) | (3U << 1);
 constexpr uint32_t USB_DESCRIPTOR_DEVICE = 1;
 constexpr uint32_t USB_DESCRIPTOR_CONFIGURATION = 2;
 constexpr uint32_t USB_DESCRIPTOR_STRING = 3;
@@ -503,6 +504,11 @@ struct MappedController {
 	std::vector<XhciDevice> devices {};
 	std::vector<XhciTrb> pendingTransferEvents {};
 	ControllerMemory memory {};
+};
+
+class XhciService {
+public:
+	auto start() -> int;
 };
 
 #endif

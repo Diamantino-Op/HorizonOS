@@ -6,6 +6,8 @@
 
 using namespace std;
 
+constexpr uint64_t GPT_SIGNATURE = 0x5452415020494645ULL;
+
 enum class BlockDeviceKind : uint8_t {
 	WholeDisk,
 	Partition,
@@ -70,5 +72,10 @@ struct GptPartitionEntry {
 	uint64_t attributes {};
 	uint16_t name[36] {};
 } __attribute__((packed));
+
+class StorageManagerService {
+public:
+	auto start() -> int;
+};
 
 #endif

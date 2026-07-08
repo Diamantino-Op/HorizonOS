@@ -18,8 +18,6 @@
 using namespace std;
 
 namespace {
-	constexpr uint64_t GPT_SIGNATURE = 0x5452415020494645ULL; // "EFI PART"
-
 	uint64_t storagePort = 0;
 	uint64_t nvmePort = 0;
 	uint64_t nvmeReplyPort = 0;
@@ -955,7 +953,7 @@ namespace {
 	}
 }
 
-auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
+auto StorageManagerService::start() -> int {
 	if (register_horizonos_port(reinterpret_cast<long *>(&storagePort)) != 0) {
 		printf("Storage: Failed to register port.");
 		fflush(stdout);
@@ -1015,4 +1013,10 @@ auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
 	for (;;) {
 		usleep(100000);
 	}
+}
+
+auto main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) -> int {
+	StorageManagerService service;
+
+	return service.start();
 }

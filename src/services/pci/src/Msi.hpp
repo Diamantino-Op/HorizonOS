@@ -35,6 +35,7 @@ constexpr uint8_t MSIX_OFF_PBA      = 0x08; // PBA offset & BIR
 
 constexpr uint16_t MSIX_CTRL_ENABLE = (1U << 15);
 constexpr uint16_t MSIX_CTRL_FMASK  = (1U << 14); // function mask
+constexpr size_t MSIX_TABLE_MAP_SIZE = 0x10000;
 
 // ─── MSI-X table entry (16 bytes) ────────────────────────────────────────────
 struct MsixEntry {

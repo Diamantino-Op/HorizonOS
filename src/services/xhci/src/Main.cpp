@@ -1417,10 +1417,9 @@ namespace {
 		setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
 
 		const uint64_t dequeue = device.transferRing.phys | XHCI_TRB_CYCLE;
-		constexpr uint32_t ep0Dword1 = (4U << 3) | (3U << 1);
 		const uint32_t ep0Dword4 = 8U | (static_cast<uint32_t>(device.maxPacketSize) << 16);
 
-		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, ep0Dword1);
+		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, XHCI_EP0_DWORD1_DEFAULT);
 		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
 		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
 		setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
@@ -3107,7 +3106,7 @@ namespace {
 	}
 }
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+auto XhciService::start() -> int {
 	if (register_horizonos_port(reinterpret_cast<long *>(&xhciPort)) != 0 or xhciPort == 0) {
 		printf("XHCI: Failed to register port.");
 		fflush(stdout);
@@ -3239,4 +3238,10 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		usleep(1000000);
 	}
+}
+
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+	XhciService service;
+
+	return service.start();
 }

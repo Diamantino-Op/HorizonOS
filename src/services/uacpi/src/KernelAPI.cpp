@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <ctime>
 #include <array>
+#include "KernelAPI.hpp"
 #include "unistd.h"
 
 #include "uacpi/log.h"
@@ -23,59 +24,10 @@ extern uint64_t uacpiPort;
 extern uint64_t pciPort;
 extern bool mcfgReady;
 
-constexpr uint64_t PCI_READ_MSG_TYPE = 0x20;
-constexpr uint64_t PCI_READ_REPLY_MSG_TYPE = 0x30;
-constexpr uint64_t PCI_WRITE_MSG_TYPE = 0x40;
-constexpr uint64_t PCI_WRITE_REPLY_MSG_TYPE = 0x41;
-
-constexpr uint64_t IRQ_RECEIVE_MSG_TYPE = 0x1000;
-
-struct PciReadMsgData {
-	uint8_t bus {};
-	uint8_t dev {};
-	uint8_t func {};
-	uint16_t offset {};
-	uint8_t width {};
-};
-
-struct PciReadReplyMsgData {
-	uint32_t data {};
-};
-
-struct PciWriteMsgData {
-	uint8_t bus {};
-	uint8_t dev {};
-	uint8_t func {};
-	uint16_t offset {};
-	uint8_t width {};
-	uint32_t data {};
-};
-
-struct IrqReceiveData {
-	uint64_t irqNum {};
-	uint64_t cpuId {};
-	bool isIrq {};
-};
-
-struct IrqHandleStruct {
-	uacpi_interrupt_handler handler {};
-	uacpi_handle ctx {};
-};
-
-struct UacpiIoRange {
-	uacpi_io_addr base;
-	uacpi_size len;
-};
-
 static bool ioRangeCheck(const uacpi_handle handle, const uacpi_size offset, const uacpi_size accessSize) {
 	const auto *range = static_cast<UacpiIoRange *>(handle);
 	return range && accessSize <= range->len && offset <= (range->len - accessSize);
 }
-
-struct WorkItem {
-	uacpi_work_handler handler;
-	uacpi_handle ctx;
-};
 
 static unordered_map<uint64_t, IrqHandleStruct> irqHandles {};
 
@@ -108,14 +60,7 @@ static void *workThreadFunc(void *arg) {
 	return nullptr;
 }
 
-struct PciHandle {
-	uacpi_pci_address address;
-};
-
 namespace {
-	constexpr uint16_t PCI_CONFIG_ADDRESS = 0xCF8;
-	constexpr uint16_t PCI_CONFIG_DATA = 0xCFC;
-
 	uint32_t legacyPciAddress(const PciHandle *h, const uacpi_size offset) {
 		return (1U << 31)
 			| (static_cast<uint32_t>(h->address.bus) << 16)

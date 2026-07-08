@@ -6,6 +6,24 @@
 
 using namespace std;
 
+constexpr uint8_t STORAGE_DEVICE_KIND_WHOLE_DISK = 0;
+constexpr uint8_t STORAGE_DEVICE_KIND_PARTITION = 1;
+constexpr uint64_t KERNEL_EVENT_MSG_TYPE = 0x1100;
+constexpr uint64_t KERNEL_EVENT_THREAD_KILLED = 1;
+constexpr uint64_t KERNEL_EVENT_PROCESS_KILLED = 2;
+constexpr uint64_t VFS_CLIENT_PORT_BASE = 0xffff000000000000ULL;
+
+struct KernelEventData {
+	uint64_t eventType {};
+	uint64_t pid {};
+	uint64_t tid {};
+};
+
+class VfsService {
+public:
+	auto start() -> int;
+};
+
 enum class VfsVolumeKind : uint8_t {
 	Partition,
 	Devices,
