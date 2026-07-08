@@ -1,8 +1,12 @@
 #ifndef HORIZONOS_STORAGE_MANAGER_HPP
 #define HORIZONOS_STORAGE_MANAGER_HPP
 
+#include "StorageProtocol.hpp"
+
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -76,6 +80,29 @@ struct GptPartitionEntry {
 class StorageManagerService {
 public:
 	auto start() -> int;
+};
+
+class StorageManagerUtils {
+public:
+	static auto allocateBlockDeviceIdLocked() -> uint64_t;
+	static auto allocateNvmeRequestId() -> uint64_t;
+	static auto validName(const char *name, size_t length, size_t maxLength, string &out) -> bool;
+	static void fillName(char *dst, size_t dstSize, size_t &length, const string &name);
+	static auto gptNameToString(const uint16_t *name, size_t charCount) -> string;
+	static auto registerWithNameRegistry(const char *name) -> bool;
+	static auto waitForService(const char *name) -> GetReplyMsgData;
+	static auto findBlockDeviceLocked(uint64_t id) -> BlockDevice *;
+	static auto transferBlockCount(const BlockDevice &device, uint32_t pageCount) -> uint64_t;
+	static auto translateToBlockLocked(const BlockDevice &device, uint64_t lba, uint32_t pageCount, BlockDevice &out) -> bool;
+	static auto currentCpuId() -> uint64_t;
+	static void applyDefaultTransport(BlockDevice &device);
+	static auto blockRead(const BlockDevice &device, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount) -> bool;
+	static auto blockWrite(const BlockDevice &device, uint64_t lba, const uint64_t *pagePhysArray, uint32_t pageCount) -> bool;
+	static auto blockFlush(const BlockDevice &device) -> bool;
+	static auto readOnePage(const BlockDevice &device, uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool;
+	static void freeOnePage(uint64_t phys, uint64_t virt);
+	static void notifyFsHandlers(const BlockDevice &device);
+	static void probeGpt(const BlockDevice &rawDevice);
 };
 
 #endif

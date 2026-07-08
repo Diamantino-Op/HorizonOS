@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using namespace std;
@@ -83,6 +84,13 @@ struct GetReplyMsgData {
 	uint16_t versionMajor {};
 	uint16_t versionMinor {};
 	uint16_t versionPatch {};
+};
+
+class NvmeUtils {
+public:
+	static void fillName(char *dst, size_t dstSize, size_t &length, const string &name);
+	static auto waitForRegisteredService(const char *name) -> GetReplyMsgData;
+	static void registerNamespacesWithStorage(const vector<NvmeDriver> &controllerDrivers);
 };
 
 struct PciSearchDeviceMsgData {

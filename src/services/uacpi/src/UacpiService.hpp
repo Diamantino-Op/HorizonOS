@@ -66,4 +66,9 @@ public:
 	auto start() -> int;
 };
 
+class UacpiUtils {
+public:
+	static void processMcfg();
+};
+
 #endif

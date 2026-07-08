@@ -17,20 +17,19 @@ uint64_t pciPort = 0;
 uint64_t pciTid = 0;
 uint64_t storagePort = 0;
 
-namespace {
-	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
-		const size_t copyLen = min(dstSize - 1, name.size());
-		memcpy(dst, name.data(), copyLen);
-		dst[copyLen] = '\0';
-		length = copyLen + 1;
-	}
+void NvmeUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
+	const size_t copyLen = min(dstSize - 1, name.size());
+	memcpy(dst, name.data(), copyLen);
+	dst[copyLen] = '\0';
+	length = copyLen + 1;
+}
 
-	auto waitForRegisteredService(const char *name) -> GetReplyMsgData {
-		for (;;) {
-			auto checkMsg = hos_msg();
-			auto checkData = CheckMsgData();
+auto NvmeUtils::waitForRegisteredService(const char *name) -> GetReplyMsgData {
+	for (;;) {
+		auto checkMsg = hos_msg();
+		auto checkData = CheckMsgData();
 
-			fillName(checkData.name, sizeof(checkData.name), checkData.nameLength, name);
+			NvmeUtils::fillName(checkData.name, sizeof(checkData.name), checkData.nameLength, name);
 
 			checkMsg.type = CHECK_MSG_TYPE;
 			checkMsg.port = 1;
@@ -62,7 +61,7 @@ namespace {
 		auto getMsg = hos_msg();
 		auto getData = GetMsgData();
 
-		fillName(getData.name, sizeof(getData.name), getData.nameLength, name);
+		NvmeUtils::fillName(getData.name, sizeof(getData.name), getData.nameLength, name);
 
 		getMsg.type = GET_MSG_TYPE;
 		getMsg.port = 1;
@@ -84,11 +83,11 @@ namespace {
 		receive_horizonos_message(nvmePort, &recvGetMsg, &filterOptions);
 		delete[] filterOptions.whiteListTypes;
 
-		return getResData;
-	}
+	return getResData;
+}
 
-	void registerNamespacesWithStorage(const vector<NvmeDriver> &controllerDrivers) {
-		const GetReplyMsgData storageInfo = waitForRegisteredService("StorageManager");
+void NvmeUtils::registerNamespacesWithStorage(const vector<NvmeDriver> &controllerDrivers) {
+	const GetReplyMsgData storageInfo = NvmeUtils::waitForRegisteredService("StorageManager");
 		storagePort = storageInfo.port;
 		uint64_t storageRegisterPort {};
 
@@ -115,7 +114,7 @@ namespace {
 				data.blockCount = ns.totalLbas;
 				data.blockSize = ns.lbaSize;
 				data.maxPagesPerRequest = NVME_MAX_PAGES_PER_MSG;
-				fillName(data.name, sizeof(data.name), data.nameLength, "nvme" + to_string(controllerId) + "n" + to_string(ns.nsid));
+				NvmeUtils::fillName(data.name, sizeof(data.name), data.nameLength, "nvme" + to_string(controllerId) + "n" + to_string(ns.nsid));
 
 				auto msg = hos_msg();
 				msg.type = STORAGE_REGISTER_BLOCK_DEVICE_MSG_TYPE;
@@ -149,7 +148,6 @@ namespace {
 				fflush(stdout);
 			}
 		}
-	}
 }
 
 auto NvmeService::start() -> int {
@@ -689,7 +687,7 @@ auto NvmeService::start() -> int {
 		pthread_attr_destroy(&threadAttr);
 	}
 
-	registerNamespacesWithStorage(controllerDrivers);
+	NvmeUtils::registerNamespacesWithStorage(controllerDrivers);
 
 	for (;;) {}
 

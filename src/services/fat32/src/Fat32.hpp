@@ -131,16 +131,30 @@ public:
 	vector<MountedFat32> mounts;
 };
 
-namespace {
-	auto isPowerOfTwo(uint32_t value) -> bool;
-	auto upperAscii(string value) -> string;
-	auto pathParts(const string &path) -> vector<string>;
-	void fillName(char *dst, size_t dstSize, size_t &length, const string &name);
-	auto readDevicePage(uint64_t deviceId, uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool;
-	auto writeDevicePage(uint64_t deviceId, uint64_t lba, uint64_t phys) -> bool;
-	auto flushDevice(uint64_t deviceId) -> bool;
-	void freeDevicePage(uint64_t &phys, uint64_t &virt);
+extern Fat32Service service;
 
+class Fat32Utils {
+public:
+	static auto allocateStorageRequestId() -> uint64_t;
+	static void fillName(char *dst, size_t dstSize, size_t &length, const string &name);
+	static auto validName(const char *name, size_t length, size_t maxLength, string &out) -> bool;
+	static auto validPath(const char *path, size_t length, string &out) -> bool;
+	static auto isPowerOfTwo(uint32_t value) -> bool;
+	static auto upperAscii(string value) -> string;
+	static auto pathParts(const string &path) -> vector<string>;
+	static auto registerWithNameRegistry(const char *name) -> bool;
+	static auto waitForStorage() -> uint64_t;
+	static auto waitForServicePort(const char *name) -> uint64_t;
+	static auto registerWithVfs(const char *fsName) -> bool;
+	static auto registerFsHandler() -> bool;
+	static auto readDevicePage(uint64_t deviceId, uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool;
+	static void freeDevicePage(uint64_t &phys, uint64_t &virt);
+	static auto writeDevicePage(uint64_t deviceId, uint64_t lba, uint64_t phys) -> bool;
+	static auto flushDevice(uint64_t deviceId) -> bool;
+	static auto probeFat32(const StorageFsProbeDeviceMsgData &device) -> bool;
+};
+
+namespace {
 	class Fat32Volume {
 	public:
 		explicit Fat32Volume(const StorageFsProbeDeviceMsgData &dev) : device(dev) {}
@@ -162,11 +176,11 @@ namespace {
 				return false;
 			}
 
-			if (!isPowerOfTwo(boot.bytesPerSector) or boot.bytesPerSector < 512 or boot.bytesPerSector > 4096) {
+			if (!Fat32Utils::isPowerOfTwo(boot.bytesPerSector) or boot.bytesPerSector < 512 or boot.bytesPerSector > 4096) {
 				return false;
 			}
 
-			if (!isPowerOfTwo(boot.sectorsPerCluster) or boot.reservedSectors == 0 or boot.fatCount == 0 or boot.fatSize32 == 0) {
+			if (!Fat32Utils::isPowerOfTwo(boot.sectorsPerCluster) or boot.reservedSectors == 0 or boot.fatCount == 0 or boot.fatSize32 == 0) {
 				return false;
 			}
 
@@ -203,7 +217,7 @@ namespace {
 			current.attr = FAT_ATTR_DIRECTORY;
 			current.firstCluster = boot.rootCluster;
 
-			for (const string &part : pathParts(path)) {
+			for (const string &part : Fat32Utils::pathParts(path)) {
 				if ((current.attr & FAT_ATTR_DIRECTORY) == 0) {
 					return false;
 				}
@@ -214,11 +228,11 @@ namespace {
 					return false;
 				}
 
-				const string wanted = upperAscii(part);
+				const string wanted = Fat32Utils::upperAscii(part);
 				bool found = false;
 
 				for (const auto &candidate : entries) {
-					if (upperAscii(candidate.name) == wanted) {
+					if (Fat32Utils::upperAscii(candidate.name) == wanted) {
 						current = candidate;
 						found = true;
 						break;
@@ -280,7 +294,7 @@ namespace {
 
 				if (entry.name != "." and entry.name != "..") {
 					auto vfsEntry = VfsDirEntry();
-					fillName(vfsEntry.name, sizeof(vfsEntry.name), vfsEntry.nameLength, entry.name);
+					Fat32Utils::fillName(vfsEntry.name, sizeof(vfsEntry.name), vfsEntry.nameLength, entry.name);
 					vfsEntry.nodeType = (entry.attr & FAT_ATTR_DIRECTORY) != 0 ? VFS_NODE_DIRECTORY : VFS_NODE_FILE;
 					vfsEntry.size = entry.size;
 					vfsEntry.nodeId = entry.firstCluster;
@@ -418,7 +432,7 @@ namespace {
 
 			newSize = entry.size;
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto createFile(const string &path, uint64_t &nodeId) -> bool {
@@ -455,7 +469,7 @@ namespace {
 
 			nodeId = this->nodeId(created);
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto createDirectory(const string &path, uint64_t &nodeId) -> bool {
@@ -521,7 +535,7 @@ namespace {
 
 			nodeId = this->nodeId(created);
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto truncateFile(const string &path, const uint64_t size, uint64_t &newSize) -> bool {
@@ -541,7 +555,7 @@ namespace {
 
 			newSize = entry.size;
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto unlinkFile(const string &path) -> bool {
@@ -563,7 +577,7 @@ namespace {
 				return false;
 			}
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto renameFile(const string &oldPath, const string &newPath) -> bool {
@@ -612,7 +626,7 @@ namespace {
 				return false;
 			}
 
-			return flushDevice(device.deviceId);
+			return Fat32Utils::flushDevice(device.deviceId);
 		}
 
 		auto nodeId(const FatDirEntry &entry) const -> uint64_t {
@@ -652,12 +666,12 @@ namespace {
 				uint64_t phys = 0;
 				uint64_t virt = 0;
 
-				if (!readDevicePage(device.deviceId, pageLba, phys, virt)) {
+				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
 					return false;
 				}
 
 				memcpy(out.data() + copied, reinterpret_cast<void *>(virt + pageOffset), chunk);
-				freeDevicePage(phys, virt);
+				Fat32Utils::freeDevicePage(phys, virt);
 
 				copied += chunk;
 			}
@@ -678,14 +692,14 @@ namespace {
 				uint64_t phys = 0;
 				uint64_t virt = 0;
 
-				if (!readDevicePage(device.deviceId, pageLba, phys, virt)) {
+				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
 					return false;
 				}
 
 				memcpy(reinterpret_cast<void *>(virt + pageOffset), data + copied, chunk);
 
-				const bool success = writeDevicePage(device.deviceId, pageLba, phys);
-				freeDevicePage(phys, virt);
+				const bool success = Fat32Utils::writeDevicePage(device.deviceId, pageLba, phys);
+				Fat32Utils::freeDevicePage(phys, virt);
 
 				if (!success) {
 					return false;

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -79,6 +80,27 @@ struct Service {
 		versionMajor(versionMajor),
 		versionMinor(versionMinor),
 		versionPatch(versionPatch) {}
+};
+
+class NameRegistryUtils {
+public:
+	template <typename MsgT>
+	static auto extractServiceName(const MsgT *msg, string &name) -> bool {
+		if (msg == nullptr or msg->nameLength == 0 or msg->nameLength > sizeof(msg->name)) {
+			return false;
+		}
+
+		if (msg->name[msg->nameLength - 1] != '\0') {
+			return false;
+		}
+
+		name.assign(msg->name, msg->nameLength - 1);
+
+		return true;
+	}
+
+	static void registerService(vector<Service> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
+	static void unregisterService(vector<Service> *services, string name);
 };
 
 #endif

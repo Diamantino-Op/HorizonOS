@@ -14,14 +14,13 @@
 
 using namespace std;
 
-namespace {
-	Fat32Service service;
+Fat32Service service;
 
-	auto allocateStorageRequestId() -> uint64_t {
-		return service.allocateStorageRequestId();
-	}
+auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
+	return service.allocateStorageRequestId();
+}
 
-	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
+	void Fat32Utils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
 
 		memcpy(dst, name.data(), copyLen);
@@ -30,7 +29,7 @@ namespace {
 		length = copyLen + 1;
 	}
 
-	auto validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
+	auto Fat32Utils::validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
 		if (length == 0 or length > maxLength or name[length - 1] != '\0') {
 			return false;
 		}
@@ -40,15 +39,15 @@ namespace {
 		return true;
 	}
 
-	auto validPath(const char *path, const size_t length, string &out) -> bool {
-		return validName(path, length, VFS_MAX_PATH_LENGTH, out);
+	auto Fat32Utils::validPath(const char *path, const size_t length, string &out) -> bool {
+		return Fat32Utils::validName(path, length, VFS_MAX_PATH_LENGTH, out);
 	}
 
-	auto isPowerOfTwo(const uint32_t value) -> bool {
+	auto Fat32Utils::isPowerOfTwo(const uint32_t value) -> bool {
 		return value != 0 and (value & (value - 1)) == 0;
 	}
 
-	auto upperAscii(string value) -> string {
+	auto Fat32Utils::upperAscii(string value) -> string {
 		for (char &ch : value) {
 			ch = static_cast<char>(toupper(static_cast<unsigned char>(ch)));
 		}
@@ -56,7 +55,7 @@ namespace {
 		return value;
 	}
 
-	auto pathParts(const string &path) -> vector<string> {
+	auto Fat32Utils::pathParts(const string &path) -> vector<string> {
 		vector<string> parts;
 		size_t start = 0;
 
@@ -82,14 +81,14 @@ namespace {
 		return parts;
 	}
 
-	auto registerWithNameRegistry(const char *name) -> bool {
+	auto Fat32Utils::registerWithNameRegistry(const char *name) -> bool {
 		auto msg = hos_msg();
 		auto data = RegisterMsgData();
 
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
 
-		fillName(data.name, sizeof(data.name), data.nameLength, name);
+		Fat32Utils::fillName(data.name, sizeof(data.name), data.nameLength, name);
 
 		msg.type = REGISTER_MSG_TYPE;
 		msg.port = 1;
@@ -118,11 +117,11 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto waitForStorage() -> uint64_t {
+	auto Fat32Utils::waitForStorage() -> uint64_t {
 		for (;;) {
 			auto check = CheckMsgData();
 
-			fillName(check.name, sizeof(check.name), check.nameLength, "StorageManager");
+			Fat32Utils::fillName(check.name, sizeof(check.name), check.nameLength, "StorageManager");
 
 			auto checkMsg = hos_msg();
 
@@ -156,7 +155,7 @@ namespace {
 
 		auto get = GetMsgData();
 
-		fillName(get.name, sizeof(get.name), get.nameLength, "StorageManager");
+		Fat32Utils::fillName(get.name, sizeof(get.name), get.nameLength, "StorageManager");
 
 		auto getMsg = hos_msg();
 
@@ -185,11 +184,11 @@ namespace {
 		return reply.port;
 	}
 
-	auto waitForServicePort(const char *name) -> uint64_t {
+	auto Fat32Utils::waitForServicePort(const char *name) -> uint64_t {
 		for (;;) {
 			auto check = CheckMsgData();
 
-			fillName(check.name, sizeof(check.name), check.nameLength, name);
+			Fat32Utils::fillName(check.name, sizeof(check.name), check.nameLength, name);
 
 			auto checkMsg = hos_msg();
 
@@ -223,7 +222,7 @@ namespace {
 
 		auto get = GetMsgData();
 
-		fillName(get.name, sizeof(get.name), get.nameLength, name);
+		Fat32Utils::fillName(get.name, sizeof(get.name), get.nameLength, name);
 
 		auto getMsg = hos_msg();
 
@@ -252,8 +251,8 @@ namespace {
 		return reply.port;
 	}
 
-	auto registerWithVfs(const char *fsName) -> bool {
-		const uint64_t vfsPort = waitForServicePort("Vfs");
+	auto Fat32Utils::registerWithVfs(const char *fsName) -> bool {
+		const uint64_t vfsPort = Fat32Utils::waitForServicePort("Vfs");
 
 		if (vfsPort == 0) {
 			return false;
@@ -262,7 +261,7 @@ namespace {
 		auto data = VfsRegisterFsHandlerMsgData();
 
 		data.handlerPort = service.fat32Port;
-		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, fsName);
+		Fat32Utils::fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, fsName);
 
 		auto msg = hos_msg();
 
@@ -293,14 +292,14 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto registerFsHandler() -> bool {
+	auto Fat32Utils::registerFsHandler() -> bool {
 		auto data = StorageRegisterFsHandlerMsgData();
 
 		data.handlerPort = service.fat32Port;
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
 
-		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, "fat32");
+		Fat32Utils::fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, "fat32");
 
 		auto msg = hos_msg();
 
@@ -331,7 +330,7 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto readDevicePage(const uint64_t deviceId, const uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool {
+	auto Fat32Utils::readDevicePage(const uint64_t deviceId, const uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool {
 		if (allocPhysPage(&phys) != 0) {
 			return false;
 		}
@@ -347,7 +346,7 @@ namespace {
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = allocateStorageRequestId();
+		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
 		auto data = StorageReadMsgData();
 
@@ -406,7 +405,7 @@ namespace {
 		return true;
 	}
 
-	void freeDevicePage(uint64_t &phys, uint64_t &virt) {
+	void Fat32Utils::freeDevicePage(uint64_t &phys, uint64_t &virt) {
 		if (virt != 0) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			virt = 0;
@@ -418,9 +417,9 @@ namespace {
 		}
 	}
 
-	auto writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
+	auto Fat32Utils::writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = allocateStorageRequestId();
+		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
 		auto data = StorageWriteMsgData();
 
@@ -463,9 +462,9 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto flushDevice(const uint64_t deviceId) -> bool {
+	auto Fat32Utils::flushDevice(const uint64_t deviceId) -> bool {
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = allocateStorageRequestId();
+		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
 		auto data = StorageFlushMsgData();
 
@@ -507,19 +506,20 @@ namespace {
 
 
 
-	auto probeFat32(const StorageFsProbeDeviceMsgData &device) -> bool {
-		Fat32Volume volume(device);
+auto Fat32Utils::probeFat32(const StorageFsProbeDeviceMsgData &device) -> bool {
+	Fat32Volume volume(device);
 
-		if (!volume.load()) {
-			return false;
-		}
-
-		printf("FAT32: Recognized %s id=%lu clusters=%lu blockSize=%u.", device.deviceName, device.deviceId, volume.getClusterCount(), device.blockSize);
-		fflush(stdout);
-
-		return true;
+	if (!volume.load()) {
+		return false;
 	}
 
+	printf("FAT32: Recognized %s id=%lu clusters=%lu blockSize=%u.", device.deviceName, device.deviceId, volume.getClusterCount(), device.blockSize);
+	fflush(stdout);
+
+	return true;
+}
+
+namespace {
 	template<typename Reply>
 	void sendReply(const uint64_t type, const hos_msg &request, Reply &reply) {
 		auto replyMsg = hos_msg();
@@ -581,13 +581,13 @@ namespace {
 			auto reply = FsMountReplyMsgData();
 			string deviceName;
 
-			if (data.deviceId != 0 and data.blockCount != 0 and data.blockSize != 0 and validName(data.deviceName, data.deviceNameLength, sizeof(data.deviceName), deviceName)) {
+			if (data.deviceId != 0 and data.blockCount != 0 and data.blockSize != 0 and Fat32Utils::validName(data.deviceName, data.deviceNameLength, sizeof(data.deviceName), deviceName)) {
 				StorageFsProbeDeviceMsgData device {};
 
 				device.deviceId = data.deviceId;
 				device.blockCount = data.blockCount;
 				device.blockSize = data.blockSize;
-				fillName(device.deviceName, sizeof(device.deviceName), device.deviceNameLength, deviceName);
+				Fat32Utils::fillName(device.deviceName, sizeof(device.deviceName), device.deviceNameLength, deviceName);
 
 				Fat32Volume volume(device);
 
@@ -631,7 +631,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				FatDirEntry entry {};
 
@@ -675,7 +675,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				FatDirEntry entry {};
 				vector<VfsDirEntry> entries;
@@ -726,7 +726,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (data.length <= VFS_MAX_READ_SIZE and service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (data.length <= VFS_MAX_READ_SIZE and service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				FatDirEntry entry {};
 				vector<uint8_t> bytes;
@@ -765,7 +765,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 
 			if (service.mountedDevice(data.mountId, device)) {
-				reply.success = flushDevice(device.deviceId);
+				reply.success = Fat32Utils::flushDevice(device.deviceId);
 				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
 			} else {
 				reply.status = VFS_STATUS_NOT_FOUND;
@@ -795,7 +795,7 @@ namespace {
 			}
 
 			auto reply = StorageFsProbeDeviceReplyMsgData();
-			reply.recognized = probeFat32(data);
+			reply.recognized = Fat32Utils::probeFat32(data);
 
 			sendReply(STORAGE_FS_PROBE_DEVICE_REPLY_MSG_TYPE, msg, reply);
 		}
@@ -824,7 +824,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (data.length <= VFS_MAX_READ_SIZE and service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (data.length <= VFS_MAX_READ_SIZE and service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				uint64_t size = 0;
 
@@ -867,7 +867,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (data.nodeType == VFS_NODE_FILE and service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (data.nodeType == VFS_NODE_FILE and service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 
 				if (volume.load() and volume.createFile(path, reply.nodeId)) {
@@ -907,7 +907,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				reply.success = volume.load() and volume.unlinkFile(path);
 				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
@@ -943,7 +943,7 @@ namespace {
 			string oldPath;
 			string newPath;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.oldPath, data.oldPathLength, oldPath) and validPath(data.newPath, data.newPathLength, newPath)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.oldPath, data.oldPathLength, oldPath) and Fat32Utils::validPath(data.newPath, data.newPathLength, newPath)) {
 				Fat32Volume volume(device);
 				reply.success = volume.load() and volume.renameFile(oldPath, newPath);
 				reply.status = reply.success ? VFS_STATUS_OK : VFS_STATUS_INVALID;
@@ -978,7 +978,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 				uint64_t size = 0;
 
@@ -1020,7 +1020,7 @@ namespace {
 			StorageFsProbeDeviceMsgData device {};
 			string path;
 
-			if (service.mountedDevice(data.mountId, device) and validPath(data.path, data.pathLength, path)) {
+			if (service.mountedDevice(data.mountId, device) and Fat32Utils::validPath(data.path, data.pathLength, path)) {
 				Fat32Volume volume(device);
 
 				if (volume.load() and volume.createDirectory(path, reply.nodeId)) {
@@ -1058,14 +1058,14 @@ auto Fat32Service::start() -> int {
 		return 1;
 	}
 
-	if (!registerWithNameRegistry("Fat32")) {
+	if (!Fat32Utils::registerWithNameRegistry("Fat32")) {
 		printf("FAT32: Failed to register with Name/Registry.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	service.storagePort = waitForStorage();
+	service.storagePort = Fat32Utils::waitForStorage();
 
 	if (register_horizonos_port(reinterpret_cast<long *>(&service.storageReplyPort)) != 0 or service.storageReplyPort == 0) {
 		printf("FAT32: Failed to register Storage reply port.");
@@ -1074,14 +1074,14 @@ auto Fat32Service::start() -> int {
 		return 1;
 	}
 
-	if (!registerFsHandler()) {
+	if (!Fat32Utils::registerFsHandler()) {
 		printf("FAT32: Failed to register filesystem handler.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	if (!registerWithVfs("fat32")) {
+	if (!Fat32Utils::registerWithVfs("fat32")) {
 		printf("FAT32: Failed to register with VFS.");
 		fflush(stdout);
 

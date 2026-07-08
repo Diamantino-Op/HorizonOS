@@ -29,8 +29,6 @@ uint64_t pciPort = 0;
 uint64_t pciTid = 0;
 bool mcfgReady = false;
 
-void processMcfg();
-
 extern void *handleIrqs(void *);
 
 auto UacpiService::start() -> int {
@@ -214,7 +212,7 @@ auto UacpiService::start() -> int {
 		fflush(stdout);
 	}
 
-	processMcfg();
+	UacpiUtils::processMcfg();
 
 	long mode = 0;
 
@@ -338,7 +336,7 @@ static uacpi_iteration_decision pciRootCallback(void *user, uacpi_namespace_node
     return UACPI_ITERATION_DECISION_CONTINUE;
 }
 
-void processMcfg() {
+void UacpiUtils::processMcfg() {
 	if (pciPort == 0) {
 		printf("uACPI: Failed to get PCI port!");
 		fflush(stdout);

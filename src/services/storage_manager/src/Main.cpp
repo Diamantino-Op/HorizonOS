@@ -28,17 +28,18 @@ namespace {
 	mutex storageMutex;
 	mutex blockRequestMutex;
 	mutex nvmeRequestIdMutex;
+}
 
-	auto allocateBlockDeviceIdLocked() -> uint64_t {
+auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		return nextBlockDeviceId++;
 	}
 
-	auto allocateNvmeRequestId() -> uint64_t {
+	auto StorageManagerUtils::allocateNvmeRequestId() -> uint64_t {
 		const scoped_lock lock(nvmeRequestIdMutex);
 		return nextNvmeRequestId++;
 	}
 
-	auto validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
+	auto StorageManagerUtils::validName(const char *name, const size_t length, const size_t maxLength, string &out) -> bool {
 		if (length == 0 or length > maxLength or name[length - 1] != '\0') {
 			return false;
 		}
@@ -48,7 +49,7 @@ namespace {
 		return true;
 	}
 
-	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
+	void StorageManagerUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
 
 		memcpy(dst, name.data(), copyLen);
@@ -57,7 +58,7 @@ namespace {
 		length = copyLen + 1;
 	}
 
-	auto gptNameToString(const uint16_t *name, const size_t charCount) -> string {
+	auto StorageManagerUtils::gptNameToString(const uint16_t *name, const size_t charCount) -> string {
 		string out;
 
 		for (size_t i = 0; i < charCount and name[i] != 0; ++i) {
@@ -69,14 +70,14 @@ namespace {
 		return out;
 	}
 
-	auto registerWithNameRegistry(const char *name) -> bool {
+	auto StorageManagerUtils::registerWithNameRegistry(const char *name) -> bool {
 		auto msg = hos_msg();
 		auto data = RegisterMsgData();
 
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
 
-		fillName(data.name, sizeof(data.name), data.nameLength, name);
+		StorageManagerUtils::fillName(data.name, sizeof(data.name), data.nameLength, name);
 
 		msg.type = REGISTER_MSG_TYPE;
 		msg.port = 1;
@@ -105,11 +106,11 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto waitForService(const char *name) -> GetReplyMsgData {
+	auto StorageManagerUtils::waitForService(const char *name) -> GetReplyMsgData {
 		for (;;) {
 			auto check = CheckMsgData();
 
-			fillName(check.name, sizeof(check.name), check.nameLength, name);
+			StorageManagerUtils::fillName(check.name, sizeof(check.name), check.nameLength, name);
 
 			auto checkMsg = hos_msg();
 
@@ -144,7 +145,7 @@ namespace {
 
 		auto get = GetMsgData();
 
-		fillName(get.name, sizeof(get.name), get.nameLength, name);
+		StorageManagerUtils::fillName(get.name, sizeof(get.name), get.nameLength, name);
 
 		auto getMsg = hos_msg();
 
@@ -173,7 +174,7 @@ namespace {
 		return reply;
 	}
 
-	auto findBlockDeviceLocked(const uint64_t id) -> BlockDevice * {
+	auto StorageManagerUtils::findBlockDeviceLocked(const uint64_t id) -> BlockDevice * {
 		const auto it = ranges::find_if(blockDevices, [&](const BlockDevice &dev) -> bool {
 			return dev.id == id;
 		});
@@ -181,12 +182,12 @@ namespace {
 		return it == blockDevices.end() ? nullptr : &(*it);
 	}
 
-	auto transferBlockCount(const BlockDevice &device, const uint32_t pageCount) -> uint64_t {
+	auto StorageManagerUtils::transferBlockCount(const BlockDevice &device, const uint32_t pageCount) -> uint64_t {
 		return (static_cast<uint64_t>(pageCount) * 0x1000) / device.blockSize;
 	}
 
-	auto translateToBlockLocked(const BlockDevice &device, const uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
-		const uint64_t blocks = transferBlockCount(device, pageCount);
+	auto StorageManagerUtils::translateToBlockLocked(const BlockDevice &device, const uint64_t lba, const uint32_t pageCount, BlockDevice &out) -> bool {
+		const uint64_t blocks = StorageManagerUtils::transferBlockCount(device, pageCount);
 
 		if (blocks == 0 or lba >= device.blockCount or blocks > device.blockCount - lba) {
 			return false;
@@ -199,7 +200,7 @@ namespace {
 			return true;
 		}
 
-		const BlockDevice *parent = findBlockDeviceLocked(device.parentId);
+		const BlockDevice *parent = StorageManagerUtils::findBlockDeviceLocked(device.parentId);
 
 		if (parent == nullptr or device.parentStartLba + lba >= parent->blockCount or blocks > parent->blockCount - (device.parentStartLba + lba)) {
 			return false;
@@ -211,13 +212,13 @@ namespace {
 		return true;
 	}
 
-	auto currentCpuId() -> uint64_t {
+	auto StorageManagerUtils::currentCpuId() -> uint64_t {
 		const int cpuId = sched_getcpu();
 
 		return cpuId < 0 ? 0 : static_cast<uint64_t>(cpuId);
 	}
 
-	void applyDefaultTransport(BlockDevice &device) {
+	void StorageManagerUtils::applyDefaultTransport(BlockDevice &device) {
 		if (device.readMsgBase == 0) {
 			device.readMsgBase = NVME_READ_MSG_BASE;
 		}
@@ -243,10 +244,10 @@ namespace {
 		}
 	}
 
-	auto blockRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+	auto StorageManagerUtils::blockRead(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
 		const scoped_lock requestLock(blockRequestMutex);
-		const uint64_t cpuId = currentCpuId();
-		const uint64_t requestId = allocateNvmeRequestId();
+		const uint64_t cpuId = StorageManagerUtils::currentCpuId();
+		const uint64_t requestId = StorageManagerUtils::allocateNvmeRequestId();
 
 		auto data = NvmeReadMsgData();
 
@@ -297,10 +298,10 @@ namespace {
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
-	auto blockWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+	auto StorageManagerUtils::blockWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
 		const scoped_lock requestLock(blockRequestMutex);
-		const uint64_t cpuId = currentCpuId();
-		const uint64_t requestId = allocateNvmeRequestId();
+		const uint64_t cpuId = StorageManagerUtils::currentCpuId();
+		const uint64_t requestId = StorageManagerUtils::allocateNvmeRequestId();
 
 		auto data = NvmeWriteMsgData();
 
@@ -342,10 +343,10 @@ namespace {
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
-	auto blockFlush(const BlockDevice &device) -> bool {
+	auto StorageManagerUtils::blockFlush(const BlockDevice &device) -> bool {
 		const scoped_lock requestLock(blockRequestMutex);
-		const uint64_t cpuId = currentCpuId();
-		const uint64_t requestId = allocateNvmeRequestId();
+		const uint64_t cpuId = StorageManagerUtils::currentCpuId();
+		const uint64_t requestId = StorageManagerUtils::allocateNvmeRequestId();
 
 		auto data = NvmeFlushMsgData();
 
@@ -383,7 +384,7 @@ namespace {
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}
 
-	auto readOnePage(const BlockDevice &device, const uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool {
+	auto StorageManagerUtils::readOnePage(const BlockDevice &device, const uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool {
 		if (allocPhysPage(&phys) != 0) {
 			return false;
 		}
@@ -399,7 +400,7 @@ namespace {
 		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 		const uint64_t pages[1] { phys };
 
-		if (!blockRead(device, lba, pages, 1)) {
+		if (!StorageManagerUtils::blockRead(device, lba, pages, 1)) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 			freePhysPage(phys);
 
@@ -412,7 +413,7 @@ namespace {
 		return true;
 	}
 
-	void freeOnePage(const uint64_t phys, const uint64_t virt) {
+	void StorageManagerUtils::freeOnePage(const uint64_t phys, const uint64_t virt) {
 		if (virt != 0) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
 		}
@@ -422,7 +423,7 @@ namespace {
 		}
 	}
 
-	void notifyFsHandlers(const BlockDevice &device) {
+	void StorageManagerUtils::notifyFsHandlers(const BlockDevice &device) {
 		vector<FsHandler> handlers;
 
 		{
@@ -435,7 +436,7 @@ namespace {
 			data.deviceId = device.id;
 			data.blockCount = device.blockCount;
 			data.blockSize = device.blockSize;
-			fillName(data.deviceName, sizeof(data.deviceName), data.deviceNameLength, device.name);
+			StorageManagerUtils::fillName(data.deviceName, sizeof(data.deviceName), data.deviceNameLength, device.name);
 
 			auto msg = hos_msg();
 			msg.type = STORAGE_FS_PROBE_DEVICE_MSG_TYPE;
@@ -447,14 +448,14 @@ namespace {
 		}
 	}
 
-	void probeGpt(const BlockDevice &rawDevice) {
+	void StorageManagerUtils::probeGpt(const BlockDevice &rawDevice) {
 		uint64_t headerPhys = 0;
 		uint64_t headerVirt = 0;
 
 		printf("Storage: Probing GPT on %s.", rawDevice.name.c_str());
 		fflush(stdout);
 
-		if (!readOnePage(rawDevice, 1, headerPhys, headerVirt)) {
+		if (!StorageManagerUtils::readOnePage(rawDevice, 1, headerPhys, headerVirt)) {
 			printf("Storage: Failed to read GPT header from %s.", rawDevice.name.c_str());
 			fflush(stdout);
 
@@ -464,7 +465,7 @@ namespace {
 		const auto *header = reinterpret_cast<const GptHeader *>(headerVirt);
 
 		if (header->signature != GPT_SIGNATURE or header->headerSize < sizeof(GptHeader) or header->partitionEntrySize < sizeof(GptPartitionEntry)) {
-			freeOnePage(headerPhys, headerVirt);
+			StorageManagerUtils::freeOnePage(headerPhys, headerVirt);
 
 			printf("Storage: %s has no GPT header.", rawDevice.name.c_str());
 			fflush(stdout);
@@ -482,7 +483,7 @@ namespace {
 			uint64_t entriesPhys = 0;
 			uint64_t entriesVirt = 0;
 
-			if (!readOnePage(rawDevice, entryPageLba, entriesPhys, entriesVirt)) {
+			if (!StorageManagerUtils::readOnePage(rawDevice, entryPageLba, entriesPhys, entriesVirt)) {
 				continue;
 			}
 
@@ -518,31 +519,32 @@ namespace {
 					partition.partitionType = entry->partitionTypeGuid;
 					partition.partitionId = entry->uniquePartitionGuid;
 					partition.name = rawDevice.name + "p" + to_string(globalEntryIndex + 1);
-					partition.label = gptNameToString(entry->name, 36);
+					partition.label = StorageManagerUtils::gptNameToString(entry->name, 36);
 
 					{
 						const scoped_lock lock(storageMutex);
-						partition.id = allocateBlockDeviceIdLocked();
+						partition.id = StorageManagerUtils::allocateBlockDeviceIdLocked();
 						blockDevices.push_back(partition);
 					}
 
 					printf("Storage: Registered partition %s id=%lu start=%lu blocks=%lu.", partition.name.c_str(), partition.id, partition.parentStartLba, partition.blockCount);
 					fflush(stdout);
 
-					notifyFsHandlers(partition);
+					StorageManagerUtils::notifyFsHandlers(partition);
 					++created;
 				}
 			}
 
-			freeOnePage(entriesPhys, entriesVirt);
+			StorageManagerUtils::freeOnePage(entriesPhys, entriesVirt);
 		}
 
-		freeOnePage(headerPhys, headerVirt);
+		StorageManagerUtils::freeOnePage(headerPhys, headerVirt);
 
-		printf("Storage: GPT probe for %s created %u partition(s).", rawDevice.name.c_str(), created);
-		fflush(stdout);
-	}
+	printf("Storage: GPT probe for %s created %u partition(s).", rawDevice.name.c_str(), created);
+	fflush(stdout);
+}
 
+namespace {
 	[[noreturn]] auto blockRegistrationHandler(void */*unused*/) -> void * {
 		auto data = StorageRegisterBlockDeviceMsgData();
 		auto msg = hos_msg();
@@ -565,7 +567,7 @@ namespace {
 			string name;
 			auto reply = StorageRegisterBlockDeviceReplyMsgData();
 
-			if (validName(data.name, data.nameLength, sizeof(data.name), name) and data.blockSize != 0 and data.blockCount != 0) {
+			if (StorageManagerUtils::validName(data.name, data.nameLength, sizeof(data.name), name) and data.blockSize != 0 and data.blockCount != 0) {
 				BlockDevice device {};
 
 				device.kind = BlockDeviceKind::WholeDisk;
@@ -582,12 +584,12 @@ namespace {
 				device.readReplyMsgBase = data.readReplyMsgBase;
 				device.writeReplyMsgBase = data.writeReplyMsgBase;
 				device.flushReplyMsgBase = data.flushReplyMsgBase;
-				applyDefaultTransport(device);
+				StorageManagerUtils::applyDefaultTransport(device);
 				device.name = name;
 
 				{
 					const scoped_lock lock(storageMutex);
-					device.id = allocateBlockDeviceIdLocked();
+					device.id = StorageManagerUtils::allocateBlockDeviceIdLocked();
 					blockDevices.push_back(device);
 				}
 
@@ -597,8 +599,8 @@ namespace {
 				printf("Storage: Registered block device %s id=%lu blocks=%lu blockSize=%u.", device.name.c_str(), device.id, device.blockCount, device.blockSize);
 				fflush(stdout);
 
-				probeGpt(device);
-				notifyFsHandlers(device);
+				StorageManagerUtils::probeGpt(device);
+				StorageManagerUtils::notifyFsHandlers(device);
 			}
 
 			auto replyMsg = hos_msg();
@@ -635,7 +637,7 @@ namespace {
 
 			auto reply = StorageRegisterFsHandlerReplyMsgData();
 
-			if (validName(data.fsName, data.fsNameLength, sizeof(data.fsName), fsName) and data.handlerPort != 0) {
+			if (StorageManagerUtils::validName(data.fsName, data.fsNameLength, sizeof(data.fsName), fsName) and data.handlerPort != 0) {
 				FsHandler handler {};
 
 				handler.port = data.handlerPort;
@@ -663,7 +665,7 @@ namespace {
 				fflush(stdout);
 
 				for (const auto &device : snapshot) {
-					notifyFsHandlers(device);
+					StorageManagerUtils::notifyFsHandlers(device);
 				}
 			}
 
@@ -770,15 +772,15 @@ namespace {
 
 				{
 					const scoped_lock lock(storageMutex);
-					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
+					const BlockDevice *device = StorageManagerUtils::findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
-						translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
+						StorageManagerUtils::translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
 					}
 				}
 
 				if (blockDevice.driverPort != 0) {
-					reply.success = blockRead(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
+					reply.success = StorageManagerUtils::blockRead(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
 				}
 			}
 
@@ -821,15 +823,15 @@ namespace {
 
 				{
 					const scoped_lock lock(storageMutex);
-					const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
+					const BlockDevice *device = StorageManagerUtils::findBlockDeviceLocked(data.deviceId);
 
 					if (device != nullptr) {
-						translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
+						StorageManagerUtils::translateToBlockLocked(*device, data.lba, data.pageCount, blockDevice);
 					}
 				}
 
 				if (blockDevice.driverPort != 0) {
-					reply.success = blockWrite(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
+					reply.success = StorageManagerUtils::blockWrite(blockDevice, blockDevice.parentStartLba, data.pagePhysArray, data.pageCount);
 				}
 			}
 
@@ -870,11 +872,11 @@ namespace {
 
 			{
 				const scoped_lock lock(storageMutex);
-				const BlockDevice *device = findBlockDeviceLocked(data.deviceId);
+				const BlockDevice *device = StorageManagerUtils::findBlockDeviceLocked(data.deviceId);
 
 				if (device != nullptr) {
 					if (device->kind == BlockDeviceKind::Partition) {
-						const BlockDevice *parent = findBlockDeviceLocked(device->parentId);
+						const BlockDevice *parent = StorageManagerUtils::findBlockDeviceLocked(device->parentId);
 						if (parent != nullptr) {
 							blockDevice = *parent;
 						}
@@ -885,7 +887,7 @@ namespace {
 			}
 
 			if (blockDevice.driverPort != 0) {
-				reply.success = blockFlush(blockDevice);
+				reply.success = StorageManagerUtils::blockFlush(blockDevice);
 			}
 
 			auto replyMsg = hos_msg();
@@ -936,8 +938,8 @@ namespace {
 					out.blockSize = device.blockSize;
 					out.parentId = device.parentId;
 					out.parentStartLba = device.parentStartLba;
-					fillName(out.name, sizeof(out.name), out.nameLength, device.name);
-					fillName(out.label, sizeof(out.label), out.labelLength, device.label);
+					StorageManagerUtils::fillName(out.name, sizeof(out.name), out.nameLength, device.name);
+					StorageManagerUtils::fillName(out.label, sizeof(out.label), out.labelLength, device.label);
 				}
 			}
 
@@ -961,14 +963,14 @@ auto StorageManagerService::start() -> int {
 		return 1;
 	}
 
-	if (!registerWithNameRegistry("StorageManager")) {
+	if (!StorageManagerUtils::registerWithNameRegistry("StorageManager")) {
 		printf("Storage: Failed to register with Name/Registry.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	const GetReplyMsgData nvmeInfo = waitForService("NVMe");
+	const GetReplyMsgData nvmeInfo = StorageManagerUtils::waitForService("NVMe");
 	nvmePort = nvmeInfo.port;
 
 	if (register_horizonos_port(reinterpret_cast<long *>(&nvmeReplyPort)) != 0 or nvmeReplyPort == 0) {

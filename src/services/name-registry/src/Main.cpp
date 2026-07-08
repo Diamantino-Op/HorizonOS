@@ -15,20 +15,6 @@
 using namespace std;
 using namespace std::ranges;
 
-template <typename MsgT>
-bool extractServiceName(const MsgT *msg, string &name) {
-	if (msg == nullptr || msg->nameLength == 0 || msg->nameLength > sizeof(msg->name)) {
-		return false;
-	}
-
-	if (msg->name[msg->nameLength - 1] != '\0') {
-		return false;
-	}
-
-	name.assign(msg->name, msg->nameLength - 1);
-	return true;
-}
-
 uint64_t nrPort = 0;
 
 static std::mutex services_mutex;
@@ -37,9 +23,6 @@ static std::mutex services_mutex;
 [[noreturn]] void *unregisterMsgHandler(void *srvsPtr);
 [[noreturn]] void *getMsgHandler(void *srvsPtr);
 [[noreturn]] void *checkMsgHandler(void *srvsPtr);
-
-void registerService(vector<Service> *services, uint64_t port, uint64_t ownerPid, uint64_t tid, const string &name, uint64_t versionMajor, uint64_t versionMinor, uint64_t versionPatch);
-void unregisterService(vector<Service> *services, string name);
 
 auto NameRegistryService::start() -> int {
 	const int registerResult = register_horizonos_port(reinterpret_cast<long *>(&nrPort), 1);
@@ -95,7 +78,7 @@ auto NameRegistryService::start() -> int {
 				printf("Service: %s dead, unregistering it!", service.name.c_str());
 				fflush(stdout);
 
-				unregisterService(services, service.name);
+				NameRegistryUtils::unregisterService(services, service.name);
 			}
 		}
 
@@ -157,7 +140,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		string name;
 
-		if (!extractServiceName(&response, name)) {
+		if (!NameRegistryUtils::extractServiceName(&response, name)) {
 			printf("Name/Registry Service: Dropped invalid register message name length (%zu)", response.nameLength);
 			fflush(stdout);
 
@@ -175,7 +158,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 				});
 
 			if (!hasService) {
-				registerService(services, msg.src_port, response.ownerPid, response.tid, name, response.versionMajor, response.versionMinor, response.versionPatch);
+				NameRegistryUtils::registerService(services, msg.src_port, response.ownerPid, response.tid, name, response.versionMajor, response.versionMinor, response.versionPatch);
 			}
 		}
 
@@ -243,7 +226,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		{
 			string name;
 
-			if (!extractServiceName(&response, name)) {
+			if (!NameRegistryUtils::extractServiceName(&response, name)) {
 				printf("Name/Registry Service: Dropped invalid unregister message name length (%zu)", response.nameLength);
 				fflush(stdout);
 
@@ -251,7 +234,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 			}
 
 			std::scoped_lock lock(services_mutex);
-			unregisterService(services, name);
+			NameRegistryUtils::unregisterService(services, name);
 		}
 	}
 }
@@ -299,7 +282,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		string name;
 
-		if (!extractServiceName(&response, name)) {
+		if (!NameRegistryUtils::extractServiceName(&response, name)) {
 			printf("Name/Registry Service: Dropped invalid get message name length (%zu)", response.nameLength);
 			fflush(stdout);
 
@@ -393,7 +376,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 		string name;
 
-		if (!extractServiceName(&response, name)) {
+		if (!NameRegistryUtils::extractServiceName(&response, name)) {
 			printf("Name/Registry Service: Dropped invalid check message name length (%zu)", response.nameLength);
 			fflush(stdout);
 
@@ -425,14 +408,14 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	}
 }
 
-void registerService(vector<Service> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
+void NameRegistryUtils::registerService(vector<Service> *services, const uint64_t port, const uint64_t ownerPid, const uint64_t tid, const string &name, const uint64_t versionMajor, const uint64_t versionMinor, const uint64_t versionPatch) {
 	services->emplace_back(port, ownerPid, tid, name, versionMajor, versionMinor, versionPatch);
 
 	printf("Service %s registered on port %lu!", name.c_str(), port);
 	fflush(stdout);
 }
 
-void unregisterService(vector<Service> *services, string name) {
+void NameRegistryUtils::unregisterService(vector<Service> *services, string name) {
 	erase_if(*services, [name](const Service &service) { return service.name == name; });
 
 	printf("Service %s unregistered!", name.c_str());
