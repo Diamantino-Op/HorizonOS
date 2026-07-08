@@ -383,7 +383,7 @@ namespace kernel::common {
 
 	void terminalThreadFunction() {
 		Terminal *terminal = CommonMain::getTerminal();
-		Thread *thread = Scheduler::getCurrentThread();
+		const Thread *thread = Scheduler::getCurrentThread();
 
 		terminal->msgQueue.init();
 		__atomic_store_n(&terminal->threadId, thread != nullptr ? thread->getId() : 0, __ATOMIC_RELEASE);
@@ -404,8 +404,8 @@ namespace kernel::common {
 
 			switch (message.type) {
 				case MessageType::DEBUG:
-					//terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
-					terminal->printfBoth(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+					terminal->printfE9(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
+					//terminal->printfBoth(true, "[    \o{33}[0;32mdebug    \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m%s\033[0m", message.id, message.msg);
 
 					break;
 
