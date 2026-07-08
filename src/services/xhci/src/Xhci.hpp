@@ -66,6 +66,9 @@ constexpr uint32_t XHCI_CAP_HCSPARAMS2 = 0x08;
 constexpr uint32_t XHCI_CAP_HCCPARAMS1 = 0x10;
 constexpr uint32_t XHCI_CAP_DBOFF = 0x14;
 constexpr uint32_t XHCI_CAP_RTSOFF = 0x18;
+constexpr uint32_t XHCI_EXT_CAP_USB_LEGACY_SUPPORT = 1;
+constexpr uint32_t XHCI_LEGACY_BIOS_OWNED = 1U << 16;
+constexpr uint32_t XHCI_LEGACY_OS_OWNED = 1U << 24;
 
 constexpr uint32_t XHCI_OP_USBCMD = 0x00;
 constexpr uint32_t XHCI_OP_USBSTS = 0x04;
@@ -525,6 +528,7 @@ public:
 	static auto mmioRead32(uint64_t base, uint32_t offset) -> uint32_t;
 	static void mmioWrite32(uint64_t base, uint32_t offset, uint32_t value);
 	static void mmioWrite64(uint64_t base, uint32_t offset, uint64_t value);
+	static void dmaWriteFence();
 	static auto allocatePage(AllocatedPage &page) -> bool;
 	static void freePage(AllocatedPage &page);
 	static void releaseControllerMemory(ControllerMemory &memory);
@@ -537,6 +541,7 @@ public:
 	static auto msiAllocVector(const PciDevice &dev, uint64_t notifyPort, uint64_t lapicId = 1000000) -> uint8_t;
 	static auto findControllers() -> std::vector<PciDevice>;
 	static auto mapBar0(const PciDevice &dev, MappedController &controller) -> bool;
+	static void takeBiosOwnership(uint64_t capabilityBase, uint32_t hccParams1);
 	static auto waitForControllerReady(uint64_t operationalBase) -> bool;
 	static auto haltController(uint64_t operationalBase) -> bool;
 	static auto resetController(uint64_t operationalBase) -> bool;
@@ -562,6 +567,8 @@ public:
 	static auto drainEvents(MappedController &controller, uint32_t &loggedEvents) -> uint32_t;
 	static void logControllerStatus(const MappedController &controller, const char *phase);
 	static void logPorts(const MappedController &controller);
+	static void logPortState(const MappedController &controller, uint8_t port, const char *phase);
+	static void logDeviceContext(const MappedController &controller, const XhciDevice &device, const char *phase);
 	static void postStartProbe(MappedController &controller);
 	static auto contextSize(const MappedController &controller) -> uint32_t;
 	static auto contextPtr(const AllocatedPage &page, const MappedController &controller, uint32_t index) -> uint32_t *;

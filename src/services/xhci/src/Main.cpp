@@ -51,6 +51,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		*reinterpret_cast<volatile uint64_t *>(base + offset) = value;
 	}
 
+	void XhciUtils::dmaWriteFence() {
+		__sync_synchronize();
+	}
+
 	auto XhciUtils::allocatePage(AllocatedPage &page) -> bool {
 		if (allocPhysPage(&page.phys) != 0) {
 			return false;
@@ -503,6 +507,46 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
+	void XhciUtils::takeBiosOwnership(const uint64_t capabilityBase, const uint32_t hccParams1) {
+		uint32_t offset = ((hccParams1 >> 16) & 0xFFFFU) * 4;
+
+		for (uint32_t guard = 0; offset != 0 and guard < 64; ++guard) {
+			const uint32_t cap = XhciUtils::mmioRead32(capabilityBase, offset);
+			const uint32_t capId = cap & 0xFFU;
+			const uint32_t nextOffset = ((cap >> 8) & 0xFFU) * 4;
+
+			if (capId == XHCI_EXT_CAP_USB_LEGACY_SUPPORT) {
+				uint32_t legacy = XhciUtils::mmioRead32(capabilityBase, offset);
+
+				if ((legacy & XHCI_LEGACY_BIOS_OWNED) != 0) {
+					XhciUtils::mmioWrite32(capabilityBase, offset, legacy | XHCI_LEGACY_OS_OWNED);
+
+					for (uint32_t i = 0; i < 1000; ++i) {
+						legacy = XhciUtils::mmioRead32(capabilityBase, offset);
+
+						if ((legacy & XHCI_LEGACY_BIOS_OWNED) == 0 and (legacy & XHCI_LEGACY_OS_OWNED) != 0) {
+							break;
+						}
+
+						usleep(1000);
+					}
+				} else if ((legacy & XHCI_LEGACY_OS_OWNED) == 0) {
+					XhciUtils::mmioWrite32(capabilityBase, offset, legacy | XHCI_LEGACY_OS_OWNED);
+					legacy = XhciUtils::mmioRead32(capabilityBase, offset);
+				}
+
+				XhciUtils::mmioWrite32(capabilityBase, offset + 4, 0);
+
+				printf("XHCI: Legacy handoff cap=0x%x final=0x%x.", offset, legacy);
+				fflush(stdout);
+
+				return;
+			}
+
+			offset = nextOffset;
+		}
+	}
+
 	auto XhciUtils::waitForControllerReady(const uint64_t operationalBase) -> bool {
 		for (int i = 0; i < 10000; ++i) {
 			if ((XhciUtils::mmioRead32(operationalBase, XHCI_OP_USBSTS) & XHCI_USBSTS_CNR) == 0) {
@@ -631,6 +675,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			memory.scratchpads.push_back(page);
 		}
 
+		XhciUtils::dmaWriteFence();
+
 		return true;
 	}
 
@@ -645,6 +691,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		link.parameterHigh = static_cast<uint32_t>(memory.commandRing.phys >> 32);
 		link.control = XHCI_TRB_CYCLE | XHCI_TRB_TOGGLE_CYCLE | (XHCI_TRB_TYPE_LINK << XHCI_TRB_TYPE_SHIFT);
 
+		XhciUtils::dmaWriteFence();
 		XhciUtils::mmioWrite64(operationalBase, XHCI_OP_CRCR, memory.commandRing.phys | XHCI_TRB_CYCLE);
 
 		return true;
@@ -663,6 +710,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		erst[0].ringSegmentBase = memory.eventRing.phys;
 		erst[0].ringSegmentSize = XHCI_EVENT_RING_TRBS;
+
+		XhciUtils::dmaWriteFence();
 
 		const uint64_t interrupterBase = runtimeBase + 0x20;
 
@@ -705,6 +754,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::ringDoorbell(const MappedController &controller, const uint32_t target, const uint32_t value) {
+		XhciUtils::dmaWriteFence();
 		XhciUtils::mmioWrite32(controller.doorbellBase, target * 4, value);
 	}
 
@@ -906,6 +956,55 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				fflush(stdout);
 			}
 		}
+	}
+
+	void XhciUtils::logPortState(const MappedController &controller, const uint8_t port, const char *phase) {
+		if (port == 0 or port > controller.maxPorts) {
+			return;
+		}
+
+		const uint32_t portOffset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
+		const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, portOffset);
+		const uint32_t speed = (portsc >> XHCI_PORTSC_SPEED_SHIFT) & XHCI_PORTSC_SPEED_MASK;
+
+		printf("XHCI: %s port=%u PORTSC=0x%x ccs=%u ped=%u pr=%u speed=%u changes=0x%x.",
+		       phase,
+		       port,
+		       portsc,
+		       (portsc & XHCI_PORTSC_CCS) != 0,
+		       (portsc & XHCI_PORTSC_PED) != 0,
+		       (portsc & XHCI_PORTSC_PR) != 0,
+		       speed,
+		       portsc & XHCI_PORTSC_CHANGE_BITS);
+		fflush(stdout);
+	}
+
+	void XhciUtils::logDeviceContext(const MappedController &controller, const XhciDevice &device, const char *phase) {
+		if (device.deviceContext.virt == 0) {
+			return;
+		}
+
+		const uint32_t slot0 = XhciUtils::contextDword(device.deviceContext, controller, 0, 0);
+		const uint32_t slot1 = XhciUtils::contextDword(device.deviceContext, controller, 0, 1);
+		const uint32_t ep0State = XhciUtils::endpointState(controller, device, 1);
+		const uint32_t ep0Dword0 = XhciUtils::contextDword(device.deviceContext, controller, 1, 0);
+		const uint32_t ep0Dword1 = XhciUtils::contextDword(device.deviceContext, controller, 1, 1);
+		const uint32_t ep0Dword2 = XhciUtils::contextDword(device.deviceContext, controller, 1, 2);
+		const uint32_t ep0Dword3 = XhciUtils::contextDword(device.deviceContext, controller, 1, 3);
+		const uint32_t ep0Dword4 = XhciUtils::contextDword(device.deviceContext, controller, 1, 4);
+
+		printf("XHCI: %s slot=%u slotCtx[0]=0x%x slotCtx[1]=0x%x ep0State=%u ep0Ctx[0..4]=0x%x,0x%x,0x%x,0x%x,0x%x.",
+		       phase,
+		       device.slotId,
+		       slot0,
+		       slot1,
+		       ep0State,
+		       ep0Dword0,
+		       ep0Dword1,
+		       ep0Dword2,
+		       ep0Dword3,
+		       ep0Dword4);
+		fflush(stdout);
 	}
 
 	void XhciUtils::postStartProbe(MappedController &controller) {
@@ -1263,6 +1362,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			printf("XHCI: Control transfer failed slot=%u code=%u ctrl=0x%x status=0x%x trb=0x%lx state=%u attempt=%u.", device.slotId, code, completion.control, completion.status, failedTrb, XhciUtils::endpointState(controller, device, 1), attempt + 1);
 			fflush(stdout);
+			XhciUtils::logPortState(controller, device.rootPort, "control-fail");
+			XhciUtils::logDeviceContext(controller, device, "control-fail");
 
 			lock.unlock();
 			XhciUtils::recoverControlEndpoint(controller, device);
@@ -1315,6 +1416,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			printf("XHCI: Control no-data transfer failed slot=%u request=%u code=%u ctrl=0x%x status=0x%x trb=0x%lx state=%u attempt=%u.", device.slotId, request, code, completion.control, completion.status, failedTrb, XhciUtils::endpointState(controller, device, 1), attempt + 1);
 			fflush(stdout);
+			XhciUtils::logPortState(controller, device.rootPort, "control-no-data-fail");
+			XhciUtils::logDeviceContext(controller, device, "control-no-data-fail");
 
 			lock.unlock();
 			XhciUtils::recoverControlEndpoint(controller, device);
@@ -1346,6 +1449,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
 		uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
 
+		XhciUtils::logPortState(controller, port, "reset-check");
+
 		if ((portsc & XHCI_PORTSC_CCS) == 0) {
 			return false;
 		}
@@ -1356,6 +1461,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			if (speed >= 4) {
 				XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | (portsc & XHCI_PORTSC_CHANGE_BITS));
 				usleep(50000);
+				XhciUtils::logPortState(controller, port, "reset-skip-enabled");
 
 				return true;
 			}
@@ -1380,6 +1486,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		usleep(50000);
+		XhciUtils::logPortState(controller, port, "reset-done");
 
 		return true;
 	}
@@ -2027,6 +2134,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		printf("XHCI: Addressed device on %s as slot %u speed=%u route=0x%x.", location, device.slotId, device.speed, device.routeString);
 		fflush(stdout);
+		XhciUtils::logPortState(controller, device.rootPort, "addressed");
+		XhciUtils::logDeviceContext(controller, device, "addressed");
 
 		usleep(50000);
 
@@ -3219,6 +3328,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		       hcsParams2,
 		       hccParams1);
 		fflush(stdout);
+
+		XhciUtils::takeBiosOwnership(base, hccParams1);
 
 		if (!XhciUtils::haltController(operationalBase)) {
 			printf("XHCI: Controller %zu did not halt.", index);
