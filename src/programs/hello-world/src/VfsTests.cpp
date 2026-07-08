@@ -168,14 +168,20 @@ namespace {
 		return true;
 	}
 
-	auto symlinkPath(const char *target, const char *linkPath) -> bool {
+	auto symlinkPath(const char *target, const char *linkPath, uint32_t *statusOut = nullptr) -> bool {
 		auto request = VfsSymlinkMsgData();
 		auto reply = VfsSymlinkReplyMsgData();
 
 		fillName(request.target, sizeof(request.target), request.targetLength, target);
 		fillName(request.linkPath, sizeof(request.linkPath), request.linkPathLength, linkPath);
 
-		return vfsRequest(VFS_SYMLINK_MSG_TYPE, request, reply) and reply.success and reply.status == VFS_STATUS_OK;
+		const bool delivered = vfsRequest(VFS_SYMLINK_MSG_TYPE, request, reply);
+
+		if (statusOut != nullptr) {
+			*statusOut = delivered ? reply.status : VFS_STATUS_INVALID;
+		}
+
+		return delivered and reply.success and reply.status == VFS_STATUS_OK;
 	}
 
 	auto readLinkPath(const char *path, char *out, const size_t outSize) -> bool {
@@ -195,28 +201,38 @@ namespace {
 		return true;
 	}
 
-	auto hardLinkPath(const char *oldPath, const char *newPath) -> bool {
+	auto hardLinkPath(const char *oldPath, const char *newPath, uint32_t *statusOut = nullptr) -> bool {
 		auto request = VfsLinkMsgData();
 		auto reply = VfsLinkReplyMsgData();
 
 		fillName(request.oldPath, sizeof(request.oldPath), request.oldPathLength, oldPath);
 		fillName(request.newPath, sizeof(request.newPath), request.newPathLength, newPath);
 
-		return vfsRequest(VFS_LINK_MSG_TYPE, request, reply) and reply.success and reply.status == VFS_STATUS_OK;
+		const bool delivered = vfsRequest(VFS_LINK_MSG_TYPE, request, reply);
+
+		if (statusOut != nullptr) {
+			*statusOut = delivered ? reply.status : VFS_STATUS_INVALID;
+		}
+
+		return delivered and reply.success and reply.status == VFS_STATUS_OK;
+	}
+
+	auto optionalLinkStatus(const uint32_t status) -> bool {
+		return status == VFS_STATUS_UNSUPPORTED or status == VFS_STATUS_READ_ONLY;
 	}
 
 	void removeStalePath(const char *path) {
 		unlinkPath(path);
 	}
 
-	auto cleanupPartitionTestPaths(const char *volume, const char *symlink, const char *hardLink, const char *base, const char *dir) -> bool {
-		if (!unlinkPath(symlink)) {
+	auto cleanupPartitionTestPaths(const char *volume, const char *symlink, const bool symlinkCreated, const char *hardLink, const bool hardLinkCreated, const char *base, const char *dir) -> bool {
+		if (symlinkCreated and !unlinkPath(symlink)) {
 			printf("[VFS test] FAIL partition %s cleanup symlink", volume);
 			fflush(stdout);
 			return false;
 		}
 
-		if (!unlinkPath(hardLink)) {
+		if (hardLinkCreated and !unlinkPath(hardLink)) {
 			printf("[VFS test] FAIL partition %s cleanup hard link", volume);
 			fflush(stdout);
 			return false;
@@ -234,7 +250,7 @@ namespace {
 			return false;
 		}
 
-		if (!pathMissing(symlink) or !pathMissing(hardLink) or !pathMissing(base) or !pathMissing(dir)) {
+		if ((symlinkCreated and !pathMissing(symlink)) or (hardLinkCreated and !pathMissing(hardLink)) or !pathMissing(base) or !pathMissing(dir)) {
 			printf("[VFS test] FAIL partition %s cleanup verify", volume);
 			fflush(stdout);
 			return false;
@@ -691,36 +707,44 @@ namespace {
 			return false;
 		}
 
-		if (!symlinkPath(symlinkTarget, symlink)) {
-			printf("[VFS test] FAIL partition %s symlink create", volume);
-			fflush(stdout);
-			return false;
-		}
+		uint32_t symlinkStatus {};
+		const bool symlinkCreated = symlinkPath(symlinkTarget, symlink, &symlinkStatus);
 
 		char linkTarget[VFS_MAX_PATH_LENGTH] {};
 
-		if (!readLinkPath(symlink, linkTarget, sizeof(linkTarget)) or strcmp(linkTarget, symlinkTarget) != 0) {
+		if (!symlinkCreated and optionalLinkStatus(symlinkStatus)) {
+			printf("[VFS test] SKIP partition %s symlink workflow unsupported", volume);
+			fflush(stdout);
+		} else if (!symlinkCreated) {
+			printf("[VFS test] FAIL partition %s symlink create status=%u", volume, symlinkStatus);
+			fflush(stdout);
+			return false;
+		} else if (!readLinkPath(symlink, linkTarget, sizeof(linkTarget)) or strcmp(linkTarget, symlinkTarget) != 0) {
 			printf("[VFS test] FAIL partition %s symlink verify", volume);
 			fflush(stdout);
 			return false;
 		}
 
-		if (!hardLinkPath(base, hardLink)) {
-			printf("[VFS test] FAIL partition %s hard link create", volume);
-			fflush(stdout);
-			return false;
-		}
+		uint32_t hardLinkStatus {};
+		const bool hardLinkCreated = hardLinkPath(base, hardLink, &hardLinkStatus);
 
 		char hardReadBack[VFS_MAX_READ_SIZE + 1] {};
 		uint32_t hardReadBackLength {};
 
-		if (!readPath(hardLink, hardReadBack, sizeof(hardReadBack), hardReadBackLength) or strcmp(hardReadBack, payload) != 0) {
+		if (!hardLinkCreated and optionalLinkStatus(hardLinkStatus)) {
+			printf("[VFS test] SKIP partition %s hard link workflow unsupported", volume);
+			fflush(stdout);
+		} else if (!hardLinkCreated) {
+			printf("[VFS test] FAIL partition %s hard link create status=%u", volume, hardLinkStatus);
+			fflush(stdout);
+			return false;
+		} else if (!readPath(hardLink, hardReadBack, sizeof(hardReadBack), hardReadBackLength) or strcmp(hardReadBack, payload) != 0) {
 			printf("[VFS test] FAIL partition %s hard link readback", volume);
 			fflush(stdout);
 			return false;
 		}
 
-		if (!cleanupPartitionTestPaths(volume, symlink, hardLink, base, dir)) {
+		if (!cleanupPartitionTestPaths(volume, symlink, symlinkCreated, hardLink, hardLinkCreated, base, dir)) {
 			return false;
 		}
 

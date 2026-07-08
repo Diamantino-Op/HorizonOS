@@ -15,6 +15,7 @@
 using namespace std;
 
 namespace {
+	constexpr uint8_t STORAGE_DEVICE_KIND_WHOLE_DISK = 0;
 	constexpr uint8_t STORAGE_DEVICE_KIND_PARTITION = 1;
 	constexpr uint64_t KERNEL_EVENT_MSG_TYPE = 0x1100;
 	constexpr uint64_t KERNEL_EVENT_THREAD_KILLED = 1;
@@ -393,6 +394,30 @@ namespace {
 		return false;
 	}
 
+	auto listedDeviceHasPartition(const StorageListBlockDevicesReplyMsgData &reply, const uint64_t parentId) -> bool {
+		for (uint32_t i = 0; i < reply.deviceCount; ++i) {
+			const StorageListedBlockDevice &candidate = reply.devices[i];
+
+			if (candidate.kind == STORAGE_DEVICE_KIND_PARTITION and candidate.parentId == parentId) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	auto shouldTryMountListedDevice(const StorageListBlockDevicesReplyMsgData &reply, const StorageListedBlockDevice &device) -> bool {
+		if (device.kind == STORAGE_DEVICE_KIND_PARTITION) {
+			return true;
+		}
+
+		if (device.kind == STORAGE_DEVICE_KIND_WHOLE_DISK) {
+			return !listedDeviceHasPartition(reply, device.deviceId);
+		}
+
+		return false;
+	}
+
 	void refreshVolumes() {
 		pthread_mutex_lock(&refreshVolumesLock);
 
@@ -415,7 +440,7 @@ namespace {
 		for (uint32_t i = 0; i < reply.deviceCount; ++i) {
 			const StorageListedBlockDevice &device = reply.devices[i];
 
-			if (device.kind != STORAGE_DEVICE_KIND_PARTITION) {
+			if (!shouldTryMountListedDevice(reply, device)) {
 				continue;
 			}
 
