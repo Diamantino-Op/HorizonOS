@@ -101,10 +101,17 @@ namespace kernel::common::threading {
 
     	void setKStackPointer(u64 newKStackPointer);
     	u64 getKStackPointer() const;
+		void setKernelStackBounds(u64 base, u64 top);
+		u64 getKernelStackBase() const;
+		u64 getKernelStackTop() const;
     	void setKernelStackOwned(bool owned);
+		bool ownsKernelStack() const;
+		bool isSavedStackPointerValid() const;
 
+		void setSyscallStackBounds(u64 base, u64 top);
     	void setSyscallStackPointer(u64 newSyscallStackPointer);
     	u64 getSyscallStackPointer() const;
+		u64 getSyscallStackBase() const;
 
     	bool is32Bit() const;
 
@@ -121,10 +128,14 @@ namespace kernel::common::threading {
     	u64 getLockedCoreId() const;
     	void setLockedCoreId(u64 newId);
 
-    	void setPendingWakeup(bool val);
-    	bool getPendingWakeup() const;
+		void setPendingWakeup(bool val);
+		bool getPendingWakeup() const;
+		void setKillCleanupInProgress(bool val);
+		bool isKillCleanupInProgress() const;
+		void setReapPending(bool val);
+		bool isReapPending() const;
 
-    	void setQueuedExecutionNode(ExecutionNode *node);
+		void setQueuedExecutionNode(ExecutionNode *node);
     	ExecutionNode *getQueuedExecutionNode() const;
 
     	void setQueued(bool val);
@@ -152,8 +163,10 @@ namespace kernel::common::threading {
 		u64 stackPointer {};
 
     	u64 kernelStackPointer {};
+		u64 kernelStackBase {};
     	bool kernelStackOwned {};
 
+		u64 syscallStackBase {};
     	u64 syscallStackPointer {};
 
     	bool bit32 {};
@@ -164,9 +177,11 @@ namespace kernel::common::threading {
 
     	u64 lockedCoreId {};
 
-    	bool pendingWakeup {};
+		bool pendingWakeup {};
+		bool killCleanupInProgress {};
+		bool reapPending {};
 
-    	ExecutionNode *queuedExecutionNode {};
+		ExecutionNode *queuedExecutionNode {};
     	bool queued {};
 
     public:
@@ -252,6 +267,10 @@ namespace kernel::common::threading {
 		}
 
 		void enqueue(Thread* thread, const u8 dynPrio) {
+			if (thread == nullptr || thread->isQueued() || thread->bstNode.parent != nullptr || thread->bstNode.left != nullptr || thread->bstNode.right != nullptr) {
+				return;
+			}
+
 			thread->dynPriority = dynPrio;
 			thread->schedKey    = (static_cast<u64>(dynPrio) << 32) | (this->seqCounter++);
 			thread->setQueuedExecutionNode(this->owner);
@@ -290,6 +309,12 @@ namespace kernel::common::threading {
 			bstree_node_t *min = bstree_minimum(this->tree.root);
 			bstree_remove(&this->tree, min);
 			Thread *thread = container_of(min, &Thread::bstNode);
+
+			if (thread == nullptr || !thread->isQueued() || thread->getQueuedExecutionNode() != this->owner) {
+				this->valid = this->tree.root != nullptr;
+				return nullptr;
+			}
+
 			thread->setQueued(false);
 			thread->setQueuedExecutionNode(nullptr);
 			thread->bstNode = {};
@@ -339,6 +364,12 @@ namespace kernel::common::threading {
 			bstree_node_t *max = bstree_maximum(tree.root);
 			bstree_remove(&tree, max);
 			Thread *thread = container_of(max, &Thread::bstNode);
+
+			if (thread == nullptr || !thread->isQueued() || thread->getQueuedExecutionNode() != this->owner) {
+				valid = tree.root != nullptr;
+				return nullptr;
+			}
+
 			thread->setQueued(false);
 			thread->setQueuedExecutionNode(nullptr);
 			thread->bstNode = {};
@@ -411,12 +442,16 @@ namespace kernel::common::threading {
         void setPendingSchedUnlock(bool prevIF);
         bool hasPendingSchedUnlock() const;
         bool consumePendingSchedUnlock();
+        void setNextScheduleUnlockIF(bool prevIF);
+        bool consumeNextScheduleUnlockIF(bool &prevIF);
         void finishScheduleSwitch();
 
     private:
 		bool isDisabledFlag {};
         bool pendingSchedUnlock {};
         bool pendingSchedUnlockIF {};
+        bool nextScheduleUnlockIFValid {};
+        bool nextScheduleUnlockIF {};
 
         Thread *idleThread {};
         Thread *currentThread {};

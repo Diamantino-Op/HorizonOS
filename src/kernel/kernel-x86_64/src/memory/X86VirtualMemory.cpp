@@ -21,6 +21,25 @@ namespace kernel::common::memory {
 		bool isAligned(const u64 value, const u64 alignment) {
 			return (value & (alignment - 1)) == 0;
 		}
+
+		bool isLowerCanonicalUserAddress(const u64 vAddr) {
+			if (VirtualAllocator::isPagingLvl5) {
+				return vAddr < (1ULL << 56);
+			}
+
+			return vAddr < (1ULL << 47);
+		}
+
+		const PageTable *tableFromEntry(const PageEntry &entry) {
+			const u64 phys = (entry.address << 12) & pageEntryAddrMask;
+			const u64 hhdm = CommonMain::getCurrentHhdm();
+
+			if (phys == 0 || phys > ~0ULL - hhdm) {
+				return nullptr;
+			}
+
+			return reinterpret_cast<const PageTable *>(phys + hhdm);
+		}
 	}
 
 	void VirtualMemoryManager::archInit() {
@@ -436,6 +455,10 @@ namespace kernel::common::memory {
 	}
 
 	bool PageMap::isUserAccessible(const u64 vAddr, const bool write) const {
+		if (!isLowerCanonicalUserAddress(vAddr)) {
+			return false;
+		}
+
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -452,7 +475,11 @@ namespace kernel::common::memory {
 				return false;
 			}
 
-			lvl4Table = reinterpret_cast<PageTable *>((lvl5Entry.address << 12) + CommonMain::getCurrentHhdm());
+			lvl4Table = tableFromEntry(lvl5Entry);
+
+			if (lvl4Table == nullptr) {
+				return false;
+			}
 		} else {
 			lvl4Table = reinterpret_cast<PageTable *>(this->pageTable);
 		}
@@ -463,7 +490,12 @@ namespace kernel::common::memory {
 			return false;
 		}
 
-		const auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const auto *lvl3Table = tableFromEntry(lvl4Entry);
+
+		if (lvl3Table == nullptr) {
+			return false;
+		}
+
 		const PageEntry &lvl3Entry = lvl3Table->entries[lvl3];
 
 		if (!lvl3Entry.present || !lvl3Entry.userAccess) {
@@ -474,7 +506,12 @@ namespace kernel::common::memory {
 			return !write || lvl3Entry.writeable;
 		}
 
-		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const auto *lvl2Table = tableFromEntry(lvl3Entry);
+
+		if (lvl2Table == nullptr) {
+			return false;
+		}
+
 		const PageEntry &lvl2Entry = lvl2Table->entries[lvl2];
 
 		if (!lvl2Entry.present || !lvl2Entry.userAccess) {
@@ -485,7 +522,12 @@ namespace kernel::common::memory {
 			return !write || lvl2Entry.writeable;
 		}
 
-		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const auto *lvl1Table = tableFromEntry(lvl2Entry);
+
+		if (lvl1Table == nullptr) {
+			return false;
+		}
+
 		const PageEntry &lvl1Entry = lvl1Table->entries[lvl1];
 
 		if (!lvl1Entry.present || !lvl1Entry.userAccess) {

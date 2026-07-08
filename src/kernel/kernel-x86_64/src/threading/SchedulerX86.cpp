@@ -16,6 +16,35 @@ namespace kernel::common::threading {
 	using namespace x86_64::threading;
 	using namespace x86_64::utils;
 
+	namespace {
+		[[noreturn]] void schedulerSwitchPanic(const char *reason, const Thread *thread, const u64 rsp) {
+			auto *term = CommonMain::getTerminal();
+			const u16 tid = thread != nullptr ? thread->getId() : 0xffff;
+			const u16 pid = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getId() : 0xffff;
+			const u64 generation = thread != nullptr ? thread->getGeneration() : 0;
+			const u32 state = thread != nullptr ? static_cast<u32>(thread->getState()) : 0xff;
+			const u64 stackBase = thread != nullptr ? thread->getKernelStackBase() : 0;
+			const u64 stackTop = thread != nullptr ? thread->getKernelStackTop() : 0;
+			const u64 syscallStackBase = thread != nullptr ? thread->getSyscallStackBase() : 0;
+			const u64 syscallStackTop = thread != nullptr ? thread->getSyscallStackPointer() : 0;
+			const u64 queuedNode = thread != nullptr ? reinterpret_cast<u64>(thread->getQueuedExecutionNode()) : 0;
+			const u32 queued = thread != nullptr ? static_cast<u32>(thread->isQueued()) : 0;
+
+			term->printfBoth(true, "\033[0;31mScheduler switch panic: %s", reason);
+			term->printfBoth(true, "\033[0;31m  cpu=%lu tid=%u pid=%u gen=%lu state=%u queued=%u queuedNode=0x%.16lx",
+				CpuManager::getCurrentCore()->cpuId, tid, pid, generation, state, queued, queuedNode);
+			term->printfBoth(true, "\033[0;31m  savedRsp=0x%.16lx stackBase=0x%.16lx stackTop=0x%.16lx thread=0x%.16lx",
+				rsp, stackBase, stackTop, reinterpret_cast<u64>(thread));
+			term->printfBoth(true, "\033[0;31m  syscallStackBase=0x%.16lx syscallStackTop=0x%.16lx",
+				syscallStackBase, syscallStackTop);
+
+			for (;;) {
+				Asm::cli();
+				Asm::hlt();
+			}
+		}
+	}
+
 	void idleThreadFun() {
 		for (;;) {
 			asm volatile ("pause" ::: "memory");
@@ -140,7 +169,10 @@ namespace kernel::common::threading {
 	u128 ExecutionNode::saveOldThread(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
-		this->setPendingSchedUnlock(prevIF);
+		bool switchRestoreIF = prevIF;
+
+		this->consumeNextScheduleUnlockIF(switchRestoreIF);
+		this->setPendingSchedUnlock(switchRestoreIF);
 
 		// Save the old thread state
 
@@ -151,6 +183,10 @@ namespace kernel::common::threading {
 
 		if (!oldThreadIsUnstartedIdle) {
 			oldThread->setStackPointer(oldRsp);
+
+			if (!oldThread->isSavedStackPointerValid()) {
+				schedulerSwitchPanic("invalid old thread saved rsp", oldThread, oldRsp);
+			}
 		}
 
 		const u64 now = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
@@ -161,7 +197,11 @@ namespace kernel::common::threading {
 		}
 
 		if (!oldThreadIsUnstartedIdle && oldThread->getState() == ThreadState::TERMINATED) {
-			schedulerPtr->awaitingKillThreadList.addEnd(oldThread, false);
+			if (oldThread->isKillCleanupInProgress()) {
+				oldThread->setReapPending(true);
+			} else {
+				schedulerPtr->awaitingKillThreadList.addEnd(oldThread, false);
+			}
 		} else if (!oldThreadIsUnstartedIdle && oldThread->getSleepNs() > 0) {
 			oldThread->lastScheduledNs = now;
 
@@ -195,6 +235,20 @@ namespace kernel::common::threading {
 		Thread *nextThread = this->getNextThread();
 		this->coreLock.unlock(prevCoreIF);
 
+		if (nextThread == nullptr) {
+			schedulerSwitchPanic("no next thread", nullptr, 0);
+		}
+
+		const u64 nextRsp = *nextThread->getStackPointer();
+
+		if (nextThread->getContext() == nullptr || nextThread->getParent() == nullptr || nextThread->getParent()->getProcessContextKernel() == nullptr) {
+			schedulerSwitchPanic("invalid next thread context", nextThread, nextRsp);
+		}
+
+		if (!nextThread->isSavedStackPointerValid()) {
+			schedulerSwitchPanic("invalid next thread saved rsp", nextThread, nextRsp);
+		}
+
 		this->currentThread = nextThread;
 		this->currentThread->setState(ThreadState::RUNNING);
 		this->currentThread->lastScheduledNs = now;
@@ -224,7 +278,7 @@ namespace kernel::common::threading {
 
 		const u128 hi = static_cast<u128>(this->currentThread->getParent()->getProcessContextKernel()->pageMap.getAddr()) << 64;
 
-		return hi | *this->currentThread->getStackPointer();
+		return hi | nextRsp;
 	}
 
 	void ExecutionNode::finishScheduleSwitch() {
@@ -301,6 +355,8 @@ namespace kernel::common::threading {
 			newRsp = reinterpret_cast<u64>(kernelStack) + threadCtxStackSize;
 		}
 
+		const u64 kernelStackBase = kernelStack != nullptr ? reinterpret_cast<u64>(kernelStack) : newRsp - threadCtxStackSize;
+
 		auto *context = reinterpret_cast<ThreadContext *>(VirtualAllocator::alloc(ctx, sizeof(ThreadContext)));
 
 		if (context == nullptr) {
@@ -336,7 +392,7 @@ namespace kernel::common::threading {
 		context->prid = prid;
 
 		thread->setStackPointer(newRsp);
-		thread->setKStackPointer(newRsp);
+		thread->setKernelStackBounds(kernelStackBase, newRsp);
 		thread->setKernelStackOwned(kernelStack != nullptr);
 
 		if (isUser) {
@@ -360,7 +416,7 @@ namespace kernel::common::threading {
 				return nullptr;
 			}
 
-			thread->setSyscallStackPointer(reinterpret_cast<u64>(syscallStack) + threadCtxStackSize);
+			thread->setSyscallStackBounds(reinterpret_cast<u64>(syscallStack), reinterpret_cast<u64>(syscallStack) + threadCtxStackSize);
 
 			u64 userStack = userRsp;
 
@@ -391,7 +447,7 @@ namespace kernel::common::threading {
 
 						Asm::writeCr3(currPageMap);
 
-						thread->setSyscallStackPointer(0);
+						thread->setSyscallStackBounds(0, 0);
 						VirtualAllocator::free(ctx, syscallStack);
 
 						context->~ThreadContext();

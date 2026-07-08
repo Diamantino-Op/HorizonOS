@@ -5,6 +5,7 @@
 #include "Math.hpp"
 #include "Futex.hpp"
 #include "hal/Cpu.hpp"
+#include "memory/VirtualAllocator.hpp"
 #include "threading/PortMessaging.hpp"
 
 // TODO: Preserve
@@ -17,10 +18,6 @@ namespace kernel::common::hal {
 		constexpr u64 unlockedAffinityCpuId = ~0x0U;
 		constexpr usize affinityBitsPerByte = 8;
 		constexpr usize maxPrintMessageLength = 1024;
-
-		auto isMappedAddress(const AllocContext *ctx, const u64 addr) -> bool {
-			return ctx->pageMap.getPhysAddress(addr) != 0;
-		}
 
 		auto findThreadById(const Scheduler *scheduler, const u64 pid, const u64 tid) -> Thread * {
 			if (scheduler == nullptr) {
@@ -44,19 +41,25 @@ namespace kernel::common::hal {
 			return nullptr;
 		}
 
-		auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size, const bool write) -> bool {
-			if (ctx == nullptr or pointer == 0 or size == 0) {
-				return false;
+			auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size, const bool write) -> bool {
+				if (ctx == nullptr or pointer == 0 or size == 0) {
+					return false;
+				}
+
+				const u64 end = pointer + size - 1;
+
+				if (end < pointer) {
+					return false;
+				}
+
+				const u64 userTop = memory::VirtualAllocator::getProcessAllocStart();
+
+				if (pointer >= userTop || end >= userTop) {
+					return false;
+				}
+
+				return ctx->pageMap.isUserAccessible(pointer, write) && ctx->pageMap.isUserAccessible(end, write);
 			}
-
-			const u64 end = pointer + size - 1;
-
-			if (end < pointer) {
-				return false;
-			}
-
-			return ctx->pageMap.isUserAccessible(pointer, write) && ctx->pageMap.isUserAccessible(end, write);
-		}
 
 		auto isFullyMappedUserRange(const AllocContext *ctx, const u64 pointer, const usize size, const bool write) -> bool {
 			if (!isValidUserRange(ctx, pointer, size, write)) {
@@ -955,7 +958,7 @@ namespace kernel::common::hal {
 
 		const auto *ctx = process->getProcessContext();
 
-		if (entryFun == 0 || stack == 0 || ctx->pageMap.getPhysAddress(entryFun) == 0 || ctx->pageMap.getPhysAddress(stack - sizeof(u64)) == 0) {
+		if (entryFun == 0 || stack < sizeof(u64) || !isValidUserRange(ctx, entryFun, 1, false) || !isValidUserRange(ctx, stack - sizeof(u64), sizeof(u64), true)) {
 			if (ret != nullptr) {
 				*ret = -1;
 			}
@@ -1307,7 +1310,12 @@ namespace kernel::common::hal {
 				scheduler->sleepingThreadList.addStart(thread, false);
 			}
 
-			scheduler->getSchedLock()->unlock(schedPrevIF);
+			if (shouldReschedule) {
+				Scheduler::getCurrentExecutionNode()->setNextScheduleUnlockIF(schedPrevIF);
+				scheduler->getSchedLock()->unlockNoSti();
+			} else {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+			}
 
 			if (shouldReschedule) {
 				ExecutionNode::reSchedule();

@@ -557,11 +557,16 @@ namespace kernel::common::threading {
 	        scheduler->removeThread(currThread);
 	        scheduler->blockedThreadList.addStart(currThread, false);
 
-	        // Release both locks together. entry->lock first (NoSti — keep IF
-	        // disabled), then schedLock with the original prevPortIF to finally
-	        // restore the pre-syscall interrupt state.
+	        // Release both locks without opening an interrupt window while the
+	        // current thread is already BLOCKED but has not switched out yet.
 	        entry->lock.unlockNoSti();
-	        scheduler->getSchedLock()->unlock(prevPortIF);  // restores IF
+
+	        if (isCurrentThread) {
+	            Scheduler::getCurrentExecutionNode()->setNextScheduleUnlockIF(prevPortIF);
+	            scheduler->getSchedLock()->unlockNoSti();
+	        } else {
+	            scheduler->getSchedLock()->unlock(prevPortIF);
+	        }
 
 	        if (isCurrentThread) {
 	            ExecutionNode::reSchedule();

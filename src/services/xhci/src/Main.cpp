@@ -3391,16 +3391,6 @@ auto XhciService::start() -> int {
 	printf("XHCI: Successfully registered port!");
 	fflush(stdout);
 
-	if (!XhciUtils::registerWithNameRegistry()) {
-		printf("XHCI: Failed to register service.");
-		fflush(stdout);
-
-		return 1;
-	}
-
-	printf("XHCI: Successfully registered service!");
-	fflush(stdout);
-
 	const GetReplyMsgData pciInfo = XhciUtils::waitForService("PCI");
 
 	pciPort = pciInfo.port;
@@ -3504,6 +3494,20 @@ auto XhciService::start() -> int {
 	}
 
 	printf("XHCI: %zu controller(s) initialized.", controllers.size());
+	fflush(stdout);
+
+	if (controllers.empty()) {
+		return 2;
+	}
+
+	if (!XhciUtils::registerWithNameRegistry()) {
+		printf("XHCI: Failed to register service.");
+		fflush(stdout);
+
+		return 1;
+	}
+
+	printf("XHCI: Successfully registered service!");
 	fflush(stdout);
 
 	for (;;) {

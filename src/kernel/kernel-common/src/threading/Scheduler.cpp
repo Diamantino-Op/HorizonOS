@@ -201,8 +201,44 @@ namespace kernel::common::threading {
 		return this->kernelStackPointer;
 	}
 
+	void Thread::setKernelStackBounds(const u64 base, const u64 top) {
+		this->kernelStackBase = base;
+		this->kernelStackPointer = top;
+	}
+
+	u64 Thread::getKernelStackBase() const {
+		return this->kernelStackBase;
+	}
+
+	u64 Thread::getKernelStackTop() const {
+		return this->kernelStackPointer;
+	}
+
 	void Thread::setKernelStackOwned(const bool owned) {
 		this->kernelStackOwned = owned;
+	}
+
+	bool Thread::ownsKernelStack() const {
+		return this->kernelStackOwned;
+	}
+
+	bool Thread::isSavedStackPointerValid() const {
+		if (this->stackPointer == 0 || this->kernelStackBase == 0 || this->kernelStackPointer == 0) {
+			return false;
+		}
+
+		if (this->stackPointer >= this->kernelStackBase && this->stackPointer <= this->kernelStackPointer) {
+			return true;
+		}
+
+		return this->syscallStackBase != 0 && this->syscallStackPointer != 0
+			&& this->stackPointer >= this->syscallStackBase
+			&& this->stackPointer <= this->syscallStackPointer;
+	}
+
+	void Thread::setSyscallStackBounds(const u64 base, const u64 top) {
+		this->syscallStackBase = base;
+		this->syscallStackPointer = top;
 	}
 
 	void Thread::setSyscallStackPointer(const u64 newSyscallStackPointer) {
@@ -211,6 +247,10 @@ namespace kernel::common::threading {
 
 	u64 Thread::getSyscallStackPointer() const {
 		return this->syscallStackPointer;
+	}
+
+	u64 Thread::getSyscallStackBase() const {
+		return this->syscallStackBase;
 	}
 
 	bool Thread::is32Bit() const {
@@ -255,6 +295,22 @@ namespace kernel::common::threading {
 
 	bool Thread::getPendingWakeup() const {
 		return this->pendingWakeup;
+	}
+
+	void Thread::setKillCleanupInProgress(const bool val) {
+		this->killCleanupInProgress = val;
+	}
+
+	bool Thread::isKillCleanupInProgress() const {
+		return this->killCleanupInProgress;
+	}
+
+	void Thread::setReapPending(const bool val) {
+		this->reapPending = val;
+	}
+
+	bool Thread::isReapPending() const {
+		return this->reapPending;
 	}
 
 	void Thread::setQueuedExecutionNode(ExecutionNode *node) {
@@ -378,7 +434,7 @@ namespace kernel::common::threading {
 
 		Process *idleProcess = schedulerPtr->getProcess(0);
 
-		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(&idleThreadFun), false, this->getENThreadRsp());
+		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(&idleThreadFun), false);
 
 		newThread->setState(ThreadState::RUNNING);
 
@@ -471,6 +527,21 @@ namespace kernel::common::threading {
 		this->pendingSchedUnlock = false;
 
 		return this->pendingSchedUnlockIF;
+	}
+
+	void ExecutionNode::setNextScheduleUnlockIF(const bool prevIF) {
+		this->nextScheduleUnlockIFValid = true;
+		this->nextScheduleUnlockIF = prevIF;
+	}
+
+	bool ExecutionNode::consumeNextScheduleUnlockIF(bool &prevIF) {
+		if (!this->nextScheduleUnlockIFValid) {
+			return false;
+		}
+
+		this->nextScheduleUnlockIFValid = false;
+		prevIF = this->nextScheduleUnlockIF;
+		return true;
 	}
 
 	// Reaper Thread
@@ -678,11 +749,17 @@ namespace kernel::common::threading {
 		const u16 killedPid = thread->getParent() != nullptr ? thread->getParent()->getId() : 0;
 		const bool prevIF = this->schedLock.lock();
 		bool notifyKilled = false;
+		bool removedForReap = false;
 
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (thread->getState() == ThreadState::TERMINATED) {
-			this->schedLock.unlock(prevIF);
+			if (shouldReschedule) {
+				getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
+				this->schedLock.unlockNoSti();
+			} else {
+				this->schedLock.unlock(prevIF);
+			}
 
 			if (shouldReschedule) {
 				ExecutionNode::reSchedule();
@@ -694,18 +771,37 @@ namespace kernel::common::threading {
 		thread->setState(ThreadState::TERMINATED);
 		thread->setWaitingPort(0);
 		thread->setSleepNs(0);
+		thread->setKillCleanupInProgress(true);
+		thread->setReapPending(false);
 		notifyKilled = true;
 
 		if (!shouldReschedule) {
-			if (this->removeThread(thread)) {
-				this->awaitingKillThreadList.addEnd(thread, false);
-			}
+			removedForReap = this->removeThread(thread);
 		}
 
-		this->schedLock.unlock(prevIF);
+		if (shouldReschedule) {
+			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
+			this->schedLock.unlockNoSti();
+		} else {
+			this->schedLock.unlock(prevIF);
+		}
 
 		PortMessaging::removeThread(thread);
-		Futex::removeThread(thread->getId());
+		Futex::removeThread(killedTid);
+
+		const bool cleanupPrevIF = this->schedLock.lock();
+		thread->setKillCleanupInProgress(false);
+
+		if (!shouldReschedule && thread->getState() == ThreadState::TERMINATED && (removedForReap || thread->isReapPending())) {
+			thread->setReapPending(false);
+			this->awaitingKillThreadList.addEnd(thread, false);
+		}
+
+		if (shouldReschedule) {
+			this->schedLock.unlockNoSti();
+		} else {
+			this->schedLock.unlock(cleanupPrevIF);
+		}
 
 		if (notifyKilled) {
 			hal::SyscallManager::notifyThreadKilled(killedPid, killedTid);
@@ -821,7 +917,12 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.addStart(thread, false);
 		}
 
-		this->schedLock.unlock(prevIF);
+		if (shouldReschedule) {
+			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
+			this->schedLock.unlockNoSti();
+		} else {
+			this->schedLock.unlock(prevIF);
+		}
 
 		if (shouldReschedule) {
 			ExecutionNode::reSchedule();
@@ -846,7 +947,12 @@ namespace kernel::common::threading {
 			this->sleepingThreadList.addStart(thread, false);
 		}
 
-		this->schedLock.unlock(prevIF);
+		if (shouldReschedule) {
+			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
+			this->schedLock.unlockNoSti();
+		} else {
+			this->schedLock.unlock(prevIF);
+		}
 
 		if (shouldReschedule) {
 			ExecutionNode::reSchedule();
@@ -898,14 +1004,16 @@ namespace kernel::common::threading {
 			this->blockedThreadList.addStart(thread, false);
 		//}
 
-		if (useLock) {
-			this->schedLock.unlock(prevIF);
-		}
-
 		if (shouldReschedule) {
-			// TODO
-			x86_64::utils::Asm::sti();
+			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
+
+			if (useLock) {
+				this->schedLock.unlockNoSti();
+			}
+
 			ExecutionNode::reSchedule();
+		} else if (useLock) {
+			this->schedLock.unlock(prevIF);
 		}
 	}
 
