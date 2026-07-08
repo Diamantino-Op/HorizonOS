@@ -36,11 +36,11 @@ storage_manager_exe = storage_manager_proj.get_variable('storage_manager_exe')
 
 # Ext2 Service
 
-ext2_proj = subproject('ext2', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+ext4_proj = subproject('ext4', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
-ext2_exe = ext2_proj.get_variable('ext2_exe')
+ext4_exe = ext4_proj.get_variable('ext4_exe')
 
-# Ext2 Service
+# Vfs Service
 
 vfs_proj = subproject('vfs', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
@@ -51,3 +51,9 @@ vfs_exe = vfs_proj.get_variable('vfs_exe')
 xhci_proj = subproject('xhci', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 xhci_exe = xhci_proj.get_variable('xhci_exe')
+
+# Fat32 Service
+
+fat32_proj = subproject('fat32', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+fat32_exe = fat32_proj.get_variable('fat32_exe')

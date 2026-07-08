@@ -176,9 +176,10 @@ uacpi_sym_out_file = join_paths(iso_services_path, 'uacpi.sym')
 pci_sym_out_file = join_paths(iso_services_path, 'pci.sym')
 nvme_sym_out_file = join_paths(iso_services_path, 'nvme.sym')
 storage_manager_sym_out_file = join_paths(iso_services_path, 'storage_manager.sym')
-ext2_sym_out_file = join_paths(iso_services_path, 'ext2.sym')
+ext4_sym_out_file = join_paths(iso_services_path, 'ext4.sym')
 vfs_sym_out_file = join_paths(iso_services_path, 'vfs.sym')
 xhci_sym_out_file = join_paths(iso_services_path, 'xhci.sym')
+fat32_sym_out_file = join_paths(iso_services_path, 'fat32.sym')
 
 create_services_sym_file = custom_target('create_services_sym_file',
                                 output: [
@@ -187,9 +188,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     'pci.sym',
                                     'nvme.sym',
                                     'storage_manager.sym',
-                                    'ext2.sym',
+                                    'ext4.sym',
                                     'vfs.sym',
-                                    'xhci.sym'
+                                    'xhci.sym',
+                                    'fat32.sym'
                                 ],
                                 input: [
                                     name_registry_exe,
@@ -197,9 +199,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     pci_exe,
                                     nvme_exe,
                                     storage_manager_exe,
-                                    ext2_exe,
+                                    ext4_exe,
                                     vfs_exe,
-                                    xhci_exe
+                                    xhci_exe,
+                                    fat32_exe
                                 ],
                                 command: [
                                     sh, '-c', 'nm -C @INPUT0@ > @0@'.format(name_registry_sym_out_file),
@@ -212,11 +215,13 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     '&&',
                                     sh, '-c', 'nm -C @INPUT4@ >> @0@'.format(storage_manager_sym_out_file),
                                     '&&',
-                                    sh, '-c', 'nm -C @INPUT5@ >> @0@'.format(ext2_sym_out_file),
+                                    sh, '-c', 'nm -C @INPUT5@ >> @0@'.format(ext4_sym_out_file),
                                     '&&',
                                     sh, '-c', 'nm -C @INPUT6@ >> @0@'.format(vfs_sym_out_file),
                                     '&&',
                                     sh, '-c', 'nm -C @INPUT7@ >> @0@'.format(xhci_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT8@ >> @0@'.format(fat32_sym_out_file),
                                 ],
                                 depends: [
                                     name_registry_exe,
@@ -224,9 +229,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     pci_exe,
                                     nvme_exe,
                                     storage_manager_exe,
-                                    ext2_exe,
+                                    ext4_exe,
                                     vfs_exe,
-                                    xhci_exe
+                                    xhci_exe,
+                                    fat32_exe
                                 ]
 )
 
@@ -241,9 +247,10 @@ install_apps = custom_target('install_apps',
         pci_exe,
         nvme_exe,
         storage_manager_exe,
-        ext2_exe,
+        ext4_exe,
         vfs_exe,
         xhci_exe,
+        fat32_exe,
 
         # Libs
         join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
@@ -272,7 +279,7 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT8@', iso_services_path,
         '&&',
-        cp, '@INPUT9@', iso_libs_path,
+        cp, '@INPUT9@', iso_services_path,
         '&&',
         cp, '@INPUT10@', iso_libs_path,
         '&&',
@@ -281,6 +288,8 @@ install_apps = custom_target('install_apps',
         cp, '@INPUT12@', iso_libs_path,
         '&&',
         cp, '@INPUT13@', iso_libs_path,
+        '&&',
+        cp, '@INPUT14@', iso_libs_path,
         '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',
@@ -294,9 +303,10 @@ install_apps = custom_target('install_apps',
         pci_exe,
         nvme_exe,
         storage_manager_exe,
-        ext2_exe,
+        ext4_exe,
         vfs_exe,
-        xhci_exe
+        xhci_exe,
+        fat32_exe
     ]
 )
 

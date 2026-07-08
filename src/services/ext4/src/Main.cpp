@@ -1,5 +1,5 @@
+#include "Ext4.hpp"
 #include "StorageProtocol.hpp"
-#include "Ext2.hpp"
 
 #include "horizonos/generic.h"
 #include "sys/mman.h"
@@ -179,7 +179,7 @@ namespace {
 		data.ownerPid = static_cast<uint16_t>(getpid());
 		data.tid = static_cast<uint16_t>(gettid());
 
-		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, "ext2");
+		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, "ext4");
 
 		auto msg = hos_msg();
 
