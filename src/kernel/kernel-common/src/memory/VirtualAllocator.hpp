@@ -114,6 +114,7 @@ namespace kernel::common::memory {
 
     private:
         VpaListEntry *vPagesListPtr {};
+        mutable TicketSpinLock lock {};
     };
 }
 

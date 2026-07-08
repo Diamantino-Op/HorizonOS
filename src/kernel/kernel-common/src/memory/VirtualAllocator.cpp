@@ -500,9 +500,9 @@ namespace kernel::common::memory {
 
 		if (ctx->usesReservedHeap) {
 			ctx->heapCursor += allocSize;
-		} else {
-			ctx->heapSize += allocSize;
 		}
+
+		ctx->heapSize += allocSize;
 
 		ctx->freeSpace += newBlock->size;
 
@@ -668,6 +668,11 @@ namespace kernel::common::memory {
 	}
 
 	u64 *VirtualPageAllocator::allocVPages(const u64 amount) const {
+		if (amount == 0) {
+			return nullptr;
+		}
+
+		const bool prevIF = this->lock.lock();
 		VpaListEntry *currEntry = this->vPagesListPtr;
 
 		while (currEntry != nullptr) {
@@ -684,24 +689,41 @@ namespace kernel::common::memory {
 				newEntry->next = currEntry->next;
 				newEntry->prev = currEntry;
 
+				if (newEntry->next != nullptr) {
+					newEntry->next->prev = newEntry;
+				}
+
 				currEntry->next = newEntry;
 
-				return reinterpret_cast<u64 *>(currEntry->base);
+				auto *ret = reinterpret_cast<u64 *>(currEntry->base);
+				this->lock.unlock(prevIF);
+
+				return ret;
 			}
 
 			if (currEntry->count == amount and not currEntry->isAllocated) {
 				currEntry->isAllocated = true;
 
-				return reinterpret_cast<u64 *>(currEntry->base);
+				auto *ret = reinterpret_cast<u64 *>(currEntry->base);
+				this->lock.unlock(prevIF);
+
+				return ret;
 			}
 
 			currEntry = currEntry->next;
 		}
 
+		this->lock.unlock(prevIF);
+
 		return nullptr;
 	}
 
 	void VirtualPageAllocator::freeVPages(const u64 *addr) const {
+		if (addr == nullptr) {
+			return;
+		}
+
+		const bool prevIF = this->lock.lock();
 		VpaListEntry *currEntry = this->vPagesListPtr;
 
 		while (currEntry != nullptr) {
@@ -713,6 +735,8 @@ namespace kernel::common::memory {
 		}
 
 		if (currEntry == nullptr) {
+			this->lock.unlock(prevIF);
+
 			return;
 		}
 
@@ -746,5 +770,7 @@ namespace kernel::common::memory {
 
 			delete nextEntry;
 		}
+
+		this->lock.unlock(prevIF);
 	}
 }

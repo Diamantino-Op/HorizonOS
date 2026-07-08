@@ -356,11 +356,11 @@ namespace kernel::common::threading {
 	}
 
 	LinkedListEntry<Thread> *Process::addThread(Thread *entry) {
-		return this->threadList.addStart(entry);
+		return this->threadList.addStart(entry, false);
 	}
 
 	void Process::removeThread(Thread *entry) {
-		this->threadList.remove(entry, false);
+		this->threadList.remove(entry, false, false);
 	}
 
 	u16 Process::getId() const {
@@ -482,7 +482,7 @@ namespace kernel::common::threading {
 			auto *currThread = Scheduler::getCurrentThread();
 			const bool prevIF = scheduler->getSchedLock()->lock();
 
-			while (const auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry()) {
+			while (const auto *entry = scheduler->awaitingKillThreadList.removeFirstEntry(false)) {
 				Scheduler::getCurrentExecutionNode()->setDisabled(true);
 
 				scheduler->reaperThreadArch(entry);
@@ -575,7 +575,7 @@ namespace kernel::common::threading {
 	LinkedListEntry<Process> *Scheduler::addProcess(Process *process) {
 		const bool prevIF = this->schedLock.lock();
 
-		auto *entry = this->processList.addStart(process);
+		auto *entry = this->processList.addStart(process, false);
 
 		this->schedLock.unlock(prevIF);
 
@@ -698,7 +698,7 @@ namespace kernel::common::threading {
 
 		if (!shouldReschedule) {
 			if (this->removeThread(thread)) {
-				this->awaitingKillThreadList.addEnd(thread);
+				this->awaitingKillThreadList.addEnd(thread, false);
 			}
 		}
 
@@ -735,11 +735,11 @@ namespace kernel::common::threading {
 			}
 		}
 
-		if (this->sleepingThreadList.remove(thread, false)) {
+		if (this->sleepingThreadList.remove(thread, false, false)) {
 			removed = true;
 		}
 
-		if (this->blockedThreadList.remove(thread, false)) {
+		if (this->blockedThreadList.remove(thread, false, false)) {
 			removed = true;
 		}
 
@@ -818,7 +818,7 @@ namespace kernel::common::threading {
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!this->sleepingThreadList.contains(thread)) {
-			this->sleepingThreadList.addStart(thread);
+			this->sleepingThreadList.addStart(thread, false);
 		}
 
 		this->schedLock.unlock(prevIF);
@@ -843,7 +843,7 @@ namespace kernel::common::threading {
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		if (!this->sleepingThreadList.contains(thread)) {
-			this->sleepingThreadList.addStart(thread);
+			this->sleepingThreadList.addStart(thread, false);
 		}
 
 		this->schedLock.unlock(prevIF);
@@ -895,7 +895,7 @@ namespace kernel::common::threading {
 		const bool shouldReschedule = getCurrentExecutionNode()->getCurrentThread() == thread;
 
 		//if (!shouldReschedule) {
-			this->blockedThreadList.addStart(thread);
+			this->blockedThreadList.addStart(thread, false);
 		//}
 
 		if (useLock) {
@@ -1002,7 +1002,7 @@ namespace kernel::common::threading {
 				if (currEntry.getSleepNs() <= CommonMain::getInstance()->getClocks()->getMainClock()->getNs()) {
 					//CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
 
-					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
+					schedulerPtr->sleepingThreadList.remove(&currEntry, false, false);
 					schedulerPtr->blockedThreadList.remove(&currEntry, false, false);
 
 					currEntry.setState(ThreadState::RUNNING);

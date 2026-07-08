@@ -147,12 +147,12 @@ namespace kernel::common::threading {
 		}
 
 		if (!oldThreadIsUnstartedIdle && oldThread->getState() == ThreadState::TERMINATED) {
-			schedulerPtr->awaitingKillThreadList.addEnd(oldThread);
+			schedulerPtr->awaitingKillThreadList.addEnd(oldThread, false);
 		} else if (!oldThreadIsUnstartedIdle && oldThread->getSleepNs() > 0) {
 			oldThread->lastScheduledNs = now;
 
 			if (!schedulerPtr->sleepingThreadList.contains(oldThread)) {
-				schedulerPtr->sleepingThreadList.addEnd(oldThread);
+				schedulerPtr->sleepingThreadList.addEnd(oldThread, false);
 			}
 		} else if (!oldThreadIsUnstartedIdle && oldThread->getState() == ThreadState::BLOCKED) {
 			oldThread->lastScheduledNs = now;
@@ -165,7 +165,7 @@ namespace kernel::common::threading {
 
 				schedulerPtr->enqueueThread(oldThread, true);
 			} else if (!schedulerPtr->blockedThreadList.contains(oldThread)) {
-				schedulerPtr->blockedThreadList.addEnd(oldThread);
+				schedulerPtr->blockedThreadList.addEnd(oldThread, false);
 			}
 		} else if (!oldThreadIsUnstartedIdle && oldThread != this->idleThread) {
 			schedulerPtr->enqueueThread(oldThread);
@@ -444,7 +444,7 @@ namespace kernel::common::threading {
 	void Scheduler::reaperProcessArch(Process *process) {
 		const u64 currPageMap = Asm::readCr3();
 
-		this->processList.remove(process, false);
+		this->processList.remove(process, false, false);
 
 		process->getProcessContextKernel()->pageMap.load();
 

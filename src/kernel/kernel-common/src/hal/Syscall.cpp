@@ -522,7 +522,7 @@ namespace kernel::common::hal {
 
 				CommonMain::getTerminal()->debug("Unblocking thread: %lu", "Watchdog", currEntry.getId());
 
-				schedulerPtr->blockedThreadList.remove(&currEntry, false);
+				schedulerPtr->blockedThreadList.remove(&currEntry, false, false);
 				schedulerPtr->enqueueThread(&currEntry, true);
 			}
 
@@ -754,9 +754,15 @@ namespace kernel::common::hal {
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 
 		for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
-			if (!static_cast<bool>(freePage)) {
-				const u64 phys = ctx->pageMap.getPhysAddress(i);
-				UserPhysPage *tracked = findOwnedUserPhysPageUnlocked(process->getId(), alignDown<u64>(phys, pageSize));
+			const u64 phys = ctx->pageMap.getPhysAddress(i);
+			UserPhysPage *tracked = findOwnedUserPhysPageUnlocked(process->getId(), alignDown<u64>(phys, pageSize));
+
+			if (tracked != nullptr) {
+				if (static_cast<bool>(freePage)) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
+					return EBUSY;
+				}
 
 				if (tracked != nullptr && tracked->mapCount > 0) {
 					tracked->mapCount--;
@@ -1295,10 +1301,10 @@ namespace kernel::common::hal {
 			const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
 			const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
 
-			scheduler->blockedThreadList.addStart(thread);
+			scheduler->blockedThreadList.addStart(thread, false);
 
 			if (deadlineNs != 0 && !scheduler->sleepingThreadList.contains(thread)) {
-				scheduler->sleepingThreadList.addStart(thread);
+				scheduler->sleepingThreadList.addStart(thread, false);
 			}
 
 			scheduler->getSchedLock()->unlock(schedPrevIF);
@@ -1341,7 +1347,7 @@ namespace kernel::common::hal {
 					Thread *waitThread = scheduler->getThread(threadId);
 
 					if (waitThread != nullptr && waitThread->getState() == ThreadState::BLOCKED) {
-						scheduler->blockedThreadList.remove(waitThread, false);
+						scheduler->blockedThreadList.remove(waitThread, false, false);
 						scheduler->sleepingThreadList.remove(waitThread, false, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
@@ -1373,7 +1379,7 @@ namespace kernel::common::hal {
 					Thread *waitThread = scheduler->getThread(threadId);
 
 					if (waitThread != nullptr && waitThread->getState() == ThreadState::BLOCKED) {
-						scheduler->blockedThreadList.remove(waitThread, false);
+						scheduler->blockedThreadList.remove(waitThread, false, false);
 						scheduler->sleepingThreadList.remove(waitThread, false, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
@@ -1857,7 +1863,7 @@ namespace kernel::common::hal {
 		trackedPage->ownerPid = process->getId();
 
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
-		userPhysPages.addEnd(trackedPage);
+		userPhysPages.addEnd(trackedPage, false);
 		scheduler->getSchedLock()->unlock(schedPrevIF);
 
 		*ret = reinterpret_cast<long>(page);
@@ -1893,7 +1899,7 @@ namespace kernel::common::hal {
 					return EBUSY;
 				}
 
-				owned = userPhysPages.removeEntry(node);
+				owned = userPhysPages.removeEntry(node, false);
 
 				if (owned) {
 					delete node->value;
