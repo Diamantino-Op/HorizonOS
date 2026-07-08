@@ -36,6 +36,9 @@ namespace kernel::common::memory {
     	u64 getTotalMemory() const;
 
     private:
+        bool addFreeRangePhys(u64 phys, usize pageAmount, bool clearPages, bool addToTotal, const char *source);
+        void removeFreeEntry(PmmListEntry *entry);
+
         PmmListEntry *listPtr {};
         TicketSpinLock pmmSpinLock {};
 

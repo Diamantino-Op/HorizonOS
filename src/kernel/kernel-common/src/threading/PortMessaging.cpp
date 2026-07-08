@@ -105,7 +105,7 @@ namespace kernel::common::threading {
 
         entry->port = port;
 
-        getPortList().addEnd(entry);
+        getPortList().addEnd(entry, false);
 
         return entry;
     }
@@ -237,13 +237,13 @@ namespace kernel::common::threading {
         }
 
         // Promote to per-entry lock, then drop the coarse lock.
-        bool prevEntryIF = entry->lock.lock();
-        portLock.unlock(prevPortIF); // safe: we hold entry->lock, entry won't disappear
+        entry->lock.lockNoCli();
+        portLock.unlockNoSti(); // safe: we hold entry->lock, entry won't disappear
 
         // --- Allocate and fill message ---
         auto *msg = new PortMessage();
         if (msg == nullptr) {
-            entry->lock.unlock(prevEntryIF);
+            entry->lock.unlock(prevPortIF);
             return ENOMEM;
         }
 
@@ -252,7 +252,7 @@ namespace kernel::common::threading {
 
             if (msg->buffer == nullptr) {
                 delete msg;
-                entry->lock.unlock(prevEntryIF);
+                entry->lock.unlock(prevPortIF);
                 return ENOMEM;
             }
 
@@ -265,13 +265,13 @@ namespace kernel::common::threading {
 
         hdr->retLength = static_cast<ssize>(msg->length);
 
-        entry->messages.addEnd(msg);
+        entry->messages.addEnd(msg, false);
 
         // --- Wake a waiter (if any) ---
         // wakeOneWaiter removes the waiter node and returns the TID.
         const WakeTarget targetToWake = wakeOneWaiter(entry, hdr->type);
 
-        entry->lock.unlock(prevEntryIF);
+        entry->lock.unlock(prevPortIF);
 
         // Unblock outside all locks so the scheduler can run freely.
         if (targetToWake.tid != 0) {
@@ -381,7 +381,7 @@ namespace kernel::common::threading {
                 const u64   msgSrcPort = msg->sourcePort;
                 const u64   msgType    = msg->type;
 
-                if (!entry->messages.removeEntry(msgNode)) {
+                if (!entry->messages.removeEntry(msgNode, false)) {
                     entry->lock.unlockNoSti();
                     restoreInterrupts(prevPortIF);
 
@@ -399,7 +399,7 @@ namespace kernel::common::threading {
                         if (w->value != nullptr && w->value->thread == Scheduler::getCurrentThread()) {
                             const PortWaiter *dw = w->value;
 
-                            entry->waiters.removeEntry(w);
+                            entry->waiters.removeEntry(w, false);
 
                             delete dw;
                             delete w;
@@ -543,7 +543,7 @@ namespace kernel::common::threading {
 	            // sendMessage holds entry->lock when it calls wakeOneWaiter, so
 	            // it cannot see this waiter until we release entry->lock below —
 	            // by which point the thread is already BLOCKED and in blockedList.
-	            entry->waiters.addEnd(waiter);
+	            entry->waiters.addEnd(waiter, false);
 	        }
 
 	        // Mark the thread BLOCKED under schedLock so the scheduler
@@ -555,7 +555,7 @@ namespace kernel::common::threading {
 	        const bool isCurrentThread = Scheduler::getCurrentExecutionNode()->getCurrentThread() == currThread;
 
 	        scheduler->removeThread(currThread);
-	        scheduler->blockedThreadList.addStart(currThread);
+	        scheduler->blockedThreadList.addStart(currThread, false);
 
 	        // Release both locks together. entry->lock first (NoSti — keep IF
 	        // disabled), then schedLock with the original prevPortIF to finally
@@ -592,7 +592,7 @@ namespace kernel::common::threading {
                 auto *waiter = waiterNode->value;
 
                 if (waiter != nullptr && waiter->thread == thread) {
-                    if (currPort.waiters.removeEntry(waiterNode)) {
+                    if (currPort.waiters.removeEntry(waiterNode, false)) {
                         delete waiter;
                         delete waiterNode;
                     }

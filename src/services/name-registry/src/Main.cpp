@@ -78,6 +78,7 @@ auto NameRegistryService::start() -> int {
 				printf("Service: %s dead, unregistering it!", service.name.c_str());
 				fflush(stdout);
 
+				std::scoped_lock lock(services_mutex);
 				NameRegistryUtils::unregisterService(services, service.name);
 			}
 		}

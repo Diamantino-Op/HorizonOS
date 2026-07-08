@@ -725,23 +725,25 @@ namespace kernel::common::threading {
 			return false;
 		}
 
+		bool removed = false;
+
 		if (thread->isQueued()) {
 			ExecutionNode *node = thread->getQueuedExecutionNode();
 
 			if (node != nullptr && node->removeThread(thread)) {
-				return true;
+				removed = true;
 			}
 		}
 
 		if (this->sleepingThreadList.remove(thread, false)) {
-			return true;
+			removed = true;
 		}
 
 		if (this->blockedThreadList.remove(thread, false)) {
-			return true;
+			removed = true;
 		}
 
-		return false;
+		return removed;
 	}
 
 	void Scheduler::enqueueThread(Thread *thread, const bool waking) {

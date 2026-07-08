@@ -11,23 +11,143 @@ extern limine_memmap_request memMapRequest;
 
 namespace kernel::common::memory {
 	namespace {
-		bool rangesOverlap(const u64 aBase, const u64 aPages, const u64 bBase, const u64 bPages) {
-			if (aPages == 0 || bPages == 0 || aPages > (~0ULL / pageSize) || bPages > (~0ULL / pageSize)) {
-				return true;
+		bool validRange(const u64 base, const u64 pages) {
+			if (pages == 0 || pages > (~0ULL / pageSize)) {
+				return false;
 			}
 
-			const u64 aSize = aPages * pageSize;
-			const u64 bSize = bPages * pageSize;
+			const u64 size = pages * pageSize;
 
-			if (aBase > ~0ULL - aSize || bBase > ~0ULL - bSize) {
-				return true;
-			}
-
-			const u64 aEnd = aBase + aSize;
-			const u64 bEnd = bBase + bSize;
-
-			return aBase < bEnd && bBase < aEnd;
+			return base <= ~0ULL - size;
 		}
+
+	}
+
+	void PhysicalMemoryManager::removeFreeEntry(PmmListEntry *entry) {
+		if (entry == nullptr) {
+			return;
+		}
+
+		if (entry->prev != nullptr) {
+			entry->prev->next = entry->next;
+		} else {
+			this->listPtr = entry->next;
+		}
+
+		if (entry->next != nullptr) {
+			entry->next->prev = entry->prev;
+		}
+
+		entry->prev = nullptr;
+		entry->next = nullptr;
+		entry->count = 0;
+	}
+
+	bool PhysicalMemoryManager::addFreeRangePhys(u64 phys, usize pageAmount, const bool clearPages, const bool addToTotal, const char *source) {
+		if (phys == 0) {
+			phys += pageSize;
+
+			if (pageAmount == 0) {
+				return false;
+			}
+
+			pageAmount--;
+		}
+
+		if ((phys & (pageSize - 1)) != 0 || !validRange(phys, pageAmount)) {
+			return false;
+		}
+
+		const u64 hhdm = CommonMain::getCurrentHhdm();
+		const u64 size = pageAmount * pageSize;
+		const u64 end = phys + size;
+
+		PmmListEntry *prev = nullptr;
+		PmmListEntry *next = this->listPtr;
+
+		while (next != nullptr) {
+			const u64 nextPhys = reinterpret_cast<u64>(next) - hhdm;
+
+			if (nextPhys >= phys) {
+				break;
+			}
+
+			prev = next;
+			next = next->next;
+		}
+
+		if (prev != nullptr) {
+			const u64 prevPhys = reinterpret_cast<u64>(prev) - hhdm;
+			const u64 prevEnd = prevPhys + prev->count * pageSize;
+
+			if (prevEnd > phys) {
+				CommonMain::getTerminal()->error("Rejected overlapping %s free phys=0x%.16lx pages=%lu existing=0x%.16lx existingPages=%lu",
+					"PMM", source, phys, pageAmount, prevPhys, prev->count);
+
+				return false;
+			}
+		}
+
+		if (next != nullptr) {
+			const u64 nextPhys = reinterpret_cast<u64>(next) - hhdm;
+
+			if (end > nextPhys) {
+				CommonMain::getTerminal()->error("Rejected overlapping %s free phys=0x%.16lx pages=%lu existing=0x%.16lx existingPages=%lu",
+					"PMM", source, phys, pageAmount, nextPhys, next->count);
+
+				return false;
+			}
+		}
+
+		if (clearPages) {
+			memset(reinterpret_cast<void *>(phys + hhdm), 0, size);
+		}
+
+		PmmListEntry *entry = nullptr;
+
+		if (prev != nullptr) {
+			const u64 prevPhys = reinterpret_cast<u64>(prev) - hhdm;
+			const u64 prevEnd = prevPhys + prev->count * pageSize;
+
+			if (prevEnd == phys) {
+				prev->count += pageAmount;
+				entry = prev;
+			}
+		}
+
+		if (entry == nullptr) {
+			entry = reinterpret_cast<PmmListEntry *>(phys + hhdm);
+			entry->prev = prev;
+			entry->count = pageAmount;
+			entry->next = next;
+
+			if (prev != nullptr) {
+				prev->next = entry;
+			} else {
+				this->listPtr = entry;
+			}
+
+			if (next != nullptr) {
+				next->prev = entry;
+			}
+		}
+
+		if (next != nullptr) {
+			const u64 entryPhys = reinterpret_cast<u64>(entry) - hhdm;
+			const u64 entryEnd = entryPhys + entry->count * pageSize;
+			const u64 nextPhys = reinterpret_cast<u64>(next) - hhdm;
+
+			if (entryEnd == nextPhys) {
+				entry->count += next->count;
+				this->removeFreeEntry(next);
+			}
+		}
+
+		if (addToTotal) {
+			this->totalMemory += size;
+		}
+
+		return true;
 	}
 
 	void PhysicalMemoryManager::init() {
@@ -49,24 +169,8 @@ namespace kernel::common::memory {
 						continue;
 					}
 
-					this->totalMemory += end - base;
-
-					auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
-
-					terminal->debug("Found Usable entry: 0x%.16lx, limine: 0x%.16lx", "PMM", currEntry, entry);
-
-					currEntry->count = (end - base) / pageSize;
-
-					terminal->debug("New Usable entry found: Base: 0x%.16lx, Size: %llu", "PMM", currEntry, currEntry->count * pageSize);
-
-					currEntry->prev = nullptr;
-					currEntry->next = this->listPtr;
-
-					if (this->listPtr != nullptr) {
-						this->listPtr->prev = currEntry;
-					}
-
-					this->listPtr = currEntry;
+					terminal->debug("Found Usable entry: 0x%.16lx, limine: 0x%.16lx", "PMM", base + CommonMain::getCurrentHhdm(), entry);
+					this->addFreeRangePhys(base, (end - base) / pageSize, false, true, "usable");
 				}
 			}
 		}
@@ -89,19 +193,7 @@ namespace kernel::common::memory {
 					return;
 				}
 
-				auto *currEntry = reinterpret_cast<PmmListEntry *>(base + CommonMain::getCurrentHhdm());
-
-				currEntry->count = (end - base) / pageSize;
-				this->totalMemory += currEntry->count * pageSize;
-
-				currEntry->prev = nullptr;
-				currEntry->next = this->listPtr;
-
-				if (this->listPtr != nullptr) {
-					this->listPtr->prev = currEntry;
-				}
-
-				this->listPtr = currEntry;
+				this->addFreeRangePhys(base, (end - base) / pageSize, false, true, "reclaimable");
 			};
 
 			for (u64 i = 0; i < memMapRequest.response->entry_count; i++) {
@@ -141,38 +233,19 @@ namespace kernel::common::memory {
 
 		const bool prevIF = this->pmmSpinLock.lock();
 
-		const PmmListEntry *currEntry = this->listPtr;
+		PmmListEntry *currEntry = this->listPtr;
 
 		while (currEntry != nullptr) {
 			if (currEntry->count >= pageAmount) {
-				const auto retAddress = reinterpret_cast<u64>(currEntry);
+				const u64 currPhys = reinterpret_cast<u64>(currEntry) - CommonMain::getCurrentHhdm();
+				const usize remainingPages = currEntry->count - pageAmount;
+				const u64 retPhys = currPhys + (remainingPages * pageSize);
+				const u64 retAddress = retPhys + CommonMain::getCurrentHhdm();
 
-				if (currEntry->count == pageAmount) {
-					if (currEntry->prev != nullptr) {
-						currEntry->prev->next = currEntry->next;
-					} else {
-						this->listPtr = currEntry->next;
-					}
-
-					if (currEntry->next != nullptr) {
-						currEntry->next->prev = currEntry->prev;
-					}
+				if (remainingPages == 0) {
+					this->removeFreeEntry(currEntry);
 				} else {
-					auto *newEntry = reinterpret_cast<PmmListEntry *>(reinterpret_cast<u64>(currEntry) + (pageAmount * pageSize));
-
-					memcpy(newEntry, currEntry, sizeof(PmmListEntry));
-
-					newEntry->count -= pageAmount;
-
-					if (newEntry->prev != nullptr) {
-						newEntry->prev->next = newEntry;
-					} else {
-						this->listPtr = newEntry;
-					}
-
-					if (newEntry->next != nullptr) {
-						newEntry->next->prev = newEntry;
-					}
+					currEntry->count = remainingPages;
 				}
 
 				memset(reinterpret_cast<u64 *>(retAddress), 0, pageAmount * pageSize);
@@ -218,34 +291,7 @@ namespace kernel::common::memory {
 		}
 
 		const bool prevIF = this->pmmSpinLock.lock();
-
-		for (const PmmListEntry *entry = this->listPtr; entry != nullptr; entry = entry->next) {
-			const u64 entryPhys = reinterpret_cast<u64>(entry) - CommonMain::getCurrentHhdm();
-
-			if (rangesOverlap(phys, pageAmount, entryPhys, entry->count)) {
-				CommonMain::getTerminal()->error("Rejected overlapping free phys=0x%.16lx pages=%lu existing=0x%.16lx existingPages=%lu",
-					"PMM", phys, pageAmount, entryPhys, entry->count);
-				this->pmmSpinLock.unlock(prevIF);
-
-				return;
-			}
-		}
-
-		auto *currEntry = reinterpret_cast<PmmListEntry *>(phys + CommonMain::getCurrentHhdm());
-
-		memset(currEntry, 0, pageAmount * pageSize);
-
-		currEntry->count = pageAmount;
-
-		currEntry->prev = nullptr;
-		currEntry->next = this->listPtr;
-
-		if (this->listPtr != nullptr) {
-			this->listPtr->prev = currEntry;
-		}
-
-		this->listPtr = currEntry;
-
+		this->addFreeRangePhys(phys, pageAmount, true, false, "runtime");
 		this->pmmSpinLock.unlock(prevIF);
 	}
 

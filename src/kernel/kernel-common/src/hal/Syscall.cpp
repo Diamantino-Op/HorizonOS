@@ -947,6 +947,16 @@ namespace kernel::common::hal {
 			return ESRCH;
 		}
 
+		const auto *ctx = process->getProcessContext();
+
+		if (entryFun == 0 || stack == 0 || ctx->pageMap.getPhysAddress(entryFun) == 0 || ctx->pageMap.getPhysAddress(stack - sizeof(u64)) == 0) {
+			if (ret != nullptr) {
+				*ret = -1;
+			}
+
+			return EFAULT;
+		}
+
 		auto *newThread = new Thread(scheduler, process, entryFun, true, 0, stack);
 
 		if (newThread == nullptr) {
@@ -1149,6 +1159,17 @@ namespace kernel::common::hal {
 		const ssize retLength = hdr.retLength;
 
 		if (retLength > 0) {
+			if (static_cast<usize>(retLength) > hdr.length) {
+				delete[] kernelBuffer;
+				releaseCopiedMessageFilterOptions(&copiedOptions);
+
+				if (ret != nullptr) {
+					*ret = -1;
+				}
+
+				return EMSGSIZE;
+			}
+
 			const int bufferErr = copyToUser(ctx, reinterpret_cast<u64>(userBuffer), kernelBuffer, static_cast<usize>(retLength));
 
 			if (bufferErr != 0) {
