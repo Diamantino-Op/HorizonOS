@@ -23,12 +23,12 @@ namespace {
 	pthread_mutex_t storageRequestIdLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t mountsLock = PTHREAD_MUTEX_INITIALIZER;
 
-	struct MountedExt2 {
+	struct MountedExt4 {
 		uint64_t mountId {};
 		StorageFsProbeDeviceMsgData device {};
 	};
 
-	vector<MountedExt2> mounts;
+	vector<MountedExt4> mounts;
 
 	struct ScopedMutex {
 		pthread_mutex_t *mutex {};
@@ -397,6 +397,18 @@ namespace {
 		return (static_cast<uint64_t>(inode.sizeHighOrDirAcl) << 32) | inode.sizeLo;
 	}
 
+	auto extentStartBlock(const Ext4Extent &extent) -> uint64_t {
+		return (static_cast<uint64_t>(extent.startHi) << 32) | extent.startLo;
+	}
+
+	auto extentIndexLeafBlock(const Ext4ExtentIndex &index) -> uint64_t {
+		return (static_cast<uint64_t>(index.leafHi) << 32) | index.leafLo;
+	}
+
+	auto extentLength(const Ext4Extent &extent) -> uint32_t {
+		return extent.len & 0x7fffU;
+	}
+
 	auto groupDescriptorInodeTable(const Ext2Superblock &superblock, const Ext2GroupDescriptor &desc) -> uint64_t {
 		(void) superblock;
 
@@ -496,7 +508,7 @@ namespace {
 		const uint32_t unsupportedIncompat = superblock.featureIncompat & ~EXT2_SUPPORTED_INCOMPAT_FEATURES;
 
 		if (unsupportedIncompat != 0) {
-			printf("Ext2: %s has unsupported incompatible feature flags 0x%x.", device.deviceName, unsupportedIncompat);
+			printf("Ext4: %s has unsupported incompatible feature flags 0x%x.", device.deviceName, unsupportedIncompat);
 			fflush(stdout);
 
 			return false;
@@ -594,8 +606,27 @@ namespace {
 		return writeBlock(block, blockBytes.data());
 	}
 
+	auto Ext2Volume::inodeUsesExtents(const Ext2Inode &inode) const -> bool {
+		return (inode.flags & EXT4_EXTENTS_FL) != 0;
+	}
+
+	auto Ext2Volume::mutationsSupported() const -> bool {
+		constexpr uint32_t unsupportedWriteIncompat =
+			EXT4_FEATURE_INCOMPAT_64BIT | EXT4_FEATURE_INCOMPAT_FLEX_BG;
+		constexpr uint32_t unsupportedWriteRoCompat =
+			EXT4_FEATURE_RO_COMPAT_HUGE_FILE | EXT4_FEATURE_RO_COMPAT_DIR_NLINK |
+			EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE | EXT4_FEATURE_RO_COMPAT_METADATA_CSUM;
+
+		return (superblock.featureIncompat & unsupportedWriteIncompat) == 0 and
+			(superblock.featureRoCompat & unsupportedWriteRoCompat) == 0;
+	}
+
 	auto Ext2Volume::resolveDataBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) const -> bool {
 		fsBlock = 0;
+
+		if (inodeUsesExtents(inode)) {
+			return resolveExtentBlock(inode, fileBlock, fsBlock);
+		}
 
 		if (fileBlock < 12) {
 			fsBlock = inode.block[fileBlock];
@@ -701,6 +732,10 @@ namespace {
 
 	auto Ext2Volume::writeFileOverwrite(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) const -> bool {
 		(void) inodeNumber;
+
+		if (!mutationsSupported()) {
+			return false;
+		}
 
 		const uint64_t fileSize = inodeFileSize(superblock, inode);
 
@@ -1006,6 +1041,14 @@ namespace {
 	auto Ext2Volume::ensureDataBlock(Ext2Inode &inode, uint64_t fileBlock, uint32_t &fsBlock) -> bool {
 		fsBlock = 0;
 
+		if (!mutationsSupported()) {
+			return false;
+		}
+
+		if (inodeUsesExtents(inode)) {
+			return false;
+		}
+
 		uint64_t existing = 0;
 
 		if (resolveDataBlock(inode, fileBlock, existing)) {
@@ -1046,8 +1089,73 @@ namespace {
 		return ensureIndirectDataBlock(inode, inode.block[14], 3, fileBlock, fsBlock);
 	}
 
+	auto Ext2Volume::ensureExtentDataBlock(Ext2Inode &inode, const uint64_t fileBlock, uint32_t &fsBlock) -> bool {
+		fsBlock = 0;
+
+		if (!mutationsSupported() or !inodeUsesExtents(inode) or fileBlock > 0xffffffffULL) {
+			return false;
+		}
+
+		uint64_t existing = 0;
+
+		if (resolveExtentBlock(inode, fileBlock, existing)) {
+			fsBlock = static_cast<uint32_t>(existing);
+
+			return existing <= 0xffffffffULL;
+		}
+
+		auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
+
+		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
+			return false;
+		}
+
+		auto *extents = reinterpret_cast<Ext4Extent *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
+		uint32_t allocated = 0;
+
+		if (!allocateBlock(allocated)) {
+			return false;
+		}
+
+		fsBlock = allocated;
+
+		if (header->entries > 0) {
+			auto &last = extents[header->entries - 1];
+			const uint32_t lastLen = extentLength(last);
+			const uint64_t lastStart = extentStartBlock(last);
+
+			if (static_cast<uint64_t>(last.block) + lastLen == fileBlock and lastStart + lastLen == allocated and lastLen < 0x7fffU) {
+				last.len = static_cast<uint16_t>((last.len & 0x8000U) | (lastLen + 1));
+				inode.blocks += static_cast<uint32_t>(blockSize / 512);
+
+				return true;
+			}
+		}
+
+		if (header->entries >= header->max) {
+			freeBlock(allocated);
+			fsBlock = 0;
+
+			return false;
+		}
+
+		auto &extent = extents[header->entries++];
+
+		extent.block = static_cast<uint32_t>(fileBlock);
+		extent.len = 1;
+		extent.startHi = static_cast<uint16_t>(static_cast<uint64_t>(allocated) >> 32);
+		extent.startLo = allocated;
+		inode.blocks += static_cast<uint32_t>(blockSize / 512);
+
+		return true;
+	}
+
 	auto Ext2Volume::writeFile(const uint32_t inodeNumber, Ext2Inode &inode, const uint64_t offset, const uint8_t *data, const uint64_t length) -> bool {
 		if ((inode.mode & EXT2_S_IFMT) != EXT2_S_IFREG or offset > (1ULL << 47)) {
+			return false;
+		}
+
+		if (!mutationsSupported()) {
 			return false;
 		}
 
@@ -1069,7 +1177,7 @@ namespace {
 			const uint64_t toCopy = min<uint64_t>(blockSize - blockOffset, length - written);
 			uint32_t fsBlock = 0;
 
-			if (!ensureDataBlock(inode, fileBlock, fsBlock)) {
+			if (!(inodeUsesExtents(inode) ? ensureExtentDataBlock(inode, fileBlock, fsBlock) : ensureDataBlock(inode, fileBlock, fsBlock))) {
 				return false;
 			}
 
@@ -1423,6 +1531,69 @@ namespace {
 		return freeIndirectBlocks(inode.block[14], 3, remaining, pointersPerBlock * pointersPerBlock);
 	}
 
+	auto Ext2Volume::truncateExtentBlocks(Ext2Inode &inode, const uint64_t keepBlocks) -> bool {
+		if (!inodeUsesExtents(inode)) {
+			return false;
+		}
+
+		auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
+
+		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
+			return false;
+		}
+
+		auto *extents = reinterpret_cast<Ext4Extent *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
+		uint16_t out = 0;
+
+		for (uint16_t i = 0; i < header->entries; ++i) {
+			auto extent = extents[i];
+			const uint32_t len = extentLength(extent);
+			const uint64_t start = extentStartBlock(extent);
+			const uint64_t firstFileBlock = extent.block;
+			const uint64_t endFileBlock = firstFileBlock + len;
+
+			if (len == 0 or firstFileBlock >= keepBlocks) {
+				for (uint32_t block = 0; block < len; ++block) {
+					if (!freeBlock(static_cast<uint32_t>(start + block))) {
+						return false;
+					}
+
+					if (inode.blocks >= blockSize / 512) {
+						inode.blocks -= static_cast<uint32_t>(blockSize / 512);
+					}
+				}
+
+				continue;
+			}
+
+			if (endFileBlock > keepBlocks) {
+				const uint32_t keepLen = static_cast<uint32_t>(keepBlocks - firstFileBlock);
+
+				for (uint32_t block = keepLen; block < len; ++block) {
+					if (!freeBlock(static_cast<uint32_t>(start + block))) {
+						return false;
+					}
+
+					if (inode.blocks >= blockSize / 512) {
+						inode.blocks -= static_cast<uint32_t>(blockSize / 512);
+					}
+				}
+
+				extent.len = static_cast<uint16_t>((extent.len & 0x8000U) | keepLen);
+			}
+
+			extents[out++] = extent;
+		}
+
+		header->entries = out;
+
+		for (uint16_t i = out; i < header->max; ++i) {
+			extents[i] = Ext4Extent();
+		}
+
+		return true;
+	}
+
 	auto Ext2Volume::countIndirectBlocks(const uint32_t pointerBlock, const uint32_t depth) const -> uint64_t {
 		if (pointerBlock == 0) {
 			return 0;
@@ -1468,6 +1639,10 @@ namespace {
 	}
 
 	auto Ext2Volume::createFile(const string &path) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		string parentPath;
 		string name;
 
@@ -1508,6 +1683,10 @@ namespace {
 	}
 
 	auto Ext2Volume::createDirectory(const string &path) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		string parentPath;
 		string name;
 
@@ -1594,6 +1773,10 @@ namespace {
 	}
 
 	auto Ext2Volume::createHardLink(const string &oldPath, const string &newPath) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		string parentPath;
 		string name;
 
@@ -1632,6 +1815,10 @@ namespace {
 	}
 
 	auto Ext2Volume::createSymlink(const string &target, const string &linkPath) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		string parentPath;
 		string name;
 
@@ -1726,6 +1913,10 @@ namespace {
 	}
 
 	auto Ext2Volume::truncateFile(const string &path, const uint64_t size) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		uint32_t inodeNumber = 0;
 		Ext2Inode inode {};
 
@@ -1735,7 +1926,21 @@ namespace {
 
 		const uint64_t keepBlocks = (size + blockSize - 1) / blockSize;
 
-		if (size > 0) {
+		if (inodeUsesExtents(inode)) {
+			const uint64_t currentSize = inodeFileSize(superblock, inode);
+
+			if (size > currentSize) {
+				for (uint64_t fileBlock = (currentSize + blockSize - 1) / blockSize; fileBlock < keepBlocks; ++fileBlock) {
+					uint32_t fsBlock = 0;
+
+					if (!ensureExtentDataBlock(inode, fileBlock, fsBlock)) {
+						return false;
+					}
+				}
+			} else if (!truncateExtentBlocks(inode, keepBlocks)) {
+				return false;
+			}
+		} else if (size > 0) {
 			for (uint64_t fileBlock = 0; fileBlock < keepBlocks; ++fileBlock) {
 				uint32_t fsBlock = 0;
 
@@ -1743,9 +1948,11 @@ namespace {
 					return false;
 				}
 			}
-		}
 
-		if (!freeInodeBlocks(inode, keepBlocks)) {
+			if (!freeInodeBlocks(inode, keepBlocks)) {
+				return false;
+			}
+		} else if (!freeInodeBlocks(inode, keepBlocks)) {
 			return false;
 		}
 
@@ -1758,12 +1965,19 @@ namespace {
 		}
 
 		setInodeFileSize(inode, size);
-		inode.blocks = static_cast<uint32_t>(countInodeBlocks(inode) * (blockSize / 512));
+
+		if (!inodeUsesExtents(inode)) {
+			inode.blocks = static_cast<uint32_t>(countInodeBlocks(inode) * (blockSize / 512));
+		}
 
 		return writeInode(inodeNumber, inode) and flushDevice(device.deviceId);
 	}
 
 	auto Ext2Volume::unlinkFile(const string &path) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		string parentPath;
 		string name;
 
@@ -1809,6 +2023,10 @@ namespace {
 
 		const bool fastSymlink = nodeMode == EXT2_S_IFLNK and inode.blocks == 0;
 
+		if (!fastSymlink and inodeUsesExtents(inode)) {
+			return false;
+		}
+
 		if (!fastSymlink and !freeInodeBlocks(inode, 0)) {
 			return false;
 		}
@@ -1843,6 +2061,10 @@ namespace {
 	}
 
 	auto Ext2Volume::renameFile(const string &oldPath, const string &newPath) -> bool {
+		if (!mutationsSupported()) {
+			return false;
+		}
+
 		if (oldPath == newPath) {
 			return true;
 		}
@@ -2089,7 +2311,7 @@ namespace {
 		string name;
 
 		if (!findFirstRootTextFile(inodeNumber, name)) {
-			printf("Ext2: %s has no root .txt file to test.", device.deviceName);
+			printf("Ext4: %s has no root .txt file to test.", device.deviceName);
 			fflush(stdout);
 
 			return;
@@ -2099,7 +2321,7 @@ namespace {
 		vector<uint8_t> bytes;
 
 		if (!readInode(inodeNumber, inode) or !readFile(inode, bytes, 4096)) {
-			printf("Ext2: Failed to read %s/%s.", device.deviceName, name.c_str());
+			printf("Ext4: Failed to read %s/%s.", device.deviceName, name.c_str());
 			fflush(stdout);
 
 			return;
@@ -2107,7 +2329,7 @@ namespace {
 
 		const string text(reinterpret_cast<const char *>(bytes.data()), bytes.size());
 
-		printf("Ext2: First text file on %s is %s (%lu bytes): %s", device.deviceName, name.c_str(), inodeFileSize(superblock, inode), text.c_str());
+		printf("Ext4: First text file on %s is %s (%lu bytes): %s", device.deviceName, name.c_str(), inodeFileSize(superblock, inode), text.c_str());
 		fflush(stdout);
 
 		if (!bytes.empty()) {
@@ -2115,10 +2337,10 @@ namespace {
 			vector<uint8_t> reread;
 
 			if (writeFileOverwrite(inodeNumber, inode, 0, &firstByte, 1) and readInode(inodeNumber, inode) and readFile(inode, reread, bytes.size()) and reread == bytes) {
-				printf("Ext2: Verified overwrite write path on %s/%s.", device.deviceName, name.c_str());
+				printf("Ext4: Verified overwrite write path on %s/%s.", device.deviceName, name.c_str());
 				fflush(stdout);
 			} else {
-				printf("Ext2: Overwrite write path verification failed on %s/%s.", device.deviceName, name.c_str());
+				printf("Ext4: Overwrite write path verification failed on %s/%s.", device.deviceName, name.c_str());
 				fflush(stdout);
 			}
 		}
@@ -2229,8 +2451,65 @@ namespace {
 		return readDoubleIndirectPointer(static_cast<uint32_t>(doubleBlock), index % doubleSpan, fsBlock);
 	}
 
+	auto Ext2Volume::resolveExtentNode(const uint8_t *node, const uint64_t fileBlock, uint64_t &fsBlock) const -> bool {
+		const auto *header = reinterpret_cast<const Ext4ExtentHeader *>(node);
 
-	auto probeExt2(const StorageFsProbeDeviceMsgData &device) -> bool {
+		if (header->magic != EXT4_EXT_MAGIC || header->entries > header->max) {
+			return false;
+		}
+
+		if (header->depth == 0) {
+			const auto *extents = reinterpret_cast<const Ext4Extent *>(node + sizeof(Ext4ExtentHeader));
+
+			for (uint16_t i = 0; i < header->entries; ++i) {
+				const Ext4Extent &extent = extents[i];
+				const uint32_t len = extentLength(extent);
+
+				if (len == 0) {
+					continue;
+				}
+
+				if (fileBlock >= extent.block && fileBlock < static_cast<uint64_t>(extent.block) + len) {
+					fsBlock = extentStartBlock(extent) + (fileBlock - extent.block);
+
+					return fsBlock != 0;
+				}
+			}
+
+			return false;
+		}
+
+		const auto *indices = reinterpret_cast<const Ext4ExtentIndex *>(node + sizeof(Ext4ExtentHeader));
+		const Ext4ExtentIndex *selected = nullptr;
+
+		for (uint16_t i = 0; i < header->entries; ++i) {
+			if (fileBlock < indices[i].block) {
+				break;
+			}
+
+			selected = &indices[i];
+		}
+
+		if (selected == nullptr) {
+			return false;
+		}
+
+		vector<uint8_t> child;
+		child.resize(blockSize);
+
+		if (!readBlock(extentIndexLeafBlock(*selected), child.data())) {
+			return false;
+		}
+
+		return resolveExtentNode(child.data(), fileBlock, fsBlock);
+	}
+
+	auto Ext2Volume::resolveExtentBlock(const Ext2Inode &inode, const uint64_t fileBlock, uint64_t &fsBlock) const -> bool {
+		return resolveExtentNode(reinterpret_cast<const uint8_t *>(inode.block), fileBlock, fsBlock);
+	}
+
+
+	auto probeExt4(const StorageFsProbeDeviceMsgData &device) -> bool {
 		if (device.blockSize == 0 or device.blockCount == 0) {
 			return false;
 		}
@@ -2241,7 +2520,7 @@ namespace {
 			return false;
 		}
 
-		printf("Ext2: Recognized %s id=%lu blocks=%lu blockSize=%lu inodes=%u.", device.deviceName, device.deviceId, volume.getBlockCount(), volume.getBlockSize(), volume.getInodeCount());
+		printf("Ext4: Recognized %s id=%lu blocks=%lu blockSize=%lu inodes=%u.", device.deviceName, device.deviceId, volume.getBlockCount(), volume.getBlockSize(), volume.getInodeCount());
 		fflush(stdout);
 
 		volume.testReadFirstTextFile();
@@ -2309,11 +2588,11 @@ namespace {
 					ScopedMutex lock(mountsLock);
 					const uint64_t mountId = nextMountId++;
 
-					mounts.push_back(MountedExt2 { .mountId = mountId, .device = device });
+					mounts.push_back(MountedExt4 { .mountId = mountId, .device = device });
 					reply.success = true;
 					reply.mountId = mountId;
 
-					printf("Ext2: Mounted %s as mount %lu.", device.deviceName, mountId);
+					printf("Ext4: Mounted %s as mount %lu.", device.deviceName, mountId);
 					fflush(stdout);
 				}
 			}
@@ -2982,7 +3261,7 @@ namespace {
 			}
 
 			auto reply = StorageFsProbeDeviceReplyMsgData();
-			reply.recognized = probeExt2(data);
+			reply.recognized = probeExt4(data);
 
 			auto replyMsg = hos_msg();
 			replyMsg.type = STORAGE_FS_PROBE_DEVICE_REPLY_MSG_TYPE;
@@ -2997,14 +3276,14 @@ namespace {
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	if (register_horizonos_port(reinterpret_cast<long *>(&ext2Port)) != 0) {
-		printf("Ext2: Failed to register port.");
+		printf("Ext4: Failed to register port.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	if (!registerWithNameRegistry("Ext2")) {
-		printf("Ext2: Failed to register with Name/Registry.");
+	if (!registerWithNameRegistry("Ext4")) {
+		printf("Ext4: Failed to register with Name/Registry.");
 		fflush(stdout);
 
 		return 1;
@@ -3013,20 +3292,20 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	storagePort = waitForStorage();
 
 	if (register_horizonos_port(reinterpret_cast<long *>(&storageReplyPort)) != 0 or storageReplyPort == 0) {
-		printf("Ext2: Failed to register Storage reply port.");
+		printf("Ext4: Failed to register Storage reply port.");
 		fflush(stdout);
 
 		return 1;
 	}
 
 	if (!registerFsHandler()) {
-		printf("Ext2: Failed to register filesystem handler.");
+		printf("Ext4: Failed to register filesystem handler.");
 		fflush(stdout);
 
 		return 1;
 	}
 
-	printf("Ext2: Registered handler on port %lu with Storage port %lu.", ext2Port, storagePort);
+	printf("Ext4: Registered handler on port %lu with Storage port %lu.", ext2Port, storagePort);
 	fflush(stdout);
 
 	pthread_t probeThread;
@@ -3060,7 +3339,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&unlinkThread, nullptr, unlinkHandler, nullptr) != 0 or
 	    pthread_create(&renameThread, nullptr, renameHandler, nullptr) != 0 or
 	    pthread_create(&truncateThread, nullptr, truncateHandler, nullptr) != 0) {
-		printf("Ext2: Failed to create message handlers.");
+		printf("Ext4: Failed to create message handlers.");
 		fflush(stdout);
 
 		return 1;

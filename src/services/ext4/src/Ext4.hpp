@@ -14,9 +14,19 @@ namespace {
 	constexpr uint64_t EXT2_SUPERBLOCK_OFFSET = 1024;
 	constexpr uint32_t EXT2_GOOD_OLD_REV = 0;
 	constexpr uint32_t EXT2_FEATURE_INCOMPAT_FILETYPE = 0x0002;
-	constexpr uint32_t EXT2_SUPPORTED_INCOMPAT_FEATURES = EXT2_FEATURE_INCOMPAT_FILETYPE;
+	constexpr uint32_t EXT4_FEATURE_INCOMPAT_EXTENTS = 0x0040;
+	constexpr uint32_t EXT4_FEATURE_INCOMPAT_64BIT = 0x0080;
+	constexpr uint32_t EXT4_FEATURE_INCOMPAT_FLEX_BG = 0x0200;
+	constexpr uint32_t EXT2_SUPPORTED_INCOMPAT_FEATURES =
+		EXT2_FEATURE_INCOMPAT_FILETYPE | EXT4_FEATURE_INCOMPAT_EXTENTS | EXT4_FEATURE_INCOMPAT_64BIT | EXT4_FEATURE_INCOMPAT_FLEX_BG;
 	constexpr uint32_t EXT2_FEATURE_RO_COMPAT_LARGE_FILE = 0x0002;
+	constexpr uint32_t EXT4_FEATURE_RO_COMPAT_HUGE_FILE = 0x0008;
+	constexpr uint32_t EXT4_FEATURE_RO_COMPAT_DIR_NLINK = 0x0020;
+	constexpr uint32_t EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE = 0x0040;
+	constexpr uint32_t EXT4_FEATURE_RO_COMPAT_METADATA_CSUM = 0x0400;
 	constexpr uint16_t EXT2_GROUP_DESCRIPTOR_SIZE = 32;
+	constexpr uint16_t EXT4_EXT_MAGIC = 0xF30A;
+	constexpr uint32_t EXT4_EXTENTS_FL = 0x00080000;
 	constexpr uint16_t EXT2_S_IFMT = 0xF000;
 	constexpr uint16_t EXT2_S_IFREG = 0x8000;
 	constexpr uint16_t EXT2_S_IFDIR = 0x4000;
@@ -97,6 +107,28 @@ namespace {
 		char name[];
 	} __attribute__((packed));
 
+	struct Ext4ExtentHeader {
+		uint16_t magic {};
+		uint16_t entries {};
+		uint16_t max {};
+		uint16_t depth {};
+		uint32_t generation {};
+	} __attribute__((packed));
+
+	struct Ext4ExtentIndex {
+		uint32_t block {};
+		uint32_t leafLo {};
+		uint16_t leafHi {};
+		uint16_t unused {};
+	} __attribute__((packed));
+
+	struct Ext4Extent {
+		uint32_t block {};
+		uint16_t len {};
+		uint16_t startHi {};
+		uint32_t startLo {};
+	} __attribute__((packed));
+
 	class Ext2Volume {
 	public:
 		explicit Ext2Volume(const StorageFsProbeDeviceMsgData &device);
@@ -105,6 +137,7 @@ namespace {
 		auto readInode(uint32_t inodeNumber, Ext2Inode &out) const -> bool;
 		auto writeInode(uint32_t inodeNumber, const Ext2Inode &inode) const -> bool;
 		auto resolveDataBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) const -> bool;
+		auto inodeUsesExtents(const Ext2Inode &inode) const -> bool;
 		auto readFile(const Ext2Inode &inode, vector<uint8_t> &out, uint64_t maxBytes = 65536) const -> bool;
 		auto readFileRange(const Ext2Inode &inode, uint64_t offset, uint32_t length, vector<uint8_t> &out) const -> bool;
 		auto writeFileOverwrite(uint32_t inodeNumber, Ext2Inode &inode, uint64_t offset, const uint8_t *data, uint64_t length) const -> bool;
@@ -133,6 +166,11 @@ namespace {
 		auto readIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
 		auto readDoubleIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
 		auto readTripleIndirectPointer(uint32_t block, uint64_t index, uint64_t &fsBlock) const -> bool;
+		auto resolveExtentBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) const -> bool;
+		auto resolveExtentNode(const uint8_t *node, uint64_t fileBlock, uint64_t &fsBlock) const -> bool;
+		auto ensureExtentDataBlock(Ext2Inode &inode, uint64_t fileBlock, uint32_t &fsBlock) -> bool;
+		auto truncateExtentBlocks(Ext2Inode &inode, uint64_t keepBlocks) -> bool;
+		auto mutationsSupported() const -> bool;
 		auto writeSuperblock() const -> bool;
 		auto writeGroupDescriptor(uint32_t group) const -> bool;
 		auto allocateBlock(uint32_t &block) -> bool;
