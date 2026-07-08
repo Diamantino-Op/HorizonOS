@@ -17,6 +17,9 @@ namespace kernel::x86_64::threading {
     	bool init(Process *proc, u64 stackPointer, bool isUserspace);
 
         u64 *getSimdSave() const;
+        u64 *getOriginalSimdSave() const;
+        u64 getSimdSaveAllocSize() const;
+        bool isValid() const;
 
         void save();
         void load() const;
@@ -26,6 +29,8 @@ namespace kernel::x86_64::threading {
     	void updateTssPtrs(u64 rsp0);
 
     private:
+        u64 magic {};
+        u64 simdSaveAllocSize {};
         u64 *originalSimdSave {};
         u64 *simdSave {};
 

@@ -1573,6 +1573,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		auto *dcbaa = reinterpret_cast<uint64_t *>(controller.memory.dcbaa.virt);
 
 		dcbaa[device.slotId] = device.deviceContext.phys;
+		XhciUtils::dmaWriteFence();
 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, 0x3);
@@ -1590,6 +1591,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
+		XhciUtils::dmaWriteFence();
 
 		return true;
 	}
@@ -2136,6 +2138,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		fflush(stdout);
 		XhciUtils::logPortState(controller, device.rootPort, "addressed");
 		XhciUtils::logDeviceContext(controller, device, "addressed");
+
+		XhciUtils::resetControlTransferRing(device);
+		XhciUtils::dmaWriteFence();
 
 		usleep(50000);
 

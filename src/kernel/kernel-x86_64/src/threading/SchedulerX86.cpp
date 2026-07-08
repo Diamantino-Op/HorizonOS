@@ -17,6 +17,8 @@ namespace kernel::common::threading {
 	using namespace x86_64::utils;
 
 	namespace {
+		constexpr u64 threadContextMagic = 0x4852435458544354ULL; // HRCTXTCT
+
 		[[noreturn]] void schedulerSwitchPanic(const char *reason, const Thread *thread, const u64 rsp) {
 			auto *term = CommonMain::getTerminal();
 			const u16 tid = thread != nullptr ? thread->getId() : 0xffff;
@@ -37,6 +39,26 @@ namespace kernel::common::threading {
 				rsp, stackBase, stackTop, reinterpret_cast<u64>(thread));
 			term->printfBoth(true, "\033[0;31m  syscallStackBase=0x%.16lx syscallStackTop=0x%.16lx",
 				syscallStackBase, syscallStackTop);
+
+			for (;;) {
+				Asm::cli();
+				Asm::hlt();
+			}
+		}
+
+		[[noreturn]] void threadContextPanic(const char *reason, const Thread *thread, const ThreadContext *ctx) {
+			auto *term = CommonMain::getTerminal();
+			const u16 tid = thread != nullptr ? thread->getId() : 0xffff;
+			const u16 pid = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getId() : 0xffff;
+			const u64 simd = ctx != nullptr ? reinterpret_cast<u64>(ctx->getSimdSave()) : 0;
+			const u64 originalSimd = ctx != nullptr ? reinterpret_cast<u64>(ctx->getOriginalSimdSave()) : 0;
+			const u64 simdSize = ctx != nullptr ? ctx->getSimdSaveAllocSize() : 0;
+
+			term->printfBoth(true, "\033[0;31mThread context panic: %s", reason);
+			term->printfBoth(true, "\033[0;31m  cpu=%lu tid=%u pid=%u thread=0x%.16lx ctx=0x%.16lx",
+				CpuManager::getCurrentCore()->cpuId, tid, pid, reinterpret_cast<u64>(thread), reinterpret_cast<u64>(ctx));
+			term->printfBoth(true, "\033[0;31m  simd=0x%.16lx originalSimd=0x%.16lx simdAllocSize=%lu KGS=0x%.16lx",
+				simd, originalSimd, simdSize, Asm::rdmsr(KGSBAS));
 
 			for (;;) {
 				Asm::cli();
@@ -296,6 +318,10 @@ namespace kernel::common::threading {
 
 	void ExecutionNode::loadNewThread() {
 		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->getContext());
+
+		if (ctx == nullptr || !ctx->isValid()) {
+			threadContextPanic("invalid context before load", this->currentThread, ctx);
+		}
 
 		ctx->load();
 
@@ -573,9 +599,12 @@ namespace kernel::x86_64::threading {
 				}
 			}
 		}
+
+		this->magic = 0;
 	}
 
 	bool ThreadContext::init(Process *proc, const u64 stackPointer, const bool isUserspace) {
+		this->magic = threadContextMagic;
 		this->isUser = isUserspace;
 		this->userGsBase = 0;
 		this->userFsBase = 0;
@@ -584,15 +613,15 @@ namespace kernel::x86_64::threading {
 		this->originalStackPointer = stackPointer - threadCtxStackSize;
 		this->process = proc;
 
-		const u64 simdSaveAllocSize = CpuId::getXSaveSize() + 64;
+		this->simdSaveAllocSize = CpuId::getXSaveSize() + 64;
 
-		this->originalSimdSave = VirtualAllocator::alloc(CommonMain::getInstance()->getKernelAllocContext(), simdSaveAllocSize);
+		this->originalSimdSave = VirtualAllocator::alloc(CommonMain::getInstance()->getKernelAllocContext(), this->simdSaveAllocSize);
 
 		if (this->originalSimdSave == nullptr) {
 			return false;
 		}
 
-		memset(this->originalSimdSave, 0, simdSaveAllocSize);
+		memset(this->originalSimdSave, 0, this->simdSaveAllocSize);
 		this->simdSave = reinterpret_cast<u64 *>(alignUp<u64>(reinterpret_cast<u64>(this->originalSimdSave), 64));
 
 		CpuManager::initSimdContext(this->simdSave);
@@ -604,7 +633,30 @@ namespace kernel::x86_64::threading {
 		return this->simdSave;
 	}
 
+	u64 *ThreadContext::getOriginalSimdSave() const {
+		return this->originalSimdSave;
+	}
+
+	u64 ThreadContext::getSimdSaveAllocSize() const {
+		return this->simdSaveAllocSize;
+	}
+
+	bool ThreadContext::isValid() const {
+		if (this->magic != threadContextMagic || this->originalSimdSave == nullptr || this->simdSave == nullptr || this->simdSaveAllocSize < 512) {
+			return false;
+		}
+
+		const u64 original = reinterpret_cast<u64>(this->originalSimdSave);
+		const u64 simd = reinterpret_cast<u64>(this->simdSave);
+
+		return (simd & 0x3fU) == 0 && simd >= original && simd + 512 <= original + this->simdSaveAllocSize;
+	}
+
 	void ThreadContext::save() {
+		if (!this->isValid()) {
+			threadContextPanic("invalid context before save", Scheduler::getCurrentThread(), this);
+		}
+
 		CpuManager::saveSimdContext(this->simdSave);
 
 		this->userFsBase = Asm::rdmsr(Msrs::FSBAS);
@@ -615,6 +667,10 @@ namespace kernel::x86_64::threading {
 	}
 
 	void ThreadContext::load() const {
+		if (!this->isValid()) {
+			threadContextPanic("invalid context before simd restore", Scheduler::getCurrentThread(), this);
+		}
+
 		CpuManager::loadSimdContext(this->simdSave);
 
 		Asm::wrmsr(Msrs::FSBAS, this->userFsBase);

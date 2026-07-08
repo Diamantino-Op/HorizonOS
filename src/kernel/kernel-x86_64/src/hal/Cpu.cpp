@@ -115,11 +115,26 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::loadSimdContext(const uPtr *ptr) {
+		sanitizeSimdContext(ptr);
+
 		if (CpuId::hasXSave()) {
 			Asm::xrstor(ptr);
 		} else {
 			Asm::fxrstor(ptr);
 		}
+	}
+
+	void CpuManager::sanitizeSimdContext(const uPtr *ptr) {
+		if (ptr == nullptr) {
+			return;
+		}
+
+		auto *bytes = reinterpret_cast<u8 *>(const_cast<uPtr *>(ptr));
+		auto *mxcsr = reinterpret_cast<u32 *>(bytes + 24);
+		auto *mxcsrMask = reinterpret_cast<u32 *>(bytes + 28);
+		const u32 validMask = *mxcsrMask != 0 ? *mxcsrMask : 0x0000FFBFU;
+
+		*mxcsr &= validMask;
 	}
 
 	void CpuManager::startBootCore() {
