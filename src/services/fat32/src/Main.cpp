@@ -280,6 +280,114 @@ namespace {
 		return reply.port;
 	}
 
+	auto waitForServicePort(const char *name) -> uint64_t {
+		for (;;) {
+			auto check = CheckMsgData();
+
+			fillName(check.name, sizeof(check.name), check.nameLength, name);
+
+			auto checkMsg = hos_msg();
+
+			checkMsg.type = CHECK_MSG_TYPE;
+			checkMsg.port = 1;
+			checkMsg.buffer = &check;
+			checkMsg.length = sizeof(check);
+
+			send_horizonos_message(fat32Port, 1, &checkMsg);
+
+			auto reply = CheckReplyMsgData();
+			auto recv = hos_msg();
+
+			recv.buffer = &reply;
+			recv.length = sizeof(reply);
+
+			auto filter = filter_options();
+			filter.whiteListTypes = new uint64_t[1] { REPLY_CHECK_MSG_TYPE };
+			filter.whiteListCount = 1;
+
+			const int ret = receive_horizonos_message(fat32Port, &recv, &filter);
+
+			delete[] filter.whiteListTypes;
+
+			if (ret == 0 and reply.exists) {
+				break;
+			}
+
+			usleep(10000);
+		}
+
+		auto get = GetMsgData();
+
+		fillName(get.name, sizeof(get.name), get.nameLength, name);
+
+		auto getMsg = hos_msg();
+
+		getMsg.type = GET_MSG_TYPE;
+		getMsg.port = 1;
+		getMsg.buffer = &get;
+		getMsg.length = sizeof(get);
+
+		send_horizonos_message(fat32Port, 1, &getMsg);
+
+		auto reply = GetReplyMsgData();
+		auto recv = hos_msg();
+
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { REPLY_GET_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		receive_horizonos_message(fat32Port, &recv, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		return reply.port;
+	}
+
+	auto registerWithVfs(const char *fsName) -> bool {
+		const uint64_t vfsPort = waitForServicePort("Vfs");
+
+		if (vfsPort == 0) {
+			return false;
+		}
+
+		auto data = VfsRegisterFsHandlerMsgData();
+
+		data.handlerPort = fat32Port;
+		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, fsName);
+
+		auto msg = hos_msg();
+
+		msg.type = VFS_REGISTER_FS_HANDLER_MSG_TYPE;
+		msg.port = vfsPort;
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		if (send_horizonos_message(fat32Port, vfsPort, &msg) != 0) {
+			return false;
+		}
+
+		auto reply = VfsRegisterFsHandlerReplyMsgData();
+		auto recv = hos_msg();
+
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_REGISTER_FS_HANDLER_REPLY_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		const int ret = receive_horizonos_message(fat32Port, &recv, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		return ret == 0 and reply.success;
+	}
+
 	auto registerFsHandler() -> bool {
 		auto data = StorageRegisterFsHandlerMsgData();
 
@@ -2356,6 +2464,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 		return 1;
 	}
 
+	if (!registerWithVfs("fat32")) {
+		printf("FAT32: Failed to register with VFS.");
+		fflush(stdout);
+
+		return 1;
+	}
+
 	printf("FAT32: Registered handler on port %lu with Storage port %lu.", fat32Port, storagePort);
 	fflush(stdout);
 
@@ -2413,6 +2528,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(truncateThread);
 
 	for (;;) {
-		pause();
+		usleep(100000);
 	}
 }

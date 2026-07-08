@@ -51,6 +51,9 @@ constexpr uint64_t FS_SYMLINK_REPLY_MSG_TYPE = 0x80019;
 constexpr uint64_t FS_READLINK_MSG_TYPE    = 0x8001A;
 constexpr uint64_t FS_READLINK_REPLY_MSG_TYPE = 0x8001B;
 
+constexpr uint64_t VFS_REGISTER_FS_HANDLER_MSG_TYPE = 0x90040;
+constexpr uint64_t VFS_REGISTER_FS_HANDLER_REPLY_MSG_TYPE = 0x90041;
+
 constexpr uint32_t STORAGE_MAX_PAGES_PER_MSG = 256;
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t VFS_MAX_PATH_LENGTH = 256;
@@ -110,6 +113,16 @@ struct GetReplyMsgData {
 	uint16_t versionMajor {};
 	uint16_t versionMinor {};
 	uint16_t versionPatch {};
+};
+
+struct VfsRegisterFsHandlerMsgData {
+	uint64_t handlerPort {};
+	char fsName[16] {};
+	size_t fsNameLength {};
+};
+
+struct VfsRegisterFsHandlerReplyMsgData {
+	bool success {};
 };
 
 struct StorageRegisterFsHandlerMsgData {

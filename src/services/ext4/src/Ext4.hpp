@@ -169,6 +169,8 @@ namespace {
 		auto resolveExtentBlock(const Ext2Inode &inode, uint64_t fileBlock, uint64_t &fsBlock) const -> bool;
 		auto resolveExtentNode(const uint8_t *node, uint64_t fileBlock, uint64_t &fsBlock) const -> bool;
 		auto ensureExtentDataBlock(Ext2Inode &inode, uint64_t fileBlock, uint32_t &fsBlock) -> bool;
+		auto appendExtentToLeaf(uint8_t *leaf, uint64_t fileBlock, uint32_t allocatedBlock) -> bool;
+		auto truncateExtentLeaf(uint8_t *leaf, uint64_t keepBlocks, Ext2Inode &inode) -> bool;
 		auto truncateExtentBlocks(Ext2Inode &inode, uint64_t keepBlocks) -> bool;
 		auto mutationsSupported() const -> bool;
 		auto writeSuperblock() const -> bool;

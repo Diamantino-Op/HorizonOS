@@ -29,9 +29,9 @@ namespace {
 
 	uint64_t vfsPort = 0;
 	uint64_t storagePort = 0;
-	uint64_t ext2Port = 0;
 	uint64_t nextHandleId = 1;
 	vector<VfsVolume> volumes;
+	vector<VfsFsHandler> fsHandlers;
 	pthread_mutex_t volumesLock = PTHREAD_MUTEX_INITIALIZER;
 	DevFs devfs(volumes, &volumesLock);
 	vector<VfsHandle> handles;
@@ -43,6 +43,7 @@ namespace {
 	pthread_mutex_t nodeLocksLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t cacheLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t pendingUnlinksLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t fsHandlersLock = PTHREAD_MUTEX_INITIALIZER;
 
 	void fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
@@ -323,7 +324,11 @@ namespace {
 		return ret == 0 and reply.success;
 	}
 
-	auto mountExt2(const StorageListedBlockDevice &device, const string &sourceName, uint64_t &mountId) -> bool {
+	auto mountFs(const uint64_t fsPort, const StorageListedBlockDevice &device, const string &sourceName, uint64_t &mountId) -> bool {
+		if (fsPort == 0) {
+			return false;
+		}
+
 		auto data = FsMountMsgData();
 
 		data.deviceId = device.deviceId;
@@ -334,11 +339,11 @@ namespace {
 		auto msg = hos_msg();
 
 		msg.type = FS_MOUNT_MSG_TYPE;
-		msg.port = ext2Port;
+		msg.port = fsPort;
 		msg.buffer = &data;
 		msg.length = sizeof(data);
 
-		if (send_horizonos_message(vfsPort, ext2Port, &msg) != 0) {
+		if (send_horizonos_message(vfsPort, fsPort, &msg) != 0) {
 			return false;
 		}
 
@@ -361,6 +366,28 @@ namespace {
 			mountId = reply.mountId;
 
 			return true;
+		}
+
+		return false;
+	}
+
+	auto mountAnyFilesystem(const StorageListedBlockDevice &device, const string &sourceName, uint64_t &fsPort, uint64_t &mountId) -> bool {
+		vector<VfsFsHandler> handlers;
+
+		pthread_mutex_lock(&fsHandlersLock);
+		handlers = fsHandlers;
+		pthread_mutex_unlock(&fsHandlersLock);
+
+		for (const auto &handler : handlers) {
+			if (handler.port == 0) {
+				continue;
+			}
+
+			if (mountFs(handler.port, device, sourceName, mountId)) {
+				fsPort = handler.port;
+
+				return true;
+			}
 		}
 
 		return false;
@@ -429,8 +456,7 @@ namespace {
 				volume.mountId = existingCopy.mountId;
 				volume.mounted = existingCopy.mounted;
 				next.push_back(volume);
-			} else if (mountExt2(device, sourceName, volume.mountId)) {
-				volume.fsPort = ext2Port;
+			} else if (mountAnyFilesystem(device, sourceName, volume.fsPort, volume.mountId)) {
 				next.push_back(volume);
 			}
 
@@ -2837,6 +2863,60 @@ namespace {
 		}
 	}
 
+	[[noreturn]] auto fsRegisterHandler(void */*unused*/) -> void * {
+		auto data = VfsRegisterFsHandlerMsgData();
+		auto msg = hos_msg();
+
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_REGISTER_FS_HANDLER_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			memset(&data, 0, sizeof(data));
+
+			if (receive_horizonos_message(vfsPort, &msg, &filter) != 0) {
+				continue;
+			}
+
+			auto reply = VfsRegisterFsHandlerReplyMsgData();
+			string fsName;
+
+			if (data.handlerPort != 0 and validName(data.fsName, data.fsNameLength, sizeof(data.fsName), fsName)) {
+				pthread_mutex_lock(&fsHandlersLock);
+
+				const bool exists = ranges::any_of(fsHandlers, [&](const VfsFsHandler &handler) -> bool {
+					return handler.port == data.handlerPort and handler.name == fsName;
+				});
+
+				if (!exists) {
+					fsHandlers.push_back(VfsFsHandler { .port = data.handlerPort, .name = fsName });
+				}
+
+				pthread_mutex_unlock(&fsHandlersLock);
+
+				reply.success = true;
+
+				printf("Vfs: Registered filesystem handler %s on port %lu.", fsName.c_str(), data.handlerPort);
+				fflush(stdout);
+			}
+
+			auto replyMsg = hos_msg();
+			replyMsg.type = VFS_REGISTER_FS_HANDLER_REPLY_MSG_TYPE;
+			replyMsg.port = msg.src_port;
+			replyMsg.buffer = &reply;
+			replyMsg.length = sizeof(reply);
+			send_horizonos_message(vfsPort, msg.src_port, &replyMsg);
+
+			if (reply.success) {
+				refreshVolumes();
+			}
+		}
+	}
+
 	[[noreturn]] auto kernelEventHandler(void */*unused*/) -> void * {
 		auto data = KernelEventData();
 		auto msg = hos_msg();
@@ -2891,10 +2971,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	const GetReplyMsgData storageInfo = waitForService("StorageManager");
 	storagePort = storageInfo.port;
-	const GetReplyMsgData ext2Info = waitForService("Ext2");
-	ext2Port = ext2Info.port;
 
-	printf("Vfs: Ready on port %lu, Storage port %lu, Ext2 port %lu.", vfsPort, storagePort, ext2Port);
+	printf("Vfs: Ready on port %lu, Storage port %lu.", vfsPort, storagePort);
 	fflush(stdout);
 
 	pthread_t statThread;
@@ -2927,6 +3005,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_t devUnregisterThread;
 	pthread_t ioctlThread;
 	pthread_t kernelEventThread;
+	pthread_t fsRegisterThread;
 
 	if (pthread_create(&statThread, nullptr, statHandler, nullptr) != 0 or
 	    pthread_create(&readDirThread, nullptr, readDirHandler, nullptr) != 0 or
@@ -2957,6 +3036,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	    pthread_create(&devRegisterThread, nullptr, devRegisterHandler, nullptr) != 0 or
 	    pthread_create(&devUnregisterThread, nullptr, devUnregisterHandler, nullptr) != 0 or
 	    pthread_create(&ioctlThread, nullptr, ioctlHandler, nullptr) != 0 or
+	    pthread_create(&fsRegisterThread, nullptr, fsRegisterHandler, nullptr) != 0 or
 	    pthread_create(&kernelEventThread, nullptr, kernelEventHandler, nullptr) != 0) {
 		printf("Vfs: Failed to create message handlers.");
 		fflush(stdout);
@@ -2994,6 +3074,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 	pthread_detach(devUnregisterThread);
 	pthread_detach(ioctlThread);
 	pthread_detach(kernelEventThread);
+	pthread_detach(fsRegisterThread);
 
 	for (;;) {
 		refreshVolumes();

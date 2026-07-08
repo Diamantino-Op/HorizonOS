@@ -172,6 +172,114 @@ namespace {
 		return reply.port;
 	}
 
+	auto waitForServicePort(const char *name) -> uint64_t {
+		for (;;) {
+			auto check = CheckMsgData();
+
+			fillName(check.name, sizeof(check.name), check.nameLength, name);
+
+			auto checkMsg = hos_msg();
+
+			checkMsg.type = CHECK_MSG_TYPE;
+			checkMsg.port = 1;
+			checkMsg.buffer = &check;
+			checkMsg.length = sizeof(check);
+
+			send_horizonos_message(ext2Port, 1, &checkMsg);
+
+			auto reply = CheckReplyMsgData();
+			auto recv = hos_msg();
+
+			recv.buffer = &reply;
+			recv.length = sizeof(reply);
+
+			auto filter = filter_options();
+			filter.whiteListTypes = new uint64_t[1] { REPLY_CHECK_MSG_TYPE };
+			filter.whiteListCount = 1;
+
+			const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+
+			delete[] filter.whiteListTypes;
+
+			if (ret == 0 and reply.exists) {
+				break;
+			}
+
+			usleep(10000);
+		}
+
+		auto get = GetMsgData();
+
+		fillName(get.name, sizeof(get.name), get.nameLength, name);
+
+		auto getMsg = hos_msg();
+
+		getMsg.type = GET_MSG_TYPE;
+		getMsg.port = 1;
+		getMsg.buffer = &get;
+		getMsg.length = sizeof(get);
+
+		send_horizonos_message(ext2Port, 1, &getMsg);
+
+		auto reply = GetReplyMsgData();
+		auto recv = hos_msg();
+
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { REPLY_GET_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		receive_horizonos_message(ext2Port, &recv, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		return reply.port;
+	}
+
+	auto registerWithVfs(const char *fsName) -> bool {
+		const uint64_t vfsPort = waitForServicePort("Vfs");
+
+		if (vfsPort == 0) {
+			return false;
+		}
+
+		auto data = VfsRegisterFsHandlerMsgData();
+
+		data.handlerPort = ext2Port;
+		fillName(data.fsName, sizeof(data.fsName), data.fsNameLength, fsName);
+
+		auto msg = hos_msg();
+
+		msg.type = VFS_REGISTER_FS_HANDLER_MSG_TYPE;
+		msg.port = vfsPort;
+		msg.buffer = &data;
+		msg.length = sizeof(data);
+
+		if (send_horizonos_message(ext2Port, vfsPort, &msg) != 0) {
+			return false;
+		}
+
+		auto reply = VfsRegisterFsHandlerReplyMsgData();
+		auto recv = hos_msg();
+
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		auto filter = filter_options();
+
+		filter.whiteListTypes = new uint64_t[1] { VFS_REGISTER_FS_HANDLER_REPLY_MSG_TYPE };
+		filter.whiteListCount = 1;
+
+		const int ret = receive_horizonos_message(ext2Port, &recv, &filter);
+
+		delete[] filter.whiteListTypes;
+
+		return ret == 0 and reply.success;
+	}
+
 	auto registerFsHandler() -> bool {
 		auto data = StorageRegisterFsHandlerMsgData();
 
@@ -1089,6 +1197,49 @@ namespace {
 		return ensureIndirectDataBlock(inode, inode.block[14], 3, fileBlock, fsBlock);
 	}
 
+	auto Ext2Volume::appendExtentToLeaf(uint8_t *leaf, const uint64_t fileBlock, const uint32_t allocatedBlock) -> bool {
+		if (fileBlock > 0xffffffffULL) {
+			return false;
+		}
+
+		auto *header = reinterpret_cast<Ext4ExtentHeader *>(leaf);
+
+		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
+			return false;
+		}
+
+		auto *extents = reinterpret_cast<Ext4Extent *>(leaf + sizeof(Ext4ExtentHeader));
+
+		if (header->entries != 0) {
+			auto &last = extents[header->entries - 1];
+			const uint32_t lastLen = extentLength(last);
+			const uint64_t lastStart = extentStartBlock(last);
+
+			if (fileBlock < static_cast<uint64_t>(last.block) + lastLen) {
+				return false;
+			}
+
+			if (static_cast<uint64_t>(last.block) + lastLen == fileBlock and lastStart + lastLen == allocatedBlock and lastLen < 0x7fffU) {
+				last.len = static_cast<uint16_t>((last.len & 0x8000U) | (lastLen + 1));
+
+				return true;
+			}
+		}
+
+		if (header->entries >= header->max) {
+			return false;
+		}
+
+		auto &extent = extents[header->entries++];
+
+		extent.block = static_cast<uint32_t>(fileBlock);
+		extent.len = 1;
+		extent.startHi = static_cast<uint16_t>(static_cast<uint64_t>(allocatedBlock) >> 32);
+		extent.startLo = allocatedBlock;
+
+		return true;
+	}
+
 	auto Ext2Volume::ensureExtentDataBlock(Ext2Inode &inode, const uint64_t fileBlock, uint32_t &fsBlock) -> bool {
 		fsBlock = 0;
 
@@ -1105,47 +1256,106 @@ namespace {
 		}
 
 		auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
-
-		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
-			return false;
-		}
-
-		auto *extents = reinterpret_cast<Ext4Extent *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
 		uint32_t allocated = 0;
 
 		if (!allocateBlock(allocated)) {
 			return false;
 		}
 
-		fsBlock = allocated;
+		if (header->magic != EXT4_EXT_MAGIC or header->entries > header->max) {
+			freeBlock(allocated);
+			return false;
+		}
 
-		if (header->entries > 0) {
-			auto &last = extents[header->entries - 1];
-			const uint32_t lastLen = extentLength(last);
-			const uint64_t lastStart = extentStartBlock(last);
+		if (header->depth == 0) {
+			if (!appendExtentToLeaf(reinterpret_cast<uint8_t *>(inode.block), fileBlock, allocated)) {
+				freeBlock(allocated);
+				return false;
+			}
 
-			if (static_cast<uint64_t>(last.block) + lastLen == fileBlock and lastStart + lastLen == allocated and lastLen < 0x7fffU) {
-				last.len = static_cast<uint16_t>((last.len & 0x8000U) | (lastLen + 1));
+			fsBlock = allocated;
+			inode.blocks += static_cast<uint32_t>(blockSize / 512);
+
+			return true;
+		}
+
+		if (header->depth != 1) {
+			freeBlock(allocated);
+			return false;
+		}
+
+		auto *indices = reinterpret_cast<Ext4ExtentIndex *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
+		Ext4ExtentIndex *selected = nullptr;
+
+		for (uint16_t i = 0; i < header->entries; ++i) {
+			if (fileBlock < indices[i].block) {
+				break;
+			}
+
+			selected = &indices[i];
+		}
+
+		if (selected != nullptr) {
+			vector<uint8_t> leaf;
+
+			leaf.resize(blockSize);
+
+			if (!readBlock(extentIndexLeafBlock(*selected), leaf.data())) {
+				freeBlock(allocated);
+				return false;
+			}
+
+			if (appendExtentToLeaf(leaf.data(), fileBlock, allocated)) {
+				if (!writeBlock(extentIndexLeafBlock(*selected), leaf.data())) {
+					freeBlock(allocated);
+					return false;
+				}
+
+				fsBlock = allocated;
 				inode.blocks += static_cast<uint32_t>(blockSize / 512);
 
 				return true;
 			}
 		}
 
-		if (header->entries >= header->max) {
+		if (header->entries >= header->max or (header->entries != 0 and fileBlock <= indices[header->entries - 1].block)) {
 			freeBlock(allocated);
-			fsBlock = 0;
-
 			return false;
 		}
 
-		auto &extent = extents[header->entries++];
+		uint32_t leafBlock = 0;
 
-		extent.block = static_cast<uint32_t>(fileBlock);
-		extent.len = 1;
-		extent.startHi = static_cast<uint16_t>(static_cast<uint64_t>(allocated) >> 32);
-		extent.startLo = allocated;
-		inode.blocks += static_cast<uint32_t>(blockSize / 512);
+		if (!allocateBlock(leafBlock)) {
+			freeBlock(allocated);
+			return false;
+		}
+
+		vector<uint8_t> leaf;
+
+		leaf.resize(blockSize);
+
+		auto *leafHeader = reinterpret_cast<Ext4ExtentHeader *>(leaf.data());
+
+		leafHeader->magic = EXT4_EXT_MAGIC;
+		leafHeader->entries = 0;
+		leafHeader->max = static_cast<uint16_t>((blockSize - sizeof(Ext4ExtentHeader)) / sizeof(Ext4Extent));
+		leafHeader->depth = 0;
+		leafHeader->generation = 0;
+
+		if (!appendExtentToLeaf(leaf.data(), fileBlock, allocated) or !writeBlock(leafBlock, leaf.data())) {
+			freeBlock(allocated);
+			freeBlock(leafBlock);
+			return false;
+		}
+
+		auto &index = indices[header->entries++];
+
+		index.block = static_cast<uint32_t>(fileBlock);
+		index.leafLo = leafBlock;
+		index.leafHi = static_cast<uint16_t>(static_cast<uint64_t>(leafBlock) >> 32);
+		index.unused = 0;
+		fsBlock = allocated;
+		inode.blocks += static_cast<uint32_t>((blockSize / 512) * 2);
 
 		return true;
 	}
@@ -1539,10 +1749,72 @@ namespace {
 		auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
 
 		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
+			if (header->magic != EXT4_EXT_MAGIC or header->depth != 1 or header->entries > header->max) {
+				return false;
+			}
+
+			auto *indices = reinterpret_cast<Ext4ExtentIndex *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
+			uint16_t out = 0;
+
+			for (uint16_t i = 0; i < header->entries; ++i) {
+				vector<uint8_t> leaf;
+				const uint64_t leafBlock = extentIndexLeafBlock(indices[i]);
+
+				leaf.resize(blockSize);
+
+				if (!readBlock(leafBlock, leaf.data())) {
+					return false;
+				}
+
+				if (!truncateExtentLeaf(leaf.data(), keepBlocks, inode)) {
+					return false;
+				}
+
+				const auto *leafHeader = reinterpret_cast<const Ext4ExtentHeader *>(leaf.data());
+
+				if (leafHeader->entries == 0) {
+					if (!freeBlock(static_cast<uint32_t>(leafBlock))) {
+						return false;
+					}
+
+					if (inode.blocks >= blockSize / 512) {
+						inode.blocks -= static_cast<uint32_t>(blockSize / 512);
+					}
+
+					continue;
+				}
+
+				const auto *leafExtents = reinterpret_cast<const Ext4Extent *>(leaf.data() + sizeof(Ext4ExtentHeader));
+
+				indices[i].block = leafExtents[0].block;
+
+				if (!writeBlock(leafBlock, leaf.data())) {
+					return false;
+				}
+
+				indices[out++] = indices[i];
+			}
+
+			header->entries = out;
+
+			for (uint16_t i = out; i < header->max; ++i) {
+				indices[i] = Ext4ExtentIndex();
+			}
+
+			return true;
+		}
+
+		return truncateExtentLeaf(reinterpret_cast<uint8_t *>(inode.block), keepBlocks, inode);
+	}
+
+	auto Ext2Volume::truncateExtentLeaf(uint8_t *leaf, const uint64_t keepBlocks, Ext2Inode &inode) -> bool {
+		auto *header = reinterpret_cast<Ext4ExtentHeader *>(leaf);
+
+		if (header->magic != EXT4_EXT_MAGIC or header->depth != 0 or header->entries > header->max) {
 			return false;
 		}
 
-		auto *extents = reinterpret_cast<Ext4Extent *>(reinterpret_cast<uint8_t *>(inode.block) + sizeof(Ext4ExtentHeader));
+		auto *extents = reinterpret_cast<Ext4Extent *>(leaf + sizeof(Ext4ExtentHeader));
 		uint16_t out = 0;
 
 		for (uint16_t i = 0; i < header->entries; ++i) {
@@ -3300,6 +3572,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 
 	if (!registerFsHandler()) {
 		printf("Ext4: Failed to register filesystem handler.");
+		fflush(stdout);
+
+		return 1;
+	}
+
+	if (!registerWithVfs("ext4")) {
+		printf("Ext4: Failed to register with VFS.");
 		fflush(stdout);
 
 		return 1;

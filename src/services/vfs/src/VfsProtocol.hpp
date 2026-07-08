@@ -107,6 +107,8 @@ constexpr uint64_t VFS_DEV_WRITE_MSG_TYPE  = 0x9003C;
 constexpr uint64_t VFS_DEV_WRITE_REPLY_MSG_TYPE = 0x9003D;
 constexpr uint64_t VFS_DEV_IOCTL_MSG_TYPE  = 0x9003E;
 constexpr uint64_t VFS_DEV_IOCTL_REPLY_MSG_TYPE = 0x9003F;
+constexpr uint64_t VFS_REGISTER_FS_HANDLER_MSG_TYPE = 0x90040;
+constexpr uint64_t VFS_REGISTER_FS_HANDLER_REPLY_MSG_TYPE = 0x90041;
 
 constexpr uint32_t STORAGE_MAX_NAME_LENGTH = 32;
 constexpr uint32_t STORAGE_MAX_LIST_DEVICES = 64;
@@ -181,6 +183,16 @@ struct GetReplyMsgData {
 	uint16_t versionMajor {};
 	uint16_t versionMinor {};
 	uint16_t versionPatch {};
+};
+
+struct VfsRegisterFsHandlerMsgData {
+	uint64_t handlerPort {};
+	char fsName[16] {};
+	size_t fsNameLength {};
+};
+
+struct VfsRegisterFsHandlerReplyMsgData {
+	bool success {};
 };
 
 struct StorageListBlockDevicesMsgData {

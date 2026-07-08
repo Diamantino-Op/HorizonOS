@@ -24,6 +24,11 @@ struct VfsVolume {
 	string sourceName;
 };
 
+struct VfsFsHandler {
+	uint64_t port {};
+	string name;
+};
+
 struct VfsHandle {
 	uint64_t handle {};
 	uint64_t ownerPort {};
