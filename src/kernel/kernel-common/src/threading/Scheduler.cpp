@@ -16,6 +16,13 @@ namespace kernel::common::threading {
 
 	namespace {
 		constexpr u64 unlockedCoreId = ~0x0U;
+		u64 nextThreadGeneration = 1;
+
+		auto allocateThreadGeneration() -> u64 {
+			const u64 generation = __atomic_fetch_add(&nextThreadGeneration, 1, __ATOMIC_RELAXED);
+
+			return generation == 0 ? __atomic_fetch_add(&nextThreadGeneration, 1, __ATOMIC_RELAXED) : generation;
+		}
 
 		auto selectTargetExecutionNode(Thread *thread) -> ExecutionNode * {
 			if (thread == nullptr) {
@@ -83,10 +90,12 @@ namespace kernel::common::threading {
 		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userRsp);
 
 		this->id = TIDAllocator::allocTID();
+		this->generation = allocateThreadGeneration();
 	}
 
 	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context), lockedCoreId(~0x0U) {
 		this->id = TIDAllocator::allocTID();
+		this->generation = allocateThreadGeneration();
 	}
 
 	Thread::~Thread() {
@@ -222,6 +231,10 @@ namespace kernel::common::threading {
 
 	u16 Thread::getId() const {
 		return this->id;
+	}
+
+	u64 Thread::getGeneration() const {
+		return this->generation;
 	}
 
 	Process *Thread::getParent() const {
@@ -934,6 +947,39 @@ namespace kernel::common::threading {
 		}
 	}
 
+	void Scheduler::unblockThreadIfWaiting(const u16 threadId, const u64 generation, const u64 port, const bool top, const bool useLock) {
+		bool prevIF = true;
+
+		if (useLock) {
+			prevIF = this->schedLock.lock();
+		}
+
+		Thread *thread = this->getThread(threadId);
+
+		if (thread == nullptr || thread->getGeneration() != generation || thread->getWaitingPort() != port) {
+			if (useLock) {
+				this->schedLock.unlock(prevIF);
+			}
+
+			return;
+		}
+
+		const bool wasBlocked = this->blockedThreadList.remove(thread, false, false);
+
+		if (wasBlocked) {
+			thread->setWaitingPort(0);
+			thread->setSleepNs(0);
+			thread->setState(ThreadState::RUNNING);
+
+			(void) top;
+			this->enqueueThread(thread, true);
+		}
+
+		if (useLock) {
+			this->schedLock.unlock(prevIF);
+		}
+	}
+
 	void Scheduler::sleepTick() {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 
@@ -952,6 +998,7 @@ namespace kernel::common::threading {
 					//CommonMain::getTerminal()->debug("Wake thread: %u", "Scheduler", currEntry.getId());
 
 					schedulerPtr->sleepingThreadList.remove(&currEntry, false);
+					schedulerPtr->blockedThreadList.remove(&currEntry, false, false);
 
 					currEntry.setState(ThreadState::RUNNING);
 					currEntry.setSleepNs(0);

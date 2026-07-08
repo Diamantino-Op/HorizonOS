@@ -124,27 +124,32 @@ namespace kernel::common::threading {
         }
     }
 
-    u16 PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
+    PortMessaging::WakeTarget PortMessaging::wakeOneWaiter(PortEntry *entry, const u64 messageType) {
         auto *waiterNode = entry->waiters.getFirst();
 
         while (waiterNode != nullptr) {
             auto *waiter = waiterNode->value;
 
             if (waiter != nullptr && waiter->accepts(messageType)) {
-                const u16 tid = waiter->thread ? waiter->thread->getId() : 0;
+                WakeTarget target {};
+
+	if (waiter->thread != nullptr) {
+		target.tid = waiter->thread->getId();
+		target.generation = waiter->generation;
+	}
 
                 if (entry->waiters.removeEntry(waiterNode, false)) {
                     delete waiter;
                     delete waiterNode;
                 }
 
-                return tid;
+                return target;
             }
 
             waiterNode = waiterNode->next;
         }
 
-	return 0;
+        return {};
     }
 
     // =========================================================================
@@ -264,13 +269,13 @@ namespace kernel::common::threading {
 
         // --- Wake a waiter (if any) ---
         // wakeOneWaiter removes the waiter node and returns the TID.
-        const u16 tidToWake = wakeOneWaiter(entry, hdr->type);
+        const WakeTarget targetToWake = wakeOneWaiter(entry, hdr->type);
 
         entry->lock.unlock(prevEntryIF);
 
         // Unblock outside all locks so the scheduler can run freely.
-        if (tidToWake != 0) {
-            CommonMain::getInstance()->getScheduler()->unblockThread(tidToWake, /*top=*/true);
+        if (targetToWake.tid != 0) {
+            CommonMain::getInstance()->getScheduler()->unblockThreadIfWaiting(targetToWake.tid, targetToWake.generation, port, /*top=*/true);
         }
 
         return 0;
@@ -495,6 +500,7 @@ namespace kernel::common::threading {
 	            }
 
 	            waiter->thread = currThread;
+	            waiter->generation = currThread->getGeneration();
 
 	            if (options != nullptr) {
 	                waiter->blackListCount = options->blackListCount;

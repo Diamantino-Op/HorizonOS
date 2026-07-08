@@ -7,7 +7,7 @@
 
 using namespace std;
 
-DevFs::DevFs(vector<VfsVolume> &volumes) : volumes(volumes) {
+DevFs::DevFs(vector<VfsVolume> &volumes, pthread_mutex_t *volumesLock) : volumes(volumes), volumesLock(volumesLock) {
 }
 
 void DevFs::setPort(const uint64_t port) {
@@ -47,12 +47,20 @@ auto DevFs::findNode(const string &name, VfsDeviceNode &out) -> bool {
 auto DevFs::volumesText() const -> string {
 	string text;
 
+	if (volumesLock != nullptr) {
+		pthread_mutex_lock(volumesLock);
+	}
+
 	for (const auto &volume : volumes) {
 		text += volume.name;
 		text += " ";
 		text += volume.mounted ? "mounted " : "unmounted ";
 		text += volume.sourceName.empty() ? "virtual" : volume.sourceName;
 		text += "\n";
+	}
+
+	if (volumesLock != nullptr) {
+		pthread_mutex_unlock(volumesLock);
 	}
 
 	return text;

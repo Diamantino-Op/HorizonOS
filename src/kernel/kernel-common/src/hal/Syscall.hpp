@@ -137,6 +137,7 @@ namespace kernel::common::hal {
 	struct UserPhysPage {
 		u64 address {};
 		u64 ownerPid {};
+		u64 mapCount {};
 	};
 
 	struct HosCpuInfo {

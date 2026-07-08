@@ -114,6 +114,7 @@ namespace kernel::common::threading {
         ThreadState getState() const;
 
 		u16 getId() const;
+		u64 getGeneration() const;
 
         Process *getParent() const;
 
@@ -136,6 +137,7 @@ namespace kernel::common::threading {
     private:
         Process *parent {};
         u16 id {};
+		u64 generation {};
 
         u64 sleepNs {};
         u64 waitingPort {};
@@ -554,8 +556,9 @@ namespace kernel::common::threading {
 		 *  @param top Push the thread to the top of the queue.
 		 **/
 		void unblockThread(u16 threadId, bool top, bool useLock = true);
+		void unblockThreadIfWaiting(u16 threadId, u64 generation, u64 port, bool top, bool useLock = true);
 
-    	void enqueueThread(Thread *thread, bool waking = false);
+		void enqueueThread(Thread *thread, bool waking = false);
     	void enqueueThread(Thread *thread, ExecutionNode *target, bool waking = false);
     	auto hasRunnableThreads() -> bool;
 

@@ -31,6 +31,7 @@ namespace kernel::common::threading {
     // -------------------------------------------------------------------------
     struct PortWaiter {
         Thread *thread        {};
+	u64     generation    {};
         u64    *blackListTypes {};
         usize   blackListCount {};
         u64    *whiteListTypes {};
@@ -106,6 +107,11 @@ namespace kernel::common::threading {
         static void debugDump();
 
     private:
+	struct WakeTarget {
+		u16 tid {};
+		u64 generation {};
+	};
+
         // Must be called with portLock held.
         static PortEntry *findPortUnlocked(u64 port);
         static PortEntry *createPortUnlocked(u64 port);
@@ -113,7 +119,7 @@ namespace kernel::common::threading {
         // Remove and return the first waiter that accepts `messageType`.
         // Must be called with entry->lock held but portLock released.
         // Returns the thread ID that should be unblocked (0 if none).
-        static u16 wakeOneWaiter(PortEntry *entry, u64 messageType);
+        static WakeTarget wakeOneWaiter(PortEntry *entry, u64 messageType);
 
         static TicketSpinLock portLock;
         static u64            currUsedPort;   // next port to hand out (starts at 2)

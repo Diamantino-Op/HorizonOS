@@ -18,7 +18,7 @@ struct VfsDeviceNode {
 
 class DevFs {
 public:
-	explicit DevFs(std::vector<VfsVolume> &volumes);
+	explicit DevFs(std::vector<VfsVolume> &volumes, pthread_mutex_t *volumesLock);
 
 	void setPort(uint64_t port);
 	void cleanupOwner(uint64_t ownerPort);
@@ -43,6 +43,7 @@ private:
 
 	uint64_t vfsPort {};
 	std::vector<VfsVolume> &volumes;
+	pthread_mutex_t *volumesLock {};
 	std::vector<VfsDeviceNode> nodes;
 	pthread_mutex_t nodesLock = PTHREAD_MUTEX_INITIALIZER;
 };

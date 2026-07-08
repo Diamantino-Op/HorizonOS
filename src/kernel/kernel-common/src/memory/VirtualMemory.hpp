@@ -43,6 +43,7 @@ namespace kernel::common::memory {
         u64 getPhysAddress(u64 vAddr) const;
 
 		bool hasPageEntry(u64 vAddr) const;
+		bool isUserAccessible(u64 vAddr, bool write) const;
 
         u64 *getPageTable() const;
 

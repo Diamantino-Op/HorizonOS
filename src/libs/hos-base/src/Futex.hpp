@@ -14,6 +14,7 @@ class Futex {
 public:
 	static bool addWaiter(u64 address, u16 threadId);
 	static bool popWaiter(u64 address, u16 *threadId);
+	static bool removeWaiter(u64 address, u16 threadId);
 	static void removeThread(u16 threadId);
 
 	static TicketSpinLock futexLock;

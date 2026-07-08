@@ -67,6 +67,29 @@ bool Futex::popWaiter(const u64 address, u16 *threadId) {
 	return false;
 }
 
+bool Futex::removeWaiter(const u64 address, const u16 threadId) {
+	const bool prevIF = futexLock.lock();
+	auto &waiters = getFutexWaiters();
+	auto *entry = waiters.getFirst();
+
+	while (entry != nullptr) {
+		auto *next = entry->next;
+		auto *waiter = entry->value;
+
+		if (waiter != nullptr && waiter->address == address && waiter->threadId == threadId) {
+			waiters.remove(entry, false);
+			delete waiter;
+			futexLock.unlock(prevIF);
+			return true;
+		}
+
+		entry = next;
+	}
+
+	futexLock.unlock(prevIF);
+	return false;
+}
+
 void Futex::removeThread(const u16 threadId) {
 	const bool prevIF = futexLock.lock();
 	auto &waiters = getFutexWaiters();

@@ -435,6 +435,66 @@ namespace kernel::common::memory {
 		return lvl1Table->entries[lvl1].present || lvl1Table->entries[lvl1].address != 0;
 	}
 
+	bool PageMap::isUserAccessible(const u64 vAddr, const bool write) const {
+		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
+		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
+		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
+		const u32 lvl2 = (vAddr >> 21) & 0x1FF;
+		const u32 lvl1 = (vAddr >> 12) & 0x1FF;
+
+		const PageTable *lvl4Table = nullptr;
+
+		if (VirtualAllocator::isPagingLvl5) {
+			const auto *lvl5Table = reinterpret_cast<PageTable *>(this->pageTable);
+			const PageEntry &lvl5Entry = lvl5Table->entries[lvl5];
+
+			if (!lvl5Entry.present || !lvl5Entry.userAccess) {
+				return false;
+			}
+
+			lvl4Table = reinterpret_cast<PageTable *>((lvl5Entry.address << 12) + CommonMain::getCurrentHhdm());
+		} else {
+			lvl4Table = reinterpret_cast<PageTable *>(this->pageTable);
+		}
+
+		const PageEntry &lvl4Entry = lvl4Table->entries[lvl4];
+
+		if (!lvl4Entry.present || !lvl4Entry.userAccess) {
+			return false;
+		}
+
+		const auto *lvl3Table = reinterpret_cast<PageTable *>((lvl4Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const PageEntry &lvl3Entry = lvl3Table->entries[lvl3];
+
+		if (!lvl3Entry.present || !lvl3Entry.userAccess) {
+			return false;
+		}
+
+		if (lvl3Entry.size) {
+			return !write || lvl3Entry.writeable;
+		}
+
+		const auto *lvl2Table = reinterpret_cast<PageTable *>((lvl3Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const PageEntry &lvl2Entry = lvl2Table->entries[lvl2];
+
+		if (!lvl2Entry.present || !lvl2Entry.userAccess) {
+			return false;
+		}
+
+		if (lvl2Entry.size) {
+			return !write || lvl2Entry.writeable;
+		}
+
+		const auto *lvl1Table = reinterpret_cast<PageTable *>((lvl2Entry.address << 12) + CommonMain::getCurrentHhdm());
+		const PageEntry &lvl1Entry = lvl1Table->entries[lvl1];
+
+		if (!lvl1Entry.present || !lvl1Entry.userAccess) {
+			return false;
+		}
+
+		return !write || lvl1Entry.writeable;
+	}
+
 	u64* PageMap::getOrCreatePageTable(u64* parent, const u16 index, const u8 flags, const bool global, const bool noExec) {
 		auto *parentTable = reinterpret_cast<PageTable *>(parent);
 		const u8 tableFlags = flags | 0b1;

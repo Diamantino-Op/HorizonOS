@@ -44,7 +44,7 @@ namespace kernel::common::hal {
 			return nullptr;
 		}
 
-		auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size) -> bool {
+		auto isValidUserRange(const AllocContext *ctx, const u64 pointer, const usize size, const bool write) -> bool {
 			if (ctx == nullptr or pointer == 0 or size == 0) {
 				return false;
 			}
@@ -55,11 +55,11 @@ namespace kernel::common::hal {
 				return false;
 			}
 
-			return isMappedAddress(ctx, pointer) && isMappedAddress(ctx, end);
+			return ctx->pageMap.isUserAccessible(pointer, write) && ctx->pageMap.isUserAccessible(end, write);
 		}
 
-		auto isFullyMappedUserRange(const AllocContext *ctx, const u64 pointer, const usize size) -> bool {
-			if (!isValidUserRange(ctx, pointer, size)) {
+		auto isFullyMappedUserRange(const AllocContext *ctx, const u64 pointer, const usize size, const bool write) -> bool {
+			if (!isValidUserRange(ctx, pointer, size, write)) {
 				return false;
 			}
 
@@ -67,7 +67,7 @@ namespace kernel::common::hal {
 			u64 addr = alignDown<u64>(pointer, pageSize);
 
 			while (addr <= end) {
-				if (!isMappedAddress(ctx, addr)) {
+				if (!ctx->pageMap.isUserAccessible(addr, write)) {
 					return false;
 				}
 
@@ -82,7 +82,7 @@ namespace kernel::common::hal {
 		}
 
 		auto isValidFutexPointer(const AllocContext *ctx, const u64 pointer) -> bool {
-			return isValidUserRange(ctx, pointer, sizeof(u32));
+			return isValidUserRange(ctx, pointer, sizeof(u32), false);
 		}
 
 		auto timespecToNs(const Timespec *ts, u64 *ns) -> int {
@@ -155,7 +155,7 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			if (!isFullyMappedUserRange(ctx, userPtr, size)) {
+			if (!isFullyMappedUserRange(ctx, userPtr, size, true)) {
 				return EFAULT;
 			}
 
@@ -180,7 +180,7 @@ namespace kernel::common::hal {
 				return EFAULT;
 			}
 
-			if (!isFullyMappedUserRange(ctx, userPtr, size)) {
+			if (!isFullyMappedUserRange(ctx, userPtr, size, false)) {
 				return EFAULT;
 			}
 
@@ -198,6 +198,23 @@ namespace kernel::common::hal {
 			}
 
 			return 0;
+		}
+
+		auto futexTimeoutFromUser(const AllocContext *ctx, const u64 timePtr, u64 *timeoutNs) -> int {
+			*timeoutNs = 0;
+
+			if (timePtr == 0) {
+				return 0;
+			}
+
+			Timespec timeout {};
+			const int copyErr = copyFromUser(ctx, &timeout, timePtr, sizeof(timeout));
+
+			if (copyErr != 0) {
+				return copyErr;
+			}
+
+			return timespecToNs(&timeout, timeoutNs);
 		}
 
 		struct CopiedMessageFilterOptions {
@@ -383,6 +400,16 @@ namespace kernel::common::hal {
 				const LinkedListEntry<Thread> *firstThread = process.threadList.getFirst();
 
 				return firstThread != nullptr ? firstThread->value : nullptr;
+			}
+
+			return nullptr;
+		}
+
+		auto findOwnedUserPhysPageUnlocked(const u64 ownerPid, const u64 pageAddr) -> UserPhysPage * {
+			for (auto &page : SyscallManager::userPhysPages) {
+				if (page.ownerPid == ownerPid && page.address == pageAddr) {
+					return &page;
+				}
 			}
 
 			return nullptr;
@@ -727,6 +754,15 @@ namespace kernel::common::hal {
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 
 		for (u64 i = bottomAddr; i < topAddr; i += pageSize) {
+			if (!static_cast<bool>(freePage)) {
+				const u64 phys = ctx->pageMap.getPhysAddress(i);
+				UserPhysPage *tracked = findOwnedUserPhysPageUnlocked(process->getId(), alignDown<u64>(phys, pageSize));
+
+				if (tracked != nullptr && tracked->mapCount > 0) {
+					tracked->mapCount--;
+				}
+			}
+
 			ctx->pageMap.unMapPage(i, static_cast<bool>(freePage));
 		}
 
@@ -816,7 +852,7 @@ namespace kernel::common::hal {
 		const Thread *thread = Scheduler::getCurrentThread();
 		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
 
-		if (not isValidUserRange(ctx, info, sizeof(KernelSysInfo))) {
+		if (not isValidUserRange(ctx, info, sizeof(KernelSysInfo), true)) {
 			return EFAULT;
 		}
 
@@ -1173,106 +1209,97 @@ namespace kernel::common::hal {
 		const AllocContext *ctx = thread->getParent()->getProcessContext();
 
 		const u64 futexOp = type & FUTEX_CMD_MASK;
+		const auto waitOnFutex = [&]() -> u64 {
+			u64 timeoutNs = 0;
+			const int timeoutErr = futexTimeoutFromUser(ctx, time, &timeoutNs);
 
-		switch (futexOp) {
-			case FUTEX_WAIT: {
-				if (time != 0) {
+			if (timeoutErr != 0) {
+				return timeoutErr;
+			}
+
+			if (!isValidFutexPointer(ctx, pointer)) {
+				return EFAULT;
+			}
+
+			const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
+
+			if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
+				return EAGAIN;
+			}
+
+			const bool schedPrevIF = scheduler->getSchedLock()->lock();
+
+			if (!isValidFutexPointer(ctx, pointer)) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				return EFAULT;
+			}
+
+			if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				return EAGAIN;
+			}
+
+			if (time != 0 && timeoutNs == 0) {
+				scheduler->getSchedLock()->unlock(schedPrevIF);
+
+				return ETIMEDOUT;
+			}
+
+			u64 deadlineNs = 0;
+
+			if (timeoutNs != 0) {
+				deadlineNs = CommonMain::getInstance()->getClocks()->getMainClock()->getNs();
+
+				if (deadlineNs > ~0ULL - timeoutNs) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
 					return EINVAL;
 				}
 
-				if (!isValidFutexPointer(ctx, pointer)) {
-					return EFAULT;
-				}
+				deadlineNs += timeoutNs;
+			}
 
-				const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
-
-				if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
-					return EAGAIN;
-				}
-
-				const bool schedPrevIF = scheduler->getSchedLock()->lock();
-
-				if (!isValidFutexPointer(ctx, pointer)) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return EFAULT;
-				}
-
-				if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return EAGAIN;
-				}
-
-				if (!Futex::addWaiter(pointer, thread->getId())) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return ENOMEM;
-				}
-
-				thread->setState(ThreadState::BLOCKED);
-				scheduler->removeThread(thread);
-
-				const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
-				const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
-
-				scheduler->blockedThreadList.addStart(thread);
-
+			if (!Futex::addWaiter(pointer, thread->getId())) {
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 
-				if (shouldReschedule) {
-					ExecutionNode::reSchedule();
-				}
+				return ENOMEM;
+			}
 
-				return 0;
+			thread->setSleepNs(deadlineNs);
+			thread->setState(ThreadState::BLOCKED);
+			scheduler->removeThread(thread);
+
+			const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
+			const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
+
+			scheduler->blockedThreadList.addStart(thread);
+
+			if (deadlineNs != 0 && !scheduler->sleepingThreadList.contains(thread)) {
+				scheduler->sleepingThreadList.addStart(thread);
+			}
+
+			scheduler->getSchedLock()->unlock(schedPrevIF);
+
+			if (shouldReschedule) {
+				ExecutionNode::reSchedule();
+			}
+
+			if (deadlineNs != 0 && Futex::removeWaiter(pointer, thread->getId())) {
+				return ETIMEDOUT;
+			}
+
+			return 0;
+		};
+
+		switch (futexOp) {
+			case FUTEX_WAIT: {
+				return waitOnFutex();
 			}
 
 			case FUTEX_WAIT_BITSET: {
-				if (!isValidFutexPointer(ctx, pointer)) {
-					return EFAULT;
-				}
-
-				const auto *futexWord = reinterpret_cast<volatile u32 *>(pointer);
-
-				if (static_cast<u32>(*futexWord) != static_cast<u32>(expected)) {
-					return EAGAIN;
-				}
-
-				const bool schedPrevIF = scheduler->getSchedLock()->lock();
-
-				if (!isValidFutexPointer(ctx, pointer)) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return EFAULT;
-				}
-
-				if (static_cast<u32>(*reinterpret_cast<volatile u32 *>(pointer)) != static_cast<u32>(expected)) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return EAGAIN;
-				}
-
-				if (!Futex::addWaiter(pointer, thread->getId())) {
-					scheduler->getSchedLock()->unlock(schedPrevIF);
-
-					return ENOMEM;
-				}
-
-				thread->setState(ThreadState::BLOCKED);
-				scheduler->removeThread(thread);
-
-				const Thread *currentEntry = Scheduler::getCurrentExecutionNode()->getCurrentThread();
-				const bool shouldReschedule = currentEntry != nullptr && currentEntry == thread;
-
-				scheduler->blockedThreadList.addStart(thread);
-
-				scheduler->getSchedLock()->unlock(schedPrevIF);
-
-				if (shouldReschedule) {
-					ExecutionNode::reSchedule();
-				}
-
-				return 0;
+				return waitOnFutex();
 			}
 
 			case FUTEX_WAKE: {
@@ -1294,6 +1321,7 @@ namespace kernel::common::hal {
 
 					if (waitThread != nullptr && waitThread->getState() == ThreadState::BLOCKED) {
 						scheduler->blockedThreadList.remove(waitThread, false);
+						scheduler->sleepingThreadList.remove(waitThread, false, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
 						scheduler->enqueueThread(waitThread, true);
@@ -1325,6 +1353,7 @@ namespace kernel::common::hal {
 
 					if (waitThread != nullptr && waitThread->getState() == ThreadState::BLOCKED) {
 						scheduler->blockedThreadList.remove(waitThread, false);
+						scheduler->sleepingThreadList.remove(waitThread, false, false);
 						waitThread->setState(ThreadState::RUNNING);
 						waitThread->setSleepNs(0);
 						scheduler->enqueueThread(waitThread, true);
@@ -1363,13 +1392,13 @@ namespace kernel::common::hal {
 
 		const AllocContext *ctx = thread->getParent()->getProcessContext();
 
-		if (!isValidUserRange(ctx, action, action != 0 ? sizeof(SignalAction) : 0)) {
+		if (!isValidUserRange(ctx, action, action != 0 ? sizeof(SignalAction) : 0, false)) {
 			if (action != 0) {
 				return EFAULT;
 			}
 		}
 
-		if (!isValidUserRange(ctx, oldAction, oldAction != 0 ? sizeof(SignalAction) : 0)) {
+		if (!isValidUserRange(ctx, oldAction, oldAction != 0 ? sizeof(SignalAction) : 0, true)) {
 			if (oldAction != 0) {
 				return EFAULT;
 			}
@@ -1608,6 +1637,28 @@ namespace kernel::common::hal {
 
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
 		const u64 retAddr = process->topmostMappedPage + pageSize + pageOffset;
+		const u64 originalTopmostMappedPage = process->topmostMappedPage;
+		u64 mappedBytes = 0;
+		u64 countedBytes = 0;
+
+		const auto rollbackMappings = [&]() {
+			u64 virt = retAddr - pageOffset;
+
+			for (u64 offset = 0; offset < mappedBytes; offset += pageSize) {
+				kernelCtx->pageMap.unMapPage(virt + offset, false);
+				processCtx->pageMap.unMapPage(virt + offset, false);
+			}
+
+			for (u64 offset = 0; offset < countedBytes; offset += pageSize) {
+				UserPhysPage *tracked = findOwnedUserPhysPageUnlocked(process->getId(), alignedAddr + offset);
+
+				if (tracked != nullptr && tracked->mapCount > 0) {
+					tracked->mapCount--;
+				}
+			}
+
+			process->topmostMappedPage = originalTopmostMappedPage;
+		};
 
 		for (u64 i = alignedAddr; i < alignedEnd;) {
 			const u64 virtAddr = process->topmostMappedPage + pageSize;
@@ -1641,6 +1692,7 @@ namespace kernel::common::hal {
 			if (!mapped) {
 				kernelCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
 				processCtx->pageMap.mapPage(virtAddr, i, 0b00000111, false, false, cacheMode);
+				mappingSize = pageSize;
 			}
 
 			if (virtAddr > process->topmostMappedPage) {
@@ -1648,10 +1700,24 @@ namespace kernel::common::hal {
 			}
 
 			if (processCtx->pageMap.getPhysAddress(virtAddr) == 0) {
+				kernelCtx->pageMap.unMapPage(virtAddr, false);
+				processCtx->pageMap.unMapPage(virtAddr, false);
+				rollbackMappings();
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 				return ENOMEM;
 			}
 
+			mappedBytes += mappingSize;
+
+			for (u64 page = i; page < i + mappingSize; page += pageSize) {
+				UserPhysPage *tracked = findOwnedUserPhysPageUnlocked(process->getId(), page);
+
+				if (tracked != nullptr) {
+					tracked->mapCount++;
+				}
+			}
+
+			countedBytes += mappingSize;
 			i += mappingSize;
 		}
 
@@ -1720,7 +1786,7 @@ namespace kernel::common::hal {
 		const Thread *thread = Scheduler::getCurrentThread();
 		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
 
-		if (!isFullyMappedUserRange(ctx, cpuIdOutArray, cpuCount * sizeof(HosCpuInfo))) {
+		if (!isFullyMappedUserRange(ctx, cpuIdOutArray, cpuCount * sizeof(HosCpuInfo), true)) {
 			return EFAULT;
 		}
 
@@ -1800,6 +1866,12 @@ namespace kernel::common::hal {
 			auto *next = node->next;
 
 			if (node->value != nullptr && node->value->address == pageAddr && node->value->ownerPid == process->getId()) {
+				if (node->value->mapCount != 0) {
+					scheduler->getSchedLock()->unlock(schedPrevIF);
+
+					return EBUSY;
+				}
+
 				owned = userPhysPages.removeEntry(node);
 
 				if (owned) {
@@ -1837,7 +1909,7 @@ namespace kernel::common::hal {
 
 		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
 
-		if (!isValidUserRange(ctx, mask, cpuSetSize)) {
+		if (!isValidUserRange(ctx, mask, cpuSetSize, true)) {
 			return EFAULT;
 		}
 
@@ -1917,7 +1989,7 @@ namespace kernel::common::hal {
 
 		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
 
-		if (!isValidUserRange(ctx, mask, cpuSetSize)) {
+		if (!isValidUserRange(ctx, mask, cpuSetSize, false)) {
 			return EFAULT;
 		}
 

@@ -372,8 +372,7 @@ namespace kernel::common::threading {
 						CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
 
 						for (u64 mappedAddr = startPage; mappedAddr < mappedEnd; mappedAddr += pageSize) {
-							CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(mappedAddr), 1);
-							process->getProcessContext()->pageMap.unMapPage(mappedAddr);
+							process->getProcessContext()->pageMap.unMapPage(mappedAddr, true);
 						}
 
 						Asm::writeCr3(currPageMap);
@@ -499,9 +498,7 @@ namespace kernel::x86_64::threading {
 
 				if (this->userStackPointer != 0) {
 					for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-						CommonMain::getInstance()->getPMM()->freePagesCtx(process->getProcessContext(), reinterpret_cast<u64 *>(addr), 1);
-
-						process->getProcessContext()->pageMap.unMapPage(addr);
+						process->getProcessContext()->pageMap.unMapPage(addr, true);
 					}
 				}
 			}
