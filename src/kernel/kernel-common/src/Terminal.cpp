@@ -93,7 +93,7 @@ namespace kernel::common {
 		constexpr u16 com1Port = 0x2F8;
 
 	 	if (flantermCtx != nullptr) {
-	 		flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
+	 		//flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 	 	}
 
 		// TODO: Only x86_64
@@ -113,7 +113,7 @@ namespace kernel::common {
 		//constexpr u16 e9Port = 0xe9;
 
 		if (flantermCtx != nullptr) {
-			flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
+			//flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 		}
 
 		// TODO: Only x86_64
@@ -198,6 +198,72 @@ namespace kernel::common {
 		}
 	}
 
+	void Terminal::appendPersistentInfoLog(const TermMsg &message) {
+		if (message.type != MessageType::INFO) {
+			return;
+		}
+
+		u64 timestamp = 0;
+		CommonMain *main = CommonMain::getInstance();
+		const Clocks *clocks = main != nullptr ? main->getClocks() : nullptr;
+		const Clock *clock = clocks != nullptr ? clocks->getMainClock() : nullptr;
+
+		if (clock != nullptr && clock->getNs != nullptr) {
+			timestamp = clock->getNs();
+		}
+
+		const bool prevIF = this->persistentInfoLogLock.lock();
+		KernelLogEntry &entry = this->persistentInfoLogs[this->nextPersistentInfoSequence % maxPersistentInfoLogs];
+
+		entry.sequence = this->nextPersistentInfoSequence++;
+		entry.timestampNs = timestamp;
+		entry.type = MessageType::INFO;
+
+		for (usize i = 0; i < maxMsgIDLength; ++i) {
+			entry.id[i] = message.id[i];
+		}
+
+		for (usize i = 0; i < maxMsgLength; ++i) {
+			entry.msg[i] = message.msg[i];
+		}
+
+		if (this->nextPersistentInfoSequence > maxPersistentInfoLogs + 1) {
+			this->persistentInfoDropped = this->nextPersistentInfoSequence - maxPersistentInfoLogs - 1;
+		}
+
+		this->persistentInfoLogLock.unlock(prevIF);
+	}
+
+	auto Terminal::readInfoLog(const u64 afterSequence, KernelLogEntry *out, const usize maxEntries) -> usize {
+		if (out == nullptr || maxEntries == 0) {
+			return 0;
+		}
+
+		const bool prevIF = this->persistentInfoLogLock.lock();
+		const u64 nextSequence = this->nextPersistentInfoSequence;
+		const u64 firstAvailable = nextSequence > maxPersistentInfoLogs ? nextSequence - maxPersistentInfoLogs : 1;
+		u64 sequence = afterSequence + 1;
+		usize copied = 0;
+
+		if (sequence < firstAvailable) {
+			sequence = firstAvailable;
+		}
+
+		while (sequence < nextSequence && copied < maxEntries) {
+			const KernelLogEntry &entry = this->persistentInfoLogs[sequence % maxPersistentInfoLogs];
+
+			if (entry.sequence == sequence) {
+				out[copied++] = entry;
+			}
+
+			sequence++;
+		}
+
+		this->persistentInfoLogLock.unlock(prevIF);
+
+		return copied;
+	}
+
 	void Terminal::wakeThread() {
 		const u16 tid = __atomic_load_n(&this->threadId, __ATOMIC_ACQUIRE);
 
@@ -237,8 +303,25 @@ namespace kernel::common {
 
 			va_end(args);
 
+			this->appendPersistentInfoLog(message);
 			this->enqueueMessage(message);
 		} else if (canPrint()) {
+			TermMsg message {};
+
+			message.type = MessageType::INFO;
+
+			for (usize i = 0; i < maxMsgIDLength - 1 && id[i] != '\0'; ++i) {
+				message.id[i] = id[i];
+				message.id[i+1] = '\0';
+			}
+
+			va_list args;
+			va_start(args, id);
+			npf_vsnprintf(message.msg, maxMsgLength, format, args);
+			va_end(args);
+
+			this->appendPersistentInfoLog(message);
+
 			const bool prevIF = this->lock();
 
 			this->printf(false, "[ \o{33}[1;34minformation \o{33}[0m] \o{33}[1;30m%s: \o{33}[0;37m", id);

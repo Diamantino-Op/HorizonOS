@@ -62,7 +62,7 @@ namespace kernel::common::hal {
 	constexpr u64 sendMessageRetryCount = 40;
 
 	constexpr u64 linuxSyscallAmount = 309;
-	constexpr u64 horizonSyscallAmount = 43;
+	constexpr u64 horizonSyscallAmount = 45;
 
 	constexpr u64 irqReceiveMsgType = 0x1000;
 	constexpr u64 kernelEventMsgType = 0x1100;
@@ -145,6 +145,21 @@ namespace kernel::common::hal {
 		u64 apicId;
 	};
 
+	struct FramebufferInfo {
+		u64 physicalAddress {};
+		u64 length {};
+		u32 width {};
+		u32 height {};
+		u32 pitch {};
+		u16 bpp {};
+		u8 redMaskSize {};
+		u8 redMaskShift {};
+		u8 greenMaskSize {};
+		u8 greenMaskShift {};
+		u8 blueMaskSize {};
+		u8 blueMaskShift {};
+	};
+
     class SyscallManager {
     public:
         static void init();
@@ -195,6 +210,8 @@ namespace kernel::common::hal {
     	static auto syscallGetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
     	static auto syscallSetAffinity(long *, u64 tidPid, u64 cpuSetSize, u64 mask, u64, u64, u64) -> u64;
     	static auto syscallRegisterEventHandler(long *, u64 port, u64 eventMask, u64, u64, u64, u64) -> u64;
+    	static auto syscallGetFramebufferInfo(long *, u64 infoOut, u64 framebufferIndex, u64, u64, u64, u64) -> u64;
+    	static auto syscallReadKernelLog(long *ret, u64 afterSequence, u64 entriesOut, u64 maxEntries, u64, u64, u64) -> u64;
 
     	static void notifyThreadKilled(u64 pid, u64 tid);
     	static void notifyProcessKilled(u64 pid);

@@ -7,9 +7,10 @@
 #include "hal/Cpu.hpp"
 #include "memory/VirtualAllocator.hpp"
 #include "threading/PortMessaging.hpp"
+#include "limine.h"
 
-// TODO: Preserve
 extern limine_mp_request mpRequest;
+extern limine_framebuffer_request framebufferRequest;
 
 namespace kernel::common::hal {
 	using namespace threading;
@@ -470,6 +471,8 @@ namespace kernel::common::hal {
 		horizonSyscalls[40] = &syscallGetAffinity;
 		horizonSyscalls[41] = &syscallSetAffinity;
 		horizonSyscalls[42] = &syscallRegisterEventHandler;
+		horizonSyscalls[43] = &syscallGetFramebufferInfo;
+		horizonSyscalls[44] = &syscallReadKernelLog;
 
 		initArch();
 	}
@@ -2120,7 +2123,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	auto SyscallManager::syscallRegisterEventHandler(long */*unused*/, const u64 port, const u64 eventMask, u64, u64, u64, u64) -> u64 {
+	auto SyscallManager::syscallRegisterEventHandler(long */*unused*/, const u64 port, const u64 eventMask, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (port == 0 or eventMask == 0) {
 			return EINVAL;
 		}
@@ -2142,6 +2145,83 @@ namespace kernel::common::hal {
 		registration->port = port;
 		registration->eventMask = eventMask;
 		eventRegistrations.addEnd(registration);
+
+		return 0;
+	}
+
+	auto SyscallManager::syscallGetFramebufferInfo(long */*unused*/, const u64 infoOut, const u64 framebufferIndex, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		const Thread *thread = Scheduler::getCurrentThread();
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+
+		if (ctx == nullptr || infoOut == 0) {
+			return EFAULT;
+		}
+
+		if (framebufferRequest.response == nullptr || framebufferIndex >= framebufferRequest.response->framebuffer_count) {
+			return ENOENT;
+		}
+
+		const limine_framebuffer *fb = framebufferRequest.response->framebuffers[framebufferIndex];
+
+		if (fb == nullptr || fb->address == nullptr || fb->pitch == 0 || fb->height == 0) {
+			return EFAULT;
+		}
+
+		const u64 fbVirt = reinterpret_cast<u64>(fb->address);
+		const u64 fbPhys = CommonMain::getInstance()->getKernelAllocContext()->pageMap.getPhysAddress(fbVirt);
+
+		if (fbPhys == 0) {
+			return EFAULT;
+		}
+
+		FramebufferInfo info {};
+
+		info.physicalAddress = fbPhys;
+		info.length = fb->pitch * fb->height;
+		info.width = fb->width;
+		info.height = fb->height;
+		info.pitch = fb->pitch;
+		info.bpp = fb->bpp;
+		info.redMaskSize = fb->red_mask_size;
+		info.redMaskShift = fb->red_mask_shift;
+		info.greenMaskSize = fb->green_mask_size;
+		info.greenMaskShift = fb->green_mask_shift;
+		info.blueMaskSize = fb->blue_mask_size;
+		info.blueMaskShift = fb->blue_mask_shift;
+
+		return copyToUser(ctx, infoOut, &info, sizeof(info));
+	}
+
+	auto SyscallManager::syscallReadKernelLog(long *ret, const u64 afterSequence, const u64 entriesOut, const u64 maxEntries, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+		const Thread *thread = Scheduler::getCurrentThread();
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+
+		if (ret == nullptr) {
+			return EINVAL;
+		}
+
+		*ret = 0;
+
+		if (ctx == nullptr || entriesOut == 0 || maxEntries == 0) {
+			return EFAULT;
+		}
+
+		constexpr usize maxBatch = 64;
+		const usize requested = maxEntries > maxBatch ? maxBatch : maxEntries;
+		KernelLogEntry entries[maxBatch] {};
+		const usize copied = CommonMain::getTerminal()->readInfoLog(afterSequence, entries, requested);
+
+		if (copied == 0) {
+			return 0;
+		}
+
+		const int err = copyToUser(ctx, entriesOut, entries, copied * sizeof(KernelLogEntry));
+
+		if (err != 0) {
+			return err;
+		}
+
+		*ret = static_cast<long>(copied);
 
 		return 0;
 	}

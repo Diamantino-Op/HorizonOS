@@ -62,8 +62,6 @@ namespace kernel::x86_64 {
 	}
 
 	void Kernel::init() {
-		this->rootInit();
-
 		if (not LIMINE_BASE_REVISION_SUPPORTED(limineBaseRevision)) {
 			Asm::lhlt();
 		}
@@ -78,6 +76,8 @@ namespace kernel::x86_64 {
 		terminal = Terminal(framebuffer);
 
 		terminal.info("Initializing HorizonOS...", "HorizonOS");
+
+		this->rootInit();
 
 		// GDT
 		this->gdtManager = GdtManager(this->tssManager.getTss());

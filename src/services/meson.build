@@ -74,4 +74,4 @@ display_exe = display_proj.get_variable('display_exe')
 
 logd_proj = subproject('logd', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
-logd2_exe = logd_proj.get_variable('logd_exe')
+logd_exe = logd_proj.get_variable('logd_exe')

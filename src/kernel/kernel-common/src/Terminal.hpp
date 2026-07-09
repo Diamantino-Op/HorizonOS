@@ -16,6 +16,7 @@ namespace kernel::common {
 	constexpr u64 maxMsgLength = 256;
 	constexpr u64 maxMsgIDLength = 64;
 	constexpr u64 maxMessages = 1024;
+	constexpr u64 maxPersistentInfoLogs = 4096;
 
 	enum MessageType {
 		DEBUG,
@@ -28,6 +29,14 @@ namespace kernel::common {
 		MessageType type;
 		char id[maxMsgIDLength];
 		char msg[maxMsgLength];
+	};
+
+	struct KernelLogEntry {
+		u64 sequence {};
+		u64 timestampNs {};
+		MessageType type {};
+		char id[maxMsgIDLength] {};
+		char msg[maxMsgLength] {};
 	};
 
     class Terminal {
@@ -58,12 +67,14 @@ namespace kernel::common {
         void debug(const char *format, const char *id, ...);
         void warn(const char *format, const char *id, ...);
         void warnNoLock(const char *format, const char *id, ...);
-        void error(const char *format, const char *id, ...);
+	        void error(const char *format, const char *id, ...);
+	    	auto readInfoLog(u64 afterSequence, KernelLogEntry *out, usize maxEntries) -> usize;
 
         ExecutionNode *getCurrentCore();
 
     private:
     	void enqueueMessage(const TermMsg &message);
+    	void appendPersistentInfoLog(const TermMsg &message);
     	void wakeThread();
 
         static flanterm_context *flantermCtx;
@@ -71,7 +82,11 @@ namespace kernel::common {
         TicketSpinLock spinLock;
 
     public:
-    	LFQueue<TermMsg, maxMessages> msgQueue;
+    	LFQueue<TermMsg, maxMessages> msgQueue {};
+    	KernelLogEntry persistentInfoLogs[maxPersistentInfoLogs] {};
+    	TicketSpinLock persistentInfoLogLock;
+    	u64 nextPersistentInfoSequence = 1;
+    	u64 persistentInfoDropped = 0;
 
     	bool isThreaded = false;
     	u16 threadId {};
