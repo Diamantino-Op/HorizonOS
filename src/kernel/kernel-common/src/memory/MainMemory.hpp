@@ -16,8 +16,6 @@ namespace kernel::common::memory {
 
 void* operator new(usize size);
 void* operator new[](usize size);
-void *operator new(usize, void *p) noexcept;
-void *operator new[](usize, void *p) noexcept;
 void operator delete(void* ptr) noexcept;
 void operator delete(void* ptr, usize) noexcept;
 void operator delete[](void* ptr) noexcept;

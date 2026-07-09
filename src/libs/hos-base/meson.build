@@ -28,7 +28,10 @@ hos_base_lib = static_library('hos_base',
                                   freestnd_cxx_hdrs_dep
                               ],
                               c_args: get_option('lib_c_flags'),
-                              cpp_args: get_option('lib_cpp_flags'),
+                              cpp_args: get_option('lib_cpp_flags') + [
+                                  '-Wno-unknown-attributes',
+                                  '-Wno-keyword-compat',
+                              ],
                               pic: true,
                               native: false
 )

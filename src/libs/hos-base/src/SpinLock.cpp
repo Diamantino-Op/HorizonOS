@@ -1,5 +1,16 @@
 #include "SpinLock.hpp"
 
+TicketSpinLock::TicketSpinLock(const TicketSpinLock &) {
+	nextTicket.store(0, std::memory_order_relaxed);
+	currentTicket.store(0, std::memory_order_relaxed);
+}
+
+auto TicketSpinLock::operator=(const TicketSpinLock &) -> TicketSpinLock & {
+	nextTicket.store(0, std::memory_order_relaxed);
+	currentTicket.store(0, std::memory_order_relaxed);
+	return *this;
+}
+
 bool TicketSpinLock::lock() {
 	u64 flags;
 
@@ -12,9 +23,9 @@ bool TicketSpinLock::lock() {
 		: "memory"
 	);
 
-	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
+	const auto ticket = nextTicket.fetch_add(1, std::memory_order_relaxed);
 
-	while(__atomic_load_n(&currentTicket, __ATOMIC_ACQUIRE) != ticket) {
+	while(currentTicket.load(std::memory_order_acquire) != ticket) {
 		lockedFun();
 	}
 
@@ -22,9 +33,9 @@ bool TicketSpinLock::lock() {
 }
 
 void TicketSpinLock::lockNoCli() {
-	const auto ticket = __atomic_fetch_add(&nextTicket, 1, __ATOMIC_RELAXED);
+	const auto ticket = nextTicket.fetch_add(1, std::memory_order_relaxed);
 
-	while(__atomic_load_n(&currentTicket, __ATOMIC_ACQUIRE) != ticket) {
+	while(currentTicket.load(std::memory_order_acquire) != ticket) {
 		lockedFun();
 	}
 }
@@ -40,9 +51,9 @@ void TicketSpinLock::lockedFun() {
 }
 
 void TicketSpinLock::unlock(bool prevIF) {
-	const auto current = __atomic_load_n(&currentTicket, __ATOMIC_RELAXED);
+	const auto current = currentTicket.load(std::memory_order_relaxed);
 
-	__atomic_store_n(&currentTicket, current + 1, __ATOMIC_RELEASE);
+	currentTicket.store(current + 1, std::memory_order_release);
 
 	if (prevIF) {
 		asm volatile("sti" ::: "memory");
@@ -50,9 +61,9 @@ void TicketSpinLock::unlock(bool prevIF) {
 }
 
 void TicketSpinLock::unlockNoSti() {
-	const auto current = __atomic_load_n(&currentTicket, __ATOMIC_RELAXED);
+	const auto current = currentTicket.load(std::memory_order_relaxed);
 
-	__atomic_store_n(&currentTicket, current + 1, __ATOMIC_RELEASE);
+	currentTicket.store(current + 1, std::memory_order_release);
 }
 
 bool SimpleSpinLock::lock() {
@@ -68,14 +79,23 @@ bool SimpleSpinLock::lock() {
 	);
 
 	while (true) {
-		if (!__atomic_exchange_n(&this->locked, true, __ATOMIC_ACQUIRE)) {
+		if (!this->locked.exchange(true, std::memory_order_acquire)) {
 			return flags & (1 << 9);
 		}
 
-		while (__atomic_load_n(&this->locked, __ATOMIC_RELAXED)) {
+		while (this->locked.load(std::memory_order_relaxed)) {
 			lockedFun();
 		}
 	}
+}
+
+SimpleSpinLock::SimpleSpinLock(const SimpleSpinLock &) {
+	locked.store(false, std::memory_order_relaxed);
+}
+
+auto SimpleSpinLock::operator=(const SimpleSpinLock &) -> SimpleSpinLock & {
+	locked.store(false, std::memory_order_relaxed);
+	return *this;
 }
 
 void SimpleSpinLock::lockedFun() {
@@ -89,7 +109,7 @@ void SimpleSpinLock::lockedFun() {
 }
 
 void SimpleSpinLock::unlock(bool prevIF) {
-	__atomic_store_n(&this->locked, false, __ATOMIC_RELEASE);
+	this->locked.store(false, std::memory_order_release);
 
 	if (prevIF) {
 		asm volatile("sti" ::: "memory");

@@ -1,5 +1,7 @@
 #include "Event.hpp"
 
+#include "stdatomic.h"
+
 SimpleEvent::SimpleEvent(const u64 counter) {
 	atomic_init(&this->counter, counter);
 }

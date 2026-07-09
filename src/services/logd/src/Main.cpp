@@ -105,8 +105,8 @@ namespace {
 	}
 
 	int openLogFile() {
-		mkdir("Tmp:/Logs", 0755);
-		return open("Tmp:/Logs/info.log", O_CREAT | O_WRONLY | O_APPEND, 0644);
+		mkdir("HorizonOS:/Logs", 0755);
+		return open("HorizonOS:/Logs/info.log", O_CREAT | O_WRONLY | O_APPEND, 0644);
 	}
 }
 

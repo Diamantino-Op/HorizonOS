@@ -81,14 +81,8 @@ namespace kernel::common {
 
         TicketSpinLock spinLock;
 
-    public:
-    	LFQueue<TermMsg, maxMessages> msgQueue {};
-    	KernelLogEntry persistentInfoLogs[maxPersistentInfoLogs] {};
-    	TicketSpinLock persistentInfoLogLock;
-    	u64 nextPersistentInfoSequence = 1;
-    	u64 persistentInfoDropped = 0;
-
-    	bool isThreaded = false;
+	public:
+		bool isThreaded = false;
     	u16 threadId {};
     };
 

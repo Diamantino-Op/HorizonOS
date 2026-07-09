@@ -112,7 +112,7 @@ npf_path = join_paths(deps_dir, 'nanoprintf', 'nanoprintf.h')
 
 run_command(sh, '-c', 'mkdir -p "@0@/nanoprintf"'.format(deps_dir))
 
-run_command(sh, '-c', 'wget -O "@0@" https://raw.githubusercontent.com/charlesnicholson/nanoprintf/main/nanoprintf.h'.format(npf_path))
+run_command(sh, '-c', 'test -s "@0@" || wget -O "@0@" https://raw.githubusercontent.com/charlesnicholson/nanoprintf/main/nanoprintf.h'.format(npf_path))
 
 npf_inc = include_directories(join_paths(deps_dir, 'nanoprintf'))
 

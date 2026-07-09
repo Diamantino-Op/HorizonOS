@@ -5,6 +5,8 @@
 #include "PhysicalMemory.hpp"
 #include "MainMemory.hpp"
 
+#include <new>
+
 extern limine_memmap_request memMapRequest;
 extern limine_paging_mode_request pagingModeRequest;
 

@@ -14,6 +14,10 @@ namespace kernel::common {
 	}
 
 	bool Terminal::canPrint() {
+		if (CommonMain::getInstance() == nullptr or reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager() == nullptr) {
+			return true;
+		}
+
 		const CpuCore *bspCore = reinterpret_cast<Kernel *>(CommonMain::getInstance())->getCpuManager()->getBootstrapCpu();
 
 		return bspCore == nullptr or bspCore == CpuManager::getCurrentCore() or CpuManager::getCurrentCore()->printEnabled;

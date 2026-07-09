@@ -102,6 +102,10 @@ else
 endif
 
 kernel_cpp_flags += kernel_c_flags
+kernel_cpp_flags += [
+    '-Wno-unknown-attributes',
+    '-Wno-keyword-compat',
+]
 
 
 

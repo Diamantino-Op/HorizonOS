@@ -77,14 +77,6 @@ void* operator new[](const usize size) {
 	return malloc(size);
 }
 
-void *operator new(usize, void *p) noexcept {
-	return p;
-}
-
-void *operator new[](usize, void *p) noexcept {
-	return p;
-}
-
 void operator delete(void* ptr) noexcept {
 	free(ptr);
 }

@@ -2,78 +2,84 @@
 #define LIB_HOS_BASE_LFQUEUE_HPP
 
 #include "Types.hpp"
-#include "stdatomic.h"
+
+#include <atomic>
+#include <new>
 
 template <typename T, usize N>
 struct LFQueue {
 	static_assert((N & (N - 1)) == 0, "N must be power of two");
 
+	// Bounded MPSC queue: many producers may call push(), exactly one consumer
+	// may call pop(). init() must not run while producers or the consumer use it.
 	struct Cell {
-		alignas(64) usize sequence;
+		alignas(std::hardware_destructive_interference_size) std::atomic<usize> sequence {0};
 		T value;
 	};
 
-	alignas(64) usize head;
-	alignas(64) usize tail;
-	Cell buf[N];
+	alignas(std::hardware_destructive_interference_size) std::atomic<usize> head {0};
+	alignas(std::hardware_destructive_interference_size) usize tail {0};
+	Cell buf[N] {};
+
+	LFQueue() = default;
+
+	LFQueue(const LFQueue &) {
+		init();
+	}
+
+	auto operator=(const LFQueue &) -> LFQueue & {
+		init();
+		return *this;
+	}
 
 	void init() {
-		__atomic_store_n(&head, 0, __ATOMIC_RELAXED);
-		__atomic_store_n(&tail, 0, __ATOMIC_RELAXED);
+		head.store(0, std::memory_order_relaxed);
+		tail = 0;
 
 		for (usize i = 0; i < N; ++i) {
-			__atomic_store_n(&buf[i].sequence, i, __ATOMIC_RELAXED);
+			buf[i].sequence.store(i, std::memory_order_relaxed);
 		}
 	}
 
 	bool push(const T& v) {
 		Cell *cell;
-		usize pos = __atomic_load_n(&head, __ATOMIC_RELAXED);
+		usize pos = head.load(std::memory_order_relaxed);
 
 		for (;;) {
 			cell = &buf[pos & (N - 1)];
-			const usize sequence = __atomic_load_n(&cell->sequence, __ATOMIC_ACQUIRE);
+			const usize sequence = cell->sequence.load(std::memory_order_acquire);
 			const isize diff = static_cast<isize>(sequence) - static_cast<isize>(pos);
 
 			if (diff == 0) {
-				if (__atomic_compare_exchange_n(&head, &pos, pos + 1, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+				if (head.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed, std::memory_order_relaxed)) {
 					break;
 				}
 			} else if (diff < 0) {
 				return false;
 			} else {
-				pos = __atomic_load_n(&head, __ATOMIC_RELAXED);
+				pos = head.load(std::memory_order_relaxed);
 			}
 		}
 
 		cell->value = v;
-		__atomic_store_n(&cell->sequence, pos + 1, __ATOMIC_RELEASE);
+		cell->sequence.store(pos + 1, std::memory_order_release);
 
 		return true;
 	}
 
 	bool pop(T& out) {
-		Cell *cell;
-		usize pos = __atomic_load_n(&tail, __ATOMIC_RELAXED);
+		const usize pos = tail;
+		Cell *cell = &buf[pos & (N - 1)];
+		const usize sequence = cell->sequence.load(std::memory_order_acquire);
+		const isize diff = static_cast<isize>(sequence) - static_cast<isize>(pos + 1);
 
-		for (;;) {
-			cell = &buf[pos & (N - 1)];
-			const usize sequence = __atomic_load_n(&cell->sequence, __ATOMIC_ACQUIRE);
-			const isize diff = static_cast<isize>(sequence) - static_cast<isize>(pos + 1);
-
-			if (diff == 0) {
-				if (__atomic_compare_exchange_n(&tail, &pos, pos + 1, false, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
-					break;
-				}
-			} else if (diff < 0) {
-				return false;
-			} else {
-				pos = __atomic_load_n(&tail, __ATOMIC_RELAXED);
-			}
+		if (diff != 0) {
+			return false;
 		}
 
 		out = cell->value;
-		__atomic_store_n(&cell->sequence, pos + N, __ATOMIC_RELEASE);
+		cell->sequence.store(pos + N, std::memory_order_release);
+		tail = pos + 1;
 
 		return true;
 	}

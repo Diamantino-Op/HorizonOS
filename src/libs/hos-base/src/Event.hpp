@@ -3,7 +3,6 @@
 
 #include "Types.hpp"
 #include "stdbool.h"
-#include "stdatomic.h"
 
 class SimpleEvent {
 public:

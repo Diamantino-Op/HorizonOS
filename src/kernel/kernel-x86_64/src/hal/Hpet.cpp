@@ -4,7 +4,6 @@
 #include "CommonMain.hpp"
 #include "Main.hpp"
 #include "Math.hpp"
-#include "stdatomic.h"
 
 #include "uacpi/tables.h"
 

@@ -10,6 +10,8 @@
 
 #include "limine.h"
 
+#include <new>
+
 // ReSharper disable CppDeclaratorNeverUsed
 
 __attribute__((used, section(".limine_requests_start")))

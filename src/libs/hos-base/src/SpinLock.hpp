@@ -1,16 +1,19 @@
 #ifndef LIB_HOS_BASE_SPINLOCK_HPP
 #define LIB_HOS_BASE_SPINLOCK_HPP
 
-#include "stdbool.h"
 #include "Types.hpp"
-#include "stdatomic.h"
+
+#include <atomic>
 
 // TODO: Maybe disable ints when locking and re-enable when unlocking
 
 class TicketSpinLock {
 public:
     TicketSpinLock() = default;
+    TicketSpinLock(const TicketSpinLock &);
     ~TicketSpinLock() = default;
+
+	auto operator=(const TicketSpinLock &) -> TicketSpinLock &;
 
     bool lock();
 	void lockNoCli();
@@ -21,14 +24,17 @@ public:
 private:
     void lockedFun();
 
-    u64 nextTicket {};
-    u64 currentTicket {};
+    std::atomic<u64> nextTicket {};
+    std::atomic<u64> currentTicket {};
 };
 
 class SimpleSpinLock {
 public:
     SimpleSpinLock() = default;
+	SimpleSpinLock(const SimpleSpinLock &);
     ~SimpleSpinLock() = default;
+
+	auto operator=(const SimpleSpinLock &) -> SimpleSpinLock &;
 
     bool lock();
     void unlock(bool prevIF);
@@ -36,7 +42,7 @@ public:
 private:
     void lockedFun();
 
-    bool locked {};
+    std::atomic<bool> locked {};
 };
 
 #endif

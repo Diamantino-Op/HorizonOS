@@ -94,6 +94,16 @@ library_cpp_flags += library_c_flags
 
 base_library_cpp_flags += base_library_c_flags
 
+library_cpp_flags += [
+    '-Wno-unknown-attributes',
+    '-Wno-keyword-compat',
+]
+
+base_library_cpp_flags += [
+    '-Wno-unknown-attributes',
+    '-Wno-keyword-compat',
+]
+
 
 
 # Hos Base

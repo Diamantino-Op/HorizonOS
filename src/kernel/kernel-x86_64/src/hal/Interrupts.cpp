@@ -300,3 +300,8 @@ extern "C" void __assert_fail(const char *assertion, const char *file, unsigned 
 
 	Asm::lhlt();
 }
+
+extern "C" [[noreturn]] void abort() {
+	Asm::cli();
+	Asm::lhlt();
+}
