@@ -100,7 +100,7 @@
 		constexpr u16 com1Port = 0x2F8;
 
 	 	if (flantermCtx != nullptr) {
-	 		//flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
+	 		flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 	 	}
 
 		// TODO: Only x86_64
@@ -120,7 +120,7 @@
 		//constexpr u16 e9Port = 0xe9;
 
 		if (flantermCtx != nullptr) {
-			//flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
+			flanterm_write(flantermCtx, reinterpret_cast<const char *>(&c), 1);
 		}
 
 		// TODO: Only x86_64

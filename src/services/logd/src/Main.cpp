@@ -3,6 +3,7 @@
 #include <horizonos/syscall.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -15,6 +16,8 @@ namespace {
 	constexpr uint64_t REGISTER_MSG_TYPE = 0x1;
 	constexpr uint64_t REPLY_REGISTER_MSG_TYPE = 0x5;
 	constexpr uint64_t NAME_REGISTRY_PORT = 1;
+	constexpr char LOG_DIR[] = "HorizonOS:/Logs";
+	constexpr char LOG_PATH[] = "HorizonOS:/Logs/info.log";
 
 	struct RegisterMsgData {
 		uint16_t ownerPid {};
@@ -81,9 +84,25 @@ namespace {
 	}
 
 	std::string formatEntry(const HorizonKernelLogEntry &entry) {
+		constexpr uint64_t NS_PER_MS = 1000ULL * 1000ULL;
+		constexpr uint64_t MS_PER_SECOND = 1000ULL;
+		constexpr uint64_t SECONDS_PER_MINUTE = 60ULL;
+		constexpr uint64_t MINUTES_PER_HOUR = 60ULL;
+
+		const uint64_t totalMs = entry.timestampNs / NS_PER_MS;
+		const uint64_t milliseconds = totalMs % MS_PER_SECOND;
+		const uint64_t totalSeconds = totalMs / MS_PER_SECOND;
+		const uint64_t seconds = totalSeconds % SECONDS_PER_MINUTE;
+		const uint64_t totalMinutes = totalSeconds / SECONDS_PER_MINUTE;
+		const uint64_t minutes = totalMinutes % MINUTES_PER_HOUR;
+		const uint64_t hours = totalMinutes / MINUTES_PER_HOUR;
+
 		char line[512] {};
-		snprintf(line, sizeof(line), "[%llu ns] INFO %s: %s\n",
-			static_cast<unsigned long long>(entry.timestampNs),
+		snprintf(line, sizeof(line), "[%02llu:%02llu:%02llu.%03llu] INFO %s: %s\n",
+			static_cast<unsigned long long>(hours),
+			static_cast<unsigned long long>(minutes),
+			static_cast<unsigned long long>(seconds),
+			static_cast<unsigned long long>(milliseconds),
 			entry.id,
 			entry.msg);
 		return line;
@@ -104,9 +123,73 @@ namespace {
 		return true;
 	}
 
+	bool statDirectory(const char *path) {
+		struct stat st {};
+
+		if (stat(path, &st) != 0) {
+			return false;
+		}
+
+		return S_ISDIR(st.st_mode);
+	}
+
 	int openLogFile() {
-		mkdir("HorizonOS:/Logs", 0755);
-		return open("HorizonOS:/Logs/info.log", O_CREAT | O_WRONLY | O_APPEND, 0644);
+		if (!statDirectory(LOG_DIR)) {
+			if (mkdir(LOG_DIR, 0755) != 0 && errno != EEXIST) {
+				const int mkdirErr = errno;
+
+				if (!statDirectory(LOG_DIR)) {
+					struct stat root {};
+					const int rootErr = stat("HorizonOS:/", &root) == 0 ? 0 : errno;
+
+					printf("LogD: mkdir %s failed: errno=%d rootStatErr=%d", LOG_DIR, mkdirErr, rootErr);
+					fflush(stdout);
+
+					return -1;
+				}
+			}
+		}
+
+		struct stat existing {};
+
+		if (stat(LOG_PATH, &existing) != 0 && (errno == EIO || errno == EINVAL)) {
+			const int statErr = errno;
+
+			if (unlink(LOG_PATH) == 0) {
+				printf("LogD: removed broken %s after stat errno=%d", LOG_PATH, statErr);
+				fflush(stdout);
+			}
+		}
+
+		const int fd = open(LOG_PATH, O_CREAT | O_RDWR | O_TRUNC, 0644);
+
+		if (fd < 0) {
+			const int openErr = errno;
+			struct stat dir {};
+			struct stat file {};
+			const int dirErr = stat(LOG_DIR, &dir) == 0 ? 0 : errno;
+			const int fileErr = stat(LOG_PATH, &file) == 0 ? 0 : errno;
+
+			printf("LogD: open %s failed: errno=%d dirStatErr=%d fileStatErr=%d", LOG_PATH, openErr, dirErr, fileErr);
+			fflush(stdout);
+
+			return -1;
+		}
+
+		if (lseek(fd, 0, SEEK_END) < 0) {
+			printf("LogD: seek %s failed: errno=%d", LOG_PATH, errno);
+			fflush(stdout);
+
+			close(fd);
+			return -1;
+		}
+
+		fsync(fd);
+
+		printf("LogD: writing kernel info log to %s", LOG_PATH);
+		fflush(stdout);
+
+		return fd;
 	}
 }
 
@@ -116,15 +199,20 @@ int main() {
 	}
 
 	if (!registerService("LogD")) {
-		printf("LogD: failed to register service\n");
+		printf("LogD: failed to register service");
+		fflush(stdout);
+
 		return 1;
 	}
 
-	printf("LogD: ready\n");
+	printf("LogD: ready");
+	fflush(stdout);
 
 	uint64_t lastSequence = 0;
 	int logFd = -1;
+	uint64_t openAttempts = 0;
 	std::vector<std::string> backlog;
+
 	backlog.reserve(4096);
 
 	for (;;) {
@@ -140,6 +228,12 @@ int main() {
 
 		if (logFd < 0) {
 			logFd = openLogFile();
+			++openAttempts;
+
+			if (logFd < 0 && (openAttempts % 200) == 1) {
+				printf("LogD: waiting for %s", LOG_PATH);
+				fflush(stdout);
+			}
 		}
 
 		if (logFd >= 0 && !backlog.empty()) {
@@ -149,13 +243,20 @@ int main() {
 				const std::string &line = backlog[flushed];
 
 				if (!writeAll(logFd, line.data(), line.size())) {
+					printf("LogD: write %s failed: errno=%d", LOG_PATH, errno);
+					fflush(stdout);
+
 					close(logFd);
+
 					logFd = -1;
+
 					break;
 				}
 			}
 
 			if (flushed > 0) {
+				fsync(logFd);
+
 				backlog.erase(backlog.begin(), backlog.begin() + static_cast<long>(flushed));
 			}
 		}

@@ -1322,7 +1322,7 @@ namespace horizonos::services::ext4 {
 		string parentPath;
 		string name;
 
-		if (!splitParentPath(path, parentPath, name)) {
+		if (!splitParentPath(path, parentPath, name) or name == "." or name == "..") {
 			return false;
 		}
 
@@ -1351,11 +1351,29 @@ namespace horizonos::services::ext4 {
 		inode.mode = EXT4_S_IFREG | 0644;
 		inode.linksCount = 1;
 
+		if ((superblock.featureIncompat & EXT4_FEATURE_INCOMPAT_EXTENTS) != 0) {
+			inode.flags |= EXT4_EXTENTS_FL;
+
+			auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
+
+			header->magic = EXT4_EXT_MAGIC;
+			header->entries = 0;
+			header->max = static_cast<uint16_t>((sizeof(inode.block) - sizeof(Ext4ExtentHeader)) / sizeof(Ext4Extent));
+			header->depth = 0;
+			header->generation = 0;
+		}
+
 		if (!writeInode(inodeNumber, inode)) {
+			freeInode(inodeNumber);
 			return false;
 		}
 
-		return addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 1);
+		if (!addDirectoryEntry(parentInodeNumber, parent, inodeNumber, name, 1)) {
+			freeInode(inodeNumber);
+			return false;
+		}
+
+		return Utils::flushDevice(device.deviceId);
 	}
 
 	auto Ext4Volume::createDirectory(const string &path) -> bool {

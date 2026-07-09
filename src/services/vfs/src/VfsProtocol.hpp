@@ -537,9 +537,9 @@ struct VfsReadLinkReplyMsgData {
 };
 
 struct VfsOpenMsgData {
-	uint32_t flags {};
 	char path[VFS_MAX_PATH_LENGTH] {};
 	size_t pathLength {};
+	uint32_t flags {};
 };
 
 struct VfsOpenReplyMsgData {
