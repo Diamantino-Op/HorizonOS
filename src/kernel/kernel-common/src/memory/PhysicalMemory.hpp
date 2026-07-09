@@ -25,6 +25,8 @@ namespace kernel::common::memory {
 
         u64 *allocPages(usize pageAmount, bool useHhdm);
 
+        u64 *allocPagesBelow(usize pageAmount, bool useHhdm, u64 maxPhysExclusive);
+
         void freePages(u64 *virtAddress, usize pageAmount);
 
     	void freePagesCtx(const AllocContext *ctx, u64 *virtAddress, usize pageAmount);

@@ -2,6 +2,7 @@
 #include "MassStorage.hpp"
 
 #include "horizonos/generic.h"
+#include "horizonos/syscall.h"
 #include "pthread.h"
 #include "sys/mman.h"
 #include "unistd.h"
@@ -51,12 +52,20 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		*reinterpret_cast<volatile uint64_t *>(base + offset) = value;
 	}
 
-	void XhciUtils::dmaWriteFence() {
+		void XhciUtils::dmaReadFence() {
+			__sync_synchronize();
+		}
+
+		void XhciUtils::dmaWriteFence() {
 		__sync_synchronize();
 	}
 
-	auto XhciUtils::allocatePage(AllocatedPage &page) -> bool {
-		if (allocPhysPage(&page.phys) != 0) {
+	auto XhciUtils::allocatePage(AllocatedPage &page, const uint64_t maxPhysExclusive) -> bool {
+			const int allocResult = maxPhysExclusive == 0
+				? allocPhysPage(&page.phys)
+				: syscall(SYSCALL_ALLOC_PHYS_PAGE, reinterpret_cast<long *>(&page.phys), maxPhysExclusive);
+
+			if (allocResult != 0) {
 			return false;
 		}
 
@@ -469,8 +478,12 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			XhciUtils::pciWrite32(dev, PCI_BAR0 + 4, bar0Hi);
 		}
 
-		const uint64_t sizeMask = is64Bit ? (static_cast<uint64_t>(sizeHi) << 32) | sizeLo : sizeLo;
-		uint64_t barSize = sizeMask != 0 ? (~sizeMask + 1) : 0x10000;
+			const uint64_t sizeMask = is64Bit ? (static_cast<uint64_t>(sizeHi) << 32) | sizeLo : sizeLo;
+			uint64_t barSize = 0x10000;
+
+			if (sizeMask != 0) {
+				barSize = is64Bit ? (~sizeMask + 1) : static_cast<uint64_t>(~sizeLo + 1U);
+			}
 
 		if (barSize == 0 or barSize > 0x10000000) {
 			printf("XHCI: Unreasonable BAR0 size 0x%lx for %02x:%02x.%x.", barSize, dev.bus, dev.device, dev.function);
@@ -543,9 +556,43 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				return;
 			}
 
-			offset = nextOffset;
+				if (nextOffset == 0) {
+					break;
+				}
+
+				offset += nextOffset;
+			}
 		}
-	}
+
+		void XhciUtils::discoverRootPortProtocols(MappedController &controller, const uint64_t capabilityBase, const uint32_t hccParams1) {
+			controller.rootPortProtocolMajor.assign(controller.maxPorts + 1, 0);
+			uint32_t offset = ((hccParams1 >> 16) & 0xFFFFU) * 4;
+
+			for (uint32_t guard = 0; offset != 0 and guard < 64; ++guard) {
+				const uint32_t header = XhciUtils::mmioRead32(capabilityBase, offset);
+				const uint32_t capId = header & 0xFFU;
+				const uint32_t nextOffset = ((header >> 8) & 0xFFU) * 4;
+
+				if (capId == XHCI_EXT_CAP_SUPPORTED_PROTOCOL) {
+					const uint8_t major = static_cast<uint8_t>(header >> 24);
+					const uint32_t ports = XhciUtils::mmioRead32(capabilityBase, offset + 8);
+					const uint8_t firstPort = static_cast<uint8_t>(ports & 0xFFU);
+					const uint8_t portCount = static_cast<uint8_t>((ports >> 8) & 0xFFU);
+
+					for (uint32_t port = firstPort; port < static_cast<uint32_t>(firstPort) + portCount and port <= controller.maxPorts; ++port) {
+						if (port != 0) {
+							controller.rootPortProtocolMajor[port] = major;
+						}
+					}
+				}
+
+				if (nextOffset == 0) {
+					break;
+				}
+
+				offset += nextOffset;
+			}
+		}
 
 	auto XhciUtils::waitForControllerReady(const uint64_t operationalBase) -> bool {
 		for (int i = 0; i < 10000; ++i) {
@@ -626,7 +673,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		XhciUtils::mmioWrite32(operationalBase, XHCI_OP_USBCMD, command);
 	}
 
-	void XhciUtils::powerRootPorts(MappedController &controller) {
+		void XhciUtils::powerRootPorts(MappedController &controller) {
 		for (uint32_t port = 1; port <= controller.maxPorts; ++port) {
 			const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
 			const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
@@ -635,7 +682,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				continue;
 			}
 
-			XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & ~XHCI_PORTSC_CHANGE_BITS) | XHCI_PORTSC_PP);
+				XhciUtils::mmioWrite32(controller.operationalBase, offset, XHCI_PORTSC_PP | (portsc & XHCI_PORTSC_CHANGE_BITS));
 			usleep(20000);
 
 			const uint32_t powered = XhciUtils::mmioRead32(controller.operationalBase, offset);
@@ -648,14 +695,14 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return ((hcsParams2 >> 27) & 0x1FU) << 5U | ((hcsParams2 >> 21) & 0x1FU);
 	}
 
-	auto XhciUtils::setupScratchpads(ControllerMemory &memory, const uint32_t maxScratchpads) -> bool {
+		auto XhciUtils::setupScratchpads(ControllerMemory &memory, const uint32_t maxScratchpads, const uint64_t dmaAddressLimit) -> bool {
 		memory.maxScratchpads = maxScratchpads;
 
 		if (maxScratchpads == 0) {
 			return true;
 		}
 
-		if (!XhciUtils::allocatePage(memory.scratchpadArray)) {
+			if (!XhciUtils::allocatePage(memory.scratchpadArray, dmaAddressLimit)) {
 			return false;
 		}
 
@@ -667,7 +714,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		for (uint32_t i = 0; i < maxScratchpads; ++i) {
 			auto page = AllocatedPage();
 
-			if (!XhciUtils::allocatePage(page)) {
+				if (!XhciUtils::allocatePage(page, dmaAddressLimit)) {
 				return false;
 			}
 
@@ -680,8 +727,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::setupCommandRing(ControllerMemory &memory, const uint64_t operationalBase) -> bool {
-		if (!XhciUtils::allocatePage(memory.commandRing)) {
+		auto XhciUtils::setupCommandRing(ControllerMemory &memory, const uint64_t operationalBase, const uint64_t dmaAddressLimit) -> bool {
+			if (!XhciUtils::allocatePage(memory.commandRing, dmaAddressLimit)) {
 			return false;
 		}
 
@@ -697,12 +744,12 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::setupEventRing(ControllerMemory &memory, const uint64_t runtimeBase) -> bool {
-		if (!XhciUtils::allocatePage(memory.eventRing)) {
+		auto XhciUtils::setupEventRing(ControllerMemory &memory, const uint64_t runtimeBase, const uint64_t dmaAddressLimit) -> bool {
+			if (!XhciUtils::allocatePage(memory.eventRing, dmaAddressLimit)) {
 			return false;
 		}
 
-		if (!XhciUtils::allocatePage(memory.erst)) {
+			if (!XhciUtils::allocatePage(memory.erst, dmaAddressLimit)) {
 			return false;
 		}
 
@@ -817,9 +864,11 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			for (;;) {
 				const auto &event = events[controller.memory.eventDequeueIndex];
 
-				if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
-					break;
-				}
+					if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
+						break;
+					}
+
+					XhciUtils::dmaReadFence();
 
 				const uint32_t type = XhciUtils::eventType(event);
 				const uint64_t eventParam = static_cast<uint64_t>(event.parameterLow) | (static_cast<uint64_t>(event.parameterHigh) << 32);
@@ -901,6 +950,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
 				break;
 			}
+
+			XhciUtils::dmaReadFence();
 
 			const uint32_t type = XhciUtils::eventType(event);
 			const uint32_t code = XhciUtils::completionCode(event);
@@ -1072,17 +1123,50 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return static_cast<uint8_t>((portsc >> XHCI_PORTSC_SPEED_SHIFT) & XHCI_PORTSC_SPEED_MASK);
 	}
 
-	auto XhciUtils::ep0MaxPacketForSpeed(const uint8_t speed) -> uint16_t {
-		if (speed >= 4) {
-			return 512;
+		auto XhciUtils::ep0MaxPacketForSpeed(const MappedController &controller, const uint8_t rootPort, const uint8_t speed) -> uint16_t {
+			const bool usb3Port = rootPort < controller.rootPortProtocolMajor.size() and controller.rootPortProtocolMajor[rootPort] >= 3;
+
+			if (usb3Port or speed >= 4) {
+				return 512;
 		}
 
 		if (speed == 3) {
 			return 64;
 		}
 
-		return 8;
-	}
+			return 8;
+		}
+
+		auto XhciUtils::endpointInterval(const uint8_t speed, const uint8_t attributes, const uint8_t interval) -> uint8_t {
+			const uint8_t transferType = attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK;
+
+			if (transferType != USB_ENDPOINT_TRANSFER_INTERRUPT and transferType != USB_ENDPOINT_TRANSFER_ISOCHRONOUS) {
+				return 0;
+			}
+
+			if (interval == 0) {
+				return 0;
+			}
+
+			if (speed >= 3) {
+				return static_cast<uint8_t>(min<uint32_t>(interval, 16) - 1);
+			}
+
+			if (transferType == USB_ENDPOINT_TRANSFER_ISOCHRONOUS) {
+				return static_cast<uint8_t>(min<uint32_t>(interval + 2U, 15));
+			}
+
+			const uint32_t microframes = static_cast<uint32_t>(interval) * 8;
+			uint8_t exponent = 0;
+			uint32_t period = 1;
+
+			while (period < microframes and exponent < 15) {
+				period <<= 1;
+				++exponent;
+			}
+
+			return exponent;
+		}
 
 	auto XhciUtils::usbEndpointId(const uint8_t endpointAddress) -> uint8_t {
 		const uint8_t endpointNumber = endpointAddress & 0x0FU;
@@ -1131,9 +1215,11 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			for (;;) {
 				const auto &event = events[controller.memory.eventDequeueIndex];
 
-				if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
-					break;
-				}
+					if ((event.control & XHCI_TRB_CYCLE) != controller.memory.eventConsumerCycle) {
+						break;
+					}
+
+					XhciUtils::dmaReadFence();
 
 				const uint32_t type = XhciUtils::eventType(event);
 				const auto eventSlot = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
@@ -1236,32 +1322,100 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::bulkOrInterruptTransfer(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint, const uint64_t *pagePhysArray, const uint32_t pageCount, const uint32_t length, const bool in, uint32_t *actualLength, const int timeoutMs, const bool logTimeout) -> bool {
+		auto XhciUtils::bulkOrInterruptTransfer(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint, const uint64_t *pagePhysArray, const uint32_t pageCount, const uint32_t length, const bool in, uint32_t *actualLength, const int timeoutMs, const bool logTimeout) -> bool {
 		if (actualLength != nullptr) {
 			*actualLength = 0;
 		}
 
-		if (endpoint.transferRing.phys == 0 or pagePhysArray == nullptr or pageCount == 0 or length == 0) {
-			return false;
-		}
+			if (endpoint.transferRing.phys == 0 or pagePhysArray == nullptr or pageCount == 0 or length == 0) {
+				return false;
+			}
 
-		unique_lock lock(eventRingMutex);
+			for (uint32_t page = 0; page < pageCount; ++page) {
+				if ((pagePhysArray[page] & (XHCI_PAGE_SIZE - 1)) != 0) {
+					return false;
+				}
+			}
+
+			struct BouncePageList {
+				vector<AllocatedPage> pages {};
+
+				~BouncePageList() {
+					for (auto &page : pages) {
+						XhciUtils::freePage(page);
+					}
+				}
+			} bounce;
+
+			vector<uint64_t> dmaPages;
+			const uint64_t *transferPages = pagePhysArray;
+			bool needsBounce = false;
+			uint32_t checkedLength = length;
+
+			if (controller.dmaAddressLimit != 0) {
+				for (uint32_t page = 0; page < pageCount and checkedLength != 0; ++page) {
+					const uint32_t chunk = min<uint32_t>(checkedLength, XHCI_PAGE_SIZE);
+					const uint64_t phys = pagePhysArray[page];
+
+					if (phys >= controller.dmaAddressLimit or chunk > controller.dmaAddressLimit - phys) {
+						needsBounce = true;
+						break;
+					}
+
+					checkedLength -= chunk;
+				}
+			}
+
+			if (needsBounce) {
+				bounce.pages.reserve(pageCount);
+				dmaPages.reserve(pageCount);
+				uint32_t bounceRemaining = length;
+
+				for (uint32_t page = 0; page < pageCount and bounceRemaining != 0; ++page) {
+					const uint32_t chunk = min<uint32_t>(bounceRemaining, XHCI_PAGE_SIZE);
+					auto bouncePage = AllocatedPage();
+
+					if (!XhciUtils::allocatePage(bouncePage, controller.dmaAddressLimit)) {
+						return false;
+					}
+
+					if (!in) {
+						uint64_t sourceVirt = 0;
+
+						if (mmap_phys(pagePhysArray[page], XHCI_PAGE_SIZE, &sourceVirt, false) != 0) {
+							XhciUtils::freePage(bouncePage);
+							return false;
+						}
+
+						memcpy(reinterpret_cast<void *>(bouncePage.virt), reinterpret_cast<const void *>(sourceVirt), chunk);
+						munmap_extra(reinterpret_cast<void *>(sourceVirt), XHCI_PAGE_SIZE, false);
+					}
+
+					dmaPages.push_back(bouncePage.phys);
+					bounce.pages.push_back(bouncePage);
+					bounceRemaining -= chunk;
+				}
+
+				if (bounceRemaining != 0) {
+					return false;
+				}
+
+				transferPages = dmaPages.data();
+			}
+
+			unique_lock lock(eventRingMutex);
 		uint32_t remaining = length;
 
 		for (uint32_t page = 0; page < pageCount and remaining != 0; ++page) {
 			const uint32_t chunk = min<uint32_t>(remaining, XHCI_PAGE_SIZE);
 			auto trb = XhciTrb();
 
-			trb.parameterLow = static_cast<uint32_t>(pagePhysArray[page]);
-			trb.parameterHigh = static_cast<uint32_t>(pagePhysArray[page] >> 32);
+				trb.parameterLow = static_cast<uint32_t>(transferPages[page]);
+				trb.parameterHigh = static_cast<uint32_t>(transferPages[page] >> 32);
 			trb.status = chunk;
 			trb.control = XHCI_TRB_ISP | (XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT);
 
-			if (in) {
-				trb.control |= XHCI_TRB_DIR_IN;
-			}
-
-			remaining -= chunk;
+				remaining -= chunk;
 
 			if (remaining == 0) {
 				trb.control |= XHCI_TRB_IOC;
@@ -1305,11 +1459,34 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		const uint32_t residue = completion.status & 0xFFFFFFU;
 
-		if (actualLength != nullptr) {
-			*actualLength = length >= residue ? length - residue : 0;
-		}
+			if (actualLength != nullptr) {
+				*actualLength = length >= residue ? length - residue : 0;
+			}
 
-		return true;
+			const uint32_t completedLength = length >= residue ? length - residue : 0;
+
+			if (needsBounce and in) {
+				uint32_t copyRemaining = completedLength;
+
+				for (uint32_t page = 0; page < bounce.pages.size() and copyRemaining != 0; ++page) {
+					const uint32_t chunk = min<uint32_t>(copyRemaining, XHCI_PAGE_SIZE);
+					uint64_t destinationVirt = 0;
+
+					if (mmap_phys(pagePhysArray[page], XHCI_PAGE_SIZE, &destinationVirt, false) != 0) {
+						return false;
+					}
+
+					memcpy(reinterpret_cast<void *>(destinationVirt), reinterpret_cast<const void *>(bounce.pages[page].virt), chunk);
+					munmap_extra(reinterpret_cast<void *>(destinationVirt), XHCI_PAGE_SIZE, false);
+					copyRemaining -= chunk;
+				}
+
+				if (copyRemaining != 0) {
+					return false;
+				}
+			}
+
+			return true;
 	}
 
 	auto XhciUtils::controlTransferIn(MappedController &controller, XhciDevice &device, const uint8_t requestType, const uint8_t request, const uint16_t value, const uint16_t index, const uint16_t length, const uint64_t dataPhys) -> bool {
@@ -1427,14 +1604,16 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return false;
 	}
 
-	auto XhciUtils::waitForPortReset(const MappedController &controller, const uint8_t port) -> bool {
-		const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
+		auto XhciUtils::waitForPortReset(const MappedController &controller, const uint8_t port, const bool warmReset) -> bool {
+			const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
+			const uint32_t resetBit = warmReset ? XHCI_PORTSC_WPR : XHCI_PORTSC_PR;
+			const uint32_t completionBit = warmReset ? XHCI_PORTSC_WRC : XHCI_PORTSC_PRC;
 
-		for (int i = 0; i < 250; ++i) {
-			const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
+			for (int i = 0; i < 1000; ++i) {
+				const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
 
-			if ((portsc & XHCI_PORTSC_PR) == 0 and (portsc & XHCI_PORTSC_PRC) != 0) {
-				XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | XHCI_PORTSC_PRC | XHCI_PORTSC_CSC | XHCI_PORTSC_PEC);
+				if ((portsc & resetBit) == 0 and (portsc & completionBit) != 0) {
+					XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | (portsc & XHCI_PORTSC_CHANGE_BITS));
 
 				return true;
 			}
@@ -1451,15 +1630,17 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		XhciUtils::logPortState(controller, port, "reset-check");
 
-		if ((portsc & XHCI_PORTSC_CCS) == 0) {
-			return false;
-		}
+			if ((portsc & XHCI_PORTSC_CCS) == 0) {
+				return false;
+			}
 
-		if ((portsc & XHCI_PORTSC_PED) != 0) {
 			const uint8_t speed = static_cast<uint8_t>((portsc >> XHCI_PORTSC_SPEED_SHIFT) & XHCI_PORTSC_SPEED_MASK);
+			const bool protocolIsUsb3 = port < controller.rootPortProtocolMajor.size() and controller.rootPortProtocolMajor[port] >= 3;
+			const bool warmReset = protocolIsUsb3 or speed >= 4;
 
-			if (speed >= 4) {
-				XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | (portsc & XHCI_PORTSC_CHANGE_BITS));
+			if ((portsc & XHCI_PORTSC_PED) != 0) {
+				if (warmReset) {
+					XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | (portsc & XHCI_PORTSC_CHANGE_BITS));
 				usleep(50000);
 				XhciUtils::logPortState(controller, port, "reset-skip-enabled");
 
@@ -1467,10 +1648,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			}
 		}
 
-		XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & ~XHCI_PORTSC_CHANGE_BITS) | XHCI_PORTSC_PR);
+			XhciUtils::mmioWrite32(controller.operationalBase, offset, (portsc & XHCI_PORTSC_PP) | (warmReset ? XHCI_PORTSC_WPR : XHCI_PORTSC_PR));
 
-		if (!XhciUtils::waitForPortReset(controller, port)) {
-			printf("XHCI: Port %u reset timed out.", port);
+			if (!XhciUtils::waitForPortReset(controller, port, warmReset)) {
+				printf("XHCI: Port %u %s reset timed out.", port, warmReset ? "warm" : "normal");
 			fflush(stdout);
 
 			return false;
@@ -1514,8 +1695,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::setupTransferRing(XhciDevice &device) -> bool {
-		if (!XhciUtils::allocatePage(device.transferRing)) {
+		auto XhciUtils::setupTransferRing(const MappedController &controller, XhciDevice &device) -> bool {
+			if (!XhciUtils::allocatePage(device.transferRing, controller.dmaAddressLimit)) {
 			return false;
 		}
 
@@ -1529,8 +1710,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::setupEndpointTransferRing(UsbEndpoint &endpoint) -> bool {
-		if (!XhciUtils::allocatePage(endpoint.transferRing)) {
+		auto XhciUtils::setupEndpointTransferRing(const MappedController &controller, UsbEndpoint &endpoint) -> bool {
+			if (!XhciUtils::allocatePage(endpoint.transferRing, controller.dmaAddressLimit)) {
 			return false;
 		}
 
@@ -1566,7 +1747,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	auto XhciUtils::setupDeviceContexts(const MappedController &controller, XhciDevice &device) -> bool {
-		if (!XhciUtils::allocatePage(device.inputContext) or !XhciUtils::allocatePage(device.deviceContext) or !XhciUtils::allocatePage(device.descriptorBuffer) or !XhciUtils::setupTransferRing(device)) {
+			if (!XhciUtils::allocatePage(device.inputContext, controller.dmaAddressLimit) or
+			    !XhciUtils::allocatePage(device.deviceContext, controller.dmaAddressLimit) or
+			    !XhciUtils::allocatePage(device.descriptorBuffer, controller.dmaAddressLimit) or
+			    !XhciUtils::setupTransferRing(controller, device)) {
 			return false;
 		}
 
@@ -1578,19 +1762,21 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, 0x3);
 
-		const uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
-		const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			const uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
+			const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			const uint32_t slotDword2 = static_cast<uint32_t>(device.ttHubSlotId) | (static_cast<uint32_t>(device.ttPortNumber) << 8);
 
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 2, slotDword2);
 
 		const uint64_t dequeue = device.transferRing.phys | XHCI_TRB_CYCLE;
-		const uint32_t ep0Dword4 = 8U | (static_cast<uint32_t>(device.maxPacketSize) << 16);
+			const uint32_t ep0Dword1 = XHCI_EP0_DWORD1_DEFAULT | (static_cast<uint32_t>(device.maxPacketSize) << 16);
 
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, XHCI_EP0_DWORD1_DEFAULT);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, ep0Dword1);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, 8U);
 		XhciUtils::dmaWriteFence();
 
 		return true;
@@ -1772,20 +1958,21 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, 0x3);
 
-		const uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
-		const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			const uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (1U << 27);
+			const uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			const uint32_t slotDword2 = static_cast<uint32_t>(device.ttHubSlotId) | (static_cast<uint32_t>(device.ttPortNumber) << 8);
 
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 2, slotDword2);
 
 		const uint64_t dequeue = device.transferRing.phys | XHCI_TRB_CYCLE;
-		const uint32_t ep0Dword1 = (4U << 3) | (3U << 1);
-		const uint32_t ep0Dword4 = 8U | (static_cast<uint32_t>(device.maxPacketSize) << 16);
+			const uint32_t ep0Dword1 = XHCI_EP0_DWORD1_DEFAULT | (static_cast<uint32_t>(device.maxPacketSize) << 16);
 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 1, ep0Dword1);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 2, static_cast<uint32_t>(dequeue));
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 3, static_cast<uint32_t>(dequeue >> 32));
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, ep0Dword4);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_EP0_CONTEXT_INDEX, 4, 8U);
 
 		auto command = XhciTrb();
 
@@ -1810,7 +1997,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		for (auto &interface : device.interfaces) {
 			for (auto &endpoint : interface.endpoints) {
-				if (endpoint.transferRing.phys == 0 and !XhciUtils::setupEndpointTransferRing(endpoint)) {
+					if (endpoint.transferRing.phys == 0 and !XhciUtils::setupEndpointTransferRing(controller, endpoint)) {
 					printf("XHCI: Failed to allocate transfer ring slot=%u ep=0x%02x.", device.slotId, endpoint.address);
 					fflush(stdout);
 
@@ -1829,27 +2016,41 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 0, 0x0);
 		XhciUtils::setContextDword(device.inputContext, controller, XHCI_INPUT_CONTROL_CONTEXT_INDEX, 1, addFlags);
 
-		uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (static_cast<uint32_t>(maxEndpointId) << 27);
-		uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			uint32_t slotDword0 = (device.routeString & 0xFFFFFU) | (static_cast<uint32_t>(device.speed) << 20) | (static_cast<uint32_t>(maxEndpointId) << 27);
+			uint32_t slotDword1 = static_cast<uint32_t>(device.rootPort) << 16;
+			uint32_t slotDword2 = static_cast<uint32_t>(device.ttHubSlotId) | (static_cast<uint32_t>(device.ttPortNumber) << 8);
 
-		if (device.isHub) {
-			slotDword0 |= 1U << 26;
-			slotDword1 |= static_cast<uint32_t>(device.hubPortCount) << 24;
-		}
+			if (device.isHub) {
+				slotDword0 |= 1U << 26;
 
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
-		XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+				if (device.multiTT) {
+					slotDword0 |= 1U << 25;
+				}
+
+				slotDword1 |= static_cast<uint32_t>(device.hubPortCount) << 24;
+				slotDword2 |= static_cast<uint32_t>((device.hubCharacteristics >> 5) & 0x3U) << 16;
+			}
+
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 1, slotDword1);
+			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 2, slotDword2);
 
 		for (auto &interface : device.interfaces) {
 			for (const auto &endpoint : interface.endpoints) {
 				const uint64_t dequeue = endpoint.transferRing.phys | XHCI_TRB_CYCLE;
 				const uint32_t ctxIndex = XhciUtils::contextIndexForEndpointId(endpoint.endpointId);
-				const uint32_t interval = static_cast<uint32_t>(endpoint.interval) << 16;
-				const uint32_t epDword1 = (static_cast<uint32_t>(endpoint.endpointType) << 3) | (3U << 1);
-				const uint32_t avgTrbLength = min<uint32_t>(endpoint.maxPacketSize, 0xFFFF);
-				const uint32_t epDword4 = avgTrbLength | (static_cast<uint32_t>(endpoint.maxPacketSize) << 16);
+					const uint32_t epDword0 = (static_cast<uint32_t>((endpoint.maxEsitPayload >> 16) & 0xFFU) << 24) |
+					                          (static_cast<uint32_t>(XhciUtils::endpointInterval(device.speed, endpoint.attributes, endpoint.interval)) << 16) |
+					                          (static_cast<uint32_t>(endpoint.mult & 0x3U) << 8);
+					const uint32_t errorCount = (endpoint.attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_ISOCHRONOUS ? 0 : 3;
+					const uint32_t epDword1 = (static_cast<uint32_t>(endpoint.maxPacketSize) << 16) |
+					                          (static_cast<uint32_t>(endpoint.maxBurst) << 8) |
+					                          (static_cast<uint32_t>(endpoint.endpointType) << 3) |
+					                          (errorCount << 1);
+					const uint32_t avgTrbLength = min<uint32_t>(endpoint.maxPacketSize, 0xFFFF);
+					const uint32_t epDword4 = avgTrbLength | ((endpoint.maxEsitPayload & 0xFFFFU) << 16);
 
-				XhciUtils::setContextDword(device.inputContext, controller, ctxIndex, 0, interval);
+					XhciUtils::setContextDword(device.inputContext, controller, ctxIndex, 0, epDword0);
 				XhciUtils::setContextDword(device.inputContext, controller, ctxIndex, 1, epDword1);
 				XhciUtils::setContextDword(device.inputContext, controller, ctxIndex, 2, static_cast<uint32_t>(dequeue));
 				XhciUtils::setContextDword(device.inputContext, controller, ctxIndex, 3, static_cast<uint32_t>(dequeue >> 32));
@@ -1946,9 +2147,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return text;
 	}
 
-	void XhciUtils::parseConfigurationDescriptor(XhciDevice &device, const uint8_t *desc, const uint16_t totalLength) {
-		uint16_t offset = 0;
-		UsbInterface *currentInterface = nullptr;
+		void XhciUtils::parseConfigurationDescriptor(XhciDevice &device, const uint8_t *desc, const uint16_t totalLength) {
+			uint16_t offset = 0;
+			UsbInterface *currentInterface = nullptr;
+			UsbEndpoint *currentEndpoint = nullptr;
 
 		device.interfaces.clear();
 
@@ -1963,7 +2165,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				return;
 			}
 
-			if (type == USB_DESCRIPTOR_INTERFACE and length >= 9) {
+				if (type == USB_DESCRIPTOR_INTERFACE and length >= 9) {
+					currentEndpoint = nullptr;
 				const uint8_t interfaceNumber = desc[offset + 2];
 				const uint8_t alternateSetting = desc[offset + 3];
 				const uint8_t endpointCount = desc[offset + 4];
@@ -1994,7 +2197,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			} else if (type == USB_DESCRIPTOR_ENDPOINT and length >= 7) {
 				const uint8_t endpointAddress = desc[offset + 2];
 				const uint8_t attributes = desc[offset + 3];
-				const uint16_t maxPacket = static_cast<uint16_t>(desc[offset + 4]) | (static_cast<uint16_t>(desc[offset + 5]) << 8);
+					const uint16_t rawMaxPacket = static_cast<uint16_t>(desc[offset + 4]) | (static_cast<uint16_t>(desc[offset + 5]) << 8);
+					const uint16_t maxPacket = rawMaxPacket & 0x7FFU;
 				const uint8_t interval = desc[offset + 6];
 				auto endpoint = UsbEndpoint();
 
@@ -2002,21 +2206,48 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				endpoint.attributes = attributes;
 				endpoint.maxPacketSize = maxPacket;
 				endpoint.interval = interval;
-				endpoint.endpointId = XhciUtils::usbEndpointId(endpointAddress);
-				endpoint.endpointType = XhciUtils::xhciEndpointType(endpointAddress, attributes);
+					endpoint.endpointId = XhciUtils::usbEndpointId(endpointAddress);
+					endpoint.endpointType = XhciUtils::xhciEndpointType(endpointAddress, attributes);
 
-				if (currentInterface != nullptr and endpoint.endpointId != 0 and endpoint.endpointType != 0) {
-					currentInterface->endpoints.push_back(endpoint);
-				}
+					if ((attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_INTERRUPT or
+					    (attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_ISOCHRONOUS) {
+						const uint8_t additionalTransactions = static_cast<uint8_t>(min<uint32_t>((rawMaxPacket >> 11) & 0x3U, 2));
+						const uint32_t transactions = 1U + additionalTransactions;
+
+						if (device.speed == 3) {
+							endpoint.maxBurst = additionalTransactions;
+						}
+
+						endpoint.maxEsitPayload = maxPacket * transactions;
+					}
+
+					if (currentInterface != nullptr and endpoint.endpointId != 0 and endpoint.endpointType != 0) {
+						currentInterface->endpoints.push_back(endpoint);
+						currentEndpoint = &currentInterface->endpoints.back();
+					} else {
+						currentEndpoint = nullptr;
+					}
 
 				printf("XHCI: Endpoint slot=%u addr=0x%02x attrs=0x%02x maxPacket=%u interval=%u.",
 				       device.slotId,
 				       endpointAddress,
 				       attributes,
 				       maxPacket,
-				       interval);
-				fflush(stdout);
-			}
+					       interval);
+					fflush(stdout);
+				} else if (type == USB_DESCRIPTOR_SS_ENDPOINT_COMPANION and length >= 6 and currentEndpoint != nullptr) {
+					currentEndpoint->maxBurst = desc[offset + 2];
+
+					if ((currentEndpoint->attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_ISOCHRONOUS) {
+						currentEndpoint->mult = desc[offset + 3] & 0x3U;
+					}
+
+					if ((currentEndpoint->attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_INTERRUPT or
+					    (currentEndpoint->attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_ISOCHRONOUS) {
+						currentEndpoint->maxEsitPayload = static_cast<uint16_t>(desc[offset + 4]) |
+						                                  (static_cast<uint16_t>(desc[offset + 5]) << 8);
+					}
+				}
 
 			offset += length;
 		}
@@ -2097,12 +2328,23 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		device.controllerId = controllerId;
 		device.rootPort = rootPort;
-		device.parentSlotId = parentSlotId;
-		device.hubPort = hubPort;
+			device.parentSlotId = parentSlotId;
+			device.hubPort = hubPort;
 		device.routeString = routeString;
 		device.depth = depth;
-		device.speed = speed;
-		device.maxPacketSize = XhciUtils::ep0MaxPacketForSpeed(device.speed);
+			device.speed = speed;
+
+			if (parentSlotId != 0 and speed <= 2) {
+				for (const auto &parent : controller.devices) {
+					if (parent.slotId == parentSlotId and parent.speed == 3) {
+						device.ttHubSlotId = parentSlotId;
+						device.ttPortNumber = hubPort;
+						break;
+					}
+				}
+			}
+
+			device.maxPacketSize = XhciUtils::ep0MaxPacketForSpeed(controller, rootPort, device.speed);
 
 		if (!XhciUtils::enableSlot(controller, device.slotId)) {
 			controller.devices.pop_back();
@@ -2328,7 +2570,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		const uint16_t characteristics = static_cast<uint16_t>(desc[3]) | (static_cast<uint16_t>(desc[4]) << 8);
 		const uint8_t powerOnDelayMs = static_cast<uint8_t>(min<uint32_t>(255, max<uint32_t>(20, static_cast<uint32_t>(desc[5]) * 2)));
 
-		device.isHub = true;
+			device.isHub = true;
+			device.multiTT = interface.interfaceProtocol == 2;
 		device.hubPortCount = portCount;
 		device.hubCharacteristics = characteristics;
 		device.hubPowerOnDelayMs = powerOnDelayMs;
@@ -2637,7 +2880,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			return;
 		}
 
-		if (hub.hubInterruptBuffer.phys == 0 and !XhciUtils::allocatePage(hub.hubInterruptBuffer)) {
+		if (hub.hubInterruptBuffer.phys == 0 and !XhciUtils::allocatePage(hub.hubInterruptBuffer, controller.dmaAddressLimit)) {
 			printf("XHCI: Failed to allocate hub interrupt buffer slot=%u.", hub.slotId);
 			fflush(stdout);
 
@@ -2652,7 +2895,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		trb.parameterLow = static_cast<uint32_t>(hub.hubInterruptBuffer.phys);
 		trb.parameterHigh = static_cast<uint32_t>(hub.hubInterruptBuffer.phys >> 32);
 		trb.status = bitmapLength;
-		trb.control = XHCI_TRB_ISP | XHCI_TRB_IOC | XHCI_TRB_DIR_IN | (XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT);
+		trb.control = XHCI_TRB_ISP | XHCI_TRB_IOC | (XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT);
 
 		{
 			const scoped_lock lock(eventRingMutex);
@@ -2821,6 +3064,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 					if ((event.control & XHCI_TRB_CYCLE) != controller->memory.eventConsumerCycle) {
 						break;
 					}
+
+					XhciUtils::dmaReadFence();
 
 					const uint32_t type = XhciUtils::eventType(event);
 					const uint32_t code = XhciUtils::completionCode(event);
@@ -3119,8 +3364,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		printf("XHCI: MSI unavailable for %02x:%02x.%x, trying legacy INTx.", controller.pci.bus, controller.pci.device, controller.pci.function);
 		fflush(stdout);
 
-		const uint8_t interruptPin = static_cast<uint8_t>(XhciUtils::pciRead32(controller.pci, PCI_INTERRUPT_PIN) & 0xFFU);
-		const uint8_t interruptLine = static_cast<uint8_t>(XhciUtils::pciRead32(controller.pci, PCI_INTERRUPT_LINE) & 0xFFU);
+			const uint32_t interruptInfo = XhciUtils::pciRead32(controller.pci, PCI_INTERRUPT_LINE);
+			const uint8_t interruptPin = static_cast<uint8_t>((interruptInfo >> 8) & 0xFFU);
+			const uint8_t interruptLine = static_cast<uint8_t>(interruptInfo & 0xFFU);
 
 		if (interruptPin == 0 or interruptLine == 0 or interruptLine == 0xFF) {
 			printf("XHCI: No usable legacy interrupt line for %02x:%02x.%x pin=%u line=%u.",
@@ -3257,20 +3503,20 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return ret == 0 and reply.success;
 	}
 
-	auto XhciUtils::setupControllerMemory(MappedController &controller, const uint32_t maxScratchpads) -> bool {
-		if (!XhciUtils::allocatePage(controller.memory.dcbaa)) {
-			return false;
-		}
+		auto XhciUtils::setupControllerMemory(MappedController &controller, const uint32_t maxScratchpads) -> bool {
+			if (!XhciUtils::allocatePage(controller.memory.dcbaa, controller.dmaAddressLimit)) {
+				return false;
+			}
 
-		if (!XhciUtils::setupScratchpads(controller.memory, maxScratchpads)) {
-			return false;
-		}
+			if (!XhciUtils::setupScratchpads(controller.memory, maxScratchpads, controller.dmaAddressLimit)) {
+				return false;
+			}
 
-		if (!XhciUtils::setupCommandRing(controller.memory, controller.operationalBase)) {
-			return false;
-		}
+			if (!XhciUtils::setupCommandRing(controller.memory, controller.operationalBase, controller.dmaAddressLimit)) {
+				return false;
+			}
 
-		if (!XhciUtils::setupEventRing(controller.memory, controller.runtimeBase)) {
+			if (!XhciUtils::setupEventRing(controller.memory, controller.runtimeBase, controller.dmaAddressLimit)) {
 			return false;
 		}
 
@@ -3304,15 +3550,24 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		const uint32_t maxInterrupters = (hcsParams1 >> 8) & 0x7FFU;
 		const uint32_t maxPorts = (hcsParams1 >> 24) & 0xFFU;
 		const uint32_t maxScratchpads = XhciUtils::maxScratchpadBuffers(hcsParams2);
-		const uint32_t pageSizeMask = XhciUtils::mmioRead32(operationalBase, XHCI_OP_PAGESIZE);
+			const uint32_t pageSizeMask = XhciUtils::mmioRead32(operationalBase, XHCI_OP_PAGESIZE);
+
+			if ((pageSizeMask & 1U) == 0) {
+				printf("XHCI: Controller %zu does not support 4 KiB pages (mask=0x%x).", index, pageSizeMask);
+				fflush(stdout);
+
+				return false;
+			}
 
 		controller.operationalBase = operationalBase;
 		controller.runtimeBase = runtimeBase;
 		controller.doorbellBase = doorbellBase;
 		controller.maxSlots = maxSlots;
-		controller.maxPorts = maxPorts;
-		controller.maxInterrupters = maxInterrupters;
-		controller.uses64ByteContexts = (hccParams1 & (1U << 2)) != 0;
+			controller.maxPorts = maxPorts;
+			controller.maxInterrupters = maxInterrupters;
+			controller.dmaAddressLimit = (hccParams1 & 1U) != 0 ? 0 : (1ULL << 32);
+			controller.uses64ByteContexts = (hccParams1 & (1U << 2)) != 0;
+			XhciUtils::discoverRootPortProtocols(controller, base, hccParams1);
 
 		printf("XHCI: Controller %zu %02x:%02x.%x BAR=0x%lx size=0x%lx cap0=0x%x versionRaw=0x%x version=%x.%02x slots=%u ports=%u interrupters=%u scratchpads=%u pageMask=0x%x hcs2=0x%x hcc=0x%x.",
 		       index,
@@ -3334,7 +3589,12 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		       hccParams1);
 		fflush(stdout);
 
-		XhciUtils::takeBiosOwnership(base, hccParams1);
+			XhciUtils::takeBiosOwnership(base, hccParams1);
+
+			if (controller.dmaAddressLimit != 0) {
+				printf("XHCI: Controller %zu requires DMA addresses below 4 GiB.", index);
+				fflush(stdout);
+			}
 
 		if (!XhciUtils::haltController(operationalBase)) {
 			printf("XHCI: Controller %zu did not halt.", index);

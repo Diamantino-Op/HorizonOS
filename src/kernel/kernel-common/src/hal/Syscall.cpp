@@ -1843,7 +1843,7 @@ namespace kernel::common::hal {
 		return 0;
 	}
 
-	auto SyscallManager::syscallAllocPhysPage(long *ret, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
+	auto SyscallManager::syscallAllocPhysPage(long *ret, const u64 maxPhysExclusive, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		if (ret == nullptr) {
 			return EINVAL;
 		}
@@ -1856,7 +1856,9 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const u64 *page = CommonMain::getInstance()->getPMM()->allocPages(1, false);
+		const u64 *page = maxPhysExclusive == 0
+			? CommonMain::getInstance()->getPMM()->allocPages(1, false)
+			: CommonMain::getInstance()->getPMM()->allocPagesBelow(1, false, maxPhysExclusive);
 
 		if (page == nullptr) {
 			return ENOMEM;

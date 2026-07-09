@@ -269,6 +269,65 @@ namespace kernel::common::memory {
 		return nullptr;
 	}
 
+	u64 *PhysicalMemoryManager::allocPagesBelow(const usize pageAmount, const bool useHhdm, const u64 maxPhysExclusive) {
+		if (pageAmount == 0 || pageAmount > (~static_cast<usize>(0) / pageSize)) {
+			return nullptr;
+		}
+
+		const u64 allocationSize = pageAmount * pageSize;
+		const u64 limit = alignDown<u64>(maxPhysExclusive, pageSize);
+
+		if (limit < allocationSize) {
+			return nullptr;
+		}
+
+		const bool prevIF = this->pmmSpinLock.lock();
+		const u64 hhdm = CommonMain::getCurrentHhdm();
+		PmmListEntry *currEntry = this->listPtr;
+
+		while (currEntry != nullptr) {
+			const u64 currPhys = reinterpret_cast<u64>(currEntry) - hhdm;
+
+			if (currEntry->count >= pageAmount && currPhys < limit && allocationSize <= limit - currPhys) {
+				const usize remainingPages = currEntry->count - pageAmount;
+				PmmListEntry *prev = currEntry->prev;
+				PmmListEntry *next = currEntry->next;
+
+				if (remainingPages == 0) {
+					this->removeFreeEntry(currEntry);
+				} else {
+					auto *replacement = reinterpret_cast<PmmListEntry *>(currPhys + allocationSize + hhdm);
+
+					replacement->prev = prev;
+					replacement->count = remainingPages;
+					replacement->next = next;
+
+					if (prev != nullptr) {
+						prev->next = replacement;
+					} else {
+						this->listPtr = replacement;
+					}
+
+					if (next != nullptr) {
+						next->prev = replacement;
+					}
+				}
+
+				const u64 retAddress = currPhys + hhdm;
+				memset(reinterpret_cast<void *>(retAddress), 0, allocationSize);
+				this->pmmSpinLock.unlock(prevIF);
+
+				return reinterpret_cast<u64 *>(useHhdm ? retAddress : currPhys);
+			}
+
+			currEntry = currEntry->next;
+		}
+
+		this->pmmSpinLock.unlock(prevIF);
+
+		return nullptr;
+	}
+
 	void PhysicalMemoryManager::freePages(u64 *virtAddress, const usize pageAmount) {
 		this->freePagesCtx(CommonMain::getInstance()->getKernelAllocContext(), virtAddress, pageAmount);
 	}
