@@ -140,6 +140,24 @@ namespace kernel::common::threading {
 		return 0;
 	}
 
+	extern "C" u64 prepareScheduleSwitch() {
+		u64 flags = 0;
+
+		asm volatile(
+			"pushfq\n"
+			"cli\n"
+			"popq %0"
+			: "=r"(flags)
+			:
+			: "memory"
+		);
+
+		bool restoreIF = static_cast<bool>(flags & (1ULL << 9));
+		CpuManager::getCurrentCore()->executionNode.consumeNextScheduleUnlockIF(restoreIF);
+
+		return restoreIF;
+	}
+
 	extern "C" void loadNewThread() {
 		CpuManager::getCurrentCore()->executionNode.loadNewThread();
 	}
@@ -170,9 +188,7 @@ namespace kernel::common::threading {
 		if (not this->isScheduling) {
 			this->isScheduling = true;
 
-			const auto current = __atomic_load_n(&CommonMain::schedulingCoresRemaining, __ATOMIC_RELAXED);
-
-			__atomic_store_n(&CommonMain::schedulingCoresRemaining, current - 1, __ATOMIC_RELEASE);
+			const auto current = __atomic_fetch_sub(&CommonMain::schedulingCoresRemaining, 1, __ATOMIC_ACQ_REL);
 
 			if (current == 1) {
 				CommonMain::getInstance()->getPMM()->reclaimMemory();
@@ -191,10 +207,7 @@ namespace kernel::common::threading {
 	u128 ExecutionNode::saveOldThread(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
 		const bool prevIF = schedulerPtr->getSchedLock()->lock();
-		bool switchRestoreIF = prevIF;
-
-		this->consumeNextScheduleUnlockIF(switchRestoreIF);
-		this->setPendingSchedUnlock(switchRestoreIF);
+		this->setPendingSchedUnlock(prevIF);
 
 		// Save the old thread state
 
@@ -310,7 +323,8 @@ namespace kernel::common::threading {
 
 		// TODO
 
-		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(this->consumePendingSchedUnlock());
+		this->consumePendingSchedUnlock();
+		CommonMain::getInstance()->getScheduler()->getSchedLock()->unlockNoSti();
 
 		//this->consumePendingSchedUnlock();
 		//CommonMain::getInstance()->getScheduler()->getSchedLock()->unlock(true);
@@ -414,6 +428,21 @@ namespace kernel::common::threading {
 		}
 
 		const u8 prid = process->pridAllocator.allocPRID();
+
+		if (prid >= maxProcThreads) {
+			context->~ThreadContext();
+			VirtualAllocator::free(ctx, reinterpret_cast<u64 *>(context));
+
+			if (kernelStack != nullptr) {
+				VirtualAllocator::free(ctx, kernelStack);
+			}
+
+			if (prevIF) {
+				Asm::sti();
+			}
+
+			return nullptr;
+		}
 
 		context->prid = prid;
 

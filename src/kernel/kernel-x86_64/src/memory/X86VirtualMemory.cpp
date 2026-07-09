@@ -104,6 +104,12 @@ namespace kernel::common::memory {
 	}
 
 	void PageMap::mapPage(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
+		const bool prevIF = this->pageLock.lock();
+		this->mapPageUnlocked(vAddr, pAddr, flags, global, noExec, cacheMode);
+		this->pageLock.unlock(prevIF);
+	}
+
+	void PageMap::mapPageUnlocked(const u64 vAddr, const u64 pAddr, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -147,6 +153,14 @@ namespace kernel::common::memory {
 	}
 
 	bool PageMap::mapHugePage(const u64 vAddr, const u64 pAddr, const u64 hugeSize, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
+		const bool prevIF = this->pageLock.lock();
+		const bool mapped = this->mapHugePageUnlocked(vAddr, pAddr, hugeSize, flags, global, noExec, cacheMode);
+		this->pageLock.unlock(prevIF);
+
+		return mapped;
+	}
+
+	bool PageMap::mapHugePageUnlocked(const u64 vAddr, const u64 pAddr, const u64 hugeSize, const u8 flags, const bool global, const bool noExec, const PageCacheMode cacheMode) {
 		if ((hugeSize != hugePageSize2MiB and hugeSize != hugePageSize1GiB) or not isAligned(vAddr, hugeSize) or not isAligned(pAddr, hugeSize)) {
 			return false;
 		}
@@ -204,6 +218,12 @@ namespace kernel::common::memory {
 	}
 
 	void PageMap::unMapPage(const u64 vAddr, const bool freePage) {
+		const bool prevIF = this->pageLock.lock();
+		this->unMapPageUnlocked(vAddr, freePage);
+		this->pageLock.unlock(prevIF);
+	}
+
+	void PageMap::unMapPageUnlocked(const u64 vAddr, const bool freePage) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -293,6 +313,14 @@ namespace kernel::common::memory {
 	}
 
 	bool PageMap::protectPage(const u64 vAddr, const u8 prot) {
+		const bool prevIF = this->pageLock.lock();
+		const bool protectedPage = this->protectPageUnlocked(vAddr, prot);
+		this->pageLock.unlock(prevIF);
+
+		return protectedPage;
+	}
+
+	bool PageMap::protectPageUnlocked(const u64 vAddr, const u8 prot) {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -358,6 +386,14 @@ namespace kernel::common::memory {
 	}
 
 	u64 PageMap::getPhysAddress(const u64 vAddr) const {
+		const bool prevIF = this->pageLock.lock();
+		const u64 physAddress = this->getPhysAddressUnlocked(vAddr);
+		this->pageLock.unlock(prevIF);
+
+		return physAddress;
+	}
+
+	u64 PageMap::getPhysAddressUnlocked(const u64 vAddr) const {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -408,6 +444,14 @@ namespace kernel::common::memory {
 	}
 
 	bool PageMap::hasPageEntry(const u64 vAddr) const {
+		const bool prevIF = this->pageLock.lock();
+		const bool hasEntry = this->hasPageEntryUnlocked(vAddr);
+		this->pageLock.unlock(prevIF);
+
+		return hasEntry;
+	}
+
+	bool PageMap::hasPageEntryUnlocked(const u64 vAddr) const {
 		const u32 lvl5 = (vAddr >> 48) & 0x1FF;
 		const u32 lvl4 = (vAddr >> 39) & 0x1FF;
 		const u32 lvl3 = (vAddr >> 30) & 0x1FF;
@@ -455,6 +499,14 @@ namespace kernel::common::memory {
 	}
 
 	bool PageMap::isUserAccessible(const u64 vAddr, const bool write) const {
+		const bool prevIF = this->pageLock.lock();
+		const bool accessible = this->isUserAccessibleUnlocked(vAddr, write);
+		this->pageLock.unlock(prevIF);
+
+		return accessible;
+	}
+
+	bool PageMap::isUserAccessibleUnlocked(const u64 vAddr, const bool write) const {
 		if (!isLowerCanonicalUserAddress(vAddr)) {
 			return false;
 		}

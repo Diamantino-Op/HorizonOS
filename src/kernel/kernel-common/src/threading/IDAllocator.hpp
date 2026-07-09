@@ -1,6 +1,7 @@
 #ifndef KERNEL_COMMON_IDALLOCATOR_HPP
 #define KERNEL_COMMON_IDALLOCATOR_HPP
 
+#include "SpinLock.hpp"
 #include "Types.hpp"
 
 namespace kernel::common::threading {
@@ -17,6 +18,7 @@ namespace kernel::common::threading {
     private:
         static u16 freePIDs[maxProcesses];
         static i32 pidTop;
+        static TicketSpinLock lock;
     };
 
 	class PRIDAllocator {
@@ -30,6 +32,7 @@ namespace kernel::common::threading {
 	private:
 		u8 freePRIDs[maxProcThreads] {};
 		i32 pridTop {-1};
+		TicketSpinLock lock {};
 	};
 
     class TIDAllocator {
@@ -41,6 +44,7 @@ namespace kernel::common::threading {
     private:
         static u16 freeTIDs[maxThreads];
         static i32 tidTop;
+        static TicketSpinLock lock;
     };
 }
 

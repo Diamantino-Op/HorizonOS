@@ -53,7 +53,15 @@ namespace kernel::common::memory {
 
     	static void invPg(u64 page);
 
-    private:
+	private:
+		void mapPageUnlocked(u64 vAddr, u64 pAddr, u8 flags, bool global, bool noExec, PageCacheMode cacheMode);
+		bool mapHugePageUnlocked(u64 vAddr, u64 pAddr, u64 hugeSize, u8 flags, bool global, bool noExec, PageCacheMode cacheMode);
+		void unMapPageUnlocked(u64 vAddr, bool freePage);
+		bool protectPageUnlocked(u64 vAddr, u8 prot);
+		u64 getPhysAddressUnlocked(u64 vAddr) const;
+		bool hasPageEntryUnlocked(u64 vAddr) const;
+		bool isUserAccessibleUnlocked(u64 vAddr, bool write) const;
+
         void setPageFlags(u64 *pageAddr, u8 flags);
 
 		void setPageCacheMode(u64 *pageAddr, PageCacheMode cacheMode, bool isHugePage);
@@ -66,6 +74,7 @@ namespace kernel::common::memory {
         u64 physPageTable {};
         AllocContext *allocCtx {};
         bool isKernel {};
+        mutable TicketSpinLock pageLock {};
     };
 
     class VirtualMemoryManager {

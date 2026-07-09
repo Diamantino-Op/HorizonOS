@@ -33,7 +33,10 @@ handleInterrupt:
     push r15
 
     mov rdi, rsp
+    mov r12, rsp
+    and rsp, -16
     call handleInterruptAsm
+    mov rsp, r12
 
     pop r15
     pop r14

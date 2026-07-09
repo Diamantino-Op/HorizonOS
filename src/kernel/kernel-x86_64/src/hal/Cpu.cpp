@@ -231,6 +231,14 @@ namespace kernel::x86_64::hal {
 				++j;
 			}
 		}
+
+		while (__atomic_load_n(&this->initializedApplicationCores, __ATOMIC_ACQUIRE) < this->coreAmount - 1) {
+			Asm::pause();
+		}
+	}
+
+	void CpuManager::notifyApplicationCoreInitialized() {
+		__atomic_fetch_add(&this->initializedApplicationCores, 1, __ATOMIC_RELEASE);
 	}
 
 	void CpuManager::setCorePointer(CpuCore *core) {

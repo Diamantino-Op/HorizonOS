@@ -63,6 +63,7 @@ namespace kernel::x86_64::hal {
         void startBootCore();
 
         void startMultithread();
+		void notifyApplicationCoreInitialized();
 
         auto getCoreAmount() const -> u64;
 
@@ -95,6 +96,7 @@ namespace kernel::x86_64::hal {
         char *vendor {};
 
         bool hasX2Apic {};
+		u64 initializedApplicationCores {};
     };
 
     void bootCore(const limine_mp_info *info);

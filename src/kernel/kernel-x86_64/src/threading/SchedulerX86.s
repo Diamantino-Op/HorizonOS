@@ -2,14 +2,25 @@
 .extern loadNewThread
 .extern finishScheduleSwitch
 .extern checkDisabled
+.extern prepareScheduleSwitch
 .extern kernelThreadReturned
 
 .global switchContextAsm
 switchContextAsm:
+    sub rsp, 8
     call checkDisabled
+    add rsp, 8
 
     cmp rax, 1
     je enDisabled
+
+    sub rsp, 8
+    call prepareScheduleSwitch
+    add rsp, 8
+
+    # Saved with the outgoing stack and restored only when that same
+    # continuation is scheduled again.
+    push rax
 
     push rbx
     push rbp
@@ -37,6 +48,11 @@ switchContextAsm:
 
     call finishScheduleSwitch
 
+    pop rax
+    test al, al
+    jz enDisabled
+    sti
+
 enDisabled:
     ret
 
@@ -47,6 +63,11 @@ setStackAsm:
     mov rsp, [rdi]
 
     push rsi
+
+    # Initial contexts enter their trampoline with interrupts disabled.
+    # User contexts enable them through IRET; kernelThreadTrampoline does
+    # so explicitly.
+    push 0
 
     push 0
     push 0

@@ -87,15 +87,23 @@ namespace kernel::common::threading {
 	// Threads
 
 	Thread::Thread(Scheduler *scheduler, Process* parent, const u64 rip, const bool isUser, const u64 rsp, const u64 userRsp, const bool is32Bit, const ThreadOS os) : parent(parent), bit32(is32Bit), os(os), lockedCoreId(~0x0U) {
-		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userRsp);
-
 		this->id = TIDAllocator::allocTID();
 		this->generation = allocateThreadGeneration();
+
+		if (this->id == maxThreads) {
+			return;
+		}
+
+		this->context = scheduler->createContext(this, parent, isUser, rip, rsp, userRsp);
 	}
 
-	Thread::Thread(Process* parent, u64 *context) : parent(parent), context(context), lockedCoreId(~0x0U) {
+	Thread::Thread(Process* parent, u64 *context) : parent(parent), lockedCoreId(~0x0U) {
 		this->id = TIDAllocator::allocTID();
 		this->generation = allocateThreadGeneration();
+
+		if (this->id != maxThreads) {
+			this->context = context;
+		}
 	}
 
 	Thread::~Thread() {
@@ -434,14 +442,26 @@ namespace kernel::common::threading {
 
 		Process *idleProcess = schedulerPtr->getProcess(0);
 
+		if (idleProcess == nullptr) {
+			CommonMain::getTerminal()->error("Missing scheduler idle process", "Scheduler");
+			x86_64::utils::Asm::lhlt();
+		}
+
 		auto *newThread = new Thread(schedulerPtr, idleProcess, reinterpret_cast<u64>(&idleThreadFun), false);
+
+		if (newThread == nullptr || newThread->getContext() == nullptr) {
+			CommonMain::getTerminal()->error("Failed to initialize scheduler idle thread", "Scheduler");
+			x86_64::utils::Asm::lhlt();
+		}
 
 		newThread->setState(ThreadState::RUNNING);
 
-		schedulerPtr->getProcess(0)->addThread(newThread);
+		const bool prevIF = schedulerPtr->getSchedLock()->lock();
+		idleProcess->addThread(newThread);
 
 		this->idleThread = newThread;
 		this->currentThread = newThread;
+		schedulerPtr->getSchedLock()->unlock(prevIF);
 	}
 
 	void ExecutionNode::setCurrentThread(Thread *thread) {
@@ -503,7 +523,12 @@ namespace kernel::common::threading {
 	}
 
 	bool ExecutionNode::hasRunnableThreads() const {
-		return !this->uleQueue.isEmpty();
+		auto *self = const_cast<ExecutionNode *>(this);
+		const bool prevIF = self->coreLock.lock();
+		const bool hasRunnable = !self->uleQueue.isEmpty();
+		self->coreLock.unlock(prevIF);
+
+		return hasRunnable;
 	}
 
 	bool ExecutionNode::isDisabled() const {

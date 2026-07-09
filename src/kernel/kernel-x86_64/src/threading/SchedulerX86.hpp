@@ -51,6 +51,7 @@ namespace kernel::x86_64::threading {
     };
 
     extern "C" u64 checkDisabled();
+	extern "C" u64 prepareScheduleSwitch();
     extern "C" u128 scheduleEntry(u64 oldRsp);
     extern "C" void loadNewThread();
     extern "C" void finishScheduleSwitch();

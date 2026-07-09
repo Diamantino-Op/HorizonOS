@@ -417,6 +417,7 @@ namespace kernel::x86_64 {
 		this->cpuCore.apic.arm(TimeUtils::msToNs(10), clockInt, true);
 
 		terminal->info("Core %u initialized...", "Cpu", this->cpuCore.cpuId);
+		commonKernel->getCpuManager()->notifyApplicationCoreInitialized();
 
 		Asm::sti();
 
