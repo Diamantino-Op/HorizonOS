@@ -74,7 +74,9 @@ namespace kernel::x86_64::hal {
 
         static void initSimdContext(const uPtr *ptr);
         static void saveSimdContext(const uPtr *ptr);
+        static void saveSimdContextChecked(const uPtr *ptr, const uPtr *originalPtr, u64 allocSize);
         static void loadSimdContext(const uPtr *ptr);
+        static void loadSimdContextChecked(const uPtr *ptr, const uPtr *originalPtr, u64 allocSize);
         static void sanitizeSimdContext(const uPtr *ptr);
 
         static void setCorePointer(CpuCore *core);

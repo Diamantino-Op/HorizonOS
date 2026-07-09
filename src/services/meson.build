@@ -57,3 +57,21 @@ xhci_exe = xhci_proj.get_variable('xhci_exe')
 fat32_proj = subproject('fat32', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
 
 fat32_exe = fat32_proj.get_variable('fat32_exe')
+
+# Compositor Service
+
+compositor_proj = subproject('compositor', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+compositor_exe = compositor_proj.get_variable('compositor_exe')
+
+# Display Service
+
+display_proj = subproject('display', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+display_exe = display_proj.get_variable('display_exe')
+
+# LogD Service
+
+logd_proj = subproject('logd', default_options: [ 'globber_path=@0@'.format(globber), 'arch=@0@'.format(arch) ])
+
+logd2_exe = logd_proj.get_variable('logd_exe')

@@ -180,6 +180,9 @@ ext4_sym_out_file = join_paths(iso_services_path, 'ext4.sym')
 vfs_sym_out_file = join_paths(iso_services_path, 'vfs.sym')
 xhci_sym_out_file = join_paths(iso_services_path, 'xhci.sym')
 fat32_sym_out_file = join_paths(iso_services_path, 'fat32.sym')
+compositor_sym_out_file = join_paths(iso_services_path, 'compositor.sym')
+display_sym_out_file = join_paths(iso_services_path, 'display.sym')
+logd_sym_out_file = join_paths(iso_services_path, 'logd.sym')
 
 create_services_sym_file = custom_target('create_services_sym_file',
                                 output: [
@@ -191,7 +194,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     'ext4.sym',
                                     'vfs.sym',
                                     'xhci.sym',
-                                    'fat32.sym'
+                                    'fat32.sym',
+                                    'compositor.sym',
+                                    'display.sym',
+                                    'logd.sym'
                                 ],
                                 input: [
                                     name_registry_exe,
@@ -202,7 +208,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     ext4_exe,
                                     vfs_exe,
                                     xhci_exe,
-                                    fat32_exe
+                                    fat32_exe,
+                                    compositor_exe,
+                                    display_exe,
+                                    logd_exe
                                 ],
                                 command: [
                                     sh, '-c', 'nm -C @INPUT0@ > @0@'.format(name_registry_sym_out_file),
@@ -222,6 +231,12 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     sh, '-c', 'nm -C @INPUT7@ >> @0@'.format(xhci_sym_out_file),
                                     '&&',
                                     sh, '-c', 'nm -C @INPUT8@ >> @0@'.format(fat32_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT9@ >> @0@'.format(compositor_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT10@ >> @0@'.format(display_sym_out_file),
+                                    '&&',
+                                    sh, '-c', 'nm -C @INPUT11@ >> @0@'.format(logd_sym_out_file),
                                 ],
                                 depends: [
                                     name_registry_exe,
@@ -232,7 +247,10 @@ create_services_sym_file = custom_target('create_services_sym_file',
                                     ext4_exe,
                                     vfs_exe,
                                     xhci_exe,
-                                    fat32_exe
+                                    fat32_exe,
+                                    compositor_exe,
+                                    display_exe,
+                                    logd_exe
                                 ]
 )
 
@@ -251,6 +269,9 @@ install_apps = custom_target('install_apps',
         vfs_exe,
         xhci_exe,
         fat32_exe,
+        compositor_exe,
+        display_exe,
+        logd_exe,
 
         # Libs
         join_paths(sysroot_path, 'usr', 'lib', 'libc++.so'),
@@ -281,15 +302,21 @@ install_apps = custom_target('install_apps',
         '&&',
         cp, '@INPUT9@', iso_services_path,
         '&&',
-        cp, '@INPUT10@', iso_libs_path,
+        cp, '@INPUT10@', iso_services_path,
         '&&',
-        cp, '@INPUT11@', iso_libs_path,
+        cp, '@INPUT11@', iso_services_path,
         '&&',
-        cp, '@INPUT12@', iso_libs_path,
+        cp, '@INPUT12@', iso_services_path,
         '&&',
         cp, '@INPUT13@', iso_libs_path,
         '&&',
         cp, '@INPUT14@', iso_libs_path,
+        '&&',
+        cp, '@INPUT15@', iso_libs_path,
+        '&&',
+        cp, '@INPUT16@', iso_libs_path,
+        '&&',
+        cp, '@INPUT17@', iso_libs_path,
         '&&',
         sh, '-c', 'mkdir -p @0@'.format(iso_out_path),
         '&&',
@@ -306,7 +333,10 @@ install_apps = custom_target('install_apps',
         ext4_exe,
         vfs_exe,
         xhci_exe,
-        fat32_exe
+        fat32_exe,
+        compositor_exe,
+        display_exe,
+        logd_exe
     ]
 )
 

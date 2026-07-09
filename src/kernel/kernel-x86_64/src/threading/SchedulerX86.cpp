@@ -657,7 +657,11 @@ namespace kernel::x86_64::threading {
 			threadContextPanic("invalid context before save", Scheduler::getCurrentThread(), this);
 		}
 
-		CpuManager::saveSimdContext(this->simdSave);
+		u64 *simd = this->simdSave;
+		u64 *originalSimd = this->originalSimdSave;
+		const u64 allocSize = this->simdSaveAllocSize;
+
+		CpuManager::saveSimdContextChecked(simd, originalSimd, allocSize);
 
 		this->userFsBase = Asm::rdmsr(Msrs::FSBAS);
 
@@ -671,7 +675,11 @@ namespace kernel::x86_64::threading {
 			threadContextPanic("invalid context before simd restore", Scheduler::getCurrentThread(), this);
 		}
 
-		CpuManager::loadSimdContext(this->simdSave);
+		u64 *simd = this->simdSave;
+		u64 *originalSimd = this->originalSimdSave;
+		const u64 allocSize = this->simdSaveAllocSize;
+
+		CpuManager::loadSimdContextChecked(simd, originalSimd, allocSize);
 
 		Asm::wrmsr(Msrs::FSBAS, this->userFsBase);
 

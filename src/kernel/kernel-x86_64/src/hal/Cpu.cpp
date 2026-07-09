@@ -107,6 +107,28 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::saveSimdContext(const uPtr *ptr) {
+		saveSimdContextChecked(ptr, nullptr, 0);
+	}
+
+	void CpuManager::saveSimdContextChecked(const uPtr *ptr, const uPtr *originalPtr, const u64 allocSize) {
+		const u64 addr = reinterpret_cast<u64>(ptr);
+		const u64 original = reinterpret_cast<u64>(originalPtr);
+
+		const bool outsideAlloc = originalPtr != nullptr && (allocSize < 512 || addr < original || addr - original > allocSize - 512);
+
+		if (ptr == nullptr || (addr & 0x3fU) != 0 || outsideAlloc) {
+			auto *term = CommonMain::getTerminal();
+
+			term->printfBoth(true, "\033[0;31mSIMD save panic: invalid save area");
+			term->printfBoth(true, "\033[0;31m  ptr=0x%.16lx original=0x%.16lx size=%lu cpu=%lu KGS=0x%.16lx",
+				addr, original, allocSize, CpuManager::getCurrentCore()->cpuId, Asm::rdmsr(KGSBAS));
+
+			for (;;) {
+				Asm::cli();
+				Asm::hlt();
+			}
+		}
+
 		if (CpuId::hasXSave()) {
 			Asm::xsave(ptr);
 		} else {
@@ -115,6 +137,28 @@ namespace kernel::x86_64::hal {
 	}
 
 	void CpuManager::loadSimdContext(const uPtr *ptr) {
+		loadSimdContextChecked(ptr, nullptr, 0);
+	}
+
+	void CpuManager::loadSimdContextChecked(const uPtr *ptr, const uPtr *originalPtr, const u64 allocSize) {
+		const u64 addr = reinterpret_cast<u64>(ptr);
+		const u64 original = reinterpret_cast<u64>(originalPtr);
+
+		const bool outsideAlloc = originalPtr != nullptr && (allocSize < 512 || addr < original || addr - original > allocSize - 512);
+
+		if (ptr == nullptr || (addr & 0x3fU) != 0 || outsideAlloc) {
+			auto *term = CommonMain::getTerminal();
+
+			term->printfBoth(true, "\033[0;31mSIMD restore panic: invalid save area");
+			term->printfBoth(true, "\033[0;31m  ptr=0x%.16lx original=0x%.16lx size=%lu cpu=%lu KGS=0x%.16lx",
+				addr, original, allocSize, CpuManager::getCurrentCore()->cpuId, Asm::rdmsr(KGSBAS));
+
+			for (;;) {
+				Asm::cli();
+				Asm::hlt();
+			}
+		}
+
 		sanitizeSimdContext(ptr);
 
 		if (CpuId::hasXSave()) {
