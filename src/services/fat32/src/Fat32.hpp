@@ -75,7 +75,6 @@ struct FatDirEntryRaw {
 
 struct FatDirEntry {
 	string name;
-	string shortAlias;
 	uint8_t attr {};
 	uint32_t firstCluster {};
 	uint32_t size {};
@@ -230,14 +229,10 @@ namespace {
 				}
 
 				const string wanted = Fat32Utils::upperAscii(part);
-				uint8_t wantedShortRaw[11] {};
-				const bool hasShortAlias = makeShortAlias(part, wantedShortRaw);
-				const string wantedShort = hasShortAlias ? Fat32Utils::upperAscii(shortName(wantedShortRaw)) : string();
 				bool found = false;
 
 				for (const auto &candidate : entries) {
-					if (Fat32Utils::upperAscii(candidate.name) == wanted or
-					    (hasShortAlias and Fat32Utils::upperAscii(candidate.shortAlias) == wantedShort)) {
+					if (Fat32Utils::upperAscii(candidate.name) == wanted) {
 						current = candidate;
 						found = true;
 						break;
@@ -1436,8 +1431,7 @@ namespace {
 		static auto makeEntry(const FatDirEntryRaw &raw, const string &longName, const uint32_t dirCluster, const uint32_t dirOffset) -> FatDirEntry {
 			auto entry = FatDirEntry();
 
-			entry.shortAlias = shortName(raw.name);
-			entry.name = longName.empty() ? entry.shortAlias : longName;
+			entry.name = longName.empty() ? shortName(raw.name) : longName;
 			entry.attr = raw.attr;
 			entry.firstCluster = (static_cast<uint32_t>(raw.firstClusterHigh) << 16) | raw.firstClusterLow;
 			entry.size = raw.fileSize;

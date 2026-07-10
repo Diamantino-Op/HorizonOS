@@ -15,6 +15,23 @@
 using namespace std;
 
 namespace {
+	class ScopedPthreadLock {
+	public:
+		explicit ScopedPthreadLock(pthread_mutex_t &lock) : mutex(&lock) {
+			pthread_mutex_lock(mutex);
+		}
+
+		~ScopedPthreadLock() {
+			pthread_mutex_unlock(mutex);
+		}
+
+		ScopedPthreadLock(const ScopedPthreadLock &) = delete;
+		auto operator=(const ScopedPthreadLock &) -> ScopedPthreadLock & = delete;
+
+	private:
+		pthread_mutex_t *mutex;
+	};
+
 	uint64_t vfsPort = 0;
 	uint64_t storagePort = 0;
 	uint64_t nextHandleId = 1;
@@ -32,6 +49,7 @@ namespace {
 	pthread_mutex_t cacheLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t pendingUnlinksLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t fsHandlersLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t fsRequestLock = PTHREAD_MUTEX_INITIALIZER;
 }
 
 void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
@@ -608,6 +626,7 @@ void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const s
 
 	template<typename Request, typename Reply>
 	auto VfsUtils::sendFsRequest(const uint64_t requestType, const uint64_t replyType, const VfsVolume &volume, Request &request, Reply &reply) -> bool {
+		const ScopedPthreadLock requestLock(fsRequestLock);
 		auto msg = hos_msg();
 
 		msg.type = requestType;
