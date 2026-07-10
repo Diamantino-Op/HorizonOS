@@ -460,6 +460,7 @@ namespace {
 			newSize = entry.size;
 
 			if (!Fat32Utils::flushDevice(device.deviceId)) {
+				ioFailed = true;
 				return fail("flush");
 			}
 
@@ -681,6 +682,10 @@ namespace {
 			return clusterCount;
 		}
 
+		auto hadIoFailure() const -> bool {
+			return ioFailed;
+		}
+
 	private:
 		auto readBytes(const uint64_t byteOffset, const size_t length, vector<uint8_t> &out) const -> bool {
 			out.resize(length);
@@ -698,6 +703,7 @@ namespace {
 				uint64_t virt = 0;
 
 				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
+					ioFailed = true;
 					printf("FAT32: Page read failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
 					fflush(stdout);
 					return false;
@@ -726,6 +732,7 @@ namespace {
 				uint64_t virt = 0;
 
 				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
+					ioFailed = true;
 					printf("FAT32: Read-before-write failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
 					fflush(stdout);
 					return false;
@@ -737,6 +744,7 @@ namespace {
 				Fat32Utils::freeDevicePage(phys, virt);
 
 				if (!success) {
+					ioFailed = true;
 					printf("FAT32: Page write failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
 					fflush(stdout);
 					return false;
@@ -1544,6 +1552,7 @@ namespace {
 		uint64_t clusterCount {};
 		uint32_t activeFatIndex {};
 		bool fatMirroringEnabled { true };
+		mutable bool ioFailed {};
 	};
 }
 

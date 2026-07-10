@@ -2,7 +2,9 @@
 #define HORIZONOS_EXT4_HPP
 
 #include "StorageProtocol.hpp"
+#include "Ext4Rules.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -25,7 +27,8 @@ namespace horizonos::services::ext4 {
 	constexpr uint32_t EXT4_FEATURE_RO_COMPAT_METADATA_CSUM = 0x0400;
 	constexpr uint32_t EXT4_UNSUPPORTED_WRITE_INCOMPAT_FEATURES = EXT4_FEATURE_INCOMPAT_64BIT | EXT4_FEATURE_INCOMPAT_FLEX_BG;
 	constexpr uint32_t EXT4_UNSUPPORTED_WRITE_RO_COMPAT_FEATURES = EXT4_FEATURE_RO_COMPAT_HUGE_FILE | EXT4_FEATURE_RO_COMPAT_DIR_NLINK | EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE | EXT4_FEATURE_RO_COMPAT_METADATA_CSUM;
-	constexpr uint16_t EXT4_GROUP_DESCRIPTOR_SIZE = 32;
+	constexpr uint16_t EXT4_LEGACY_GROUP_DESCRIPTOR_SIZE = ext4_rules::LEGACY_GROUP_DESCRIPTOR_SIZE;
+	constexpr uint16_t EXT4_64BIT_GROUP_DESCRIPTOR_SIZE = ext4_rules::MIN_64BIT_GROUP_DESCRIPTOR_SIZE;
 	constexpr uint16_t EXT4_EXT_MAGIC = 0xF30A;
 	constexpr uint32_t EXT4_EXTENTS_FL = 0x00080000;
 	constexpr uint16_t EXT4_S_IFMT = 0xF000;
@@ -66,7 +69,16 @@ namespace horizonos::services::ext4 {
 		uint32_t featureCompat {};
 		uint32_t featureIncompat {};
 		uint32_t featureRoCompat {};
+		uint8_t reservedToDescSize[150] {};
+		uint16_t descSize {};
+		uint8_t reservedToBlocksCountHi[80] {};
+		uint32_t blocksCountHi {};
+		uint32_t reservedBlocksCountHi {};
+		uint32_t freeBlocksCountHi {};
 	} __attribute__((packed));
+
+	static_assert(offsetof(Ext4Superblock, descSize) == 0xFE);
+	static_assert(offsetof(Ext4Superblock, blocksCountHi) == 0x150);
 
 	struct Ext4GroupDescriptor {
 		uint32_t blockBitmapLo {};
@@ -76,8 +88,25 @@ namespace horizonos::services::ext4 {
 		uint16_t freeInodesCountLo {};
 		uint16_t usedDirsCountLo {};
 		uint16_t flags {};
-		uint32_t reserved[3] {};
+		uint32_t excludeBitmapLo {};
+		uint16_t blockBitmapChecksumLo {};
+		uint16_t inodeBitmapChecksumLo {};
+		uint16_t unusedInodesCountLo {};
+		uint16_t checksum {};
+		uint32_t blockBitmapHi {};
+		uint32_t inodeBitmapHi {};
+		uint32_t inodeTableHi {};
+		uint16_t freeBlocksCountHi {};
+		uint16_t freeInodesCountHi {};
+		uint16_t usedDirsCountHi {};
+		uint16_t unusedInodesCountHi {};
+		uint32_t excludeBitmapHi {};
+		uint16_t blockBitmapChecksumHi {};
+		uint16_t inodeBitmapChecksumHi {};
+		uint32_t reserved {};
 	} __attribute__((packed));
+
+	static_assert(sizeof(Ext4GroupDescriptor) == EXT4_64BIT_GROUP_DESCRIPTOR_SIZE);
 
 	struct Ext4Inode {
 		uint16_t mode {};
@@ -164,6 +193,7 @@ namespace horizonos::services::ext4 {
 		auto getInodeCount() const -> uint32_t;
 		auto getBlockCount() const -> uint64_t;
 		auto fileSize(const Ext4Inode &inode) const -> uint64_t;
+		auto hadIoFailure() const -> bool;
 
 	private:
 		auto readBlock(uint64_t fsBlock, uint8_t *buffer) const -> bool;
@@ -200,7 +230,9 @@ namespace horizonos::services::ext4 {
 		StorageFsProbeDeviceMsgData device {};
 		Ext4Superblock superblock {};
 		uint64_t blockSize {};
+		uint16_t groupDescriptorSize { EXT4_LEGACY_GROUP_DESCRIPTOR_SIZE };
 		vector<Ext4GroupDescriptor> groupDescriptors {};
+		mutable bool ioFailed {};
 	};
 }
 

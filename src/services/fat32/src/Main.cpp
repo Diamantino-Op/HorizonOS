@@ -18,6 +18,9 @@ using namespace std;
 Fat32Service service;
 
 namespace {
+	constexpr uint32_t FILESYSTEM_STORAGE_ATTEMPTS = 5;
+	constexpr useconds_t FILESYSTEM_STORAGE_RETRY_DELAY_US = 100000;
+
 	template<typename Reply>
 	auto receiveStorageReply(const uint64_t replyType, const uint64_t requestId, Reply &reply) -> int {
 		auto recv = hos_msg();
@@ -375,51 +378,46 @@ auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 			return false;
 		}
 
-		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
-
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
-		auto data = StorageReadMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			memset(reinterpret_cast<void *>(virt), 0, 0x1000);
+			const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
+			auto data = StorageReadMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
-		data.lba = lba;
-		data.pageCount = 1;
-		data.pagePhysArray[0] = phys;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
+			data.lba = lba;
+			data.pageCount = 1;
+			data.pagePhysArray[0] = phys;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
 
-		msg.type = STORAGE_READ_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			msg.type = STORAGE_READ_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
-			freePhysPage(phys);
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageReadReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_READ_REPLY_MSG_TYPE, requestId, reply);
 
-			phys = 0;
-			virt = 0;
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
 
-			return false;
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageReadReplyMsgData();
-		const int ret = receiveStorageReply(STORAGE_READ_REPLY_MSG_TYPE, requestId, reply);
-
-		if (ret != 0 or !reply.success) {
-			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
-			freePhysPage(phys);
-
-			phys = 0;
-			virt = 0;
-
-			return false;
-		}
-
-		return true;
+		munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
+		freePhysPage(phys);
+		phys = 0;
+		virt = 0;
+		return false;
 	}
 
 	void Fat32Utils::freeDevicePage(uint64_t &phys, uint64_t &virt) {
@@ -436,59 +434,75 @@ auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 
 	auto Fat32Utils::writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
-		auto data = StorageWriteMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
+			auto data = StorageWriteMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
-		data.lba = lba;
-		data.pageCount = 1;
-		data.pagePhysArray[0] = phys;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
+			data.lba = lba;
+			data.pageCount = 1;
+			data.pagePhysArray[0] = phys;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
 
-		msg.type = STORAGE_WRITE_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			msg.type = STORAGE_WRITE_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			return false;
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageWriteReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_WRITE_REPLY_MSG_TYPE, requestId, reply);
+
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
+
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageWriteReplyMsgData();
-		const int ret = receiveStorageReply(STORAGE_WRITE_REPLY_MSG_TYPE, requestId, reply);
-
-		return ret == 0 and reply.success;
+		return false;
 	}
 
 	auto Fat32Utils::flushDevice(const uint64_t deviceId) -> bool {
 		ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
 
-		auto data = StorageFlushMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			const uint64_t requestId = Fat32Utils::allocateStorageRequestId();
+			auto data = StorageFlushMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
 
-		msg.type = STORAGE_FLUSH_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			msg.type = STORAGE_FLUSH_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			return false;
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageFlushReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_FLUSH_REPLY_MSG_TYPE, requestId, reply);
+
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
+
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageFlushReplyMsgData();
-		const int ret = receiveStorageReply(STORAGE_FLUSH_REPLY_MSG_TYPE, requestId, reply);
-
-		return ret == 0 and reply.success;
+		return false;
 	}
 
 
@@ -629,7 +643,7 @@ namespace {
 					reply.status = VFS_STATUS_OK;
 					reply.nodeId = volume.nodeId(entry);
 				} else {
-					reply.status = VFS_STATUS_NOT_FOUND;
+					reply.status = volume.hadIoFailure() ? VFS_STATUS_IO_ERROR : VFS_STATUS_NOT_FOUND;
 				}
 			} else {
 				reply.status = VFS_STATUS_INVALID;
@@ -680,7 +694,7 @@ namespace {
 						reply.entries[i] = entries[i];
 					}
 				} else {
-					reply.status = VFS_STATUS_NOT_FOUND;
+					reply.status = volume.hadIoFailure() ? VFS_STATUS_IO_ERROR : VFS_STATUS_NOT_FOUND;
 				}
 			} else {
 				reply.status = VFS_STATUS_INVALID;
@@ -821,7 +835,7 @@ namespace {
 					reply.size = size;
 					reply.status = VFS_STATUS_OK;
 				} else {
-					reply.status = VFS_STATUS_INVALID;
+					reply.status = volume.hadIoFailure() ? VFS_STATUS_IO_ERROR : VFS_STATUS_INVALID;
 				}
 			} else {
 				reply.status = VFS_STATUS_INVALID;

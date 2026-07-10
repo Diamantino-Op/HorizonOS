@@ -154,17 +154,6 @@ namespace {
 			}
 		}
 
-		struct stat existing {};
-
-		if (stat(LOG_PATH, &existing) != 0 && (errno == EIO || errno == EINVAL)) {
-			const int statErr = errno;
-
-			if (unlink(LOG_PATH) == 0) {
-				printf("LogD: removed broken %s after stat errno=%d", LOG_PATH, statErr);
-				fflush(stdout);
-			}
-		}
-
 		const int fd = open(LOG_PATH, O_CREAT | O_RDWR | (truncate ? O_TRUNC : 0), 0644);
 
 		if (fd < 0) {

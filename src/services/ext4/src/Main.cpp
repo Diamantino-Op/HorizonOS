@@ -111,7 +111,7 @@ namespace {
 					reply.status = VFS_STATUS_OK;
 					reply.nodeId = inodeNumber;
 				} else {
-					reply.status = VFS_STATUS_NOT_FOUND;
+					reply.status = volume.hadIoFailure() ? VFS_STATUS_IO_ERROR : VFS_STATUS_NOT_FOUND;
 				}
 			} else {
 				reply.status = VFS_STATUS_INVALID;
@@ -171,7 +171,7 @@ namespace {
 						reply.entries[i] = entries[i];
 					}
 				} else {
-					reply.status = VFS_STATUS_NOT_FOUND;
+					reply.status = volume.hadIoFailure() ? VFS_STATUS_IO_ERROR : VFS_STATUS_NOT_FOUND;
 				}
 			} else {
 				reply.status = VFS_STATUS_INVALID;

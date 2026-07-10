@@ -139,6 +139,7 @@ constexpr uint8_t VFS_LOCK_EXCLUSIVE = 2;
 
 constexpr uint32_t VFS_STATUS_OK = 0;
 constexpr uint32_t VFS_STATUS_NOT_FOUND = 2;
+constexpr uint32_t VFS_STATUS_IO_ERROR = 5;
 constexpr uint32_t VFS_STATUS_BUSY = 16;
 constexpr uint32_t VFS_STATUS_EXISTS = 17;
 constexpr uint32_t VFS_STATUS_NOT_DIR = 20;

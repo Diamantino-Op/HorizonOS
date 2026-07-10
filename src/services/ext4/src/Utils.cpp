@@ -5,12 +5,44 @@
 #include "sys/mman.h"
 #include "unistd.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 
 namespace horizonos::services::ext4 {
+	namespace {
+		constexpr uint32_t FILESYSTEM_STORAGE_ATTEMPTS = 5;
+		constexpr useconds_t FILESYSTEM_STORAGE_RETRY_DELAY_US = 100000;
+
+		template<typename Reply>
+		auto receiveStorageReply(const uint64_t replyType, const uint64_t requestId, Reply &reply) -> int {
+			auto recv = hos_msg();
+			recv.buffer = &reply;
+			recv.length = sizeof(reply);
+
+			uint64_t acceptedType = replyType;
+			auto filter = filter_options();
+			filter.whiteListTypes = &acceptedType;
+			filter.whiteListCount = 1;
+
+			for (;;) {
+				reply = {};
+				const int ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
+
+				if (ret == EFAULT) {
+					usleep(1000);
+					continue;
+				}
+
+				if (ret != 0 or reply.requestId == requestId) {
+					return ret;
+				}
+			}
+		}
+	}
+
 	void Utils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
 		const size_t copyLen = min(dstSize - 1, name.size());
 
@@ -292,144 +324,122 @@ namespace horizonos::services::ext4 {
 			return false;
 		}
 
-		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
-
 		const ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = service.allocateStorageRequestId();
 
-		auto data = StorageReadMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			memset(reinterpret_cast<void *>(virt), 0, 0x1000);
+			const uint64_t requestId = service.allocateStorageRequestId();
+			auto data = StorageReadMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
-		data.lba = lba;
-		data.pageCount = 1;
-		data.pagePhysArray[0] = phys;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
+			data.lba = lba;
+			data.pageCount = 1;
+			data.pagePhysArray[0] = phys;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
+			msg.type = STORAGE_READ_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		msg.type = STORAGE_READ_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageReadReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_READ_REPLY_MSG_TYPE, requestId, reply);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
-			freePhysPage(phys);
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
 
-			phys = 0;
-			virt = 0;
-
-			return false;
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageReadReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_READ_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
-
-		if (ret != 0 or reply.requestId != requestId or !reply.success) {
-			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
-			freePhysPage(phys);
-
-			phys = 0;
-			virt = 0;
-
-			return false;
-		}
-
-		return true;
+		munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
+		freePhysPage(phys);
+		phys = 0;
+		virt = 0;
+		printf("Ext4: Storage read failed device=%lu lba=%lu after %u attempts.", deviceId, lba, FILESYSTEM_STORAGE_ATTEMPTS);
+		fflush(stdout);
+		return false;
 	}
 
 	auto Utils::writeDevicePage(const uint64_t deviceId, const uint64_t lba, const uint64_t phys) -> bool {
 		const ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = service.allocateStorageRequestId();
 
-		auto data = StorageWriteMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			const uint64_t requestId = service.allocateStorageRequestId();
+			auto data = StorageWriteMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
-		data.lba = lba;
-		data.pageCount = 1;
-		data.pagePhysArray[0] = phys;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
+			data.lba = lba;
+			data.pageCount = 1;
+			data.pagePhysArray[0] = phys;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
+			msg.type = STORAGE_WRITE_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		msg.type = STORAGE_WRITE_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageWriteReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_WRITE_REPLY_MSG_TYPE, requestId, reply);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			return false;
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
+
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageWriteReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_WRITE_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
-
-		return ret == 0 and reply.requestId == requestId and reply.success;
+		printf("Ext4: Storage write failed device=%lu lba=%lu after %u attempts.", deviceId, lba, FILESYSTEM_STORAGE_ATTEMPTS);
+		fflush(stdout);
+		return false;
 	}
 
 	auto Utils::flushDevice(const uint64_t deviceId) -> bool {
 		const ScopedMutex rpcLock(service.storageRpcLock);
-		const uint64_t requestId = service.allocateStorageRequestId();
 
-		auto data = StorageFlushMsgData();
+		for (uint32_t attempt = 0; attempt < FILESYSTEM_STORAGE_ATTEMPTS; ++attempt) {
+			const uint64_t requestId = service.allocateStorageRequestId();
+			auto data = StorageFlushMsgData();
 
-		data.replyPort = service.storageReplyPort;
-		data.requestId = requestId;
-		data.deviceId = deviceId;
+			data.replyPort = service.storageReplyPort;
+			data.requestId = requestId;
+			data.deviceId = deviceId;
 
-		auto msg = hos_msg();
+			auto msg = hos_msg();
+			msg.type = STORAGE_FLUSH_MSG_TYPE;
+			msg.port = service.storagePort;
+			msg.buffer = &data;
+			msg.length = sizeof(data);
 
-		msg.type = STORAGE_FLUSH_MSG_TYPE;
-		msg.port = service.storagePort;
-		msg.buffer = &data;
-		msg.length = sizeof(data);
+			if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) == 0) {
+				auto reply = StorageFlushReplyMsgData();
+				const int ret = receiveStorageReply(STORAGE_FLUSH_REPLY_MSG_TYPE, requestId, reply);
 
-		if (send_horizonos_message(service.storageReplyPort, service.storagePort, &msg) != 0) {
-			return false;
+				if (ret == 0 and reply.success) {
+					return true;
+				}
+			}
+
+			if (attempt + 1 < FILESYSTEM_STORAGE_ATTEMPTS) {
+				usleep(FILESYSTEM_STORAGE_RETRY_DELAY_US);
+			}
 		}
 
-		auto reply = StorageFlushReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_FLUSH_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
-
-		return ret == 0 and reply.requestId == requestId and reply.success;
+		printf("Ext4: Storage flush failed device=%lu after %u attempts.", deviceId, FILESYSTEM_STORAGE_ATTEMPTS);
+		fflush(stdout);
+		return false;
 	}
 
 	void Utils::freeDevicePage(const uint64_t phys, const uint64_t virt) {
@@ -451,7 +461,9 @@ namespace horizonos::services::ext4 {
 	}
 
 	auto Utils::blocksCount(const Ext4Superblock &superblock) -> uint64_t {
-		return superblock.blocksCount;
+		return ext4_rules::combineLowHigh(superblock.blocksCount,
+		                                  superblock.blocksCountHi,
+		                                  (superblock.featureIncompat & EXT4_FEATURE_INCOMPAT_64BIT) != 0);
 	}
 
 	auto Utils::inodeFileSize(const Ext4Superblock &superblock, const Ext4Inode &inode) -> uint64_t {
@@ -479,9 +491,9 @@ namespace horizonos::services::ext4 {
 	}
 
 	auto Utils::groupDescriptorInodeTable(const Ext4Superblock &superblock, const Ext4GroupDescriptor &desc) -> uint64_t {
-		(void) superblock;
-
-		return desc.inodeTableLo;
+		return ext4_rules::combineLowHigh(desc.inodeTableLo,
+		                                  desc.inodeTableHi,
+		                                  (superblock.featureIncompat & EXT4_FEATURE_INCOMPAT_64BIT) != 0);
 	}
 
 	auto Utils::inodeNodeType(const Ext4Inode &inode) -> uint8_t {

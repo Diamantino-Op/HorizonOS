@@ -16,12 +16,19 @@ namespace horizonos::services::ext4 {
 	}
 
 	auto Ext4Volume::load() -> bool {
+		ioFailed = false;
+
+		if (device.blockSize == 0 or device.blockSize > 4096 or (4096 % device.blockSize) != 0) {
+			return false;
+		}
+
 		const uint64_t superLba = EXT4_SUPERBLOCK_OFFSET / device.blockSize;
 		const uint64_t superOffsetInPage = EXT4_SUPERBLOCK_OFFSET - (superLba * device.blockSize);
 		uint64_t phys = 0;
 		uint64_t virt = 0;
 
 		if (!Utils::readDevicePage(device.deviceId, superLba, phys, virt)) {
+			ioFailed = true;
 			return false;
 		}
 
@@ -41,19 +48,52 @@ namespace horizonos::services::ext4 {
 			return false;
 		}
 
+		if (superblock.logBlockSize > 2) {
+			return false;
+		}
+
 		blockSize = 1024ULL << superblock.logBlockSize;
 
 		if (blockSize < 1024 or blockSize > 4096 or blockSize % device.blockSize != 0) {
 			return false;
 		}
 
+		const uint16_t inodeSize = Utils::inodeSize(superblock);
+
+		if (!ext4_rules::validInodeSize(inodeSize, blockSize)) {
+			return false;
+		}
+
 		const uint64_t totalBlocks = Utils::blocksCount(superblock);
-		const uint64_t groupCount = (totalBlocks + superblock.blocksPerGroup - 1) / superblock.blocksPerGroup;
-		const uint16_t descSize = EXT4_GROUP_DESCRIPTOR_SIZE;
+
+		if (totalBlocks <= superblock.firstDataBlock or superblock.blocksPerGroup == 0 or superblock.inodesPerGroup == 0 or
+		    totalBlocks > UINT64_MAX / blockSize or device.blockCount > UINT64_MAX / device.blockSize or
+		    totalBlocks * blockSize > device.blockCount * static_cast<uint64_t>(device.blockSize)) {
+			return false;
+		}
+
+		if (!ext4_rules::selectGroupDescriptorSize((superblock.featureIncompat & EXT4_FEATURE_INCOMPAT_64BIT) != 0,
+		                                               superblock.descSize,
+		                                               blockSize,
+		                                               groupDescriptorSize)) {
+			return false;
+		}
+
+		const uint64_t groupCount = ext4_rules::blockGroupCount(totalBlocks, superblock.firstDataBlock, superblock.blocksPerGroup);
+		const uint16_t descSize = groupDescriptorSize;
+
+		if (groupCount > UINT64_MAX / descSize or groupCount > SIZE_MAX / sizeof(Ext4GroupDescriptor)) {
+			return false;
+		}
+
 		const uint64_t descTableBlock = superblock.firstDataBlock + 1;
 		const uint64_t descTableBytes = groupCount * descSize;
-		const uint64_t descTableBlocks = (descTableBytes + blockSize - 1) / blockSize;
+		const uint64_t descTableBlocks = ((descTableBytes - 1) / blockSize) + 1;
 		vector<uint8_t> descBytes;
+
+		if (descTableBlocks > SIZE_MAX / blockSize) {
+			return false;
+		}
 
 		descBytes.resize(descTableBlocks * blockSize);
 
@@ -199,6 +239,8 @@ namespace horizonos::services::ext4 {
 				}
 
 				memcpy(out.data() + copied, blockBytes.data(), toCopy);
+			} else if (ioFailed) {
+				return false;
 			} else {
 				memset(out.data() + copied, 0, toCopy);
 			}
@@ -241,6 +283,8 @@ namespace horizonos::services::ext4 {
 				}
 
 				memcpy(out.data() + copied, blockBytes.data() + blockOffset, toCopy);
+			} else if (ioFailed) {
+				return false;
 			} else {
 				memset(out.data() + copied, 0, toCopy);
 			}
@@ -329,7 +373,7 @@ namespace horizonos::services::ext4 {
 		}
 
 		const uint64_t descTableBlock = superblock.firstDataBlock + 1;
-		const uint64_t offset = static_cast<uint64_t>(group) * EXT4_GROUP_DESCRIPTOR_SIZE;
+		const uint64_t offset = static_cast<uint64_t>(group) * groupDescriptorSize;
 		const uint64_t block = descTableBlock + (offset / blockSize);
 		const uint64_t blockOffset = offset % blockSize;
 		vector<uint8_t> bytes;
@@ -340,7 +384,7 @@ namespace horizonos::services::ext4 {
 			return false;
 		}
 
-		memcpy(bytes.data() + blockOffset, &groupDescriptors[group], EXT4_GROUP_DESCRIPTOR_SIZE);
+		memcpy(bytes.data() + blockOffset, &groupDescriptors[group], min<size_t>(groupDescriptorSize, sizeof(Ext4GroupDescriptor)));
 
 		return writeBlock(block, bytes.data());
 	}
@@ -1953,14 +1997,16 @@ namespace horizonos::services::ext4 {
 				if (name != "." and name != "..") {
 					Ext4Inode child {};
 
-					if (readInode(entry->inode, child)) {
-						auto &out = entries.emplace_back();
-
-						Utils::fillName(out.name, sizeof(out.name), out.nameLength, name);
-						out.nodeType = Utils::inodeNodeType(child);
-						out.size = Utils::inodeFileSize(superblock, child);
-						out.nodeId = entry->inode;
+					if (!readInode(entry->inode, child)) {
+						return false;
 					}
+
+					auto &out = entries.emplace_back();
+
+					Utils::fillName(out.name, sizeof(out.name), out.nameLength, name);
+					out.nodeType = Utils::inodeNodeType(child);
+					out.size = Utils::inodeFileSize(superblock, child);
+					out.nodeId = entry->inode;
 				}
 			}
 
@@ -2083,8 +2129,13 @@ namespace horizonos::services::ext4 {
 		return Utils::inodeFileSize(superblock, inode);
 	}
 
+	auto Ext4Volume::hadIoFailure() const -> bool {
+		return ioFailed;
+	}
+
 	auto Ext4Volume::readBlock(const uint64_t fsBlock, uint8_t *buffer) const -> bool {
-		if (blockSize == 0) {
+		if (blockSize == 0 or buffer == nullptr or fsBlock >= Utils::blocksCount(superblock) or
+		    fsBlock > UINT64_MAX / blockSize) {
 			return false;
 		}
 
@@ -2094,6 +2145,7 @@ namespace horizonos::services::ext4 {
 		uint64_t virt = 0;
 
 		if (!Utils::readDevicePage(device.deviceId, lba, phys, virt)) {
+			ioFailed = true;
 			return false;
 		}
 
@@ -2104,18 +2156,28 @@ namespace horizonos::services::ext4 {
 	}
 
 	auto Ext4Volume::writeBlock(const uint64_t fsBlock, const uint8_t *buffer) const -> bool {
+		if (blockSize == 0 or buffer == nullptr or fsBlock >= Utils::blocksCount(superblock) or
+		    fsBlock > UINT64_MAX / blockSize) {
+			return false;
+		}
+
 		const uint64_t byteOffset = fsBlock * blockSize;
 		const uint64_t lba = byteOffset / device.blockSize;
 		uint64_t phys = 0;
 		uint64_t virt = 0;
 
 		if (!Utils::readDevicePage(device.deviceId, lba, phys, virt)) {
+			ioFailed = true;
 			return false;
 		}
 
 		memcpy(reinterpret_cast<void *>(virt), buffer, blockSize);
 
 		const bool success = Utils::writeDevicePage(device.deviceId, lba, phys);
+
+		if (!success) {
+			ioFailed = true;
+		}
 
 		Utils::freeDevicePage(phys, virt);
 
