@@ -72,6 +72,7 @@ private:
 		uint8_t senseKey {};
 		uint8_t additionalSenseCode {};
 		uint8_t additionalSenseQualifier {};
+		bool synchronizeCacheSupported { true };
 	};
 
 	UsbMassStorageTransport transport {};
@@ -80,7 +81,7 @@ private:
 	uint32_t nextNsid { 1 };
 
 	auto find(uint32_t controllerId, uint32_t nsid) -> Unit *;
-	auto sendCommand(Unit &unit, const uint8_t *cdb, uint8_t cdbLength, const uint64_t *dataPages, uint32_t dataPageCount, uint32_t dataLength, bool dataIn) const -> bool;
+	auto sendCommand(Unit &unit, const uint8_t *cdb, uint8_t cdbLength, const uint64_t *dataPages, uint32_t dataPageCount, uint32_t dataLength, bool dataIn, bool *scsiFailure = nullptr) const -> bool;
 	auto inquiry(Unit &unit) const -> bool;
 	auto testUnitReady(Unit &unit) const -> bool;
 	auto requestSense(Unit &unit, bool logSense = false) const -> bool;

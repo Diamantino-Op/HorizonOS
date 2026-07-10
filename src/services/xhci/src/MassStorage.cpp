@@ -81,7 +81,11 @@ auto UsbMassStorageDriver::find(const uint32_t controllerId, const uint32_t nsid
 	return nullptr;
 }
 
-auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uint8_t cdbLength, const uint64_t *dataPages, const uint32_t dataPageCount, const uint32_t dataLength, const bool dataIn) const -> bool {
+auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uint8_t cdbLength, const uint64_t *dataPages, const uint32_t dataPageCount, const uint32_t dataLength, const bool dataIn, bool *scsiFailure) const -> bool {
+	if (scsiFailure != nullptr) {
+		*scsiFailure = false;
+	}
+
 	if (transport.bulkTransfer == nullptr or unit.device == nullptr or unit.bulkIn == nullptr or unit.bulkOut == nullptr or cdbLength == 0 or cdbLength > 16) {
 		return false;
 	}
@@ -160,6 +164,8 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 				       csw->residue);
 				fflush(stdout);
 			}
+		} else if (scsiFailure != nullptr) {
+			*scsiFailure = true;
 		}
 		// CSW status 1 is a normal SCSI command failure. The caller will issue
 		// REQUEST SENSE; BOT reset recovery is reserved for transport/phase errors.
@@ -389,16 +395,32 @@ auto UsbMassStorageDriver::readWriteWithRetry(Unit &unit, const uint64_t lba, co
 }
 
 auto UsbMassStorageDriver::flushWithRetry(Unit &unit) const -> bool {
+	if (!unit.synchronizeCacheSupported) {
+		return true;
+	}
+
 	uint8_t cdb[10] {};
 
 	cdb[0] = 0x35;
 
 	for (uint32_t attempt = 0; attempt < 3; ++attempt) {
-		if (sendCommand(unit, cdb, sizeof(cdb), nullptr, 0, 0, false)) {
+		bool scsiFailure = false;
+
+		if (sendCommand(unit, cdb, sizeof(cdb), nullptr, 0, 0, false, &scsiFailure)) {
 			return true;
 		}
 
-		requestSense(unit, true);
+		const bool senseOk = requestSense(unit, true);
+
+		if (scsiFailure and senseOk and
+		    (unit.senseKey == 0x05 or
+		     (unit.senseKey == 0 and unit.additionalSenseCode == 0 and unit.additionalSenseQualifier == 0))) {
+			unit.synchronizeCacheSupported = false;
+			printf("XHCI/MSD: SYNCHRONIZE CACHE unsupported slot=%u; disabling explicit flushes.", unit.device != nullptr ? unit.device->slotId : 0);
+			fflush(stdout);
+			return true;
+		}
+
 		usleep(50000);
 	}
 

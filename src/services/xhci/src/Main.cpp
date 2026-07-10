@@ -29,6 +29,12 @@ namespace {
 	mutex usbStorageMutex;
 	mutex storageRegistrationMutex;
 	recursive_mutex deviceStateMutex;
+
+	void prepareLinkTraversal(XhciTrb &link, const uint32_t producerCycle, const bool chain) {
+		link.control = (link.control & ~(XHCI_TRB_CYCLE | XHCI_TRB_CHAIN)) |
+		               (producerCycle != 0 ? XHCI_TRB_CYCLE : 0) |
+		               (chain ? XHCI_TRB_CHAIN : 0);
+	}
 }
 
 void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
@@ -827,6 +833,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		++controller.memory.commandEnqueueIndex;
 
 		if (controller.memory.commandEnqueueIndex == XHCI_COMMAND_RING_TRBS - 1) {
+			auto &link = ring[XHCI_COMMAND_RING_TRBS - 1];
+			prepareLinkTraversal(link, controller.memory.commandProducerCycle, false);
+
 			controller.memory.commandEnqueueIndex = 0;
 			controller.memory.commandProducerCycle ^= 1;
 		}
@@ -1294,6 +1303,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		++device.transferEnqueueIndex;
 
 		if (device.transferEnqueueIndex == XHCI_TRANSFER_RING_TRBS - 1) {
+			auto &link = ring[XHCI_TRANSFER_RING_TRBS - 1];
+			prepareLinkTraversal(link, device.transferProducerCycle, false);
+
 			device.transferEnqueueIndex = 0;
 			device.transferProducerCycle ^= 1;
 		}
@@ -1319,6 +1331,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		++endpoint.transferEnqueueIndex;
 
 		if (endpoint.transferEnqueueIndex == XHCI_TRANSFER_RING_TRBS - 1) {
+			auto &link = ring[XHCI_TRANSFER_RING_TRBS - 1];
+			// The Link TRB closes this producer cycle and may sit inside the TD.
+			prepareLinkTraversal(link, endpoint.transferProducerCycle, (trb.control & XHCI_TRB_CHAIN) != 0);
+
 			endpoint.transferEnqueueIndex = 0;
 			endpoint.transferProducerCycle ^= 1;
 		}

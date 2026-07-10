@@ -28,6 +28,9 @@ namespace {
 	mutex storageMutex;
 	mutex blockRequestMutex;
 	mutex nvmeRequestIdMutex;
+	constexpr uint32_t PARTITION_READ_ATTEMPTS = 10;
+	constexpr useconds_t PARTITION_READ_RETRY_DELAY_US = 100000;
+	constexpr useconds_t PARTITION_PROBE_SETTLE_DELAY_US = 100000;
 }
 
 auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
@@ -397,20 +400,27 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 			return false;
 		}
 
-		memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 		const uint64_t pages[1] { phys };
 
-		if (!StorageManagerUtils::blockRead(device, lba, pages, 1)) {
-			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
-			freePhysPage(phys);
+		for (uint32_t attempt = 0; attempt < PARTITION_READ_ATTEMPTS; ++attempt) {
+			memset(reinterpret_cast<void *>(virt), 0, 0x1000);
 
-			phys = 0;
-			virt = 0;
+			if (StorageManagerUtils::blockRead(device, lba, pages, 1)) {
+				return true;
+			}
 
-			return false;
+			if (attempt + 1 < PARTITION_READ_ATTEMPTS) {
+				usleep(PARTITION_READ_RETRY_DELAY_US);
+			}
 		}
 
-		return true;
+		munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
+		freePhysPage(phys);
+
+		phys = 0;
+		virt = 0;
+
+		return false;
 	}
 
 	void StorageManagerUtils::freeOnePage(const uint64_t phys, const uint64_t virt) {
@@ -647,6 +657,8 @@ namespace {
 
 			string name;
 			auto reply = StorageRegisterBlockDeviceReplyMsgData();
+			BlockDevice registeredDevice {};
+			bool shouldProbe = false;
 
 			if (StorageManagerUtils::validName(data.name, data.nameLength, sizeof(data.name), name) and data.blockSize != 0 and data.blockCount != 0) {
 				BlockDevice device {};
@@ -676,13 +688,11 @@ namespace {
 
 				reply.success = true;
 				reply.deviceId = device.id;
+				registeredDevice = device;
+				shouldProbe = true;
 
 				printf("Storage: Registered block device %s id=%lu blocks=%lu blockSize=%u.", device.name.c_str(), device.id, device.blockCount, device.blockSize);
 				fflush(stdout);
-
-				StorageManagerUtils::probeGpt(device);
-				StorageManagerUtils::probeMbr(device);
-				StorageManagerUtils::notifyFsHandlers(device);
 			}
 
 			auto replyMsg = hos_msg();
@@ -692,7 +702,15 @@ namespace {
 			replyMsg.buffer = &reply;
 			replyMsg.length = sizeof(reply);
 
-			send_horizonos_message(storagePort, msg.src_port, &replyMsg);
+			const int replyResult = send_horizonos_message(storagePort, msg.src_port, &replyMsg);
+
+			// Let the driver finish publishing the device before partition I/O is issued.
+			if (replyResult == 0 and shouldProbe) {
+				usleep(PARTITION_PROBE_SETTLE_DELAY_US);
+				StorageManagerUtils::probeGpt(registeredDevice);
+				StorageManagerUtils::probeMbr(registeredDevice);
+				StorageManagerUtils::notifyFsHandlers(registeredDevice);
+			}
 		}
 	}
 

@@ -1394,7 +1394,8 @@ namespace {
 			entries.clear();
 
 			uint8_t exactShort[11] {};
-			const bool needsLfn = !makeShortName(name, exactShort) or memcmp(exactShort, raw.name, sizeof(exactShort)) != 0;
+			const bool exactShortValid = makeShortName(name, exactShort);
+			const bool needsLfn = !exactShortValid or shortName(exactShort) != name;
 
 			if (needsLfn) {
 				const uint32_t partCount = (name.size() + 12) / 13;
