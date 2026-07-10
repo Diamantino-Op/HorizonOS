@@ -3257,10 +3257,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::drainPendingInterruptEvents(MappedController &controller) {
-		const scoped_lock deviceLock(deviceStateMutex);
 		vector<XhciTrb> pending;
 
 		{
+			const scoped_lock deviceLock(deviceStateMutex);
 			const scoped_lock lock(eventRingMutex);
 
 			for (auto it = controller.pendingTransferEvents.begin(); it != controller.pendingTransferEvents.end();) {
@@ -3292,8 +3292,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::pollHubChanges(MappedController &controller) {
-		const scoped_lock deviceLock(deviceStateMutex);
 		XhciUtils::drainPendingInterruptEvents(controller);
+		const scoped_lock deviceLock(deviceStateMutex);
 
 		vector<uint8_t> hubSlots;
 
@@ -3378,7 +3378,6 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				continue;
 			}
 
-			uint32_t drained = 0;
 			vector<uint32_t> changedPorts;
 
 			{
@@ -3411,8 +3410,6 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 					}
 
 					controller->memory.eventDequeueIndex++;
-					++drained;
-
 					if (controller->memory.eventDequeueIndex == XHCI_EVENT_RING_TRBS) {
 						controller->memory.eventDequeueIndex = 0;
 						controller->memory.eventConsumerCycle ^= 1;
@@ -3433,18 +3430,6 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			XhciUtils::drainPendingInterruptEvents(*controller);
 
-			if (drained == 0 and loggedEvents < 32) {
-				if (controller->memory.usingMsix) {
-					printf("XHCI: MSI-X vector %u irq=%lu cpu=%lu had no completed events.", controller->memory.msixVector, irq.irqNum, irq.cpuId);
-				} else if (controller->memory.usingMsi) {
-					printf("XHCI: MSI vector %u irq=%lu cpu=%lu had no completed events.", controller->memory.msiVector, irq.irqNum, irq.cpuId);
-				} else {
-					printf("XHCI: legacy IRQ %u irq=%lu cpu=%lu had no completed events.", controller->memory.legacyIrq, irq.irqNum, irq.cpuId);
-				}
-				fflush(stdout);
-
-				++loggedEvents;
-			}
 		}
 	}
 

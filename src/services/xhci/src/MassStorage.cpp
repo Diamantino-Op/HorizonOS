@@ -385,11 +385,21 @@ auto UsbMassStorageDriver::readWriteWithRetry(Unit &unit, const uint64_t lba, co
 		}
 
 		if (unit.senseKey == 0x03 or unit.senseKey == 0x04) {
-			return false;
+			break;
 		}
 
 		usleep(50000);
 	}
+
+	printf("XHCI/MSD: %s failed slot=%u lba=%lu pages=%u key=0x%02x asc=0x%02x ascq=0x%02x.",
+	       write ? "WRITE" : "READ",
+	       unit.device == nullptr ? 0 : unit.device->slotId,
+	       lba,
+	       pageCount,
+	       unit.senseKey,
+	       unit.additionalSenseCode,
+	       unit.additionalSenseQualifier);
+	fflush(stdout);
 
 	return false;
 }

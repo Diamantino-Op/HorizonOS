@@ -354,14 +354,21 @@ namespace {
 		}
 
 		auto writeFile(const string &path, const uint64_t offset, const uint8_t *data, const uint32_t length, uint64_t &newSize) -> bool {
-			if (length > 0 and data == nullptr) {
+			auto fail = [&](const char *stage) {
+				printf("FAT32: Write %s failed on %s path='%s' offset=%lu length=%u.", stage, device.deviceName, path.c_str(), offset, length);
+				fflush(stdout);
+
 				return false;
+			};
+
+			if (length > 0 and data == nullptr) {
+				return fail("validation");
 			}
 
 			FatDirEntry entry {};
 
 			if (!lookupPath(path, entry) or (entry.attr & FAT_ATTR_DIRECTORY) != 0) {
-				return false;
+				return fail("lookup");
 			}
 
 			if (length == 0) {
@@ -370,13 +377,13 @@ namespace {
 			}
 
 			if (offset > 0xffffffffULL or offset + length > 0xffffffffULL) {
-				return false;
+				return fail("range validation");
 			}
 
 			const uint32_t targetSize = static_cast<uint32_t>(max<uint64_t>(entry.size, offset + length));
 
 			if (!ensureFileClusters(entry, targetSize)) {
-				return false;
+				return fail("cluster allocation");
 			}
 
 			uint32_t cluster = entry.firstCluster;
@@ -387,7 +394,7 @@ namespace {
 				uint32_t next = 0;
 
 				if (!readFatEntry(cluster, next)) {
-					return false;
+					return fail("cluster-chain lookup");
 				}
 
 				cluster = next;
@@ -400,14 +407,14 @@ namespace {
 				vector<uint8_t> clusterData;
 
 				if (!readCluster(cluster, clusterData)) {
-					return false;
+					return fail("data read");
 				}
 
 				const uint32_t toCopy = min<uint64_t>(clusterBytes - clusterOffset, length - written);
 				memcpy(clusterData.data() + clusterOffset, data + written, toCopy);
 
 				if (!writeCluster(cluster, clusterData.data())) {
-					return false;
+					return fail("data write");
 				}
 
 				written += toCopy;
@@ -417,7 +424,7 @@ namespace {
 					uint32_t next = 0;
 
 					if (!readFatEntry(cluster, next)) {
-						return false;
+						return fail("cluster-chain advance");
 					}
 
 					cluster = next;
@@ -427,12 +434,16 @@ namespace {
 			entry.size = targetSize;
 
 			if (!updateDirectoryEntry(entry)) {
-				return false;
+				return fail("directory update");
 			}
 
 			newSize = entry.size;
 
-			return Fat32Utils::flushDevice(device.deviceId);
+			if (!Fat32Utils::flushDevice(device.deviceId)) {
+				return fail("flush");
+			}
+
+			return true;
 		}
 
 		auto createFile(const string &path, uint64_t &nodeId) -> bool {
@@ -667,6 +678,8 @@ namespace {
 				uint64_t virt = 0;
 
 				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
+					printf("FAT32: Page read failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
+					fflush(stdout);
 					return false;
 				}
 
@@ -693,6 +706,8 @@ namespace {
 				uint64_t virt = 0;
 
 				if (!Fat32Utils::readDevicePage(device.deviceId, pageLba, phys, virt)) {
+					printf("FAT32: Read-before-write failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
+					fflush(stdout);
 					return false;
 				}
 
@@ -702,6 +717,8 @@ namespace {
 				Fat32Utils::freeDevicePage(phys, virt);
 
 				if (!success) {
+					printf("FAT32: Page write failed on %s lba=%lu blocks=%lu.", device.deviceName, pageLba, blocksPerPage);
+					fflush(stdout);
 					return false;
 				}
 

@@ -298,7 +298,21 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		//printf("Storage: NVMe read reply for %s ret=%d success=%d.", device.name.c_str(), ret, reply.success);
 		//fflush(stdout);
 
-		return ret == 0 and reply.requestId == requestId and reply.success;
+		const bool success = ret == 0 and reply.requestId == requestId and reply.success;
+
+		if (!success) {
+			printf("Storage: Block read failed for %s lba=%lu pages=%u ret=%d request=%lu replyRequest=%lu success=%d.",
+			       device.name.c_str(),
+			       lba,
+			       pageCount,
+			       ret,
+			       requestId,
+			       reply.requestId,
+			       reply.success);
+			fflush(stdout);
+		}
+
+		return success;
 	}
 
 	auto StorageManagerUtils::blockWrite(const BlockDevice &device, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
@@ -343,7 +357,21 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 
 		delete[] filter.whiteListTypes;
 
-		return ret == 0 and reply.requestId == requestId and reply.success;
+		const bool success = ret == 0 and reply.requestId == requestId and reply.success;
+
+		if (!success) {
+			printf("Storage: Block write failed for %s lba=%lu pages=%u ret=%d request=%lu replyRequest=%lu success=%d.",
+			       device.name.c_str(),
+			       lba,
+			       pageCount,
+			       ret,
+			       requestId,
+			       reply.requestId,
+			       reply.success);
+			fflush(stdout);
+		}
+
+		return success;
 	}
 
 	auto StorageManagerUtils::blockFlush(const BlockDevice &device) -> bool {
