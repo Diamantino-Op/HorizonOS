@@ -112,6 +112,10 @@ namespace {
 		while (length > 0) {
 			const ssize_t written = write(fd, data, length);
 
+			if (written < 0 and errno == EINTR) {
+				continue;
+			}
+
 			if (written <= 0) {
 				return false;
 			}
@@ -133,7 +137,7 @@ namespace {
 		return S_ISDIR(st.st_mode);
 	}
 
-	int openLogFile() {
+	int openLogFile(const bool truncate) {
 		if (!statDirectory(LOG_DIR)) {
 			if (mkdir(LOG_DIR, 0755) != 0 && errno != EEXIST) {
 				const int mkdirErr = errno;
@@ -161,7 +165,7 @@ namespace {
 			}
 		}
 
-		const int fd = open(LOG_PATH, O_CREAT | O_RDWR | O_TRUNC, 0644);
+		const int fd = open(LOG_PATH, O_CREAT | O_RDWR | (truncate ? O_TRUNC : 0), 0644);
 
 		if (fd < 0) {
 			const int openErr = errno;
@@ -213,6 +217,7 @@ int main() {
 	uint64_t openAttempts = 0;
 	uint32_t openRetryDelay = 0;
 	uint32_t writeDelay = 0;
+	bool logInitialized = false;
 	std::vector<std::string> backlog;
 
 	backlog.reserve(4096);
@@ -230,9 +235,13 @@ int main() {
 
 		if (logFd < 0) {
 			if (openRetryDelay == 0) {
-				logFd = openLogFile();
+				logFd = openLogFile(!logInitialized);
 				++openAttempts;
 				openRetryDelay = 40;
+
+				if (logFd >= 0) {
+					logInitialized = true;
+				}
 
 				if (logFd < 0 && (openAttempts % 5) == 1) {
 					printf("LogD: waiting for %s", LOG_PATH);

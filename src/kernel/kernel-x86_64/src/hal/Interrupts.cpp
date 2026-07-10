@@ -240,7 +240,7 @@ namespace kernel::x86_64::hal {
 		const auto *scheduler = main != nullptr ? main->getScheduler() : nullptr;
 		const auto *currentThread = scheduler != nullptr ? Scheduler::getCurrentThread() : nullptr;
 		const auto *process = currentThread != nullptr ? currentThread->getParent() : nullptr;
-		const auto *pageMapContext = process != nullptr ? process->getProcessContext() : (main != nullptr ? main->getKernelAllocContext() : nullptr);
+		const auto *pageMapContext = process != nullptr ? process->getProcessContextKernel() : (main != nullptr ? main->getKernelAllocContext() : nullptr);
 		const usize stackTop = main != nullptr ? main->getStackTop() : 0;
 		const usize stackBottom = stackTop > kernelStackSize ? stackTop - kernelStackSize : 0;
 		const auto isValidBacktraceFrame = [pageMapContext, userMode, stackBottom, stackTop](const usize frameRbp) -> bool {

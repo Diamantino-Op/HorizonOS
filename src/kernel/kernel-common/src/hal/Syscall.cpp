@@ -547,7 +547,7 @@ namespace kernel::common::hal {
 
 		for (; copiedLength < maxPrintMessageLength - 1; copiedLength++) {
 			u8 byte = 0;
-			const int err = readUserByte(Scheduler::getCurrentThread()->getParent()->getProcessContext(), message + copiedLength, &byte);
+			const int err = readUserByte(Scheduler::getCurrentThread()->getParent()->getProcessContextKernel(), message + copiedLength, &byte);
 
 			if (err != 0) {
 				return err;
@@ -594,7 +594,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		AllocContext *ctx = process->getProcessContext();
+		AllocContext *ctx = process->getProcessContextKernel();
 
 		if (ctx == nullptr) {
 			*ret = MAP_FAILED;
@@ -754,7 +754,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		AllocContext *ctx = process->getProcessContext();
+		AllocContext *ctx = process->getProcessContextKernel();
 		const u64 bottomAddr = alignDown<u64>(addr, pageSize);
 		const u64 topAddr = alignUp<u64>(addr + size, pageSize);
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
@@ -831,7 +831,7 @@ namespace kernel::common::hal {
 		}
 
 		const Thread *thread = Scheduler::getCurrentThread();
-		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContextKernel() : nullptr;
 
 		u64 clockNs = 0;
 		const int err = getCurrentClockNs(&clockNs);
@@ -862,7 +862,7 @@ namespace kernel::common::hal {
 		auto *commonMain = CommonMain::getInstance();
 		auto *scheduler = commonMain != nullptr ? commonMain->getScheduler() : nullptr;
 		const Thread *thread = Scheduler::getCurrentThread();
-		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContextKernel() : nullptr;
 
 		if (not isValidUserRange(ctx, info, sizeof(KernelSysInfo), true)) {
 			return EFAULT;
@@ -959,7 +959,7 @@ namespace kernel::common::hal {
 			return ESRCH;
 		}
 
-		const auto *ctx = process->getProcessContext();
+		const auto *ctx = process->getProcessContextKernel();
 
 		if (entryFun == 0 || stack < sizeof(u64) || !isValidUserRange(ctx, entryFun, 1, false) || !isValidUserRange(ctx, stack - sizeof(u64), sizeof(u64), true)) {
 			if (ret != nullptr) {
@@ -1015,7 +1015,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const auto *ctx = thread->getParent()->getProcessContext();
+		const auto *ctx = thread->getParent()->getProcessContextKernel();
 		MessageHeader hdr {};
 		const int hdrErr = copyFromUser(ctx, &hdr, msgHdr, sizeof(hdr));
 
@@ -1113,7 +1113,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const auto *ctx = thread->getParent()->getProcessContext();
+		const auto *ctx = thread->getParent()->getProcessContextKernel();
 		MessageHeader hdr {};
 		const int hdrErr = copyFromUser(ctx, &hdr, msgHdr, sizeof(hdr));
 
@@ -1239,7 +1239,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const AllocContext *ctx = thread->getParent()->getProcessContext();
+		const AllocContext *ctx = thread->getParent()->getProcessContextKernel();
 
 		const u64 futexOp = type & FUTEX_CMD_MASK;
 		const auto waitOnFutex = [&]() -> u64 {
@@ -1428,7 +1428,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		const AllocContext *ctx = thread->getParent()->getProcessContext();
+		const AllocContext *ctx = thread->getParent()->getProcessContextKernel();
 
 		if (!isValidUserRange(ctx, action, action != 0 ? sizeof(SignalAction) : 0, false)) {
 			if (action != 0) {
@@ -1537,7 +1537,7 @@ namespace kernel::common::hal {
 			return EINVAL;
 		}
 
-		AllocContext *ctx = thread->getParent()->getProcessContext();
+		AllocContext *ctx = thread->getParent()->getProcessContextKernel();
 		const u64 bottomAddr = alignDown<u64>(pointer, pageSize);
 		const u64 topAddr = alignUp<u64>(pointer + size, pageSize);
 		const bool schedPrevIF = scheduler->getSchedLock()->lock();
@@ -1630,7 +1630,7 @@ namespace kernel::common::hal {
 		const auto *thread = Scheduler::getCurrentThread();
 		auto *process = thread != nullptr ? thread->getParent() : nullptr;
 		auto *kernelCtx = CommonMain::getInstance()->getKernelAllocContext();
-		auto *processCtx = process != nullptr ? process->getProcessContext() : nullptr;
+		auto *processCtx = process != nullptr ? process->getProcessContextKernel() : nullptr;
 		auto *scheduler = CommonMain::getInstance()->getScheduler();
 
 		if (thread == nullptr || process == nullptr || kernelCtx == nullptr || processCtx == nullptr || scheduler == nullptr) {
@@ -1822,7 +1822,7 @@ namespace kernel::common::hal {
 		}
 
 		const Thread *thread = Scheduler::getCurrentThread();
-		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const auto *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContextKernel() : nullptr;
 
 		if (!isFullyMappedUserRange(ctx, cpuIdOutArray, cpuCount * sizeof(HosCpuInfo), true)) {
 			return EFAULT;
@@ -1947,7 +1947,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
+		const AllocContext *ctx = currentThread->getParent()->getProcessContextKernel();
 
 		if (!isValidUserRange(ctx, mask, cpuSetSize, true)) {
 			return EFAULT;
@@ -2027,7 +2027,7 @@ namespace kernel::common::hal {
 			return EFAULT;
 		}
 
-		const AllocContext *ctx = currentThread->getParent()->getProcessContext();
+		const AllocContext *ctx = currentThread->getParent()->getProcessContextKernel();
 
 		if (!isValidUserRange(ctx, mask, cpuSetSize, false)) {
 			return EFAULT;
@@ -2153,7 +2153,7 @@ namespace kernel::common::hal {
 
 	auto SyscallManager::syscallGetFramebufferInfo(long */*unused*/, const u64 infoOut, const u64 framebufferIndex, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		const Thread *thread = Scheduler::getCurrentThread();
-		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContextKernel() : nullptr;
 
 		if (ctx == nullptr || infoOut == 0) {
 			return EFAULT;
@@ -2196,7 +2196,7 @@ namespace kernel::common::hal {
 
 	auto SyscallManager::syscallReadKernelLog(long *ret, const u64 afterSequence, const u64 entriesOut, const u64 maxEntries, u64 /*unused*/, u64 /*unused*/, u64 /*unused*/) -> u64 {
 		const Thread *thread = Scheduler::getCurrentThread();
-		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContext() : nullptr;
+		const AllocContext *ctx = thread != nullptr && thread->getParent() != nullptr ? thread->getParent()->getProcessContextKernel() : nullptr;
 
 		if (ret == nullptr) {
 			return EINVAL;

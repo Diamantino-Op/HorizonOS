@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <pthread.h>
@@ -15,6 +16,37 @@
 using namespace std;
 
 Fat32Service service;
+
+namespace {
+	template<typename Reply>
+	auto receiveStorageReply(const uint64_t replyType, const uint64_t requestId, Reply &reply) -> int {
+		auto recv = hos_msg();
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		uint64_t acceptedType = replyType;
+		auto filter = filter_options();
+		filter.whiteListTypes = &acceptedType;
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			reply = {};
+			const int ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
+
+			// Message delivery can transiently lose the current process mapping
+			// while the scheduler switches address spaces. The request remains in
+			// flight, so retry the receive instead of turning it into disk I/O loss.
+			if (ret == EFAULT) {
+				usleep(1000);
+				continue;
+			}
+
+			if (ret != 0 or reply.requestId == requestId) {
+				return ret;
+			}
+		}
+	}
+}
 
 auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 	return service.allocateStorageRequestId();
@@ -375,22 +407,7 @@ auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 		}
 
 		auto reply = StorageReadReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_READ_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		int ret = -1;
-
-		do {
-			ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-		} while (ret == 0 and reply.requestId != requestId);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveStorageReply(STORAGE_READ_REPLY_MSG_TYPE, requestId, reply);
 
 		if (ret != 0 or !reply.success) {
 			munmap_extra(reinterpret_cast<void *>(virt), 0x1000, false);
@@ -442,22 +459,7 @@ auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 		}
 
 		auto reply = StorageWriteReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_WRITE_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		int ret = -1;
-
-		do {
-			ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-		} while (ret == 0 and reply.requestId != requestId);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveStorageReply(STORAGE_WRITE_REPLY_MSG_TYPE, requestId, reply);
 
 		return ret == 0 and reply.success;
 	}
@@ -484,22 +486,7 @@ auto Fat32Utils::allocateStorageRequestId() -> uint64_t {
 		}
 
 		auto reply = StorageFlushReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_FLUSH_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		int ret = -1;
-
-		do {
-			ret = receive_horizonos_message(service.storageReplyPort, &recv, &filter);
-		} while (ret == 0 and reply.requestId != requestId);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveStorageReply(STORAGE_FLUSH_REPLY_MSG_TYPE, requestId, reply);
 
 		return ret == 0 and reply.success;
 	}

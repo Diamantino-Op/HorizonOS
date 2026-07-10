@@ -1,4 +1,5 @@
 #include "MassStorage.hpp"
+#include "MassStorageRules.hpp"
 
 #include "horizonos/generic.h"
 #include "unistd.h"
@@ -287,7 +288,7 @@ auto UsbMassStorageDriver::readCapacity10(Unit &unit) const -> bool {
 
 	MassStorageUtils::freeStage(page);
 
-	return ok and unit.blockCount != 0 and unit.blockSize != 0;
+	return ok and mass_storage_rules::validCapacity(unit.blockCount, unit.blockSize, STAGE_PAGE_SIZE);
 }
 
 auto UsbMassStorageDriver::readCapacity16(Unit &unit) const -> bool {
@@ -319,7 +320,7 @@ auto UsbMassStorageDriver::readCapacity16(Unit &unit) const -> bool {
 
 	MassStorageUtils::freeStage(page);
 
-	return ok and unit.blockCount != 0 and unit.blockSize != 0;
+	return ok and mass_storage_rules::validCapacity(unit.blockCount, unit.blockSize, STAGE_PAGE_SIZE);
 }
 
 void UsbMassStorageDriver::recover(Unit &unit) const {
@@ -474,11 +475,6 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 	unit.bulkOut = bulkOut;
 	unit.interfaceNumber = interface.number;
 
-	{
-		const std::scoped_lock lock(unitsMutex);
-		unit.nsid = nextNsid++;
-	}
-
 	if (!inquiry(unit)) {
 		printf("XHCI/MSD: INQUIRY failed slot=%u.", device.slotId);
 		fflush(stdout);
@@ -510,6 +506,11 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 		fflush(stdout);
 
 		return false;
+	}
+
+	{
+		const std::scoped_lock lock(unitsMutex);
+		unit.nsid = nextNsid++;
 	}
 
 	char name[32] {};

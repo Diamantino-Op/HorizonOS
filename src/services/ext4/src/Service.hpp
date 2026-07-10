@@ -91,6 +91,7 @@ namespace horizonos::services::ext4 {
 		uint64_t nextStorageRequestId = 1;
 		uint64_t nextMountId = 1;
 		pthread_mutex_t storageRpcLock = PTHREAD_MUTEX_INITIALIZER;
+		pthread_mutex_t volumeLock = PTHREAD_MUTEX_INITIALIZER;
 		pthread_mutex_t storageRequestIdLock = PTHREAD_MUTEX_INITIALIZER;
 		pthread_mutex_t mountsLock = PTHREAD_MUTEX_INITIALIZER;
 		vector<MountedExt4> mounts;

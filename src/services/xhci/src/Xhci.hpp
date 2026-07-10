@@ -451,6 +451,8 @@ struct UsbInterface {
 	uint8_t interfaceClass {};
 	uint8_t interfaceSubclass {};
 	uint8_t interfaceProtocol {};
+	bool massStorageBound {};
+	uint8_t massStorageBindAttempts {};
 	std::vector<UsbEndpoint> endpoints {};
 };
 
@@ -538,6 +540,7 @@ struct MappedController {
 	uint32_t configuredSlots {};
 	uint64_t dmaAddressLimit {};
 	bool uses64ByteContexts {};
+	bool started {};
 	std::vector<uint8_t> rootPortProtocolMajor {};
 	std::list<XhciDevice> devices {};
 	std::vector<XhciTrb> pendingTransferEvents {};
@@ -611,7 +614,7 @@ public:
 	static auto usbEndpointId(uint8_t endpointAddress) -> uint8_t;
 	static auto xhciEndpointType(uint8_t endpointAddress, uint8_t attributes) -> uint8_t;
 	static auto contextIndexForEndpointId(uint8_t endpointId) -> uint32_t;
-	static auto waitForTransferEvent(MappedController &controller, uint8_t slotId, uint8_t endpointId, XhciTrb &completion, int timeoutMs = 1000, bool logTimeoutPath = true) -> bool;
+	static auto waitForTransferEvent(MappedController &controller, uint8_t slotId, uint8_t endpointId, XhciTrb &completion, int timeoutMs = 1000, bool logTimeoutPath = true, uint64_t expectedTrbPhys = 0) -> bool;
 	static auto enqueueTransferTrb(XhciDevice &device, const XhciTrb &trb) -> bool;
 	static auto enqueueEndpointTrb(UsbEndpoint &endpoint, const XhciTrb &trb) -> bool;
 	static void recoverEndpoint(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint);
@@ -641,6 +644,7 @@ public:
 	static auto readConfigurationDescriptor(MappedController &controller, XhciDevice &device, uint8_t &configurationValue) -> bool;
 	static auto setConfiguration(MappedController &controller, XhciDevice &device, uint8_t configurationValue) -> bool;
 	static void bindClassDrivers(MappedController &controller, XhciDevice &device, uint32_t controllerId);
+	static void retryMassStorageBindings(MappedController &controller);
 	static auto prepareHubMetadata(MappedController &controller, XhciDevice &device) -> bool;
 	static void submitHubInterruptTransfer(MappedController &controller, XhciDevice &hub);
 	static void submitHidInterruptTransfer(MappedController &controller, XhciDevice &device, HidInterruptPipe &pipe);

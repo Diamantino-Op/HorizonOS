@@ -133,6 +133,10 @@ namespace horizonos::services::ext4 {
 	class Ext4Volume {
 	public:
 		explicit Ext4Volume(const StorageFsProbeDeviceMsgData &device);
+		~Ext4Volume();
+
+		Ext4Volume(const Ext4Volume &) = delete;
+		auto operator=(const Ext4Volume &) -> Ext4Volume & = delete;
 
 		auto load() -> bool;
 		auto readInode(uint32_t inodeNumber, Ext4Inode &out) const -> bool;

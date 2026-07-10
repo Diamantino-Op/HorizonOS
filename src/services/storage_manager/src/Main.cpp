@@ -1,5 +1,6 @@
 #include "StorageProtocol.hpp"
 #include "StorageManager.hpp"
+#include "PartitionRules.hpp"
 
 #include "bits/linux/linux_sched.h"
 #include "horizonos/generic.h"
@@ -453,6 +454,41 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		}
 	}
 
+	auto StorageManagerUtils::readDeviceBytes(const BlockDevice &device, const uint64_t byteOffset, const size_t length, vector<uint8_t> &out) -> bool {
+		out.clear();
+
+		if (device.blockSize == 0 or device.blockSize > 0x1000 or (0x1000 % device.blockSize) != 0 or
+		    device.blockCount > UINT64_MAX / device.blockSize or
+		    byteOffset > device.blockCount * static_cast<uint64_t>(device.blockSize) or
+		    length > device.blockCount * static_cast<uint64_t>(device.blockSize) - byteOffset) {
+			return false;
+		}
+
+		out.resize(length);
+		const uint64_t blocksPerPage = 0x1000 / device.blockSize;
+		size_t copied = 0;
+
+		while (copied < length) {
+			const uint64_t absoluteByte = byteOffset + copied;
+			const uint64_t block = absoluteByte / device.blockSize;
+			const uint64_t pageLba = (block / blocksPerPage) * blocksPerPage;
+			const size_t pageOffset = static_cast<size_t>(absoluteByte - pageLba * device.blockSize);
+			const size_t chunk = min<size_t>(length - copied, 0x1000 - pageOffset);
+			uint64_t phys = 0;
+			uint64_t virt = 0;
+
+			if (!StorageManagerUtils::readOnePage(device, pageLba, phys, virt)) {
+				return false;
+			}
+
+			memcpy(out.data() + copied, reinterpret_cast<const void *>(virt + pageOffset), chunk);
+			StorageManagerUtils::freeOnePage(phys, virt);
+			copied += chunk;
+		}
+
+		return true;
+	}
+
 	void StorageManagerUtils::notifyFsHandlers(const BlockDevice &device) {
 		vector<FsHandler> handlers;
 
@@ -494,7 +530,11 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 
 		const auto *header = reinterpret_cast<const GptHeader *>(headerVirt);
 
-		if (header->signature != GPT_SIGNATURE or header->headerSize < sizeof(GptHeader) or header->partitionEntrySize < sizeof(GptPartitionEntry)) {
+		if (header->signature != GPT_SIGNATURE or rawDevice.blockSize == 0 or rawDevice.blockCount > UINT64_MAX / rawDevice.blockSize or
+		    header->headerSize < sizeof(GptHeader) or header->headerSize > rawDevice.blockSize or
+		    header->currentLba != 1 or header->firstUsableLba > header->lastUsableLba or header->lastUsableLba >= rawDevice.blockCount or
+		    header->partitionEntryLba >= rawDevice.blockCount or
+		    header->partitionEntrySize < sizeof(GptPartitionEntry) or header->partitionEntrySize > 0x1000 or (header->partitionEntrySize % 8) != 0) {
 			StorageManagerUtils::freeOnePage(headerPhys, headerVirt);
 
 			printf("Storage: %s has no GPT header.", rawDevice.name.c_str());
@@ -503,31 +543,26 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 			return;
 		}
 
-		const uint32_t entriesPerPage = 0x1000 / header->partitionEntrySize;
-		const uint32_t maxEntries = min<uint32_t>(header->partitionEntryCount, 128);
-		const uint32_t entryPageCount = (maxEntries + entriesPerPage - 1) / entriesPerPage;
+		constexpr uint64_t MAX_GPT_ENTRY_BYTES = 4ULL * 1024 * 1024;
+		const uint32_t entrySize = header->partitionEntrySize;
+		const uint32_t maxEntries = partition_rules::boundedGptEntryCount(header->partitionEntryCount, entrySize, MAX_GPT_ENTRY_BYTES);
+		const uint64_t entryArrayByteOffset = header->partitionEntryLba * static_cast<uint64_t>(rawDevice.blockSize);
+		const size_t entryArrayBytes = static_cast<size_t>(maxEntries) * entrySize;
+		vector<uint8_t> entryBytes;
 		uint32_t created = 0;
 
-		for (uint32_t pageIndex = 0; pageIndex < entryPageCount; ++pageIndex) {
-			const uint64_t entryPageLba = header->partitionEntryLba + (static_cast<uint64_t>(pageIndex * (0x1000 / rawDevice.blockSize)));
-			uint64_t entriesPhys = 0;
-			uint64_t entriesVirt = 0;
-
-			if (!StorageManagerUtils::readOnePage(rawDevice, entryPageLba, entriesPhys, entriesVirt)) {
-				continue;
-			}
-
-			const uint32_t firstEntry = pageIndex * entriesPerPage;
-			const uint32_t pageEntryCount = min<uint32_t>(entriesPerPage, maxEntries - firstEntry);
-
-			for (uint32_t entryIndex = 0; entryIndex < pageEntryCount; ++entryIndex) {
-				const uint32_t globalEntryIndex = firstEntry + entryIndex;
-				const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entriesVirt + (static_cast<uint64_t>(entryIndex * header->partitionEntrySize)));
+		if (maxEntries != 0 and StorageManagerUtils::readDeviceBytes(rawDevice, entryArrayByteOffset, entryArrayBytes, entryBytes)) {
+			for (uint32_t globalEntryIndex = 0; globalEntryIndex < maxEntries; ++globalEntryIndex) {
+				const auto *entry = reinterpret_cast<const GptPartitionEntry *>(entryBytes.data() + static_cast<size_t>(globalEntryIndex) * entrySize);
 				const bool empty = ranges::all_of(entry->partitionTypeGuid.bytes, [](const uint8_t byte) -> bool {
 					return byte == 0;
 				});
 
-				if (!empty and entry->firstLba <= entry->lastLba and entry->lastLba < rawDevice.blockCount) {
+				if (!empty and partition_rules::validGptEntry(rawDevice.blockCount,
+				                                                     header->firstUsableLba,
+				                                                     header->lastUsableLba,
+				                                                     entry->firstLba,
+				                                                     entry->lastLba)) {
 					BlockDevice partition {};
 
 					partition.kind = BlockDeviceKind::Partition;
@@ -564,8 +599,9 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 					++created;
 				}
 			}
-
-			StorageManagerUtils::freeOnePage(entriesPhys, entriesVirt);
+		} else if (maxEntries != 0) {
+			printf("Storage: Failed to read GPT entry array from %s.", rawDevice.name.c_str());
+			fflush(stdout);
 		}
 
 		StorageManagerUtils::freeOnePage(headerPhys, headerVirt);
@@ -600,19 +636,13 @@ void StorageManagerUtils::probeMbr(const BlockDevice &rawDevice) {
 	}
 
 	uint32_t created = 0;
-
-	for (uint32_t i = 0; i < 4; ++i) {
-		const MbrPartitionEntry &entry = mbr->partitions[i];
-
-		if (entry.type == 0 or entry.type == 0xEE or entry.sectorCount == 0) {
-			continue;
-		}
-
-		if (entry.firstLba >= rawDevice.blockCount or entry.sectorCount > rawDevice.blockCount - entry.firstLba) {
-			printf("Storage: Ignoring invalid MBR partition %u on %s start=%u sectors=%u.", i + 1, rawDevice.name.c_str(), entry.firstLba, entry.sectorCount);
+	uint32_t logicalIndex = 5;
+	vector<pair<uint64_t, uint64_t>> extendedPartitions;
+	const auto registerPartition = [&](const uint8_t type, const uint64_t firstLba, const uint64_t sectorCount, const uint32_t partitionIndex) -> bool {
+		if (!partition_rules::validRange(rawDevice.blockCount, firstLba, sectorCount)) {
+			printf("Storage: Ignoring invalid MBR partition %u on %s start=%lu sectors=%lu.", partitionIndex, rawDevice.name.c_str(), firstLba, sectorCount);
 			fflush(stdout);
-
-			continue;
+			return false;
 		}
 
 		BlockDevice partition {};
@@ -621,7 +651,7 @@ void StorageManagerUtils::probeMbr(const BlockDevice &rawDevice) {
 		partition.driverPort = rawDevice.driverPort;
 		partition.controllerId = rawDevice.controllerId;
 		partition.nsid = rawDevice.nsid;
-		partition.blockCount = entry.sectorCount;
+		partition.blockCount = sectorCount;
 		partition.blockSize = rawDevice.blockSize;
 		partition.maxPagesPerRequest = rawDevice.maxPagesPerRequest;
 		partition.transport = rawDevice.transport;
@@ -632,8 +662,8 @@ void StorageManagerUtils::probeMbr(const BlockDevice &rawDevice) {
 		partition.writeReplyMsgBase = rawDevice.writeReplyMsgBase;
 		partition.flushReplyMsgBase = rawDevice.flushReplyMsgBase;
 		partition.parentId = rawDevice.id;
-		partition.parentStartLba = entry.firstLba;
-		partition.name = rawDevice.name + "p" + to_string(i + 1);
+		partition.parentStartLba = firstLba;
+		partition.name = rawDevice.name + "p" + to_string(partitionIndex);
 		partition.label = partition.name;
 
 		{
@@ -642,14 +672,93 @@ void StorageManagerUtils::probeMbr(const BlockDevice &rawDevice) {
 			blockDevices.push_back(partition);
 		}
 
-		printf("Storage: Registered MBR partition %s id=%lu type=0x%02x start=%lu blocks=%lu.", partition.name.c_str(), partition.id, entry.type, partition.parentStartLba, partition.blockCount);
+		printf("Storage: Registered MBR partition %s id=%lu type=0x%02x start=%lu blocks=%lu.", partition.name.c_str(), partition.id, type, partition.parentStartLba, partition.blockCount);
 		fflush(stdout);
 
 		StorageManagerUtils::notifyFsHandlers(partition);
 		++created;
+		return true;
+	};
+
+	for (uint32_t i = 0; i < 4; ++i) {
+		const MbrPartitionEntry &entry = mbr->partitions[i];
+
+		if (entry.type == 0 or entry.type == 0xEE or entry.sectorCount == 0) {
+			continue;
+		}
+
+		if (partition_rules::isExtendedMbrType(entry.type)) {
+			extendedPartitions.emplace_back(entry.firstLba, entry.sectorCount);
+			continue;
+		}
+
+		registerPartition(entry.type, entry.firstLba, entry.sectorCount, i + 1);
 	}
 
 	StorageManagerUtils::freeOnePage(mbrPhys, mbrVirt);
+
+	for (const auto &[extendedBase, extendedLength] : extendedPartitions) {
+		if (!partition_rules::validRange(rawDevice.blockCount, extendedBase, extendedLength)) {
+			continue;
+		}
+
+		uint64_t ebrLba = extendedBase;
+		vector<uint64_t> visited;
+
+		for (uint32_t link = 0; link < 128; ++link) {
+			if (ranges::find(visited, ebrLba) != visited.end()) {
+				printf("Storage: Stopped cyclic EBR chain on %s at LBA %lu.", rawDevice.name.c_str(), ebrLba);
+				fflush(stdout);
+				break;
+			}
+
+			visited.push_back(ebrLba);
+			uint64_t ebrPhys = 0;
+			uint64_t ebrVirt = 0;
+
+			if (!StorageManagerUtils::readOnePage(rawDevice, ebrLba, ebrPhys, ebrVirt)) {
+				break;
+			}
+
+			const auto *ebr = reinterpret_cast<const MbrSector *>(ebrVirt);
+			const MbrSector ebrCopy = *ebr;
+			StorageManagerUtils::freeOnePage(ebrPhys, ebrVirt);
+
+			if (ebrCopy.signature != MBR_BOOT_SIGNATURE) {
+				break;
+			}
+
+			const auto &logical = ebrCopy.partitions[0];
+
+			if (logical.type != 0 and !partition_rules::isExtendedMbrType(logical.type)) {
+				uint64_t logicalStart = 0;
+
+				if (partition_rules::logicalRange(rawDevice.blockCount,
+				                                  extendedBase,
+				                                  extendedLength,
+				                                  ebrLba,
+				                                  logical.firstLba,
+				                                  logical.sectorCount,
+				                                  logicalStart)) {
+					registerPartition(logical.type, logicalStart, logical.sectorCount, logicalIndex++);
+				}
+			}
+
+			const auto &next = ebrCopy.partitions[1];
+
+			if (!partition_rules::isExtendedMbrType(next.type) or next.sectorCount == 0 or next.firstLba > UINT64_MAX - extendedBase) {
+				break;
+			}
+
+			const uint64_t nextEbr = extendedBase + next.firstLba;
+
+			if (nextEbr < extendedBase or nextEbr - extendedBase >= extendedLength) {
+				break;
+			}
+
+			ebrLba = nextEbr;
+		}
+	}
 
 	printf("Storage: MBR probe for %s created %u partition(s).", rawDevice.name.c_str(), created);
 	fflush(stdout);

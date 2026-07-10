@@ -117,6 +117,7 @@ public:
 	static auto blockFlush(const BlockDevice &device) -> bool;
 	static auto readOnePage(const BlockDevice &device, uint64_t lba, uint64_t &phys, uint64_t &virt) -> bool;
 	static void freeOnePage(uint64_t phys, uint64_t virt);
+	static auto readDeviceBytes(const BlockDevice &device, uint64_t byteOffset, size_t length, vector<uint8_t> &out) -> bool;
 	static void notifyFsHandlers(const BlockDevice &device);
 	static void probeGpt(const BlockDevice &rawDevice);
 	static void probeMbr(const BlockDevice &rawDevice);

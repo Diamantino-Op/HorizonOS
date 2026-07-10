@@ -171,7 +171,10 @@ namespace kernel::common::memory {
 
 		CommonMain::getInstance()->getKernelAllocContext()->pageMap.mapPage(processAddr, pageMapAddr, ctxKern->pageFlags , false, false);
 
-		ctxKern->pageMap.init(reinterpret_cast<u64 *>(processAddr), pageMapAddr, ctxKern, true); // , not ctx->isUserspace
+		// Page-map operations run in the kernel and may outlive the address space
+		// that happened to be active when the context was created. Keep the root
+		// table on its permanent HHDM alias instead of the per-process alias.
+		ctxKern->pageMap.init(reinterpret_cast<u64 *>(pageMapAddr + CommonMain::getCurrentHhdm()), pageMapAddr, ctxKern, true);
 
 		shareKernelPages(ctxKern);
 		initContext(ctxKern);

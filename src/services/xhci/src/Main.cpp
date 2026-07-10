@@ -1,5 +1,6 @@
 #include "Xhci.hpp"
 #include "MassStorage.hpp"
+#include "XhciRules.hpp"
 
 #include "horizonos/generic.h"
 #include "horizonos/syscall.h"
@@ -8,6 +9,7 @@
 #include "unistd.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -24,11 +26,35 @@ namespace {
 	uint64_t storageReplyPort = 0;
 	vector<pthread_t> eventThreads;
 	UsbMassStorageDriver massStorageDriver;
-	vector<MappedController> *activeControllers = nullptr;
+	vector<MappedController> controllers;
+	vector<MappedController> *activeControllers = &controllers;
 	mutex eventRingMutex;
 	mutex usbStorageMutex;
 	mutex storageRegistrationMutex;
 	recursive_mutex deviceStateMutex;
+
+	template<typename Reply>
+	auto receiveStorageRegistrationReply(const uint64_t replyType, Reply &reply) -> int {
+		auto recv = hos_msg();
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		uint64_t acceptedType = replyType;
+		auto filter = filter_options();
+		filter.whiteListTypes = &acceptedType;
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
+
+			if (ret == EFAULT) {
+				usleep(1000);
+				continue;
+			}
+
+			return ret;
+		}
+	}
 
 	void prepareLinkTraversal(XhciTrb &link, const uint32_t producerCycle, const bool chain) {
 		link.control = (link.control & ~(XHCI_TRB_CYCLE | XHCI_TRB_CHAIN)) |
@@ -69,7 +95,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	auto XhciUtils::allocatePage(AllocatedPage &page, const uint64_t maxPhysExclusive) -> bool {
-			const int allocResult = maxPhysExclusive == 0
+			const long allocResult = maxPhysExclusive == 0
 				? allocPhysPage(&page.phys)
 				: syscall(SYSCALL_ALLOC_PHYS_PAGE, reinterpret_cast<long *>(&page.phys), maxPhysExclusive);
 
@@ -1207,19 +1233,27 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return static_cast<uint32_t>(endpointId) + 1;
 	}
 
-	auto XhciUtils::waitForTransferEvent(MappedController &controller, const uint8_t slotId, const uint8_t endpointId, XhciTrb &completion, const int timeoutMs, const bool logTimeoutPath) -> bool {
+	auto XhciUtils::waitForTransferEvent(MappedController &controller, const uint8_t slotId, const uint8_t endpointId, XhciTrb &completion, const int timeoutMs, const bool logTimeoutPath, const uint64_t expectedTrbPhys) -> bool {
 		uint32_t ignoredLogs = 32;
 
 		for (int i = 0; i < timeoutMs; ++i) {
 			for (auto it = controller.pendingTransferEvents.begin(); it != controller.pendingTransferEvents.end(); ++it) {
 				const auto eventSlot = static_cast<uint8_t>((it->control >> 24) & 0xFFU);
 				const auto eventEndpoint = static_cast<uint8_t>((it->control >> 16) & 0x1FU);
+				const uint64_t eventTrbPhys = xhci_rules::trbPhysical(it->parameterLow, it->parameterHigh);
 
-				if (eventSlot == slotId and eventEndpoint == endpointId) {
+				if (eventSlot == slotId and eventEndpoint == endpointId and (expectedTrbPhys == 0 or eventTrbPhys == expectedTrbPhys)) {
 					completion = *it;
 					controller.pendingTransferEvents.erase(it);
 
 					return true;
+				}
+
+				if (eventSlot == slotId and eventEndpoint == endpointId and expectedTrbPhys != 0) {
+					// A completion left behind by a timed-out/recovered TD must never
+					// satisfy the next BOT phase on the same endpoint.
+					controller.pendingTransferEvents.erase(it);
+					break;
 				}
 			}
 
@@ -1237,7 +1271,16 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				const uint32_t type = XhciUtils::eventType(event);
 				const auto eventSlot = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
 				const auto eventEndpoint = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
-				const bool matched = type == XHCI_TRB_TYPE_TRANSFER_EVENT and eventSlot == slotId and eventEndpoint == endpointId;
+				const uint64_t eventTrbPhys = xhci_rules::trbPhysical(event.parameterLow, event.parameterHigh);
+				const bool sameEndpoint = type == XHCI_TRB_TYPE_TRANSFER_EVENT and eventSlot == slotId and eventEndpoint == endpointId;
+				const bool matched = xhci_rules::transferEventMatches(type,
+				                                                      XHCI_TRB_TYPE_TRANSFER_EVENT,
+				                                                      eventSlot,
+				                                                      eventEndpoint,
+				                                                      slotId,
+				                                                      endpointId,
+				                                                      eventTrbPhys,
+				                                                      expectedTrbPhys);
 
 				if (matched) {
 					completion = event;
@@ -1248,6 +1291,12 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 					if (logTimeoutPath) {
 						printf("XHCI: Port status change event for port %u during transfer wait.", portId);
 						fflush(stdout);
+					}
+				} else if (sameEndpoint and expectedTrbPhys != 0) {
+					if (logTimeoutPath and ignoredLogs != 0) {
+						printf("XHCI: Dropped stale transfer event slot=%u ep=%u trb=0x%lx expected=0x%lx.", slotId, endpointId, eventTrbPhys, expectedTrbPhys);
+						fflush(stdout);
+						--ignoredLogs;
 					}
 				} else if (type == XHCI_TRB_TYPE_TRANSFER_EVENT) {
 					controller.pendingTransferEvents.push_back(event);
@@ -1427,6 +1476,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			unique_lock lock(eventRingMutex);
 		uint32_t remaining = length;
+		uint64_t completionTrbPhys = 0;
 
 		for (uint32_t page = 0; page < pageCount and remaining != 0; ++page) {
 			const uint32_t chunk = min<uint32_t>(remaining, XHCI_PAGE_SIZE);
@@ -1450,6 +1500,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			trb.status = chunk | (tdSize << 17);
 
 			if (remaining == 0) {
+				completionTrbPhys = endpoint.transferRing.phys + static_cast<uint64_t>(endpoint.transferEnqueueIndex) * sizeof(XhciTrb);
 				trb.control |= XHCI_TRB_IOC;
 			} else {
 				trb.control |= XHCI_TRB_CHAIN;
@@ -1468,7 +1519,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 		auto completion = XhciTrb();
 
-		if (!XhciUtils::waitForTransferEvent(controller, device.slotId, endpoint.endpointId, completion, timeoutMs, logTimeout)) {
+		if (!XhciUtils::waitForTransferEvent(controller, device.slotId, endpoint.endpointId, completion, timeoutMs, logTimeout, completionTrbPhys)) {
 			if (logTimeout) {
 				printf("XHCI: Endpoint transfer timed out slot=%u ep=0x%02x.", device.slotId, endpoint.address);
 				fflush(stdout);
@@ -1544,6 +1595,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			auto status = XhciTrb();
 
 			status.control = XHCI_TRB_IOC | (XHCI_TRB_TYPE_STATUS_STAGE << XHCI_TRB_TYPE_SHIFT);
+			const uint32_t statusIndex = xhci_rules::ringIndexAfter(device.transferEnqueueIndex, 2, XHCI_TRANSFER_RING_TRBS - 1);
+			const uint64_t statusTrbPhys = device.transferRing.phys + static_cast<uint64_t>(statusIndex) * sizeof(XhciTrb);
 
 			if (!XhciUtils::enqueueTransferTrb(device, setup) or !XhciUtils::enqueueTransferTrb(device, data) or !XhciUtils::enqueueTransferTrb(device, status)) {
 				return false;
@@ -1553,7 +1606,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			auto completion = XhciTrb();
 
-			if (!XhciUtils::waitForTransferEvent(controller, device.slotId, 1, completion, 1000)) {
+			if (!XhciUtils::waitForTransferEvent(controller, device.slotId, 1, completion, 1000, true, statusTrbPhys)) {
 				printf("XHCI: Control transfer timed out slot=%u attempt=%u.", device.slotId, attempt + 1);
 				fflush(stdout);
 
@@ -1598,6 +1651,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			auto status = XhciTrb();
 
 			status.control = XHCI_TRB_DIR_IN | XHCI_TRB_IOC | (XHCI_TRB_TYPE_STATUS_STAGE << XHCI_TRB_TYPE_SHIFT);
+			const uint32_t statusIndex = xhci_rules::ringIndexAfter(device.transferEnqueueIndex, 1, XHCI_TRANSFER_RING_TRBS - 1);
+			const uint64_t statusTrbPhys = device.transferRing.phys + static_cast<uint64_t>(statusIndex) * sizeof(XhciTrb);
 
 			if (!XhciUtils::enqueueTransferTrb(device, setup) or !XhciUtils::enqueueTransferTrb(device, status)) {
 				return false;
@@ -1607,7 +1662,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			auto completion = XhciTrb();
 
-			if (!XhciUtils::waitForTransferEvent(controller, device.slotId, 1, completion, 1000)) {
+			if (!XhciUtils::waitForTransferEvent(controller, device.slotId, 1, completion, 1000, true, statusTrbPhys)) {
 				printf("XHCI: Control no-data transfer timed out slot=%u request=%u attempt=%u.", device.slotId, request, attempt + 1);
 				fflush(stdout);
 
@@ -2822,7 +2877,14 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			} else if (interface.interfaceClass == USB_CLASS_HUB) {
 				XhciUtils::probeHub(controller, device, interface);
 			} else if (interface.interfaceClass == USB_CLASS_MASS_STORAGE and interface.interfaceSubclass == USB_SUBCLASS_SCSI and interface.interfaceProtocol == USB_PROTOCOL_BULK_ONLY) {
-				if (!massStorageDriver.bind(controllerId, device, interface)) {
+				if (interface.massStorageBound) {
+					continue;
+				}
+
+				++interface.massStorageBindAttempts;
+				interface.massStorageBound = massStorageDriver.bind(controllerId, device, interface);
+
+				if (!interface.massStorageBound) {
 					printf("XHCI/MSD: Failed to bind slot=%u interface=%u.", device.slotId, interface.number);
 					fflush(stdout);
 				}
@@ -2840,6 +2902,32 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				       interface.interfaceSubclass,
 				       interface.interfaceProtocol);
 				fflush(stdout);
+			}
+		}
+	}
+
+	void XhciUtils::retryMassStorageBindings(MappedController &controller) {
+		const scoped_lock deviceLock(deviceStateMutex);
+
+		for (auto &device : controller.devices) {
+			if (!device.configured) {
+				continue;
+			}
+
+			for (auto &interface : device.interfaces) {
+				if (interface.interfaceClass == USB_CLASS_MASS_STORAGE and
+				    interface.interfaceSubclass == USB_SUBCLASS_SCSI and
+				    interface.interfaceProtocol == USB_PROTOCOL_BULK_ONLY and
+				    !interface.massStorageBound and interface.massStorageBindAttempts < 5) {
+					printf("XHCI/MSD: Retrying bind slot=%u interface=%u attempt=%u.",
+					       device.slotId,
+					       interface.number,
+					       interface.massStorageBindAttempts + 1);
+					fflush(stdout);
+					++interface.massStorageBindAttempts;
+					interface.massStorageBound = massStorageDriver.bind(controller.controllerId, device, interface);
+					break;
+				}
 			}
 		}
 	}
@@ -3752,19 +3840,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		auto reply = StorageRegisterBlockDeviceReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveStorageRegistrationReply(STORAGE_REGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE, reply);
 
 		if (ret == 0 and reply.success) {
 			deviceId = reply.deviceId;
@@ -3800,19 +3876,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		auto reply = StorageUnregisterBlockDeviceReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { STORAGE_UNREGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(storageReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveStorageRegistrationReply(STORAGE_UNREGISTER_BLOCK_DEVICE_REPLY_MSG_TYPE, reply);
 
 		return ret == 0 and reply.success;
 	}
@@ -4016,11 +4080,8 @@ auto XhciService::start() -> int {
 		return 2;
 	}
 
-	vector<MappedController> controllers;
-
+	controllers.clear();
 	controllers.reserve(devices.size());
-
-	activeControllers = &controllers;
 
 	for (const auto &device : devices) {
 		controllers.emplace_back();
@@ -4049,14 +4110,24 @@ auto XhciService::start() -> int {
 		if (!XhciUtils::startController(activeController.operationalBase, false)) {
 			printf("XHCI: Controller %zu failed to start.", controllerIndex);
 			fflush(stdout);
+			XhciUtils::releaseControllerMemory(activeController.memory);
+			munmap_extra(reinterpret_cast<void *>(activeController.mmioVirt), activeController.barSize, false);
+			XhciUtils::pciWrite32(device, PCI_COMMAND, activeController.originalCommand);
+			controllers.pop_back();
 
 			continue;
 		}
+
+		activeController.started = true;
 
 		printf("XHCI: Controller %zu started, configured %u device slot(s).", controllerIndex, activeController.configuredSlots);
 		fflush(stdout);
 
 		XhciUtils::powerRootPorts(activeController);
+		// A controller reset can make firmware-powered devices disconnect and
+		// reconnect without preserving CSC. Allow power/debounce to settle before
+		// the first scan; periodic CCS polling handles later arrivals.
+		usleep(500000);
 
 		XhciUtils::postStartProbe(activeController);
 
@@ -4072,10 +4143,14 @@ auto XhciService::start() -> int {
 		XhciUtils::logControllerStatus(activeController, "irq-enabled");
 	}
 
-	printf("XHCI: %zu controller(s) initialized.", controllers.size());
+	const size_t startedControllerCount = ranges::count_if(controllers, [](const MappedController &controller) {
+		return controller.started;
+	});
+
+	printf("XHCI: %zu controller(s) initialized.", startedControllerCount);
 	fflush(stdout);
 
-	if (controllers.empty()) {
+	if (startedControllerCount == 0) {
 		return 2;
 	}
 
@@ -4091,8 +4166,13 @@ auto XhciService::start() -> int {
 
 	for (;;) {
 		for (auto &controller : controllers) {
+			if (!controller.started) {
+				continue;
+			}
+
 			XhciUtils::pollRootPortChanges(controller);
 			XhciUtils::pollHubChanges(controller);
+			XhciUtils::retryMassStorageBindings(controller);
 		}
 
 		usleep(1000000);

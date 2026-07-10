@@ -8,6 +8,11 @@ using namespace std;
 namespace horizonos::services::ext4 {
 	Ext4Volume::Ext4Volume(const StorageFsProbeDeviceMsgData &device)
 		: device(device) {
+		pthread_mutex_lock(&service.volumeLock);
+	}
+
+	Ext4Volume::~Ext4Volume() {
+		pthread_mutex_unlock(&service.volumeLock);
 	}
 
 	auto Ext4Volume::load() -> bool {
@@ -853,11 +858,13 @@ namespace horizonos::services::ext4 {
 		blockBytes.resize(blockSize);
 
 		for (uint64_t fileBlock = 0; fileBlock < blocks; ++fileBlock) {
-			uint32_t fsBlock = 0;
+			uint64_t resolvedBlock = 0;
 
-			if (!ensureDataBlock(parent, fileBlock, fsBlock)) {
+			if (!resolveDataBlock(parent, fileBlock, resolvedBlock) or resolvedBlock > UINT32_MAX) {
 				return false;
 			}
+
+			const auto fsBlock = static_cast<uint32_t>(resolvedBlock);
 
 			if (!readBlock(fsBlock, blockBytes.data())) {
 				return false;
@@ -896,7 +903,9 @@ namespace horizonos::services::ext4 {
 		const uint64_t newFileBlock = blocks;
 		uint32_t fsBlock = 0;
 
-		if (!ensureDataBlock(parent, newFileBlock, fsBlock)) {
+		if (!(inodeUsesExtents(parent)
+			? ensureExtentDataBlock(parent, newFileBlock, fsBlock)
+			: ensureDataBlock(parent, newFileBlock, fsBlock))) {
 			return false;
 		}
 
@@ -929,9 +938,9 @@ namespace horizonos::services::ext4 {
 		blockBytes.resize(blockSize);
 
 		for (uint64_t fileBlock = 0; fileBlock < blocks; ++fileBlock) {
-			uint32_t fsBlock = 0;
+			uint64_t fsBlock = 0;
 
-			if (!ensureDataBlock(parent, fileBlock, fsBlock) or !readBlock(fsBlock, blockBytes.data())) {
+			if (!resolveDataBlock(parent, fileBlock, fsBlock) or !readBlock(fsBlock, blockBytes.data())) {
 				return false;
 			}
 
@@ -1408,19 +1417,37 @@ namespace horizonos::services::ext4 {
 			return false;
 		}
 
-		uint32_t dirBlock = 0;
-
-		if (!allocateBlock(dirBlock)) {
-			return false;
-		}
-
 		auto inode = Ext4Inode();
 
 		inode.mode = EXT4_S_IFDIR | 0755;
 		inode.linksCount = 2;
 		inode.sizeLo = static_cast<uint32_t>(blockSize);
-		inode.blocks = static_cast<uint32_t>(blockSize / 512);
-		inode.block[0] = dirBlock;
+
+		uint32_t dirBlock = 0;
+
+		if ((superblock.featureIncompat & EXT4_FEATURE_INCOMPAT_EXTENTS) != 0) {
+			inode.flags |= EXT4_EXTENTS_FL;
+
+			auto *header = reinterpret_cast<Ext4ExtentHeader *>(inode.block);
+			header->magic = EXT4_EXT_MAGIC;
+			header->entries = 0;
+			header->max = static_cast<uint16_t>((sizeof(inode.block) - sizeof(Ext4ExtentHeader)) / sizeof(Ext4Extent));
+			header->depth = 0;
+			header->generation = 0;
+
+			if (!ensureExtentDataBlock(inode, 0, dirBlock)) {
+				freeInode(inodeNumber);
+				return false;
+			}
+		} else {
+			if (!allocateBlock(dirBlock)) {
+				freeInode(inodeNumber);
+				return false;
+			}
+
+			inode.blocks = static_cast<uint32_t>(blockSize / 512);
+			inode.block[0] = dirBlock;
+		}
 
 		vector<uint8_t> blockBytes;
 
@@ -1717,11 +1744,11 @@ namespace horizonos::services::ext4 {
 
 		const bool fastSymlink = nodeMode == EXT4_S_IFLNK and inode.blocks == 0;
 
-		if (!fastSymlink and inodeUsesExtents(inode)) {
+		if (!fastSymlink and inodeUsesExtents(inode) and !truncateExtentBlocks(inode, 0)) {
 			return false;
 		}
 
-		if (!fastSymlink and !freeInodeBlocks(inode, 0)) {
+		if (!fastSymlink and !inodeUsesExtents(inode) and !freeInodeBlocks(inode, 0)) {
 			return false;
 		}
 

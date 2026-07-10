@@ -519,13 +519,13 @@ namespace kernel::common::threading {
 					const u64 *physPage = CommonMain::getInstance()->getPMM()->allocPages(1, false);
 
 					if (physPage != nullptr) {
-						process->getProcessContext()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContext()->pageFlags | 0b100, false, false);
+						process->getProcessContextKernel()->pageMap.mapPage(addr, reinterpret_cast<u64>(physPage), process->getProcessContextKernel()->pageFlags | 0b100, false, false);
 						mappedEnd = addr + pageSize;
 					} else {
 						CommonMain::getTerminal()->error("Failed to allocate physical memory for thread user ctx!", "Scheduler");
 
 						for (u64 mappedAddr = startPage; mappedAddr < mappedEnd; mappedAddr += pageSize) {
-							process->getProcessContext()->pageMap.unMapPage(mappedAddr, true);
+							process->getProcessContextKernel()->pageMap.unMapPage(mappedAddr, true);
 						}
 
 						Asm::writeCr3(currPageMap);
@@ -549,7 +549,7 @@ namespace kernel::common::threading {
 					}
 				}
 
-				CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadUserStackSize, process->getProcessContext()->pageFlags | 0b100);
+				CommonMain::getTerminal()->debug("User stack pointer: 0x%.16lx - 0x%.16lx, %lu", "Scheduler", startPage, startPage + threadUserStackSize, process->getProcessContextKernel()->pageFlags | 0b100);
 
 				context->userStackPointer = startPage;
 
@@ -651,7 +651,7 @@ namespace kernel::x86_64::threading {
 
 				if (this->userStackPointer != 0) {
 					for (u64 addr = startPage; addr < endPage; addr += pageSize) {
-						process->getProcessContext()->pageMap.unMapPage(addr, true);
+						process->getProcessContextKernel()->pageMap.unMapPage(addr, true);
 					}
 				}
 			}

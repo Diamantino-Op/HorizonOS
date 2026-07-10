@@ -2,6 +2,7 @@
 #define HORIZONOS_FAT32_HPP
 
 #include "../../ext4/src/StorageProtocol.hpp"
+#include "Fat32Rules.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -190,7 +191,7 @@ namespace {
 				return false;
 			}
 
-			if (!Fat32Utils::isPowerOfTwo(boot.sectorsPerCluster) or boot.reservedSectors == 0 or boot.fatCount == 0 or boot.fatSize32 == 0) {
+			if (!Fat32Utils::isPowerOfTwo(boot.sectorsPerCluster) or boot.sectorsPerCluster > 128 or boot.reservedSectors == 0 or boot.fatCount == 0 or boot.fatSize32 == 0) {
 				return false;
 			}
 
@@ -198,18 +199,23 @@ namespace {
 				return false;
 			}
 
+			if (!fat32_rules::selectFat(boot.extFlags, boot.fatCount, activeFatIndex, fatMirroringEnabled)) {
+				return false;
+			}
+
 			totalSectors = boot.totalSectors16 != 0 ? boot.totalSectors16 : boot.totalSectors32;
 			firstFatSector = boot.reservedSectors;
 			firstDataSector = boot.reservedSectors + static_cast<uint64_t>(boot.fatCount) * boot.fatSize32;
 
-			if (totalSectors <= firstDataSector) {
+			if (totalSectors <= firstDataSector or totalSectors > device.blockCount) {
 				return false;
 			}
 
 			const uint64_t dataSectors = totalSectors - firstDataSector;
 			clusterCount = dataSectors / boot.sectorsPerCluster;
+			const uint64_t fatEntryCapacity = (static_cast<uint64_t>(boot.fatSize32) * boot.bytesPerSector) / sizeof(uint32_t);
 
-			return clusterCount >= FAT32_MIN_CLUSTERS;
+			return clusterCount >= FAT32_MIN_CLUSTERS and clusterCount + 2 <= fatEntryCapacity and boot.rootCluster < clusterCount + 2;
 		}
 
 		auto lookupPath(const string &path, FatDirEntry &entry) const -> bool {
@@ -394,6 +400,10 @@ namespace {
 
 			if (!ensureFileClusters(entry, targetSize)) {
 				return fail("cluster allocation");
+			}
+
+			if (offset > entry.size and !zeroFileRange(entry, entry.size, offset - entry.size)) {
+				return fail("gap zeroing");
 			}
 
 			uint32_t cluster = entry.firstCluster;
@@ -762,7 +772,9 @@ namespace {
 			}
 
 			vector<uint8_t> bytes;
-			const uint64_t fatByteOffset = (firstFatSector * boot.bytesPerSector) + static_cast<uint64_t>(cluster) * sizeof(uint32_t);
+			const uint64_t fatByteOffset =
+				((firstFatSector + static_cast<uint64_t>(activeFatIndex) * boot.fatSize32) * boot.bytesPerSector) +
+				static_cast<uint64_t>(cluster) * sizeof(uint32_t);
 
 			if (!readBytes(fatByteOffset, sizeof(uint32_t), bytes)) {
 				return false;
@@ -780,12 +792,22 @@ namespace {
 				return false;
 			}
 
-			uint32_t value = entry & FAT32_CLUSTER_MASK;
+			const uint32_t firstFat = fatMirroringEnabled ? 0 : activeFatIndex;
+			const uint32_t fatEnd = fatMirroringEnabled ? boot.fatCount : activeFatIndex + 1;
 
-			for (uint32_t fat = 0; fat < boot.fatCount; ++fat) {
+			for (uint32_t fat = firstFat; fat < fatEnd; ++fat) {
 				const uint64_t fatByteOffset =
 					((firstFatSector + static_cast<uint64_t>(fat) * boot.fatSize32) * boot.bytesPerSector) +
 					static_cast<uint64_t>(cluster) * sizeof(uint32_t);
+				vector<uint8_t> oldBytes;
+
+				if (!readBytes(fatByteOffset, sizeof(uint32_t), oldBytes)) {
+					return false;
+				}
+
+				uint32_t oldValue = 0;
+				memcpy(&oldValue, oldBytes.data(), sizeof(oldValue));
+				const uint32_t value = fat32_rules::mergeFatEntry(oldValue, entry);
 
 				if (!writeBytes(fatByteOffset, reinterpret_cast<const uint8_t *>(&value), sizeof(value))) {
 					return false;
@@ -873,7 +895,7 @@ namespace {
 					chunk = min<uint64_t>(clusterBytes.size(), remaining);
 				}
 
-				out.insert(out.end(), clusterBytes.begin(), clusterBytes.begin() + chunk);
+				out.insert(out.end(), clusterBytes.data(), clusterBytes.data() + chunk);
 
 				if (maxBytes != 0 and out.size() >= maxBytes) {
 					return true;
@@ -912,12 +934,12 @@ namespace {
 			return true;
 		}
 
-		auto ensureFileClusters(FatDirEntry &entry, const uint32_t size) const -> bool {
+			auto ensureFileClusters(FatDirEntry &entry, const uint32_t size) const -> bool {
 			if (size == 0) {
 				return true;
 			}
 
-			const uint32_t neededClusters = (size + bytesPerCluster() - 1) / bytesPerCluster();
+			const uint32_t neededClusters = fat32_rules::clustersForSize(size, bytesPerCluster());
 
 			if (entry.firstCluster == 0) {
 				if (!allocateCluster(entry.firstCluster)) {
@@ -946,6 +968,63 @@ namespace {
 			return true;
 		}
 
+		auto zeroFileRange(const FatDirEntry &entry, const uint64_t offset, const uint64_t length) const -> bool {
+			if (length == 0) {
+				return true;
+			}
+
+			if (entry.firstCluster < 2 or offset > UINT32_MAX or length > static_cast<uint64_t>(UINT32_MAX) - offset) {
+				return false;
+			}
+
+			const uint32_t clusterBytes = bytesPerCluster();
+			uint32_t cluster = entry.firstCluster;
+			uint64_t skipClusters = offset / clusterBytes;
+
+			while (skipClusters-- != 0) {
+				uint32_t next = 0;
+
+				if (!readFatEntry(cluster, next) or next < 2 or next >= FAT32_EOC) {
+					return false;
+				}
+
+				cluster = next;
+			}
+
+			uint32_t clusterOffset = static_cast<uint32_t>(offset % clusterBytes);
+			uint64_t zeroed = 0;
+
+			while (zeroed < length) {
+				vector<uint8_t> clusterData;
+
+				if (!readCluster(cluster, clusterData)) {
+					return false;
+				}
+
+				const uint32_t chunk = static_cast<uint32_t>(min<uint64_t>(clusterBytes - clusterOffset, length - zeroed));
+				memset(clusterData.data() + clusterOffset, 0, chunk);
+
+				if (!writeCluster(cluster, clusterData.data())) {
+					return false;
+				}
+
+				zeroed += chunk;
+				clusterOffset = 0;
+
+				if (zeroed < length) {
+					uint32_t next = 0;
+
+					if (!readFatEntry(cluster, next) or next < 2 or next >= FAT32_EOC) {
+						return false;
+					}
+
+					cluster = next;
+				}
+			}
+
+			return true;
+		}
+
 		auto resizeFile(FatDirEntry &entry, const uint32_t size) const -> bool {
 			if (size == 0) {
 				if (!freeClusterChain(entry.firstCluster)) {
@@ -958,11 +1037,17 @@ namespace {
 				return updateDirectoryEntry(entry);
 			}
 
+			const uint32_t oldSize = entry.size;
+
 			if (!ensureFileClusters(entry, size)) {
 				return false;
 			}
 
-			const uint32_t keepClusters = (size + bytesPerCluster() - 1) / bytesPerCluster();
+			if (size > oldSize and !zeroFileRange(entry, oldSize, static_cast<uint64_t>(size) - oldSize)) {
+				return false;
+			}
+
+			const uint32_t keepClusters = fat32_rules::clustersForSize(size, bytesPerCluster());
 			uint32_t cluster = entry.firstCluster;
 
 			for (uint32_t i = 1; i < keepClusters; ++i) {
@@ -1457,6 +1542,8 @@ namespace {
 		uint64_t firstFatSector {};
 		uint64_t firstDataSector {};
 		uint64_t clusterCount {};
+		uint32_t activeFatIndex {};
+		bool fatMirroringEnabled { true };
 	};
 }
 

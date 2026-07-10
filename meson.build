@@ -23,6 +23,7 @@ cp = find_program('cp', required: true)
 mkdir = find_program('mkdir', required: true)
 git = find_program('git', required: true)
 sh = find_program('sh', required: true)
+bash = find_program('bash', required: true)
 nm = find_program('nm', required: true)
 
 globber = join_paths(meson.global_source_root(), 'deps', 'Globber.sh')
@@ -375,6 +376,14 @@ horizonos_iso = custom_target('HorizonOS_ISO',
         install_apps
     ]
 )
+
+
+# Native driver regression tests
+
+test('driver-regressions',
+     bash,
+     args: [join_paths(meson.global_source_root(), 'tests', 'run_driver_regressions.sh')],
+     suite: 'drivers')
 
 
 
