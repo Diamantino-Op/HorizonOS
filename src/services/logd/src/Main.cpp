@@ -211,6 +211,8 @@ int main() {
 	uint64_t lastSequence = 0;
 	int logFd = -1;
 	uint64_t openAttempts = 0;
+	uint32_t openRetryDelay = 0;
+	uint32_t writeDelay = 0;
 	std::vector<std::string> backlog;
 
 	backlog.reserve(4096);
@@ -227,16 +229,21 @@ int main() {
 		}
 
 		if (logFd < 0) {
-			logFd = openLogFile();
-			++openAttempts;
+			if (openRetryDelay == 0) {
+				logFd = openLogFile();
+				++openAttempts;
+				openRetryDelay = 40;
 
-			if (logFd < 0 && (openAttempts % 200) == 1) {
-				printf("LogD: waiting for %s", LOG_PATH);
-				fflush(stdout);
+				if (logFd < 0 && (openAttempts % 5) == 1) {
+					printf("LogD: waiting for %s", LOG_PATH);
+					fflush(stdout);
+				}
+			} else {
+				--openRetryDelay;
 			}
 		}
 
-		if (logFd >= 0 && !backlog.empty()) {
+		if (logFd >= 0 && !backlog.empty() && writeDelay == 0) {
 			size_t flushed = 0;
 
 			for (; flushed < backlog.size(); ++flushed) {
@@ -249,16 +256,24 @@ int main() {
 					close(logFd);
 
 					logFd = -1;
+					openRetryDelay = 0;
 
 					break;
 				}
 			}
 
 			if (flushed > 0) {
-				fsync(logFd);
+				if (logFd >= 0) {
+					fsync(logFd);
+					writeDelay = 40;
+				}
 
 				backlog.erase(backlog.begin(), backlog.begin() + static_cast<long>(flushed));
 			}
+		}
+
+		if (writeDelay > 0) {
+			--writeDelay;
 		}
 
 		if (backlog.size() > 8192) {
