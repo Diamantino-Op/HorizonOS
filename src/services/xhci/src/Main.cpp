@@ -3344,7 +3344,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
 			const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
 
-			if ((portsc & XHCI_PORTSC_CHANGE_BITS) != 0) {
+			// Some controllers lose CSC while interrupts are being enabled. Checking
+			// CCS also discovers a connected port that the initial scan missed.
+			if ((portsc & (XHCI_PORTSC_CHANGE_BITS | XHCI_PORTSC_CCS)) != 0) {
 				XhciUtils::handleRootPortChange(controller, port);
 			}
 		}
