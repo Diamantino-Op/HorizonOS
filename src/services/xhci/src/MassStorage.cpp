@@ -97,9 +97,10 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 	}
 
 	auto *cbw = reinterpret_cast<BotCbw *>(cbwPage.virt);
+	const uint32_t tag = unit.tag++;
 
 	cbw->signature = CBW_SIGNATURE;
-	cbw->tag = unit.tag++;
+	cbw->tag = tag;
 	cbw->dataTransferLength = dataLength;
 	cbw->flags = dataIn ? 0x80 : 0x00;
 	cbw->lun = 0;
@@ -109,32 +110,69 @@ auto UsbMassStorageDriver::sendCommand(Unit &unit, const uint8_t *cdb, const uin
 
 	const uint64_t cbwPhys = cbwPage.phys;
 	uint32_t actual = 0;
-	bool ok = transport.bulkTransfer(transport.ctx, *unit.device, *unit.bulkOut, &cbwPhys, 1, sizeof(BotCbw), false, &actual) and actual == sizeof(BotCbw);
+	bool transportOk = transport.bulkTransfer(transport.ctx, *unit.device, *unit.bulkOut, &cbwPhys, 1, sizeof(BotCbw), false, &actual) and actual == sizeof(BotCbw);
+	uint32_t dataActual = 0;
 
-	if (ok and dataLength != 0) {
+	if (transportOk and dataLength != 0) {
 		UsbEndpoint &dataEndpoint = dataIn ? *unit.bulkIn : *unit.bulkOut;
 
-		ok = transport.bulkTransfer(transport.ctx, *unit.device, dataEndpoint, dataPages, dataPageCount, dataLength, dataIn, &actual);
+		transportOk = transport.bulkTransfer(transport.ctx, *unit.device, dataEndpoint, dataPages, dataPageCount, dataLength, dataIn, &dataActual);
 	}
 
 	const uint64_t cswPhys = cswPage.phys;
 	actual = 0;
-	ok = ok and transport.bulkTransfer(transport.ctx, *unit.device, *unit.bulkIn, &cswPhys, 1, sizeof(BotCsw), true, &actual) and actual >= sizeof(BotCsw);
+	const bool cswRead = transportOk and transport.bulkTransfer(transport.ctx, *unit.device, *unit.bulkIn, &cswPhys, 1, sizeof(BotCsw), true, &actual) and actual == sizeof(BotCsw);
+	bool commandPassed = false;
+	bool recoveryRequired = !cswRead;
 
-	if (ok) {
+	if (cswRead) {
 		const auto *csw = reinterpret_cast<const BotCsw *>(cswPage.virt);
+		const bool validCsw = csw->signature == CSW_SIGNATURE and csw->tag == tag and csw->status <= 2 and csw->residue <= dataLength;
 
-		ok = csw->signature == CSW_SIGNATURE and csw->tag == cbw->tag and csw->status == 0;
+		if (!validCsw) {
+			printf("XHCI/MSD: Invalid CSW slot=%u signature=0x%x tag=0x%x expected=0x%x residue=%u status=%u.",
+			       unit.device->slotId,
+			       csw->signature,
+			       csw->tag,
+			       tag,
+			       csw->residue,
+			       csw->status);
+			fflush(stdout);
+			recoveryRequired = true;
+		} else if (csw->status == 2) {
+			printf("XHCI/MSD: BOT phase error slot=%u tag=0x%x residue=%u.", unit.device->slotId, tag, csw->residue);
+			fflush(stdout);
+			recoveryRequired = true;
+		} else if (csw->status == 0) {
+			const bool consistentLength = dataLength == 0
+				? csw->residue == 0
+				: dataActual <= dataLength and csw->residue == dataLength - dataActual;
+
+			commandPassed = consistentLength;
+			recoveryRequired = !consistentLength;
+
+			if (!consistentLength) {
+				printf("XHCI/MSD: BOT length mismatch slot=%u tag=0x%x requested=%u actual=%u residue=%u.",
+				       unit.device->slotId,
+				       tag,
+				       dataLength,
+				       dataActual,
+				       csw->residue);
+				fflush(stdout);
+			}
+		}
+		// CSW status 1 is a normal SCSI command failure. The caller will issue
+		// REQUEST SENSE; BOT reset recovery is reserved for transport/phase errors.
 	}
 
 	MassStorageUtils::freeStage(cbwPage);
 	MassStorageUtils::freeStage(cswPage);
 
-	if (!ok) {
+	if (recoveryRequired) {
 		recover(unit);
 	}
 
-	return ok;
+	return commandPassed;
 }
 
 auto UsbMassStorageDriver::inquiry(Unit &unit) const -> bool {
@@ -305,11 +343,11 @@ auto UsbMassStorageDriver::readWrite(Unit &unit, const uint64_t lba, const uint6
 
 	const uint64_t blocks = byteCount / unit.blockSize;
 
-	if (blocks == 0 or blocks > UINT32_MAX or lba + blocks > unit.blockCount) {
+	if (blocks == 0 or blocks > UINT32_MAX or lba >= unit.blockCount or blocks > unit.blockCount - lba) {
 		return false;
 	}
 
-	if (lba <= UINT32_MAX and blocks <= 0xFFFF) {
+	if (lba <= UINT32_MAX and blocks <= 0xFFFF and blocks - 1 <= UINT32_MAX - lba) {
 		uint8_t cdb[10] {};
 
 		cdb[0] = write ? 0x2A : 0x28;
@@ -399,11 +437,15 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 	Unit unit {};
 
 	unit.controllerId = controllerId;
-	unit.nsid = nextNsid++;
 	unit.device = &device;
 	unit.bulkIn = bulkIn;
 	unit.bulkOut = bulkOut;
 	unit.interfaceNumber = interface.number;
+
+	{
+		const std::scoped_lock lock(unitsMutex);
+		unit.nsid = nextNsid++;
+	}
 
 	if (!inquiry(unit)) {
 		printf("XHCI/MSD: INQUIRY failed slot=%u.", device.slotId);
@@ -442,9 +484,47 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 
 	snprintf(name, sizeof(name), "usb%un%u", controllerId, unit.nsid);
 
-	if (!transport.registerBlockDevice(transport.ctx, unit.controllerId, unit.nsid, unit.blockCount, unit.blockSize, name, unit.storageDeviceId)) {
+	// StorageManager probes the device synchronously as part of registration.
+	// Publish the fully initialized unit first so those reads can resolve it.
+	{
+		const std::scoped_lock lock(unitsMutex);
+		units.push_back(unit);
+	}
+
+	uint64_t storageDeviceId = 0;
+
+	if (!transport.registerBlockDevice(transport.ctx, unit.controllerId, unit.nsid, unit.blockCount, unit.blockSize, name, storageDeviceId)) {
+		const std::scoped_lock lock(unitsMutex);
+
+		for (auto it = units.begin(); it != units.end(); ++it) {
+			if (it->controllerId == unit.controllerId and it->nsid == unit.nsid) {
+				units.erase(it);
+				break;
+			}
+		}
+
 		printf("XHCI/MSD: StorageManager rejected %s.", name);
 		fflush(stdout);
+
+		return false;
+	}
+
+	bool publishedStillPresent = false;
+
+	{
+		const std::scoped_lock lock(unitsMutex);
+		Unit *published = find(unit.controllerId, unit.nsid);
+
+		if (published != nullptr) {
+			published->storageDeviceId = storageDeviceId;
+			publishedStillPresent = true;
+		}
+	}
+
+	if (!publishedStillPresent) {
+		if (transport.unregisterBlockDevice != nullptr) {
+			transport.unregisterBlockDevice(transport.ctx, storageDeviceId, unit.controllerId, unit.nsid);
+		}
 
 		return false;
 	}
@@ -452,24 +532,25 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 	printf("XHCI/MSD: Registered %s slot=%u blocks=%lu blockSize=%u.", name, device.slotId, unit.blockCount, unit.blockSize);
 	fflush(stdout);
 
-	units.push_back(unit);
-
 	return true;
 }
 
 auto UsbMassStorageDriver::read(const uint32_t controllerId, const uint32_t nsid, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+	const std::scoped_lock lock(unitsMutex);
 	Unit *unit = find(controllerId, nsid);
 
 	return unit != nullptr and readWriteWithRetry(*unit, lba, pagePhysArray, pageCount, false);
 }
 
 auto UsbMassStorageDriver::write(const uint32_t controllerId, const uint32_t nsid, const uint64_t lba, const uint64_t *pagePhysArray, const uint32_t pageCount) -> bool {
+	const std::scoped_lock lock(unitsMutex);
 	Unit *unit = find(controllerId, nsid);
 
 	return unit != nullptr and readWriteWithRetry(*unit, lba, pagePhysArray, pageCount, true);
 }
 
 auto UsbMassStorageDriver::flush(const uint32_t controllerId, const uint32_t nsid) -> bool {
+	const std::scoped_lock lock(unitsMutex);
 	Unit *unit = find(controllerId, nsid);
 
 	if (unit == nullptr) {
@@ -480,16 +561,25 @@ auto UsbMassStorageDriver::flush(const uint32_t controllerId, const uint32_t nsi
 }
 
 void UsbMassStorageDriver::removeDevice(const XhciDevice &device) {
-	for (auto it = units.begin(); it != units.end();) {
-		if (it->device == &device) {
-			if (transport.unregisterBlockDevice != nullptr and it->storageDeviceId != 0) {
-				transport.unregisterBlockDevice(transport.ctx, it->storageDeviceId, it->controllerId, it->nsid);
+	std::vector<Unit> removedUnits;
+
+	{
+		const std::scoped_lock lock(unitsMutex);
+
+		for (auto it = units.begin(); it != units.end();) {
+			if (it->device == &device) {
+				removedUnits.push_back(*it);
+				it = units.erase(it);
+				continue;
 			}
 
-			it = units.erase(it);
-			continue;
+			++it;
 		}
+	}
 
-		++it;
+	for (const auto &unit : removedUnits) {
+		if (transport.unregisterBlockDevice != nullptr and unit.storageDeviceId != 0) {
+			transport.unregisterBlockDevice(transport.ctx, unit.storageDeviceId, unit.controllerId, unit.nsid);
+		}
 	}
 }

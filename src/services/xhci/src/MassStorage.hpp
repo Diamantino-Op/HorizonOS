@@ -4,6 +4,7 @@
 #include "Xhci.hpp"
 
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 constexpr uint32_t CBW_SIGNATURE = 0x43425355;
@@ -75,6 +76,7 @@ private:
 
 	UsbMassStorageTransport transport {};
 	std::vector<Unit> units {};
+	std::mutex unitsMutex {};
 	uint32_t nextNsid { 1 };
 
 	auto find(uint32_t controllerId, uint32_t nsid) -> Unit *;

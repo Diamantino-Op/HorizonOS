@@ -30,11 +30,12 @@ namespace kernel::common::threading {
 			const u64 syscallStackBase = thread != nullptr ? thread->getSyscallStackBase() : 0;
 			const u64 syscallStackTop = thread != nullptr ? thread->getSyscallStackPointer() : 0;
 			const u64 queuedNode = thread != nullptr ? reinterpret_cast<u64>(thread->getQueuedExecutionNode()) : 0;
+			const u64 runningNode = thread != nullptr ? reinterpret_cast<u64>(thread->getRunningExecutionNode()) : 0;
 			const u32 queued = thread != nullptr ? static_cast<u32>(thread->isQueued()) : 0;
 
 			term->printfBoth(true, "\033[0;31mScheduler switch panic: %s", reason);
-			term->printfBoth(true, "\033[0;31m  cpu=%lu tid=%u pid=%u gen=%lu state=%u queued=%u queuedNode=0x%.16lx",
-				CpuManager::getCurrentCore()->cpuId, tid, pid, generation, state, queued, queuedNode);
+			term->printfBoth(true, "\033[0;31m  cpu=%lu tid=%u pid=%u gen=%lu state=%u queued=%u queuedNode=0x%.16lx runningNode=0x%.16lx",
+				CpuManager::getCurrentCore()->cpuId, tid, pid, generation, state, queued, queuedNode, runningNode);
 			term->printfBoth(true, "\033[0;31m  savedRsp=0x%.16lx stackBase=0x%.16lx stackTop=0x%.16lx thread=0x%.16lx",
 				rsp, stackBase, stackTop, reinterpret_cast<u64>(thread));
 			term->printfBoth(true, "\033[0;31m  syscallStackBase=0x%.16lx syscallStackTop=0x%.16lx",
@@ -116,6 +117,12 @@ namespace kernel::common::threading {
 		const CpuCore *currentCore = CpuManager::getCurrentCore();
 		const ExecutionNode &currentNode = currentCore->executionNode;
 		const Thread *currentThread = Scheduler::getCurrentThread();
+
+		// A blocking path may hand the scheduler lock directly to the context
+		// switch. That switch must not be skipped while the lock is in transit.
+		if (currentNode.hasSchedLockHeldForSwitch()) {
+			return 0;
+		}
 
 		if (currentNode.isDisabled() or Scheduler::isDisabled) {
 			return 1;
@@ -206,7 +213,8 @@ namespace kernel::common::threading {
 
 	u128 ExecutionNode::saveOldThread(const u64 oldRsp) {
 		Scheduler *schedulerPtr = CommonMain::getInstance()->getScheduler();
-		const bool prevIF = schedulerPtr->getSchedLock()->lock();
+		const bool schedLockAlreadyHeld = this->consumeSchedLockHeldForSwitch();
+		const bool prevIF = schedLockAlreadyHeld ? false : schedulerPtr->getSchedLock()->lock();
 		this->setPendingSchedUnlock(prevIF);
 
 		// Save the old thread state
@@ -214,7 +222,12 @@ namespace kernel::common::threading {
 		Thread *oldThread = this->currentThread;
 		const bool oldThreadIsUnstartedIdle = oldThread == this->idleThread && !this->idleThreadStarted;
 
+		if (oldThread->getRunningExecutionNode() != this) {
+			schedulerSwitchPanic("outgoing thread owned by another execution node", oldThread, oldRsp);
+		}
+
 		reinterpret_cast<ThreadContext *>(oldThread->getContext())->save();
+		oldThread->setRunningExecutionNode(nullptr);
 
 		if (!oldThreadIsUnstartedIdle) {
 			oldThread->setStackPointer(oldRsp);
@@ -274,6 +287,10 @@ namespace kernel::common::threading {
 			schedulerSwitchPanic("no next thread", nullptr, 0);
 		}
 
+		if (nextThread->getRunningExecutionNode() != nullptr) {
+			schedulerSwitchPanic("next thread already running on another execution node", nextThread, *nextThread->getStackPointer());
+		}
+
 		const u64 nextRsp = *nextThread->getStackPointer();
 
 		if (nextThread->getContext() == nullptr || nextThread->getParent() == nullptr || nextThread->getParent()->getProcessContextKernel() == nullptr) {
@@ -285,6 +302,7 @@ namespace kernel::common::threading {
 		}
 
 		this->currentThread = nextThread;
+		this->currentThread->setRunningExecutionNode(this);
 		this->currentThread->setState(ThreadState::RUNNING);
 		this->currentThread->lastScheduledNs = now;
 
@@ -331,20 +349,26 @@ namespace kernel::common::threading {
 	}
 
 	void ExecutionNode::loadNewThread() {
-		auto *ctx = reinterpret_cast<ThreadContext *>(this->currentThread->getContext());
+		Thread *thread = this->currentThread;
 
-		if (ctx == nullptr || !ctx->isValid()) {
-			threadContextPanic("invalid context before load", this->currentThread, ctx);
+		if (thread == nullptr) {
+			threadContextPanic("missing current thread before load", nullptr, nullptr);
 		}
 
-		ctx->load();
+		auto *ctx = reinterpret_cast<ThreadContext *>(thread->getContext());
+
+		if (ctx == nullptr || !ctx->isValid()) {
+			threadContextPanic("invalid context before load", thread, ctx);
+		}
 
 		CpuCore *core = CpuManager::getCurrentCore();
+		const u64 syscallStackPointer = thread->getSyscallStackPointer();
+		const u64 kernelStackPointer = thread->getKStackPointer();
 
-		core->kernelStack = this->currentThread->getSyscallStackPointer();
+		core->kernelStack = syscallStackPointer;
 
 		if (ctx->threadTssIopb != nullptr) {
-			ctx->updateTssPtrs(this->currentThread->getKStackPointer());
+			ctx->updateTssPtrs(kernelStackPointer);
 
 			core->gdtManager->getGdt()->tssEntry = GdtTssEntry(ctx->threadTssIopb);
 			core->gdtManager->getGdt()->tssEntry.clearBusy();
@@ -360,8 +384,12 @@ namespace kernel::common::threading {
 				TssManager::updateTss();
 			}
 
-			core->tssManager->getTss()->rsp[0] = this->currentThread->getKStackPointer();
+			core->tssManager->getTss()->rsp[0] = kernelStackPointer;
 		}
+
+		// Restoring user SIMD and FS/GS state must be the final operation in
+		// the switch. Do not dereference scheduler or thread state afterward.
+		ctx->load();
 	}
 
 	u64 ExecutionNode::getENThreadRsp() const {

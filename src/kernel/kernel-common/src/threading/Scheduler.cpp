@@ -329,6 +329,14 @@ namespace kernel::common::threading {
 		return this->queuedExecutionNode;
 	}
 
+	void Thread::setRunningExecutionNode(ExecutionNode *node) {
+		this->runningExecutionNode = node;
+	}
+
+	ExecutionNode *Thread::getRunningExecutionNode() const {
+		return this->runningExecutionNode;
+	}
+
 	void Thread::setQueued(const bool val) {
 		this->queued = val;
 	}
@@ -461,11 +469,16 @@ namespace kernel::common::threading {
 
 		this->idleThread = newThread;
 		this->currentThread = newThread;
+		newThread->setRunningExecutionNode(this);
 		schedulerPtr->getSchedLock()->unlock(prevIF);
 	}
 
 	void ExecutionNode::setCurrentThread(Thread *thread) {
 		this->currentThread = thread;
+
+		if (thread != nullptr) {
+			thread->setRunningExecutionNode(this);
+		}
 	}
 
 	Thread *ExecutionNode::getCurrentThread() const {
@@ -567,6 +580,21 @@ namespace kernel::common::threading {
 		this->nextScheduleUnlockIFValid = false;
 		prevIF = this->nextScheduleUnlockIF;
 		return true;
+	}
+
+	void ExecutionNode::setSchedLockHeldForSwitch() {
+		this->schedLockHeldForSwitch = true;
+	}
+
+	bool ExecutionNode::hasSchedLockHeldForSwitch() const {
+		return this->schedLockHeldForSwitch;
+	}
+
+	bool ExecutionNode::consumeSchedLockHeldForSwitch() {
+		const bool held = this->schedLockHeldForSwitch;
+
+		this->schedLockHeldForSwitch = false;
+		return held;
 	}
 
 	// Reaper Thread
@@ -868,7 +896,7 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::enqueueThread(Thread *thread, const bool waking) {
-		if (thread == nullptr) {
+		if (thread == nullptr or thread->getRunningExecutionNode() != nullptr) {
 			return;
 		}
 
@@ -887,7 +915,7 @@ namespace kernel::common::threading {
 	}
 
 	void Scheduler::enqueueThread(Thread *thread, ExecutionNode *target, const bool waking) {
-		if (thread == nullptr || target == nullptr) {
+		if (thread == nullptr or target == nullptr or thread->getRunningExecutionNode() != nullptr) {
 			return;
 		}
 
@@ -944,7 +972,7 @@ namespace kernel::common::threading {
 
 		if (shouldReschedule) {
 			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
-			this->schedLock.unlockNoSti();
+			getCurrentExecutionNode()->setSchedLockHeldForSwitch();
 		} else {
 			this->schedLock.unlock(prevIF);
 		}
@@ -974,7 +1002,7 @@ namespace kernel::common::threading {
 
 		if (shouldReschedule) {
 			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
-			this->schedLock.unlockNoSti();
+			getCurrentExecutionNode()->setSchedLockHeldForSwitch();
 		} else {
 			this->schedLock.unlock(prevIF);
 		}
@@ -1033,7 +1061,7 @@ namespace kernel::common::threading {
 			getCurrentExecutionNode()->setNextScheduleUnlockIF(prevIF);
 
 			if (useLock) {
-				this->schedLock.unlockNoSti();
+				getCurrentExecutionNode()->setSchedLockHeldForSwitch();
 			}
 
 			ExecutionNode::reSchedule();

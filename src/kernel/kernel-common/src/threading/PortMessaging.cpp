@@ -563,7 +563,7 @@ namespace kernel::common::threading {
 
 	        if (isCurrentThread) {
 	            Scheduler::getCurrentExecutionNode()->setNextScheduleUnlockIF(prevPortIF);
-	            scheduler->getSchedLock()->unlockNoSti();
+	            Scheduler::getCurrentExecutionNode()->setSchedLockHeldForSwitch();
 	        } else {
 	            scheduler->getSchedLock()->unlock(prevPortIF);
 	        }

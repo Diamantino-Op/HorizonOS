@@ -1315,7 +1315,7 @@ namespace kernel::common::hal {
 
 			if (shouldReschedule) {
 				Scheduler::getCurrentExecutionNode()->setNextScheduleUnlockIF(schedPrevIF);
-				scheduler->getSchedLock()->unlockNoSti();
+				Scheduler::getCurrentExecutionNode()->setSchedLockHeldForSwitch();
 			} else {
 				scheduler->getSchedLock()->unlock(schedPrevIF);
 			}

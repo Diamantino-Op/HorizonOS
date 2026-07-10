@@ -136,7 +136,9 @@ namespace kernel::common::threading {
 		bool isReapPending() const;
 
 		void setQueuedExecutionNode(ExecutionNode *node);
-    	ExecutionNode *getQueuedExecutionNode() const;
+		ExecutionNode *getQueuedExecutionNode() const;
+		void setRunningExecutionNode(ExecutionNode *node);
+		ExecutionNode *getRunningExecutionNode() const;
 
     	void setQueued(bool val);
     	bool isQueued() const;
@@ -182,7 +184,8 @@ namespace kernel::common::threading {
 		bool reapPending {};
 
 		ExecutionNode *queuedExecutionNode {};
-    	bool queued {};
+		ExecutionNode *runningExecutionNode {};
+		bool queued {};
 
     public:
     	u64 runTime     {};   // ns spent running (updated on context switch-out)
@@ -267,7 +270,8 @@ namespace kernel::common::threading {
 		}
 
 		void enqueue(Thread* thread, const u8 dynPrio) {
-			if (thread == nullptr || thread->isQueued() || thread->bstNode.parent != nullptr || thread->bstNode.left != nullptr || thread->bstNode.right != nullptr) {
+			if (thread == nullptr || thread->isQueued() || thread->getRunningExecutionNode() != nullptr ||
+			    thread->bstNode.parent != nullptr || thread->bstNode.left != nullptr || thread->bstNode.right != nullptr) {
 				return;
 			}
 
@@ -444,6 +448,9 @@ namespace kernel::common::threading {
         bool consumePendingSchedUnlock();
         void setNextScheduleUnlockIF(bool prevIF);
         bool consumeNextScheduleUnlockIF(bool &prevIF);
+        void setSchedLockHeldForSwitch();
+        bool hasSchedLockHeldForSwitch() const;
+        bool consumeSchedLockHeldForSwitch();
         void finishScheduleSwitch();
 
     private:
@@ -452,6 +459,7 @@ namespace kernel::common::threading {
         bool pendingSchedUnlockIF {};
         bool nextScheduleUnlockIFValid {};
         bool nextScheduleUnlockIF {};
+        bool schedLockHeldForSwitch {};
 
         Thread *idleThread {};
         Thread *currentThread {};

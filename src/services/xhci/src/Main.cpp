@@ -27,6 +27,8 @@ namespace {
 	vector<MappedController> *activeControllers = nullptr;
 	mutex eventRingMutex;
 	mutex usbStorageMutex;
+	mutex storageRegistrationMutex;
+	recursive_mutex deviceStateMutex;
 }
 
 void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
@@ -774,7 +776,9 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	void XhciUtils::setInterrupterEnabled(const MappedController &controller, const bool enabled) {
 		const uint64_t interrupterBase = controller.runtimeBase + 0x20;
 
-		XhciUtils::mmioWrite32(interrupterBase, XHCI_INTERRUPTER_IMAN, enabled ? 0x3 : 0);
+		// IMAN.IP is write-one-to-clear. Enabling with 0x3 would discard an
+		// event that completed while interrupts were disabled; write IE only.
+		XhciUtils::mmioWrite32(interrupterBase, XHCI_INTERRUPTER_IMAN, enabled ? 0x2 : 0);
 	}
 
 	void XhciUtils::acknowledgeEvents(const MappedController &controller) {
@@ -1322,12 +1326,14 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-		auto XhciUtils::bulkOrInterruptTransfer(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint, const uint64_t *pagePhysArray, const uint32_t pageCount, const uint32_t length, const bool in, uint32_t *actualLength, const int timeoutMs, const bool logTimeout) -> bool {
+	auto XhciUtils::bulkOrInterruptTransfer(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint, const uint64_t *pagePhysArray, const uint32_t pageCount, const uint32_t length, const bool in, uint32_t *actualLength, const int timeoutMs, const bool logTimeout) -> bool {
 		if (actualLength != nullptr) {
 			*actualLength = 0;
 		}
 
-			if (endpoint.transferRing.phys == 0 or pagePhysArray == nullptr or pageCount == 0 or length == 0) {
+			if (endpoint.transferRing.phys == 0 or pagePhysArray == nullptr or pageCount == 0 or
+			    pageCount >= XHCI_TRANSFER_RING_TRBS or length == 0 or
+			    static_cast<uint64_t>(length) > static_cast<uint64_t>(pageCount) * XHCI_PAGE_SIZE) {
 				return false;
 			}
 
@@ -1412,10 +1418,20 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 				trb.parameterLow = static_cast<uint32_t>(transferPages[page]);
 				trb.parameterHigh = static_cast<uint32_t>(transferPages[page] >> 32);
-			trb.status = chunk;
-			trb.control = XHCI_TRB_ISP | (XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT);
+			trb.control = XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT;
 
-				remaining -= chunk;
+			if (in) {
+				trb.control |= XHCI_TRB_ISP;
+			}
+
+			remaining -= chunk;
+
+			const uint32_t packetsRemaining = endpoint.maxPacketSize == 0
+				? 0
+				: (remaining + endpoint.maxPacketSize - 1) / endpoint.maxPacketSize;
+			const uint32_t tdSize = min<uint32_t>(packetsRemaining, 31);
+
+			trb.status = chunk | (tdSize << 17);
 
 			if (remaining == 0) {
 				trb.control |= XHCI_TRB_IOC;
@@ -1504,7 +1520,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			data.parameterLow = static_cast<uint32_t>(dataPhys);
 			data.parameterHigh = static_cast<uint32_t>(dataPhys >> 32);
 			data.status = length;
-			data.control = XHCI_TRB_DIR_IN | XHCI_TRB_ISP | (XHCI_TRB_TYPE_DATA_STAGE << XHCI_TRB_TYPE_SHIFT);
+			// Complete the control TD on its Status Stage. Requesting a short-packet
+			// event here would leave the later Status Stage event queued on EP0 and
+			// allow it to be mistaken for completion of the next control request.
+			data.control = XHCI_TRB_DIR_IN | (XHCI_TRB_TYPE_DATA_STAGE << XHCI_TRB_TYPE_SHIFT);
 
 			auto status = XhciTrb();
 
@@ -1848,10 +1867,44 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::recoverEndpoint(MappedController &controller, const XhciDevice &device, UsbEndpoint &endpoint) {
-		XhciUtils::stopEndpoint(controller, device, endpoint);
-		XhciUtils::resetEndpoint(controller, device, endpoint);
+		uint32_t state = XhciUtils::endpointState(controller, device, endpoint.endpointId);
+		bool canSetDequeue = false;
+
+		if (state == XHCI_ENDPOINT_STATE_RUNNING) {
+			canSetDequeue = XhciUtils::stopEndpoint(controller, device, endpoint);
+		} else if (state == XHCI_ENDPOINT_STATE_HALTED) {
+			canSetDequeue = XhciUtils::resetEndpoint(controller, device, endpoint);
+		} else if (state == XHCI_ENDPOINT_STATE_STOPPED or state == XHCI_ENDPOINT_STATE_ERROR) {
+			canSetDequeue = true;
+		}
+
+		state = XhciUtils::endpointState(controller, device, endpoint.endpointId);
+
+		if (!canSetDequeue or (state != XHCI_ENDPOINT_STATE_STOPPED and state != XHCI_ENDPOINT_STATE_ERROR)) {
+			printf("XHCI: Endpoint recovery could not stop slot=%u ep=0x%02x state=%u.", device.slotId, endpoint.address, state);
+			fflush(stdout);
+			return;
+		}
+
 		XhciUtils::resetEndpointTransferRing(endpoint);
-		XhciUtils::setEndpointDequeuePointer(controller, device, endpoint);
+
+		if (!XhciUtils::setEndpointDequeuePointer(controller, device, endpoint)) {
+			printf("XHCI: Endpoint recovery could not set dequeue slot=%u ep=0x%02x.", device.slotId, endpoint.address);
+			fflush(stdout);
+		}
+
+		const scoped_lock lock(eventRingMutex);
+
+		for (auto it = controller.pendingTransferEvents.begin(); it != controller.pendingTransferEvents.end();) {
+			const auto eventSlot = static_cast<uint8_t>((it->control >> 24) & 0xFFU);
+			const auto eventEndpoint = static_cast<uint8_t>((it->control >> 16) & 0x1FU);
+
+			if (eventSlot == device.slotId and eventEndpoint == endpoint.endpointId) {
+				it = controller.pendingTransferEvents.erase(it);
+			} else {
+				++it;
+			}
+		}
 	}
 
 	void XhciUtils::resetControlTransferRing(XhciDevice &device) {
@@ -1938,6 +1991,12 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		device.interfaces.clear();
+
+		for (auto &pipe : device.hidInterruptPipes) {
+			XhciUtils::freePage(pipe.reportBuffer);
+		}
+
+		device.hidInterruptPipes.clear();
 
 		XhciUtils::freePage(device.descriptorBuffer);
 		XhciUtils::freePage(device.hubInterruptBuffer);
@@ -2028,7 +2087,10 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				}
 
 				slotDword1 |= static_cast<uint32_t>(device.hubPortCount) << 24;
-				slotDword2 |= static_cast<uint32_t>((device.hubCharacteristics >> 5) & 0x3U) << 16;
+
+				if (device.speed == 3) {
+					slotDword2 |= static_cast<uint32_t>((device.hubCharacteristics >> 5) & 0x3U) << 16;
+				}
 			}
 
 			XhciUtils::setContextDword(device.inputContext, controller, XHCI_SLOT_CONTEXT_INDEX, 0, slotDword0);
@@ -2165,24 +2227,31 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				return;
 			}
 
-				if (type == USB_DESCRIPTOR_INTERFACE and length >= 9) {
-					currentEndpoint = nullptr;
+			if (type == USB_DESCRIPTOR_INTERFACE and length >= 9) {
+				currentEndpoint = nullptr;
 				const uint8_t interfaceNumber = desc[offset + 2];
 				const uint8_t alternateSetting = desc[offset + 3];
 				const uint8_t endpointCount = desc[offset + 4];
 				const uint8_t interfaceClass = desc[offset + 5];
 				const uint8_t interfaceSubclass = desc[offset + 6];
 				const uint8_t interfaceProtocol = desc[offset + 7];
-				auto interface = UsbInterface();
 
-				interface.number = interfaceNumber;
-				interface.alternateSetting = alternateSetting;
-				interface.interfaceClass = interfaceClass;
-				interface.interfaceSubclass = interfaceSubclass;
-				interface.interfaceProtocol = interfaceProtocol;
-				interface.endpoints.reserve(endpointCount);
-				device.interfaces.push_back(interface);
-				currentInterface = &device.interfaces.back();
+				if (alternateSetting == 0) {
+					auto interface = UsbInterface();
+
+					interface.number = interfaceNumber;
+					interface.alternateSetting = alternateSetting;
+					interface.interfaceClass = interfaceClass;
+					interface.interfaceSubclass = interfaceSubclass;
+					interface.interfaceProtocol = interfaceProtocol;
+					interface.endpoints.reserve(endpointCount);
+					device.interfaces.push_back(interface);
+					currentInterface = &device.interfaces.back();
+				} else {
+					// SET_CONFIGURATION selects alternate setting zero. Do not
+					// configure endpoints belonging to inactive alternatives.
+					currentInterface = nullptr;
+				}
 
 				printf("XHCI: Interface slot=%u if=%u alt=%u endpoints=%u class=%02x subclass=%02x protocol=%02x.",
 				       device.slotId,
@@ -2447,7 +2516,15 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			return false;
 		}
 
-		XhciUtils::prepareHubMetadata(controller, device);
+		if (!XhciUtils::prepareHubMetadata(controller, device)) {
+			printf("XHCI: Failed to prepare hub context slot=%u.", device.slotId);
+			fflush(stdout);
+
+			XhciUtils::disableSlot(controller, device);
+			XhciUtils::releaseDeviceMemory(controller, device);
+			controller.devices.pop_back();
+			return false;
+		}
 
 		if (!XhciUtils::configureEndpoints(controller, device)) {
 			printf("XHCI: Failed to configure endpoints slot=%u.", device.slotId);
@@ -2496,7 +2573,13 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return true;
 	}
 
-	auto XhciUtils::hubPortSpeed(const uint16_t status) -> uint8_t {
+	auto XhciUtils::hubPortSpeed(const XhciDevice &hub, const uint16_t status) -> uint8_t {
+		if (hub.speed >= 4) {
+			// A SuperSpeed hub represents the SuperSpeed side of a dual-bus hub;
+			// USB 2 devices appear below its separate USB 2 companion hub.
+			return hub.speed;
+		}
+
 		if ((status & USB_HUB_PORT_STATUS_HIGH_SPEED) != 0) {
 			return 3;
 		}
@@ -2557,8 +2640,11 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 	auto XhciUtils::readHubDescriptor(MappedController &controller, XhciDevice &device, const UsbInterface &interface) -> bool {
 		memset(reinterpret_cast<void *>(device.descriptorBuffer.virt), 0, XHCI_PAGE_SIZE);
+		const bool superSpeedHub = device.speed >= 4;
+		const uint8_t descriptorType = superSpeedHub ? USB_DESCRIPTOR_SS_HUB : USB_DESCRIPTOR_HUB;
+		const uint16_t descriptorLength = superSpeedHub ? 12 : 9;
 
-		if (!XhciUtils::controlTransferIn(controller, device, 0xA0, USB_REQUEST_GET_DESCRIPTOR, USB_DESCRIPTOR_HUB << 8, 0, 9, device.descriptorBuffer.phys)) {
+		if (!XhciUtils::controlTransferIn(controller, device, 0xA0, USB_REQUEST_GET_DESCRIPTOR, descriptorType << 8, 0, descriptorLength, device.descriptorBuffer.phys)) {
 			printf("XHCI: Hub descriptor read failed slot=%u if=%u.", device.slotId, interface.number);
 			fflush(stdout);
 
@@ -2566,6 +2652,13 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		auto *desc = reinterpret_cast<uint8_t *>(device.descriptorBuffer.virt);
+
+		if (desc[0] < descriptorLength or desc[1] != descriptorType) {
+			printf("XHCI: Invalid hub descriptor slot=%u len=%u type=0x%02x expected=0x%02x.", device.slotId, desc[0], desc[1], descriptorType);
+			fflush(stdout);
+			return false;
+		}
+
 		const uint8_t portCount = desc[2];
 		const uint16_t characteristics = static_cast<uint16_t>(desc[3]) | (static_cast<uint16_t>(desc[4]) << 8);
 		const uint8_t powerOnDelayMs = static_cast<uint8_t>(min<uint32_t>(255, max<uint32_t>(20, static_cast<uint32_t>(desc[5]) * 2)));
@@ -2592,17 +2685,24 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		return portCount != 0;
 	}
 
-	void XhciUtils::prepareHubMetadata(MappedController &controller, XhciDevice &device) {
+	auto XhciUtils::prepareHubMetadata(MappedController &controller, XhciDevice &device) -> bool {
 		for (const auto &interface : device.interfaces) {
 			if (interface.interfaceClass == USB_CLASS_HUB) {
-				XhciUtils::readHubDescriptor(controller, device, interface);
-				return;
+				return XhciUtils::readHubDescriptor(controller, device, interface);
 			}
 		}
+
+		return true;
 	}
 
 	void XhciUtils::probeHub(MappedController &controller, XhciDevice &device, const UsbInterface &interface) {
 		if (!device.isHub and !XhciUtils::readHubDescriptor(controller, device, interface)) {
+			return;
+		}
+
+		if (device.speed >= 4 and !XhciUtils::controlTransferNoData(controller, device, 0x20, USB_REQUEST_SET_HUB_DEPTH, device.depth, 0)) {
+			printf("XHCI: SuperSpeed hub slot=%u failed SET_HUB_DEPTH depth=%u.", device.slotId, device.depth);
+			fflush(stdout);
 			return;
 		}
 
@@ -2644,7 +2744,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			}
 
 			const uint32_t childRouteString = device.routeString | (static_cast<uint32_t>(port) << (device.depth * 4));
-			const uint8_t childSpeed = XhciUtils::hubPortSpeed(status);
+			const uint8_t childSpeed = XhciUtils::hubPortSpeed(device, status);
 			char location[32] {};
 
 			snprintf(location, sizeof(location), "hub%u-port%u", device.slotId, port);
@@ -2655,22 +2755,48 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::configureBootHid(MappedController &controller, XhciDevice &device, const UsbInterface &interface) {
-		if (interface.interfaceSubclass != 1) {
+		if (interface.interfaceSubclass != 1 or (interface.interfaceProtocol != 1 and interface.interfaceProtocol != 2)) {
 			return;
 		}
 
 		const char *kind = interface.interfaceProtocol == 1 ? "keyboard" : (interface.interfaceProtocol == 2 ? "mouse" : "unknown");
+		const UsbEndpoint *interruptIn = nullptr;
+
+		for (const auto &endpoint : interface.endpoints) {
+			if ((endpoint.address & 0x80U) != 0 and (endpoint.attributes & USB_ENDPOINT_TRANSFER_TYPE_MASK) == USB_ENDPOINT_TRANSFER_INTERRUPT) {
+				interruptIn = &endpoint;
+				break;
+			}
+		}
+
+		if (interruptIn == nullptr) {
+			printf("XHCI/HID: Boot HID %s slot=%u if=%u has no interrupt-IN endpoint.", kind, device.slotId, interface.number);
+			fflush(stdout);
+			return;
+		}
+
 		const bool protocolOk = XhciUtils::controlTransferNoData(controller, device, 0x21, USB_HID_REQUEST_SET_PROTOCOL, 0, interface.number);
 		const bool idleOk = XhciUtils::controlTransferNoData(controller, device, 0x21, USB_HID_REQUEST_SET_IDLE, 0, interface.number);
+		auto pipe = HidInterruptPipe();
 
-		printf("XHCI/HID: Boot HID %s slot=%u if=%u endpointCount=%zu protocol=%d idle=%d input handling not installed.",
+		pipe.interfaceNumber = interface.number;
+		pipe.protocol = interface.interfaceProtocol;
+		pipe.endpointId = interruptIn->endpointId;
+		pipe.endpointAddress = interruptIn->address;
+		pipe.reportLength = min<uint16_t>(interruptIn->maxPacketSize, XHCI_PAGE_SIZE);
+		device.hidInterruptPipes.push_back(pipe);
+
+		printf("XHCI/HID: Boot HID %s slot=%u if=%u ep=0x%02x reportLength=%u protocol=%d idle=%d.",
 		       kind,
 		       device.slotId,
 		       interface.number,
-		       interface.endpoints.size(),
+		       interruptIn->address,
+		       pipe.reportLength,
 		       protocolOk,
 		       idleOk);
 		fflush(stdout);
+
+		XhciUtils::submitHidInterruptTransfer(controller, device, device.hidInterruptPipes.back());
 	}
 
 	void XhciUtils::bindClassDrivers(MappedController &controller, XhciDevice &device, const uint32_t controllerId) {
@@ -2680,14 +2806,29 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			} else if (interface.interfaceClass == USB_CLASS_HUB) {
 				XhciUtils::probeHub(controller, device, interface);
 			} else if (interface.interfaceClass == USB_CLASS_MASS_STORAGE and interface.interfaceSubclass == USB_SUBCLASS_SCSI and interface.interfaceProtocol == USB_PROTOCOL_BULK_ONLY) {
-				massStorageDriver.bind(controllerId, device, interface);
+				if (!massStorageDriver.bind(controllerId, device, interface)) {
+					printf("XHCI/MSD: Failed to bind slot=%u interface=%u.", device.slotId, interface.number);
+					fflush(stdout);
+				}
+			} else if (interface.interfaceClass == USB_CLASS_MASS_STORAGE) {
+				printf("XHCI/MSD: Unsupported slot=%u interface=%u subclass=0x%02x protocol=0x%02x (BOT/SCSI required).",
+				       device.slotId,
+				       interface.number,
+				       interface.interfaceSubclass,
+				       interface.interfaceProtocol);
+				fflush(stdout);
+			} else if (interface.interfaceClass == USB_CLASS_HID) {
+				printf("XHCI/HID: Unsupported non-boot HID slot=%u interface=%u subclass=0x%02x protocol=0x%02x.",
+				       device.slotId,
+				       interface.number,
+				       interface.interfaceSubclass,
+				       interface.interfaceProtocol);
+				fflush(stdout);
 			}
 		}
 	}
 
 	void XhciUtils::enumerateRootPorts(MappedController &controller, const uint32_t controllerId) {
-		controller.devices.reserve(max<uint32_t>(controller.maxPorts, controller.configuredSlots));
-
 		for (uint32_t port = 1; port <= controller.maxPorts; ++port) {
 			const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC);
 
@@ -2710,7 +2851,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::removeDevicesForRootPort(MappedController &controller, const uint8_t rootPort) {
-		const scoped_lock storageLock(usbStorageMutex);
+		const scoped_lock deviceLock(deviceStateMutex);
 
 		for (auto it = controller.devices.begin(); it != controller.devices.end();) {
 			if (it->rootPort != rootPort) {
@@ -2729,7 +2870,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::removeDevicesForHubPort(MappedController &controller, const uint8_t parentSlotId, const uint8_t hubPort) {
-		const scoped_lock storageLock(usbStorageMutex);
+		const scoped_lock deviceLock(deviceStateMutex);
 		vector<uint8_t> removedSlots;
 		bool progress = true;
 
@@ -2775,6 +2916,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::handleHubPortChange(MappedController &controller, const uint8_t hubSlotId, const uint8_t port) {
+		const scoped_lock deviceLock(deviceStateMutex);
 		auto *hub = XhciUtils::findDeviceBySlot(controller, hubSlotId);
 
 		if (hub == nullptr or port == 0 or port > hub->hubPortCount) {
@@ -2818,7 +2960,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		const uint32_t childRouteString = hub->routeString | (static_cast<uint32_t>(port) << (hub->depth * 4));
-		const uint8_t childSpeed = XhciUtils::hubPortSpeed(status);
+		const uint8_t childSpeed = XhciUtils::hubPortSpeed(*hub, status);
 		char location[32] {};
 
 		snprintf(location, sizeof(location), "hub%u-port%u", hubSlotId, port);
@@ -2826,6 +2968,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::handleRootPortChange(MappedController &controller, const uint32_t port) {
+		const scoped_lock deviceLock(deviceStateMutex);
+
 		if (port == 0 or port > controller.maxPorts) {
 			return;
 		}
@@ -2904,13 +3048,52 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				return;
 			}
 
+			hub.hubInterruptTransferPending = true;
 			XhciUtils::ringDoorbell(controller, hub.slotId, endpoint->endpointId);
 		}
-
-		hub.hubInterruptTransferPending = true;
 	}
 
-	void XhciUtils::handleHubInterruptTransfer(MappedController &controller, const uint8_t slotId, const uint8_t endpointId) {
+	void XhciUtils::submitHidInterruptTransfer(MappedController &controller, XhciDevice &device, HidInterruptPipe &pipe) {
+		if (pipe.endpointAddress == 0 or pipe.reportLength == 0 or pipe.transferPending) {
+			return;
+		}
+
+		auto *endpoint = XhciUtils::findEndpointByAddress(device, pipe.endpointAddress);
+
+		if (endpoint == nullptr or endpoint->transferRing.phys == 0) {
+			return;
+		}
+
+		if (pipe.reportBuffer.phys == 0 and !XhciUtils::allocatePage(pipe.reportBuffer, controller.dmaAddressLimit)) {
+			printf("XHCI/HID: Failed to allocate report buffer slot=%u if=%u.", device.slotId, pipe.interfaceNumber);
+			fflush(stdout);
+			return;
+		}
+
+		memset(reinterpret_cast<void *>(pipe.reportBuffer.virt), 0, XHCI_PAGE_SIZE);
+
+		auto trb = XhciTrb();
+
+		trb.parameterLow = static_cast<uint32_t>(pipe.reportBuffer.phys);
+		trb.parameterHigh = static_cast<uint32_t>(pipe.reportBuffer.phys >> 32);
+		trb.status = pipe.reportLength;
+		trb.control = XHCI_TRB_ISP | XHCI_TRB_IOC | (XHCI_TRB_TYPE_NORMAL << XHCI_TRB_TYPE_SHIFT);
+
+		{
+			const scoped_lock lock(eventRingMutex);
+
+			if (!XhciUtils::enqueueEndpointTrb(*endpoint, trb)) {
+				return;
+			}
+
+			pipe.transferPending = true;
+			XhciUtils::ringDoorbell(controller, device.slotId, endpoint->endpointId);
+		}
+	}
+
+	void XhciUtils::handleHubInterruptTransfer(MappedController &controller, const XhciTrb &event) {
+		const auto slotId = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
+		const auto endpointId = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
 		auto *hub = XhciUtils::findDeviceBySlot(controller, slotId);
 
 		if (hub == nullptr or !hub->isHub or hub->hubInterruptEndpointId != endpointId) {
@@ -2918,19 +3101,33 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 
 		hub->hubInterruptTransferPending = false;
+		const uint32_t code = XhciUtils::completionCode(event);
+		const uint32_t requestedLength = max<uint32_t>(1, (hub->hubPortCount + 1 + 7) / 8);
+		const uint32_t residue = event.status & 0xFFFFFFU;
+		const uint32_t actualLength = requestedLength >= residue ? requestedLength - residue : 0;
 
-		if (hub->hubInterruptBuffer.virt != 0) {
+		if ((code == XHCI_COMPLETION_SUCCESS or code == XHCI_COMPLETION_SHORT_PACKET) and hub->hubInterruptBuffer.virt != 0) {
+			XhciUtils::dmaReadFence();
 			const auto *bytes = reinterpret_cast<uint8_t *>(hub->hubInterruptBuffer.virt);
 			vector<uint8_t> changedPorts;
 
 			for (uint8_t port = 1; port <= hub->hubPortCount; ++port) {
-				if ((bytes[port / 8] & (1U << (port % 8))) != 0) {
+				if (port / 8 < actualLength and (bytes[port / 8] & (1U << (port % 8))) != 0) {
 					changedPorts.push_back(port);
 				}
 			}
 
 			for (const uint8_t port : changedPorts) {
 				XhciUtils::handleHubPortChange(controller, slotId, port);
+			}
+		} else if (code != XHCI_COMPLETION_SUCCESS and code != XHCI_COMPLETION_SHORT_PACKET) {
+			printf("XHCI: Hub interrupt transfer failed slot=%u ep=%u code=%u status=0x%x.", slotId, endpointId, code, event.status);
+			fflush(stdout);
+
+			auto *endpoint = XhciUtils::findEndpointByAddress(*hub, hub->hubInterruptEndpointAddress);
+
+			if (endpoint != nullptr) {
+				XhciUtils::recoverEndpoint(controller, *hub, *endpoint);
 			}
 		}
 
@@ -2941,8 +3138,111 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		}
 	}
 
-	void XhciUtils::drainPendingHubInterruptEvents(MappedController &controller) {
-		vector<pair<uint8_t, uint8_t>> pending;
+	void XhciUtils::handleHidInterruptTransfer(MappedController &controller, const XhciTrb &event) {
+		const auto slotId = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
+		const auto endpointId = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
+		auto *device = XhciUtils::findDeviceBySlot(controller, slotId);
+
+		if (device == nullptr) {
+			return;
+		}
+
+		for (auto &pipe : device->hidInterruptPipes) {
+			if (pipe.endpointId != endpointId) {
+				continue;
+			}
+
+			pipe.transferPending = false;
+			const uint32_t code = XhciUtils::completionCode(event);
+			const uint32_t residue = event.status & 0xFFFFFFU;
+			const uint32_t actualLength = pipe.reportLength >= residue ? pipe.reportLength - residue : 0;
+
+			if ((code == XHCI_COMPLETION_SUCCESS or code == XHCI_COMPLETION_SHORT_PACKET) and pipe.reportBuffer.virt != 0) {
+				XhciUtils::dmaReadFence();
+				const auto *report = reinterpret_cast<const uint8_t *>(pipe.reportBuffer.virt);
+				const uint32_t comparedLength = min<uint32_t>(actualLength, sizeof(pipe.previousReport));
+				const bool changed = comparedLength != 0 and memcmp(report, pipe.previousReport, comparedLength) != 0;
+
+				if (changed and pipe.protocol == 1 and actualLength >= 8) {
+					printf("XHCI/HID: Keyboard slot=%u if=%u modifiers=0x%02x keys=%02x,%02x,%02x,%02x,%02x,%02x.",
+					       slotId,
+					       pipe.interfaceNumber,
+					       report[0],
+					       report[2],
+					       report[3],
+					       report[4],
+					       report[5],
+					       report[6],
+					       report[7]);
+					fflush(stdout);
+				} else if (pipe.protocol == 2 and actualLength >= 3) {
+					const int8_t deltaX = static_cast<int8_t>(report[1]);
+					const int8_t deltaY = static_cast<int8_t>(report[2]);
+					const int8_t wheel = actualLength >= 4 ? static_cast<int8_t>(report[3]) : 0;
+
+					// Mouse deltas are relative; identical consecutive reports are
+					// distinct motion and must not be suppressed as duplicates.
+					if (changed or deltaX != 0 or deltaY != 0 or wheel != 0) {
+						printf("XHCI/HID: Mouse slot=%u if=%u buttons=0x%02x dx=%d dy=%d wheel=%d.",
+						       slotId,
+						       pipe.interfaceNumber,
+						       report[0],
+						       deltaX,
+						       deltaY,
+						       wheel);
+						fflush(stdout);
+					}
+				}
+
+				memset(pipe.previousReport, 0, sizeof(pipe.previousReport));
+				memcpy(pipe.previousReport, report, comparedLength);
+			} else if (code != XHCI_COMPLETION_SUCCESS and code != XHCI_COMPLETION_SHORT_PACKET) {
+				printf("XHCI/HID: Interrupt transfer failed slot=%u if=%u ep=%u code=%u status=0x%x.",
+				       slotId,
+				       pipe.interfaceNumber,
+				       endpointId,
+				       code,
+				       event.status);
+				fflush(stdout);
+
+				auto *endpoint = XhciUtils::findEndpointByAddress(*device, pipe.endpointAddress);
+
+				if (endpoint != nullptr) {
+					XhciUtils::recoverEndpoint(controller, *device, *endpoint);
+				}
+			}
+
+			XhciUtils::submitHidInterruptTransfer(controller, *device, pipe);
+			return;
+		}
+	}
+
+	auto XhciUtils::handleAsyncInterruptTransfer(MappedController &controller, const XhciTrb &event) -> bool {
+		const scoped_lock deviceLock(deviceStateMutex);
+		const auto slotId = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
+		const auto endpointId = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
+		auto *device = XhciUtils::findDeviceBySlot(controller, slotId);
+
+		if (device == nullptr) {
+			return false;
+		}
+
+		if (device->isHub and device->hubInterruptTransferPending and device->hubInterruptEndpointId == endpointId) {
+			XhciUtils::handleHubInterruptTransfer(controller, event);
+			return true;
+		}
+
+		if (ranges::any_of(device->hidInterruptPipes, [endpointId](const HidInterruptPipe &pipe) { return pipe.transferPending and pipe.endpointId == endpointId; })) {
+			XhciUtils::handleHidInterruptTransfer(controller, event);
+			return true;
+		}
+
+		return false;
+	}
+
+	void XhciUtils::drainPendingInterruptEvents(MappedController &controller) {
+		const scoped_lock deviceLock(deviceStateMutex);
+		vector<XhciTrb> pending;
 
 		{
 			const scoped_lock lock(eventRingMutex);
@@ -2952,23 +3252,32 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 				const auto endpointId = static_cast<uint8_t>((it->control >> 16) & 0x1FU);
 				const auto *device = XhciUtils::findDeviceBySlot(controller, slotId);
 
-				if (device == nullptr or !device->isHub or device->hubInterruptEndpointId != endpointId) {
+				if (device == nullptr) {
+					it = controller.pendingTransferEvents.erase(it);
+					continue;
+				}
+
+				const bool isHub = device->isHub and device->hubInterruptTransferPending and device->hubInterruptEndpointId == endpointId;
+				const bool isHid = ranges::any_of(device->hidInterruptPipes, [endpointId](const HidInterruptPipe &pipe) { return pipe.transferPending and pipe.endpointId == endpointId; });
+
+				if (!isHub and !isHid) {
 					++it;
 					continue;
 				}
 
-				pending.emplace_back(slotId, endpointId);
+				pending.push_back(*it);
 				it = controller.pendingTransferEvents.erase(it);
 			}
 		}
 
-		for (const auto &[slotId, endpointId] : pending) {
-			XhciUtils::handleHubInterruptTransfer(controller, slotId, endpointId);
+		for (const auto &event : pending) {
+			XhciUtils::handleAsyncInterruptTransfer(controller, event);
 		}
 	}
 
 	void XhciUtils::pollHubChanges(MappedController &controller) {
-		XhciUtils::drainPendingHubInterruptEvents(controller);
+		const scoped_lock deviceLock(deviceStateMutex);
+		XhciUtils::drainPendingInterruptEvents(controller);
 
 		vector<uint8_t> hubSlots;
 
@@ -3013,6 +3322,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 	}
 
 	void XhciUtils::pollRootPortChanges(MappedController &controller) {
+		const scoped_lock deviceLock(deviceStateMutex);
+
 		for (uint32_t port = 1; port <= controller.maxPorts; ++port) {
 			const uint32_t offset = XHCI_OP_PORT_REGS + ((port - 1) * XHCI_OP_PORT_STRIDE) + XHCI_PORTSC;
 			const uint32_t portsc = XhciUtils::mmioRead32(controller.operationalBase, offset);
@@ -3053,7 +3364,6 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			uint32_t drained = 0;
 			vector<uint32_t> changedPorts;
-			vector<pair<uint8_t, uint8_t>> hubTransferCompletions;
 
 			{
 				const scoped_lock lock(eventRingMutex);
@@ -3077,9 +3387,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 						fflush(stdout);
 						changedPorts.push_back(portId);
 					} else if (type == XHCI_TRB_TYPE_TRANSFER_EVENT) {
-						const auto eventSlot = static_cast<uint8_t>((event.control >> 24) & 0xFFU);
-						const auto eventEndpoint = static_cast<uint8_t>((event.control >> 16) & 0x1FU);
-						hubTransferCompletions.emplace_back(eventSlot, eventEndpoint);
+						controller->pendingTransferEvents.push_back(event);
 					} else if (loggedEvents < 32) {
 						printf("XHCI: Deferred event type=%u code=%u ctrl=0x%x status=0x%x.", type, code, event.control, event.status);
 						fflush(stdout);
@@ -3097,18 +3405,17 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 					XhciUtils::updateEventDequeuePointer(*controller);
 				}
 
-				if (drained != 0) {
-					XhciUtils::acknowledgeEvents(*controller);
-				}
+				// A stale USBSTS.EINT/IMAN.IP can deliver an IRQ after software has
+				// already polled the event. Always acknowledge the delivered IRQ so
+				// legacy INTx and implementations that reassert EINT cannot storm.
+				XhciUtils::acknowledgeEvents(*controller);
 			}
 
 			for (const uint32_t portId : changedPorts) {
 				XhciUtils::handleRootPortChange(*controller, portId);
 			}
 
-			for (const auto &[slotId, endpointId] : hubTransferCompletions) {
-				XhciUtils::handleHubInterruptTransfer(*controller, slotId, endpointId);
-			}
+			XhciUtils::drainPendingInterruptEvents(*controller);
 
 			if (drained == 0 and loggedEvents < 32) {
 				if (controller->memory.usingMsix) {
@@ -3213,7 +3520,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			reply.requestId = data.requestId;
 			reply.pageCount = data.pageCount;
 
-			if (data.pageCount > 0 and data.pageCount <= STORAGE_MAX_PAGES_PER_MSG) {
+			if (data.pageCount > 0 and data.pageCount <= XHCI_MAX_TRANSFER_PAGES) {
 				const scoped_lock lock(usbStorageMutex);
 				reply.success = massStorageDriver.read(data.controllerId, data.nsid, data.lba, data.pagePhysArray, data.pageCount);
 			}
@@ -3258,7 +3565,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 
 			reply.requestId = data.requestId;
 
-			if (data.pageCount > 0 and data.pageCount <= STORAGE_MAX_PAGES_PER_MSG) {
+			if (data.pageCount > 0 and data.pageCount <= XHCI_MAX_TRANSFER_PAGES) {
 				const scoped_lock lock(usbStorageMutex);
 				reply.success = massStorageDriver.write(data.controllerId, data.nsid, data.lba, data.pagePhysArray, data.pageCount);
 			}
@@ -3408,6 +3715,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 			return false;
 		}
 
+		const scoped_lock registrationLock(storageRegistrationMutex);
+
 		auto data = StorageRegisterBlockDeviceMsgData();
 
 		data.driverPort = xhciPort;
@@ -3415,7 +3724,7 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		data.nsid = nsid;
 		data.blockCount = blockCount;
 		data.blockSize = blockSize;
-		data.maxPagesPerRequest = STORAGE_MAX_PAGES_PER_MSG;
+		data.maxPagesPerRequest = XHCI_MAX_TRANSFER_PAGES;
 		data.transport = STORAGE_TRANSPORT_GENERIC_BLOCK;
 		data.readMsgBase = USB_STORAGE_READ_MSG_BASE;
 		data.writeMsgBase = USB_STORAGE_WRITE_MSG_BASE;
@@ -3466,6 +3775,8 @@ void XhciUtils::fillName(char *dst, const size_t dstSize, size_t &length, const 
 		if (storagePort == 0 or storageReplyPort == 0) {
 			return false;
 		}
+
+		const scoped_lock registrationLock(storageRegistrationMutex);
 
 		auto data = StorageUnregisterBlockDeviceMsgData();
 

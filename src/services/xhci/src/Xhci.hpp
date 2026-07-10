@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <list>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,6 +151,8 @@ constexpr uint32_t XHCI_PAGE_SIZE = 0x1000;
 constexpr uint32_t XHCI_COMMAND_RING_TRBS = 256;
 constexpr uint32_t XHCI_EVENT_RING_TRBS = 256;
 constexpr uint32_t XHCI_TRANSFER_RING_TRBS = 256;
+// One entry in each transfer ring is reserved for its Link TRB.
+constexpr uint32_t XHCI_MAX_TRANSFER_PAGES = XHCI_TRANSFER_RING_TRBS - 1;
 constexpr uint32_t XHCI_CONTROL_TRANSFER_ATTEMPTS = 4;
 constexpr uint32_t XHCI_ERST_ENTRIES = 1;
 constexpr uint32_t XHCI_MAX_CONFIGURED_SLOTS = 32;
@@ -165,9 +168,11 @@ constexpr uint32_t USB_DESCRIPTOR_STRING = 3;
 constexpr uint32_t USB_DESCRIPTOR_INTERFACE = 4;
 constexpr uint32_t USB_DESCRIPTOR_ENDPOINT = 5;
 constexpr uint32_t USB_DESCRIPTOR_HUB = 0x29;
+constexpr uint32_t USB_DESCRIPTOR_SS_HUB = 0x2A;
 constexpr uint32_t USB_DESCRIPTOR_SS_ENDPOINT_COMPANION = 0x30;
 constexpr uint32_t USB_REQUEST_GET_DESCRIPTOR = 6;
 constexpr uint32_t USB_REQUEST_SET_CONFIGURATION = 9;
+constexpr uint32_t USB_REQUEST_SET_HUB_DEPTH = 12;
 constexpr uint32_t USB_REQUEST_GET_STATUS = 0;
 constexpr uint32_t USB_REQUEST_CLEAR_FEATURE = 1;
 constexpr uint32_t USB_REQUEST_SET_FEATURE = 3;
@@ -449,6 +454,17 @@ struct UsbInterface {
 	std::vector<UsbEndpoint> endpoints {};
 };
 
+struct HidInterruptPipe {
+	uint8_t interfaceNumber {};
+	uint8_t protocol {};
+	uint8_t endpointId {};
+	uint8_t endpointAddress {};
+	uint16_t reportLength {};
+	bool transferPending {};
+	AllocatedPage reportBuffer {};
+	uint8_t previousReport[8] {};
+};
+
 struct ControllerMemory {
 	AllocatedPage dcbaa {};
 	AllocatedPage commandRing {};
@@ -501,6 +517,7 @@ struct XhciDevice {
 	AllocatedPage transferRing {};
 	AllocatedPage descriptorBuffer {};
 	AllocatedPage hubInterruptBuffer {};
+	std::vector<HidInterruptPipe> hidInterruptPipes {};
 	uint32_t transferEnqueueIndex {};
 	uint32_t transferProducerCycle { 1 };
 };
@@ -522,7 +539,7 @@ struct MappedController {
 	uint64_t dmaAddressLimit {};
 	bool uses64ByteContexts {};
 	std::vector<uint8_t> rootPortProtocolMajor {};
-	std::vector<XhciDevice> devices {};
+	std::list<XhciDevice> devices {};
 	std::vector<XhciTrb> pendingTransferEvents {};
 	ControllerMemory memory {};
 };
@@ -624,11 +641,12 @@ public:
 	static auto readConfigurationDescriptor(MappedController &controller, XhciDevice &device, uint8_t &configurationValue) -> bool;
 	static auto setConfiguration(MappedController &controller, XhciDevice &device, uint8_t configurationValue) -> bool;
 	static void bindClassDrivers(MappedController &controller, XhciDevice &device, uint32_t controllerId);
-	static void prepareHubMetadata(MappedController &controller, XhciDevice &device);
+	static auto prepareHubMetadata(MappedController &controller, XhciDevice &device) -> bool;
 	static void submitHubInterruptTransfer(MappedController &controller, XhciDevice &hub);
+	static void submitHidInterruptTransfer(MappedController &controller, XhciDevice &device, HidInterruptPipe &pipe);
 	static auto enumerateDevice(MappedController &controller, uint32_t controllerId, uint8_t rootPort, uint32_t routeString, uint8_t depth, uint8_t speed, uint8_t parentSlotId, uint8_t hubPort, const char *location) -> bool;
 	static auto hubPortStatus(MappedController &controller, XhciDevice &hub, uint8_t port, uint16_t &status, uint16_t &change) -> bool;
-	static auto hubPortSpeed(uint16_t status) -> uint8_t;
+	static auto hubPortSpeed(const XhciDevice &hub, uint16_t status) -> uint8_t;
 	static void clearHubPortChangeBits(MappedController &controller, XhciDevice &hub, uint8_t port, uint16_t change);
 	static auto resetHubPort(MappedController &controller, XhciDevice &hub, uint8_t port, uint16_t &status) -> bool;
 	static auto readHubDescriptor(MappedController &controller, XhciDevice &device, const UsbInterface &interface) -> bool;
@@ -642,8 +660,10 @@ public:
 	static void handleHubPortChange(MappedController &controller, uint8_t hubSlotId, uint8_t port);
 	static void handleRootPortChange(MappedController &controller, uint32_t port);
 	static auto findEndpointByAddress(XhciDevice &device, uint8_t endpointAddress) -> UsbEndpoint *;
-	static void handleHubInterruptTransfer(MappedController &controller, uint8_t slotId, uint8_t endpointId);
-	static void drainPendingHubInterruptEvents(MappedController &controller);
+	static void handleHubInterruptTransfer(MappedController &controller, const XhciTrb &event);
+	static void handleHidInterruptTransfer(MappedController &controller, const XhciTrb &event);
+	static auto handleAsyncInterruptTransfer(MappedController &controller, const XhciTrb &event) -> bool;
+	static void drainPendingInterruptEvents(MappedController &controller);
 	static void pollHubChanges(MappedController &controller);
 	static void pollRootPortChanges(MappedController &controller);
 	static auto startEventIrqHandler(MappedController &controller) -> bool;
