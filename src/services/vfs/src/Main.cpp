@@ -15,25 +15,9 @@
 using namespace std;
 
 namespace {
-	class ScopedPthreadLock {
-	public:
-		explicit ScopedPthreadLock(pthread_mutex_t &lock) : mutex(&lock) {
-			pthread_mutex_lock(mutex);
-		}
-
-		~ScopedPthreadLock() {
-			pthread_mutex_unlock(mutex);
-		}
-
-		ScopedPthreadLock(const ScopedPthreadLock &) = delete;
-		auto operator=(const ScopedPthreadLock &) -> ScopedPthreadLock & = delete;
-
-	private:
-		pthread_mutex_t *mutex;
-	};
-
 	uint64_t vfsPort = 0;
 	uint64_t storagePort = 0;
+	thread_local uint64_t fsReplyPort = 0;
 	uint64_t nextHandleId = 1;
 	vector<VfsVolume> volumes;
 	vector<VfsFsHandler> fsHandlers;
@@ -49,7 +33,6 @@ namespace {
 	pthread_mutex_t cacheLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t pendingUnlinksLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t fsHandlersLock = PTHREAD_MUTEX_INITIALIZER;
-	pthread_mutex_t fsRequestLock = PTHREAD_MUTEX_INITIALIZER;
 }
 
 void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const string &name) {
@@ -626,7 +609,10 @@ void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const s
 
 	template<typename Request, typename Reply>
 	auto VfsUtils::sendFsRequest(const uint64_t requestType, const uint64_t replyType, const VfsVolume &volume, Request &request, Reply &reply) -> bool {
-		const ScopedPthreadLock requestLock(fsRequestLock);
+		if (fsReplyPort == 0 and (register_horizonos_port(reinterpret_cast<long *>(&fsReplyPort)) != 0 or fsReplyPort == 0)) {
+			return false;
+		}
+
 		auto msg = hos_msg();
 
 		msg.type = requestType;
@@ -634,7 +620,7 @@ void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const s
 		msg.buffer = &request;
 		msg.length = sizeof(request);
 
-		if (send_horizonos_message(vfsPort, volume.fsPort, &msg) != 0) {
+		if (send_horizonos_message(fsReplyPort, volume.fsPort, &msg) != 0) {
 			return false;
 		}
 
@@ -648,7 +634,7 @@ void VfsUtils::fillName(char *dst, const size_t dstSize, size_t &length, const s
 		filter.whiteListTypes = new uint64_t[1] { replyType };
 		filter.whiteListCount = 1;
 
-		const int ret = receive_horizonos_message(vfsPort, &recv, &filter);
+		const int ret = receive_horizonos_message(fsReplyPort, &recv, &filter);
 
 		delete[] filter.whiteListTypes;
 
