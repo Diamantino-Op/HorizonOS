@@ -7,6 +7,7 @@
 #include "unistd.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -31,6 +32,33 @@ namespace {
 	constexpr uint32_t PARTITION_READ_ATTEMPTS = 10;
 	constexpr useconds_t PARTITION_READ_RETRY_DELAY_US = 100000;
 	constexpr useconds_t PARTITION_PROBE_SETTLE_DELAY_US = 100000;
+
+	template<typename Reply>
+	auto receiveBlockReply(const uint64_t replyType, const uint64_t requestId, Reply &reply) -> int {
+		auto recv = hos_msg();
+		recv.buffer = &reply;
+		recv.length = sizeof(reply);
+
+		uint64_t acceptedType = replyType;
+		auto filter = filter_options();
+		filter.whiteListTypes = &acceptedType;
+		filter.whiteListCount = 1;
+
+		for (;;) {
+			reply = {};
+			const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
+
+			// A transient scheduler lookup failure leaves the request in flight.
+			if (ret == EFAULT) {
+				usleep(1000);
+				continue;
+			}
+
+			if (ret != 0 or reply.requestId == requestId) {
+				return ret;
+			}
+		}
+	}
 }
 
 auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
@@ -281,19 +309,7 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		}
 
 		auto reply = NvmeReadReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { device.readReplyMsgBase + cpuId };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveBlockReply(device.readReplyMsgBase + cpuId, requestId, reply);
 
 		//printf("Storage: NVMe read reply for %s ret=%d success=%d.", device.name.c_str(), ret, reply.success);
 		//fflush(stdout);
@@ -343,19 +359,7 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		}
 
 		auto reply = NvmeWriteReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { device.writeReplyMsgBase + cpuId };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveBlockReply(device.writeReplyMsgBase + cpuId, requestId, reply);
 
 		const bool success = ret == 0 and reply.requestId == requestId and reply.success;
 
@@ -398,19 +402,7 @@ auto StorageManagerUtils::allocateBlockDeviceIdLocked() -> uint64_t {
 		}
 
 		auto reply = NvmeFlushReplyMsgData();
-		auto recv = hos_msg();
-
-		recv.buffer = &reply;
-		recv.length = sizeof(reply);
-
-		auto filter = filter_options();
-
-		filter.whiteListTypes = new uint64_t[1] { device.flushReplyMsgBase + cpuId };
-		filter.whiteListCount = 1;
-
-		const int ret = receive_horizonos_message(nvmeReplyPort, &recv, &filter);
-
-		delete[] filter.whiteListTypes;
+		const int ret = receiveBlockReply(device.flushReplyMsgBase + cpuId, requestId, reply);
 
 		return ret == 0 and reply.requestId == requestId and reply.success;
 	}

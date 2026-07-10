@@ -126,6 +126,7 @@ public:
 	uint64_t nextStorageRequestId = 1;
 	uint64_t nextMountId = 1;
 	pthread_mutex_t storageRpcLock = PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t volumeLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t storageRequestIdLock = PTHREAD_MUTEX_INITIALIZER;
 	pthread_mutex_t mountsLock = PTHREAD_MUTEX_INITIALIZER;
 	vector<MountedFat32> mounts;
@@ -157,7 +158,16 @@ public:
 namespace {
 	class Fat32Volume {
 	public:
-		explicit Fat32Volume(const StorageFsProbeDeviceMsgData &dev) : device(dev) {}
+		explicit Fat32Volume(const StorageFsProbeDeviceMsgData &dev) : device(dev) {
+			pthread_mutex_lock(&service.volumeLock);
+		}
+
+		~Fat32Volume() {
+			pthread_mutex_unlock(&service.volumeLock);
+		}
+
+		Fat32Volume(const Fat32Volume &) = delete;
+		auto operator=(const Fat32Volume &) -> Fat32Volume & = delete;
 
 		auto load() -> bool {
 			if (device.blockSize == 0 or device.blockSize > 0x1000 or (0x1000 % device.blockSize) != 0) {

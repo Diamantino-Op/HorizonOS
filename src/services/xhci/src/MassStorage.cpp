@@ -514,7 +514,7 @@ auto UsbMassStorageDriver::bind(const uint32_t controllerId, XhciDevice &device,
 
 	char name[32] {};
 
-	snprintf(name, sizeof(name), "usb%un%u", controllerId, unit.nsid);
+	snprintf(name, sizeof(name), "usb%u", unit.nsid - 1);
 
 	// StorageManager probes the device synchronously as part of registration.
 	// Publish the fully initialized unit first so those reads can resolve it.
